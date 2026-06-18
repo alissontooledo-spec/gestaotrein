@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a56db">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>GestãoTrein v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --blue:#2563eb;--blue-dark:#1e3a8a;--blue-light:#eff6ff;--blue-mid:#dbeafe;
+  --green:#16a34a;--green-light:#f0fdf4;--amber:#d97706;--amber-light:#fffbeb;
+  --red:#dc2626;--red-light:#fef2f2;--purple:#7c3aed;--purple-light:#f5f3ff;
+  --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;
+  --gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;
+  --gray-800:#1f2937;--gray-900:#111827;--white:#ffffff;
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:24px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--gray-100);color:var(--gray-900);min-height:100vh;max-width:480px;margin:0 auto;overflow-x:hidden}
+.screen{display:none;min-height:100vh;background:var(--gray-100);flex-direction:column}
+.screen.active{display:flex}
+.header{background:var(--blue);color:white;padding:16px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.header-back{background:rgba(255,255,255,0.15);border:none;color:white;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.header-back:active{background:rgba(255,255,255,0.25)}
+.header-title{font-size:17px;font-weight:600;flex:1}
+.header-subtitle{font-size:12px;opacity:.8}
+.header-action{background:rgba(255,255,255,0.15);border:none;color:white;padding:8px 14px;border-radius:var(--r-sm);font-size:14px;font-weight:500;cursor:pointer}
+.header-action:active{background:rgba(255,255,255,0.25)}
+/* PROFILE BADGES */
+.profile-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700}
+.pb-master{background:#f5f3ff;color:#5b21b6}
+.pb-comercial{background:#eff6ff;color:#1d4ed8}
+.pb-instrutor{background:#f0fdf4;color:#15803d}
+/* CONTENT */
+.content{flex:1;padding:20px 16px;overflow-y:auto}
+.content.no-pad{padding:0}
+/* CARDS */
+.card{background:var(--white);border-radius:var(--r-lg);box-shadow:0 1px 3px rgba(0,0,0,.05);border:1px solid var(--gray-200);overflow:hidden;margin-bottom:12px}
+.card-body{padding:16px}
+.card-header{padding:12px 16px;border-bottom:1px solid var(--gray-100);font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em}
+/* FORMS */
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:6px}
+.form-label .req{color:var(--red);margin-left:2px}
+.form-input,.form-select,.form-textarea{width:100%;padding:12px 14px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:15px;color:var(--gray-900);background:var(--white);transition:border-color .15s;appearance:none;-webkit-appearance:none}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--blue)}
+.form-textarea{min-height:90px;resize:none;line-height:1.5}
+.form-select{background-image:url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");background-repeat:no-repeat;background-position:right 12px center;background-size:20px;padding-right:40px}
+/* BUTTONS */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;border-radius:var(--r-sm);font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .15s;width:100%}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--blue);color:white}
+.btn-primary:hover{background:var(--blue-dark)}
+.btn-success{background:var(--green);color:white}
+.btn-danger{background:var(--red);color:white}
+.btn-outline{background:transparent;color:var(--blue);border:1.5px solid var(--blue-mid)}
+.btn-ghost{background:var(--gray-100);color:var(--gray-700)}
+.btn-purple{background:var(--purple);color:white}
+.btn-sm{padding:8px 14px;font-size:13px;width:auto}
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.badge-blue{background:var(--blue-mid);color:#1d4ed8}
+.badge-green{background:#dcfce7;color:var(--green)}
+.badge-amber{background:#fef3c7;color:var(--amber)}
+.badge-red{background:var(--red-light);color:var(--red)}
+.badge-gray{background:var(--gray-100);color:var(--gray-600)}
+.badge-purple{background:#ede9fe;color:var(--purple)}
+/* STEPS */
+.steps{display:flex;align-items:center;padding:14px 20px;background:var(--white);border-bottom:1px solid var(--gray-200)}
+.step{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative}
+.step:not(:last-child)::after{content:'';position:absolute;top:14px;left:60%;width:80%;height:2px;background:var(--gray-200);z-index:0}
+.step.done:not(:last-child)::after{background:var(--blue-mid)}
+.step-circle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--gray-200);color:var(--gray-500);z-index:1;position:relative}
+.step.active .step-circle{background:var(--blue);color:white}
+.step.done .step-circle{background:var(--green);color:white}
+.step-label{font-size:10px;color:var(--gray-400);font-weight:500;text-align:center}
+.step.active .step-label{color:var(--blue);font-weight:600}
+.step.done .step-label{color:var(--green)}
+/* PARTICIPANT ITEMS */
+.participant-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--gray-100)}
+.participant-item:last-child{border-bottom:none}
+.participant-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.av-pending{background:var(--gray-100);color:var(--gray-500)}
+.av-signed{background:#dcfce7;color:var(--green)}
+.participant-info{flex:1;min-width:0}
+.participant-name{font-size:15px;font-weight:600;color:var(--gray-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.participant-role{font-size:12px;color:var(--gray-500)}
+/* SIGNATURE */
+.signature-area{background:var(--white);border-radius:var(--r-lg);border:2px dashed var(--gray-300);overflow:hidden;position:relative}
+.signature-area canvas{display:block;cursor:crosshair;touch-action:none}
+.sign-placeholder{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--gray-300);font-size:14px;pointer-events:none;text-align:center}
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--white);border-top:1px solid var(--gray-200);display:flex;padding:8px 0 20px;z-index:200}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;cursor:pointer;border:none;background:transparent;color:var(--gray-400);font-size:10px;font-weight:500}
+.nav-item.active{color:var(--blue)}
+.nav-icon{font-size:22px;line-height:1}
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.stat-card{background:var(--white);border-radius:var(--r-lg);padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.05);border:1px solid var(--gray-200)}
+.stat-number{font-size:28px;font-weight:700;color:var(--blue-dark);line-height:1}
+.stat-label{font-size:12px;color:var(--gray-500);margin-top:4px}
+/* TRAINING CARD */
+.training-card{background:var(--white);border-radius:var(--r-lg);padding:16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.05);border:1px solid var(--gray-200);cursor:pointer;transition:box-shadow .15s}
+.training-card:active{box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.training-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.training-company{font-size:16px;font-weight:700;color:var(--gray-900)}
+.training-type{font-size:14px;color:var(--gray-600);margin-bottom:10px}
+.training-meta{display:flex;gap:12px;font-size:12px;color:var(--gray-500);flex-wrap:wrap}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;align-items:flex-end;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--white);border-radius:var(--r-xl) var(--r-xl) 0 0;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:20px 20px 44px;animation:slideUp .25s ease}
+.modal-handle{width:36px;height:4px;background:var(--gray-300);border-radius:2px;margin:0 auto 20px}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:20px;color:var(--gray-900)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+/* EMPTY */
+.empty-state{text-align:center;padding:48px 24px;color:var(--gray-400)}
+.empty-icon{font-size:48px;margin-bottom:12px;display:block}
+.empty-title{font-size:16px;font-weight:600;color:var(--gray-600);margin-bottom:6px}
+.empty-text{font-size:14px;line-height:1.5}
+/* TOAST */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--gray-900);color:white;padding:12px 20px;border-radius:var(--r-md);font-size:14px;font-weight:500;z-index:400;opacity:0;transition:all .3s;white-space:nowrap;max-width:calc(100vw - 40px);text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+/* LOADING */
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:500;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loading-overlay.show{display:flex}
+.spinner{width:40px;height:40px;border:3px solid var(--gray-200);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:15px;color:var(--gray-600);font-weight:500}
+/* MISC */
+.divider{height:1px;background:var(--gray-100);margin:4px 0}
+.section-title{font-size:13px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.progress-bar{height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden;margin:8px 0}
+.progress-fill{height:100%;background:var(--blue);border-radius:3px;transition:width .4s ease}
+.progress-fill.green{background:var(--green)}
+.pb-nav{padding-bottom:80px}
+.offline-bar{background:#fbbf24;color:var(--gray-900);text-align:center;padding:6px;font-size:12px;font-weight:600;display:none}
+.offline-bar.show{display:block}
+/* SUCCESS */
+.success-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:32px 24px;gap:16px}
+.success-icon{width:80px;height:80px;background:var(--green-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px}
+.success-protocolo{background:var(--blue-light);border:1px solid var(--blue-mid);border-radius:var(--r-md);padding:12px 20px;font-size:18px;font-weight:700;color:#1d4ed8}
+/* LOGIN */
+.login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;background:var(--gray-50)}
+.login-logo{width:72px;height:72px;background:var(--blue);border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:24px}
+.login-title{font-size:26px;font-weight:800;color:var(--gray-900);margin-bottom:6px;text-align:center}
+.login-sub{font-size:14px;color:var(--gray-500);margin-bottom:32px;text-align:center}
+.login-card{background:var(--white);border-radius:var(--r-xl);padding:28px 24px;width:100%;max-width:400px;border:1px solid var(--gray-200)}
+/* AGENDA */
+.agenda-item{background:var(--white);border-radius:var(--r-lg);padding:16px;margin-bottom:10px;border:1px solid var(--gray-200);border-left:4px solid var(--blue)}
+.agenda-item.hoje{border-left-color:var(--green)}
+.agenda-item.atrasado{border-left-color:var(--red)}
+/* EVIDENCIAS */
+.evidencia-thumb{width:80px;height:80px;border-radius:var(--r-md);object-fit:cover;border:1px solid var(--gray-200)}
+.evidencias-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.add-foto-btn{width:80px;height:80px;border-radius:var(--r-md);border:2px dashed var(--gray-300);display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--gray-50);cursor:pointer;gap:4px;font-size:11px;color:var(--gray-500)}
+/* USER CARD */
+.user-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--gray-100)}
+.user-row:last-child{border-bottom:none}
+.user-avatar-sm{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Processando...</div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="offline-bar" id="offlineBar">📶 Sem conexão — dados salvos localmente</div>
+
+<!-- ============================================================
+     TELA DE LOGIN
+============================================================ -->
+<div class="screen active" id="screenLogin">
+  <div class="login-screen">
+    <div class="login-logo">🎓</div>
+    <div class="login-title">GestãoTrein</div>
+    <div class="login-sub">Sistema de Controle de Treinamentos</div>
+    <div class="login-card">
+      <div class="form-group">
+        <label class="form-label">Usuário</label>
+        <input type="text" class="form-input" id="loginUser" placeholder="seu.usuario" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input type="password" class="form-input" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" onclick="fazerLogin()" style="margin-top:8px">Entrar</button>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gray-100)">
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;font-weight:600">USUÁRIOS DE DEMONSTRAÇÃO</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div onclick="loginDemo('master')" style="cursor:pointer;padding:8px 12px;background:var(--purple-light);border-radius:var(--r-sm);font-size:13px;color:#5b21b6;font-weight:600">👑 master / master123 — Administrador</div>
+          <div onclick="loginDemo('comercial')" style="cursor:pointer;padding:8px 12px;background:var(--blue-light);border-radius:var(--r-sm);font-size:13px;color:#1d4ed8;font-weight:600">💼 comercial / comerc123 — Comercial</div>
+          <div onclick="loginDemo('instrutor')" style="cursor:pointer;padding:8px 12px;background:var(--green-light);border-radius:var(--r-sm);font-size:13px;color:var(--green);font-weight:600">🎯 joao.silva / instr123 — Instrutor</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     HOME / DASHBOARD
+============================================================ -->
+<div class="screen" id="screenHome">
+  <div class="header">
+    <div style="flex:1">
+      <div class="header-title">GestãoTrein</div>
+      <div class="header-subtitle" id="headerDate"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="headerProfileBadge"></div>
+      <div onclick="confirmarLogout()" style="background:rgba(255,255,255,0.2);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;cursor:pointer" id="userAvatar">?</div>
+    </div>
+  </div>
+
+  <div class="content pb-nav">
+    <div style="margin-bottom:20px">
+      <div style="font-size:22px;font-weight:700;color:var(--gray-900)" id="homeGreeting">Olá!</div>
+      <div style="font-size:14px;color:var(--gray-500);margin-top:2px" id="homeSubtitle">Bem-vindo ao GestãoTrein</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-number" id="statTotal">0</div><div class="stat-label">Treinamentos este mês</div></div>
+      <div class="stat-card"><div class="stat-number" id="statPending" style="color:var(--amber)">0</div><div class="stat-label">Agendados</div></div>
+      <div class="stat-card"><div class="stat-number" id="statDone" style="color:var(--green)">0</div><div class="stat-label">Concluídos</div></div>
+      <div class="stat-card"><div class="stat-number" id="statParticipants" style="color:var(--blue-dark)">0</div><div class="stat-label">Participantes</div></div>
+    </div>
+
+    <div id="homeCTAs" style="margin-bottom:20px"></div>
+
+    <div class="section-title">Recentes</div>
+    <div id="listaTreinamentosHome"></div>
+    <div id="emptyHome" class="empty-state" style="display:none">
+      <span class="empty-icon">📋</span>
+      <div class="empty-title">Nenhum treinamento</div>
+      <div class="empty-text">Toque em "Novo Treinamento" para começar</div>
+    </div>
+  </div>
+
+  <div class="bottom-nav" id="bottomNavHome"></div>
+</div>
+
+<!-- ============================================================
+     AGENDA (INSTRUTOR)
+============================================================ -->
+<div class="screen" id="screenAgenda">
+  <div class="header">
+    <div class="header-title" style="flex:1">Minha Agenda</div>
+  </div>
+  <div class="content pb-nav">
+    <div id="listaAgenda"></div>
+    <div id="emptyAgenda" class="empty-state" style="display:none">
+      <span class="empty-icon">📅</span>
+      <div class="empty-title">Nenhum treinamento agendado</div>
+      <div class="empty-text">Seus treinamentos aparecerão aqui</div>
+    </div>
+  </div>
+  <div class="bottom-nav" id="bottomNavAgenda"></div>
+</div>
+
+<!-- ============================================================
+     STEP 1 — EMPRESA
+============================================================ -->
+<div class="screen" id="screenStep1">
+  <div class="header">
+    <button class="header-back" onclick="goBack('screenHome')">←</button>
+    <div style="flex:1"><div class="header-title">Novo Treinamento</div></div>
+  </div>
+  <div class="steps">
+    <div class="step active"><div class="step-circle">1</div><div class="step-label">Empresa</div></div>
+    <div class="step"><div class="step-circle">2</div><div class="step-label">Dados</div></div>
+    <div class="step"><div class="step-circle">3</div><div class="step-label">Participantes</div></div>
+    <div class="step"><div class="step-circle">4</div><div class="step-label">Execução</div></div>
+  </div>
+  <div class="content pb-nav">
+    <div class="card">
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Empresa <span class="req">*</span></label>
+          <select class="form-select" id="selectEmpresa" onchange="preencherDadosEmpresa()">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div id="dadosEmpresaPreenchidos" style="display:none">
+          <div class="form-group"><label class="form-label">CNPJ</label><input type="text" class="form-input" id="inputCNPJ" readonly style="background:var(--gray-50);color:var(--gray-600)"></div>
+          <div class="form-group"><label class="form-label">Endereço</label><input type="text" class="form-input" id="inputEndereco" readonly style="background:var(--gray-50);color:var(--gray-600)"></div>
+          <div style="display:grid;grid-template-columns:1fr 80px;gap:10px">
+            <div class="form-group"><label class="form-label">Cidade</label><input type="text" class="form-input" id="inputCidade" readonly style="background:var(--gray-50);color:var(--gray-600)"></div>
+            <div class="form-group"><label class="form-label">UF</label><input type="text" class="form-input" id="inputUF" readonly style="background:var(--gray-50);color:var(--gray-600)"></div>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="openModal('modalNovaEmpresa')" style="width:100%">+ Cadastrar nova empresa</button>
+      </div>
+    </div>
+  </div>
+  <div style="padding:16px;background:white;border-top:1px solid var(--gray-200);position:sticky;bottom:0">
+    <button class="btn btn-primary" onclick="avancarStep2()">Próximo → Dados do Treinamento</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     STEP 2 — DADOS DO TREINAMENTO
+============================================================ -->
+<div class="screen" id="screenStep2">
+  <div class="header">
+    <button class="header-back" onclick="showScreen('screenStep1')">←</button>
+    <div style="flex:1"><div class="header-title">Dados do Treinamento</div></div>
+  </div>
+  <div class="steps">
+    <div class="step done"><div class="step-circle">✓</div><div class="step-label">Empresa</div></div>
+    <div class="step active"><div class="step-circle">2</div><div class="step-label">Dados</div></div>
+    <div class="step"><div class="step-circle">3</div><div class="step-label">Participantes</div></div>
+    <div class="step"><div class="step-circle">4</div><div class="step-label">Execução</div></div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Tipo de Treinamento <span class="req">*</span></label>
+          <select class="form-select" id="selectTipo"><option value="">Selecione...</option></select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label class="form-label">Data <span class="req">*</span></label><input type="date" class="form-input" id="inputData"></div>
+          <div class="form-group"><label class="form-label">Hora início</label><input type="time" class="form-input" id="inputHoraInicio"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Instrutor responsável <span class="req">*</span></label>
+          <select class="form-select" id="selectInstrutor"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Local</label><input type="text" class="form-input" id="inputLocal" placeholder="Sala, obra, fábrica..."></div>
+        <div class="form-group">
+          <label class="form-label">Observações</label>
+          <textarea class="form-textarea" id="inputObs" placeholder="Informações adicionais sobre o treinamento..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:16px;background:white;border-top:1px solid var(--gray-200);position:sticky;bottom:0">
+    <button class="btn btn-primary" onclick="avancarStep3()">Próximo → Participantes</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     STEP 3 — PARTICIPANTES
+============================================================ -->
+<div class="screen" id="screenStep3">
+  <div class="header">
+    <button class="header-back" onclick="showScreen('screenStep2')">←</button>
+    <div style="flex:1"><div class="header-title">Participantes</div><div class="header-subtitle" id="contParticipantes">0 adicionados</div></div>
+  </div>
+  <div class="steps">
+    <div class="step done"><div class="step-circle">✓</div><div class="step-label">Empresa</div></div>
+    <div class="step done"><div class="step-circle">✓</div><div class="step-label">Dados</div></div>
+    <div class="step active"><div class="step-circle">3</div><div class="step-label">Participantes</div></div>
+    <div class="step"><div class="step-circle">4</div><div class="step-label">Execução</div></div>
+  </div>
+  <div class="content" style="padding-bottom:100px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <button class="btn btn-outline" onclick="openModalImportar()">📥 Importar</button>
+      <button class="btn btn-primary" onclick="openModalNovoParticipante()">➕ Adicionar</button>
+    </div>
+    <div class="card" id="cardParticipantes">
+      <div id="listaParticipantesStep3"><div class="empty-state"><span class="empty-icon">👥</span><div class="empty-title">Nenhum participante</div></div></div>
+    </div>
+  </div>
+  <div style="padding:16px;background:white;border-top:1px solid var(--gray-200);position:sticky;bottom:0">
+    <button class="btn btn-primary" onclick="avancarStep4()">Próximo → Execução do Treinamento</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     STEP 4 — EXECUÇÃO (assinaturas + evidências + obs)
+============================================================ -->
+<div class="screen" id="screenStep4">
+  <div class="header">
+    <button class="header-back" onclick="showScreen('screenStep3')">←</button>
+    <div style="flex:1"><div class="header-title">Execução</div><div class="header-subtitle" id="progressoAssinaturas">0/0 assinaram</div></div>
+  </div>
+  <div class="steps">
+    <div class="step done"><div class="step-circle">✓</div><div class="step-label">Empresa</div></div>
+    <div class="step done"><div class="step-circle">✓</div><div class="step-label">Dados</div></div>
+    <div class="step done"><div class="step-circle">✓</div><div class="step-label">Participantes</div></div>
+    <div class="step active"><div class="step-circle">4</div><div class="step-label">Execução</div></div>
+  </div>
+  <div style="padding:12px 16px;background:white;border-bottom:1px solid var(--gray-100)">
+    <div class="progress-bar"><div class="progress-fill" id="barraProgresso" style="width:0%"></div></div>
+    <div style="font-size:12px;color:var(--gray-500);margin-top:4px" id="textoProgresso">Nenhum assinou ainda</div>
+  </div>
+  <div class="content" style="padding-bottom:100px">
+
+    <!-- Assinaturas -->
+    <div class="section-title" style="margin-top:4px">Assinaturas</div>
+    <div class="card" style="margin-bottom:16px"><div id="listaParticipantesAssinatura"></div></div>
+
+    <!-- Evidências fotográficas -->
+    <div class="section-title">Evidências fotográficas</div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:10px">Registre fotos do treinamento para documentação</div>
+        <div class="evidencias-grid" id="evidenciasGrid">
+          <div class="add-foto-btn" onclick="capturarFoto()">📷<span>Câmera</span></div>
+          <div class="add-foto-btn" onclick="document.getElementById('inputGaleria').click()">🖼️<span>Galeria</span></div>
+        </div>
+        <input type="file" id="inputGaleria" accept="image/*" multiple style="display:none" onchange="adicionarEvidenciasGaleria(this)">
+      </div>
+    </div>
+
+    <!-- Observações do instrutor -->
+    <div class="section-title">Anotações do instrutor</div>
+    <div class="card">
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:0">
+          <textarea class="form-textarea" id="anotacoesInstrutor" placeholder="Registre aqui observações, situações ocorridas, necessidades identificadas ou recomendações futuras..." style="min-height:120px"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:16px;background:white;border-top:1px solid var(--gray-200);position:sticky;bottom:0">
+    <button class="btn btn-success" onclick="finalizarTreinamento()">✅ Finalizar e Gerar PDF</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     TELA ASSINATURA INDIVIDUAL
+============================================================ -->
+<div class="screen" id="screenAssinatura">
+  <div class="header">
+    <button class="header-back" onclick="voltarDaAssinatura()">←</button>
+    <div style="flex:1"><div class="header-title" id="nomeAssinando">Nome</div><div class="header-subtitle" id="cargoAssinando">Cargo</div></div>
+    <button class="header-action" onclick="limparAssinatura()">Limpar</button>
+  </div>
+  <div class="content">
+    <div style="background:var(--blue-light);border-radius:var(--r-md);padding:12px 16px;margin-bottom:16px;font-size:14px;color:#1d4ed8">✍️ Assine com o dedo ou caneta na área abaixo</div>
+    <div class="signature-area" id="signatureArea">
+      <canvas id="signatureCanvas" width="448" height="280"></canvas>
+      <div class="sign-placeholder" id="signPlaceholder">Assine aqui</div>
+    </div>
+    <div style="margin-top:6px;text-align:center;font-size:12px;color:var(--gray-400)">Passe o dedo para assinar</div>
+  </div>
+  <div style="padding:16px;background:white;border-top:1px solid var(--gray-200);position:sticky;bottom:0">
+    <button class="btn btn-success" onclick="confirmarAssinatura()">✅ Confirmar Assinatura</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     TELA SUCESSO
+============================================================ -->
+<div class="screen" id="screenSucesso">
+  <div class="header"><div class="header-title" style="text-align:center;width:100%">Treinamento Concluído!</div></div>
+  <div class="content" style="padding-bottom:80px">
+    <div class="success-screen">
+      <div class="success-icon">✅</div>
+      <div style="font-size:22px;font-weight:700">Tudo pronto!</div>
+      <div style="font-size:15px;color:var(--gray-600);line-height:1.6;max-width:300px;text-align:center">Treinamento registrado com sucesso. PDF gerado.</div>
+      <div><div style="font-size:12px;color:var(--gray-500);margin-bottom:6px">Protocolo</div><div class="success-protocolo" id="protocoloGerado">TRN-2025-00001</div></div>
+      <div class="card" style="width:100%">
+        <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-primary" onclick="baixarPDF()">📄 Baixar PDF</button>
+          <button class="btn btn-ghost" onclick="voltarHome()">🏠 Voltar ao Início</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     HISTÓRICO
+============================================================ -->
+<div class="screen" id="screenLista">
+  <div class="header"><div class="header-title" style="flex:1">Histórico</div></div>
+  <div class="content pb-nav">
+    <div style="margin-bottom:12px"><input type="text" class="form-input" placeholder="🔍 Buscar empresa, tipo, protocolo..." id="inputBusca" oninput="filtrarLista()"></div>
+    <div id="listaCompleta"></div>
+    <div id="emptyLista" class="empty-state" style="display:none"><span class="empty-icon">🔍</span><div class="empty-title">Nenhum resultado</div></div>
+  </div>
+  <div class="bottom-nav" id="bottomNavLista"></div>
+</div>
+
+<!-- ============================================================
+     EMPRESAS
+============================================================ -->
+<div class="screen" id="screenEmpresas">
+  <div class="header"><div class="header-title" style="flex:1">Empresas</div><button class="header-action" onclick="openModal('modalNovaEmpresa')">+ Nova</button></div>
+  <div class="content pb-nav">
+    <div id="listaEmpresas"></div>
+    <div id="emptyEmpresas" class="empty-state" style="display:none"><span class="empty-icon">🏢</span><div class="empty-title">Nenhuma empresa</div></div>
+  </div>
+  <div class="bottom-nav" id="bottomNavEmpresas"></div>
+</div>
+
+<!-- ============================================================
+     CONFIGURAÇÕES (MASTER)
+============================================================ -->
+<div class="screen" id="screenConfig">
+  <div class="header"><div class="header-title" style="flex:1">Configurações</div></div>
+  <div class="content pb-nav">
+
+    <!-- Usuários -->
+    <div class="section-title">Usuários do sistema</div>
+    <div class="card" style="margin-bottom:20px">
+      <div id="listaUsuarios"></div>
+      <div class="card-body" style="padding-top:8px">
+        <button class="btn btn-outline" onclick="openModal('modalNovoUsuario')">+ Novo usuário</button>
+      </div>
+    </div>
+
+    <!-- Tipos de treinamento -->
+    <div class="section-title">Tipos de treinamento</div>
+    <div class="card" style="margin-bottom:20px">
+      <div id="listaTipos"></div>
+      <div class="card-body" style="padding-top:8px">
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-input" id="inputNovoTipo" placeholder="Ex: NR-35, CIPA...">
+          <button class="btn btn-primary btn-sm" onclick="adicionarTipo()">+ Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Participantes -->
+    <div class="section-title">Participantes cadastrados</div>
+    <div class="card" style="margin-bottom:20px">
+      <div id="listaParticipantesCadastrados"></div>
+      <div class="card-body" style="padding-top:8px">
+        <button class="btn btn-outline" onclick="openModal('modalParticipanteCadastrado')">+ Cadastrar participante</button>
+      </div>
+    </div>
+
+    <!-- Dados -->
+    <div class="section-title">Dados</div>
+    <div class="card">
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-ghost" onclick="exportarDados()">📤 Exportar dados (JSON)</button>
+        <button class="btn btn-ghost" style="color:var(--red)" onclick="limparDados()">🗑️ Limpar todos os dados</button>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav" id="bottomNavConfig"></div>
+</div>
+
+<!-- ============================================================
+     MINHA CONTA (todos os perfis)
+============================================================ -->
+<div class="screen" id="screenMinhaConta">
+  <div class="header">
+    <button class="header-back" onclick="goBack('screenHome')">←</button>
+    <div style="flex:1"><div class="header-title">Minha Conta</div></div>
+  </div>
+  <div class="content">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+          <div id="contaAvatar" style="width:56px;height:56px;border-radius:50%;background:var(--blue-mid);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#1d4ed8"></div>
+          <div><div style="font-size:18px;font-weight:700" id="contaNome"></div><div id="contaPerfilBadge" style="margin-top:4px"></div></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nome completo</label>
+          <input type="text" class="form-input" id="editNome" placeholder="Seu nome">
+        </div>
+        <div class="form-group">
+          <label class="form-label">E-mail</label>
+          <input type="email" class="form-input" id="editEmail" placeholder="email@empresa.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nova senha (deixe em branco para manter)</label>
+          <input type="password" class="form-input" id="editSenha" placeholder="••••••••">
+        </div>
+        <button class="btn btn-primary" onclick="salvarMinhaConta()">Salvar alterações</button>
+      </div>
+    </div>
+    <button class="btn btn-ghost" style="color:var(--red)" onclick="confirmarLogout()">Sair do sistema</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAIS
+============================================================ -->
+
+<!-- Modal Nova Empresa -->
+<div class="modal-overlay" id="modalNovaEmpresa">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nova Empresa</div>
+    <div class="form-group"><label class="form-label">Razão Social <span class="req">*</span></label><input type="text" class="form-input" id="newEmpNome"></div>
+    <div class="form-group"><label class="form-label">CNPJ</label><input type="text" class="form-input" id="newEmpCNPJ" placeholder="00.000.000/0000-00" maxlength="18" oninput="mascararCNPJ(this)"></div>
+    <div class="form-group"><label class="form-label">Endereço</label><input type="text" class="form-input" id="newEmpEndereco"></div>
+    <div style="display:grid;grid-template-columns:1fr 80px;gap:10px">
+      <div class="form-group"><label class="form-label">Cidade</label><input type="text" class="form-input" id="newEmpCidade"></div>
+      <div class="form-group"><label class="form-label">UF</label><input type="text" class="form-input" id="newEmpUF" maxlength="2" style="text-transform:uppercase"></div>
+    </div>
+    <div class="form-group"><label class="form-label">E-mail de contato</label><input type="email" class="form-input" id="newEmpEmail"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeModal('modalNovaEmpresa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEmpresa()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Participante (treinamento) -->
+<div class="modal-overlay" id="modalNovoParticipante">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Adicionar Participante</div>
+    <div class="form-group"><label class="form-label">Nome completo <span class="req">*</span></label><input type="text" class="form-input" id="newPartNome"></div>
+    <div class="form-group"><label class="form-label">Cargo</label><input type="text" class="form-input" id="newPartCargo" placeholder="Ex: Operador, Técnico..."></div>
+    <div class="form-group"><label class="form-label">CPF (opcional)</label><input type="text" class="form-input" id="newPartCPF" placeholder="000.000.000-00" maxlength="14" oninput="mascararCPF(this)"></div>
+    <div class="form-group"><label class="form-label">E-mail (opcional)</label><input type="email" class="form-input" id="newPartEmail"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeModal('modalNovoParticipante')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarParticipanteNovo()">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Importar Participantes -->
+<div class="modal-overlay" id="modalImportar">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Importar Participantes</div>
+    <div style="margin-bottom:12px;font-size:14px;color:var(--gray-600)">Selecione os participantes para adicionar:</div>
+    <div id="listaParticipantesImportar" style="max-height:40vh;overflow-y:auto;margin-bottom:16px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn btn-ghost" onclick="closeModal('modalImportar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarImportacao()">Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Detalhe Treinamento -->
+<div class="modal-overlay" id="modalDetalhe">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="conteudoDetalhe"></div>
+    <button class="btn btn-ghost" onclick="closeModal('modalDetalhe')" style="margin-top:8px">Fechar</button>
+  </div>
+</div>
+
+<!-- Modal Novo Usuário -->
+<div class="modal-overlay" id="modalNovoUsuario">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Novo Usuário</div>
+    <div class="form-group"><label class="form-label">Nome completo <span class="req">*</span></label><input type="text" class="form-input" id="nuNome"></div>
+    <div class="form-group"><label class="form-label">Login <span class="req">*</span></label><input type="text" class="form-input" id="nuLogin" placeholder="nome.sobrenome"></div>
+    <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="nuEmail"></div>
+    <div class="form-group"><label class="form-label">Senha <span class="req">*</span></label><input type="password" class="form-input" id="nuSenha"></div>
+    <div class="form-group">
+      <label class="form-label">Perfil <span class="req">*</span></label>
+      <select class="form-select" id="nuPerfil">
+        <option value="">Selecione...</option>
+        <option value="master">👑 Master (Administrador)</option>
+        <option value="comercial">💼 Comercial</option>
+        <option value="instrutor">🎯 Instrutor</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeModal('modalNovoUsuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarNovoUsuario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Participante Cadastrado -->
+<div class="modal-overlay" id="modalParticipanteCadastrado">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Cadastrar Participante</div>
+    <div class="form-group"><label class="form-label">Nome <span class="req">*</span></label><input type="text" class="form-input" id="cadPartNome"></div>
+    <div class="form-group"><label class="form-label">Cargo</label><input type="text" class="form-input" id="cadPartCargo"></div>
+    <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="cadPartEmail"></div>
+    <div class="form-group"><label class="form-label">Empresa</label><select class="form-select" id="cadPartEmpresa"><option value="">Selecione...</option></select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeModal('modalParticipanteCadastrado')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarParticipanteCadastrado()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+//  BANCO DE DADOS LOCAL
+// ================================================================
+let db = {
+  usuarios: [
+    {id:'u1',nome:'Administrador Master',login:'master',senha:'master123',email:'master@empresa.com',perfil:'master',ativo:true},
+    {id:'u2',nome:'Ana Comercial',login:'comercial',senha:'comerc123',email:'comercial@empresa.com',perfil:'comercial',ativo:true},
+    {id:'u3',nome:'João Silva',login:'joao.silva',senha:'instr123',email:'joao@empresa.com',perfil:'instrutor',ativo:true}
+  ],
+  empresas: [],
+  participantes: [],
+  tipos: ['NR-35 — Trabalho em Altura','NR-10 — Eletricidade','NR-12 — Máquinas e Equipamentos','NR-33 — Espaços Confinados','CIPA','Primeiros Socorros','Combate a Incêndio','Integração SSO'],
+  treinamentos: [],
+  counter: 1
+};
+
+let usuarioAtual = null;
+let treinamentoAtual = null;
+let participantesAtual = [];
+let participanteAssinando = null;
+let evidenciasAtual = [];
+let pdfDataUrl = null;
+let signCanvas, signCtx, signing = false, signHasData = false;
+
+// ================================================================
+//  PERSISTÊNCIA
+// ================================================================
+function salvarDB(){localStorage.setItem('gt_v2_db',JSON.stringify(db))}
+function carregarDB(){
+  const s=localStorage.getItem('gt_v2_db');
+  if(s){try{const d=JSON.parse(s);db={...db,...d};}catch(e){}}
+}
+function carregarSessao(){
+  const s=localStorage.getItem('gt_v2_sessao');
+  if(s){try{const d=JSON.parse(s);usuarioAtual=db.usuarios.find(u=>u.id===d.id)||null;}catch(e){}}
+}
+function salvarSessao(){
+  if(usuarioAtual) localStorage.setItem('gt_v2_sessao',JSON.stringify({id:usuarioAtual.id}));
+  else localStorage.removeItem('gt_v2_sessao');
+}
+
+// ================================================================
+//  INICIALIZAÇÃO
+// ================================================================
+document.addEventListener('DOMContentLoaded',()=>{
+  carregarDB();
+  inicializarDadosExemplo();
+  carregarSessao();
+  inicializarCanvas();
+  verificarOnline();
+  document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+  if(usuarioAtual){
+    entrarNoApp();
+  } else {
+    showScreen('screenLogin');
+  }
+  // datas
+  const h=new Date();
+  document.getElementById('inputData').value=h.toISOString().split('T')[0];
+  document.getElementById('inputHoraInicio').value=h.getHours().toString().padStart(2,'0')+':'+h.getMinutes().toString().padStart(2,'0');
+  const dias=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const meses=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  document.getElementById('headerDate').textContent=`${dias[h.getDay()]}, ${h.getDate()} de ${meses[h.getMonth()]}`;
+});
+
+function inicializarDadosExemplo(){
+  if(db.empresas.length===0){
+    db.empresas=[
+      {id:gerarId(),nome:'Construtora Alfa LTDA',cnpj:'12.345.678/0001-90',endereco:'Av. Industrial, 1500',cidade:'São Paulo',uf:'SP',email:'rh@alfa.com.br'},
+      {id:gerarId(),nome:'Metalúrgica Beta S/A',cnpj:'98.765.432/0001-10',endereco:'Rua das Máquinas, 200',cidade:'Campinas',uf:'SP',email:'seg@beta.com.br'},
+      {id:gerarId(),nome:'Química Gama Ind.',cnpj:'45.678.901/0001-23',endereco:'Rod. SP-330 km 142',cidade:'Americana',uf:'SP',email:'rh@gama.com.br'}
+    ];
+    db.participantes=[
+      {id:gerarId(),nome:'Carlos Souza',cargo:'Operador de Máquinas',email:'carlos@alfa.com',empresaId:db.empresas[0].id},
+      {id:gerarId(),nome:'Maria Oliveira',cargo:'Técnica de Segurança',email:'maria@alfa.com',empresaId:db.empresas[0].id},
+      {id:gerarId(),nome:'Pedro Santos',cargo:'Eletricista',email:'pedro@beta.com',empresaId:db.empresas[1].id},
+      {id:gerarId(),nome:'Ana Lima',cargo:'Supervisora',email:'ana@beta.com',empresaId:db.empresas[1].id},
+      {id:gerarId(),nome:'Roberto Ferreira',cargo:'Peão de Obra',email:'roberto@alfa.com',empresaId:db.empresas[0].id}
+    ];
+    salvarDB();
+  }
+}
+
+// ================================================================
+//  LOGIN / LOGOUT / PERFIS
+// ================================================================
+const PERFIL_LABELS={master:'👑 Master',comercial:'💼 Comercial',instrutor:'🎯 Instrutor'};
+const PERFIL_CORES={master:'pb-master',comercial:'pb-comercial',instrutor:'pb-instrutor'};
+
+function fazerLogin(){
+  const login=document.getElementById('loginUser').value.trim();
+  const senha=document.getElementById('loginPass').value;
+  const u=db.usuarios.find(x=>x.login===login&&x.senha===senha&&x.ativo);
+  if(!u){showToast('Login ou senha incorretos','error');return;}
+  usuarioAtual=u;
+  salvarSessao();
+  entrarNoApp();
+}
+
+function loginDemo(perfil){
+  const demos={master:{login:'master',senha:'master123'},comercial:{login:'comercial',senha:'comerc123'},instrutor:{login:'joao.silva',senha:'instr123'}};
+  document.getElementById('loginUser').value=demos[perfil].login;
+  document.getElementById('loginPass').value=demos[perfil].senha;
+  fazerLogin();
+}
+
+function entrarNoApp(){
+  if(!usuarioAtual)return;
+  // Avatar
+  document.getElementById('userAvatar').textContent=iniciais(usuarioAtual.nome);
+  // Badge perfil no header
+  const pb=document.getElementById('headerProfileBadge');
+  pb.innerHTML=`<span class="profile-badge ${PERFIL_CORES[usuarioAtual.perfil]}">${PERFIL_LABELS[usuarioAtual.perfil]}</span>`;
+  // Saudação
+  const hora=new Date().getHours();
+  
+  document.getElementById('homeGreeting').textContent=(hora<12?'Bom dia, ':hora<18?'Boa tarde, ':'Boa noite, ')+usuarioAtual.nome.split(' ')[0]+'!';
+  document.getElementById('homeSubtitle').textContent='Perfil: '+PERFIL_LABELS[usuarioAtual.perfil];
+  // CTAs por perfil
+  renderizarCTAs();
+  // Bottom navs
+  renderizarBottomNavs();
+  // Dados
+  preencherSelectEmpresa();
+  preencherSelectTipo();
+  preencherSelectInstrutores();
+  renderizarHome();
+  renderizarListas();
+  showScreen('screenHome');
+}
+
+function confirmarLogout(){
+  if(confirm('Deseja realmente sair do sistema?')){
+    usuarioAtual=null;
+    salvarSessao();
+    showScreen('screenLogin');
+    document.getElementById('loginUser').value='';
+    document.getElementById('loginPass').value='';
+  }
+}
+
+// ================================================================
+//  PERMISSÕES
+// ================================================================
+function temPermissao(acao){
+  if(!usuarioAtual)return false;
+  const p=usuarioAtual.perfil;
+  const perms={
+    master:['tudo'],
+    comercial:['novo_treinamento','empresas','participantes','historico'],
+    instrutor:['agenda','assinatura','historico_proprio']
+  };
+  const pp=perms[p]||[];
+  return pp.includes('tudo')||pp.includes(acao);
+}
+
+function renderizarCTAs(){
+  const div=document.getElementById('homeCTAs');
+  const p=usuarioAtual?.perfil;
+  if(p==='instrutor'){
+    div.innerHTML=`<button class="btn btn-primary" onclick="showScreen('screenAgenda')" style="margin-bottom:10px">📅 Ver Minha Agenda</button>`;
+  } else {
+    div.innerHTML=`<button class="btn btn-primary" onclick="goToNovoTreinamento()" style="margin-bottom:10px;font-size:16px;padding:16px;border-radius:var(--r-md)">➕ Iniciar Novo Treinamento</button>`;
+  }
+}
+
+function renderizarBottomNavs(){
+  const p=usuarioAtual?.perfil;
+  const navConfigs={
+    master:[
+      {icon:'🏠',label:'Início',screen:'screenHome'},
+      {icon:'📋',label:'Histórico',screen:'screenLista'},
+      {icon:'🏢',label:'Empresas',screen:'screenEmpresas'},
+      {icon:'⚙️',label:'Config',screen:'screenConfig'}
+    ],
+    comercial:[
+      {icon:'🏠',label:'Início',screen:'screenHome'},
+      {icon:'📋',label:'Histórico',screen:'screenLista'},
+      {icon:'🏢',label:'Empresas',screen:'screenEmpresas'},
+      {icon:'👤',label:'Conta',screen:'screenMinhaConta'}
+    ],
+    instrutor:[
+      {icon:'🏠',label:'Início',screen:'screenHome'},
+      {icon:'📅',label:'Agenda',screen:'screenAgenda'},
+      {icon:'📋',label:'Histórico',screen:'screenLista'},
+      {icon:'👤',label:'Conta',screen:'screenMinhaConta'}
+    ]
+  };
+  const nav=navConfigs[p]||navConfigs.master;
+  const ids=['bottomNavHome','bottomNavAgenda','bottomNavLista','bottomNavEmpresas','bottomNavConfig'];
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.innerHTML=nav.map(n=>`<button class="nav-item" onclick="showScreen('${n.screen}')"><span class="nav-icon">${n.icon}</span><span>${n.label}</span></button>`).join('');
+  });
+}
+
+// ================================================================
+//  NAVEGAÇÃO
+// ================================================================
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const el=document.getElementById(id);
+  if(el){el.classList.add('active');window.scrollTo(0,0);}
+  // atualizar nav active
+  document.querySelectorAll('.nav-item').forEach(btn=>{
+    btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${id}'`));
+  });
+  // renderizar se necessário
+  if(id==='screenAgenda') renderizarAgenda();
+  if(id==='screenLista') renderizarListas();
+  if(id==='screenEmpresas') renderizarListas();
+  if(id==='screenConfig') renderizarConfig();
+  if(id==='screenMinhaConta') carregarMinhaConta();
+}
+function goBack(dest){showScreen(dest||'screenHome')}
+function voltarDaAssinatura(){showScreen('screenStep4')}
+function voltarHome(){treinamentoAtual=null;participantesAtual=[];evidenciasAtual=[];renderizarHome();showScreen('screenHome')}
+function goToNovoTreinamento(){
+  treinamentoAtual=null;participantesAtual=[];evidenciasAtual=[];
+  preencherSelectEmpresa();preencherSelectTipo();preencherSelectInstrutores();
+  document.getElementById('dadosEmpresaPreenchidos').style.display='none';
+  document.getElementById('anotacoesInstrutor').value='';
+  showScreen('screenStep1');
+}
+
+// ================================================================
+//  STEPS
+// ================================================================
+function avancarStep2(){
+  if(!document.getElementById('selectEmpresa').value){showToast('Selecione uma empresa','error');return;}
+  showScreen('screenStep2');
+}
+function avancarStep3(){
+  if(!document.getElementById('selectTipo').value){showToast('Selecione o tipo de treinamento','error');return;}
+  if(!document.getElementById('inputData').value){showToast('Informe a data','error');return;}
+  if(!document.getElementById('selectInstrutor').value){showToast('Selecione o instrutor','error');return;}
+  treinamentoAtual=criarTreinamento();
+  renderizarParticipantesStep3();
+  showScreen('screenStep3');
+}
+function avancarStep4(){
+  if(participantesAtual.length===0){showToast('Adicione ao menos 1 participante','error');return;}
+  renderizarParticipantesAssinatura();
+  atualizarProgressoAssinaturas();
+  renderizarEvidenciasGrid();
+  showScreen('screenStep4');
+}
+
+function criarTreinamento(){
+  const empresa=db.empresas.find(e=>e.id===document.getElementById('selectEmpresa').value);
+  const instrutorId=document.getElementById('selectInstrutor').value;
+  const instrutor=db.usuarios.find(u=>u.id===instrutorId);
+  return{
+    id:gerarId(),protocolo:gerarProtocolo(),
+    empresaId:empresa.id,empresaNome:empresa.nome,
+    tipo:document.getElementById('selectTipo').value,
+    data:document.getElementById('inputData').value,
+    horaInicio:document.getElementById('inputHoraInicio').value,
+    horaFim:'',
+    instrutorId:instrutorId||usuarioAtual?.id,
+    instrutor:instrutor?.nome||usuarioAtual?.nome||'—',
+    local:document.getElementById('inputLocal').value,
+    observacoes:document.getElementById('inputObs').value,
+    status:'em_andamento',criadoEm:new Date().toISOString()
+  };
+}
+
+// ================================================================
+//  AGENDA (INSTRUTOR)
+// ================================================================
+function renderizarAgenda(){
+  const cont=document.getElementById('listaAgenda');
+  const empty=document.getElementById('emptyAgenda');
+  const uid=usuarioAtual?.id;
+  const meus=db.treinamentos.filter(t=>t.instrutorId===uid||t.instrutor===usuarioAtual?.nome);
+  if(meus.length===0){cont.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  const hoje=new Date().toISOString().split('T')[0];
+  cont.innerHTML=meus.map(t=>{
+    const cls=t.data===hoje?'hoje':t.data<hoje&&t.status!=='concluido'?'atrasado':'';
+    const label=t.data===hoje?'🟢 Hoje':t.data<hoje&&t.status!=='concluido'?'🔴 Atrasado':'📅 Agendado';
+    return`<div class="agenda-item ${cls}" onclick="verDetalhe('${t.id}')">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:16px;font-weight:700">${t.tipo}</div>
+        <span class="badge badge-${t.status==='concluido'?'green':'blue'}">${t.status==='concluido'?'Concluído':'Em aberto'}</span>
+      </div>
+      <div style="font-size:14px;color:var(--gray-600)">${t.empresaNome}</div>
+      <div style="font-size:12px;color:var(--gray-500);margin-top:6px">${label} · ${formatarData(t.data)} · ${t.horaInicio||'—'}</div>
+      ${t.status!=='concluido'?`<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="event.stopPropagation();executarTreinamento('${t.id}')">▶️ Executar treinamento</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+function executarTreinamento(id){
+  const t=db.treinamentos.find(x=>x.id===id);
+  if(!t)return;
+  treinamentoAtual={...t};
+  participantesAtual=(t.participantes||[]).map(p=>({...p,assinou:false,assinatura:null}));
+  evidenciasAtual=[];
+  document.getElementById('anotacoesInstrutor').value=t.observacoes||'';
+  renderizarParticipantesAssinatura();
+  atualizarProgressoAssinaturas();
+  renderizarEvidenciasGrid();
+  showScreen('screenStep4');
+}
+
+// ================================================================
+//  PARTICIPANTES
+// ================================================================
+function renderizarParticipantesStep3(){
+  const cont=document.getElementById('listaParticipantesStep3');
+  document.getElementById('contParticipantes').textContent=participantesAtual.length+' adicionado'+(participantesAtual.length!==1?'s':'');
+  if(participantesAtual.length===0){cont.innerHTML=`<div class="empty-state"><span class="empty-icon">👥</span><div class="empty-title">Nenhum participante</div></div>`;return;}
+  cont.innerHTML=participantesAtual.map((p,i)=>`
+    <div class="participant-item">
+      <div class="participant-avatar av-pending">${iniciais(p.nome)}</div>
+      <div class="participant-info"><div class="participant-name">${p.nome}</div><div class="participant-role">${p.cargo||'—'}</div></div>
+      <button onclick="removerParticipante(${i})" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:4px">✕</button>
+    </div>`).join('');
+}
+function removerParticipante(i){participantesAtual.splice(i,1);renderizarParticipantesStep3()}
+
+function renderizarParticipantesAssinatura(){
+  const cont=document.getElementById('listaParticipantesAssinatura');
+  cont.innerHTML=participantesAtual.map((p,i)=>`
+    <div class="participant-item" onclick="abrirAssinatura(${i})" style="cursor:pointer">
+      <div class="participant-avatar ${p.assinou?'av-signed':'av-pending'}">${p.assinou?'✓':iniciais(p.nome)}</div>
+      <div class="participant-info"><div class="participant-name">${p.nome}</div><div class="participant-role">${p.cargo||'—'}</div></div>
+      <span class="badge badge-${p.assinou?'green':'gray'}">${p.assinou?'Assinou':'Pendente'}</span>
+    </div>`).join('');
+}
+
+function atualizarProgressoAssinaturas(){
+  const tot=participantesAtual.length,ass=participantesAtual.filter(p=>p.assinou).length;
+  const pct=tot>0?Math.round((ass/tot)*100):0;
+  document.getElementById('progressoAssinaturas').textContent=`${ass}/${tot} assinaram`;
+  document.getElementById('barraProgresso').style.width=pct+'%';
+  document.getElementById('barraProgresso').className='progress-fill'+(pct===100?' green':'');
+  document.getElementById('textoProgresso').textContent=pct===100?'🎉 Todos assinaram!':ass===0?'Nenhum assinou ainda':`${ass} de ${tot} assinaram (${pct}%)`;
+}
+
+// ================================================================
+//  ASSINATURA
+// ================================================================
+function inicializarCanvas(){
+  signCanvas=document.getElementById('signatureCanvas');
+  signCtx=signCanvas.getContext('2d');
+  signCtx.strokeStyle='#111827';signCtx.lineWidth=2.5;signCtx.lineCap='round';signCtx.lineJoin='round';
+  const gP=e=>{const r=signCanvas.getBoundingClientRect(),sx=signCanvas.width/r.width,sy=signCanvas.height/r.height;
+    if(e.touches)return{x:(e.touches[0].clientX-r.left)*sx,y:(e.touches[0].clientY-r.top)*sy};
+    return{x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy}};
+  const s=e=>{e.preventDefault();signing=true;const p=gP(e);signCtx.beginPath();signCtx.moveTo(p.x,p.y)};
+  const m=e=>{e.preventDefault();if(!signing)return;const p=gP(e);signCtx.lineTo(p.x,p.y);signCtx.stroke();signHasData=true;document.getElementById('signPlaceholder').style.display='none'};
+  const en=e=>{e.preventDefault();signing=false};
+  signCanvas.addEventListener('mousedown',s);signCanvas.addEventListener('mousemove',m);signCanvas.addEventListener('mouseup',en);
+  signCanvas.addEventListener('touchstart',s,{passive:false});signCanvas.addEventListener('touchmove',m,{passive:false});signCanvas.addEventListener('touchend',en,{passive:false});
+}
+function abrirAssinatura(i){
+  participanteAssinando=i;const p=participantesAtual[i];
+  document.getElementById('nomeAssinando').textContent=p.nome;
+  document.getElementById('cargoAssinando').textContent=p.cargo||'Participante';
+  limparAssinatura();showScreen('screenAssinatura');
+}
+function limparAssinatura(){signCtx.clearRect(0,0,signCanvas.width,signCanvas.height);signHasData=false;document.getElementById('signPlaceholder').style.display='flex'}
+function confirmarAssinatura(){
+  if(!signHasData){showToast('Realize a assinatura primeiro','error');return}
+  const img=signCanvas.toDataURL('image/png');
+  participantesAtual[participanteAssinando]={...participantesAtual[participanteAssinando],assinou:true,assinatura:img,dataAssinatura:new Date().toLocaleString('pt-BR')};
+  showToast(participantesAtual[participanteAssinando].nome+' assinou! ✓','success');
+  renderizarParticipantesAssinatura();atualizarProgressoAssinaturas();showScreen('screenStep4');
+}
+
+// ================================================================
+//  EVIDÊNCIAS FOTOGRÁFICAS
+// ================================================================
+function renderizarEvidenciasGrid(){
+  const grid=document.getElementById('evidenciasGrid');
+  const fotos=evidenciasAtual.map((ev,i)=>`
+    <div style="position:relative">
+      <img src="${ev.data}" class="evidencia-thumb" alt="Evidência ${i+1}">
+      <button onclick="removerEvidencia(${i})" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>`).join('');
+  grid.innerHTML=fotos+`
+    <div class="add-foto-btn" onclick="capturarFoto()">📷<span>Câmera</span></div>
+    <div class="add-foto-btn" onclick="document.getElementById('inputGaleria').click()">🖼️<span>Galeria</span></div>
+    <input type="file" id="inputGaleria" accept="image/*" multiple style="display:none" onchange="adicionarEvidenciasGaleria(this)">`;
+}
+function capturarFoto(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='image/*';input.capture='environment';
+  input.onchange=e=>processarImagens(e.target.files);
+  input.click();
+}
+function adicionarEvidenciasGaleria(input){processarImagens(input.files)}
+function processarImagens(files){
+  Array.from(files).forEach(f=>{
+    const r=new FileReader();
+    r.onload=e=>{evidenciasAtual.push({data:e.target.result,nome:f.name,timestamp:new Date().toISOString()});renderizarEvidenciasGrid();showToast('Foto adicionada!','success')};
+    r.readAsDataURL(f);
+  });
+}
+function removerEvidencia(i){evidenciasAtual.splice(i,1);renderizarEvidenciasGrid()}
+
+// ================================================================
+//  FINALIZAR
+// ================================================================
+async function finalizarTreinamento(){
+  const nao=participantesAtual.filter(p=>!p.assinou).length;
+  if(nao>0&&!confirm(`${nao} participante(s) ainda não assinaram. Finalizar mesmo assim?`))return;
+  showLoading('Gerando PDF...');
+  treinamentoAtual.horaFim=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  treinamentoAtual.status='concluido';
+  treinamentoAtual.participantes=[...participantesAtual];
+  treinamentoAtual.evidencias=[...evidenciasAtual];
+  treinamentoAtual.anotacoesInstrutor=document.getElementById('anotacoesInstrutor').value;
+  // atualizar ou inserir
+  const idx=db.treinamentos.findIndex(t=>t.id===treinamentoAtual.id);
+  if(idx>=0)db.treinamentos[idx]=treinamentoAtual;
+  else db.treinamentos.unshift(treinamentoAtual);
+  salvarDB();
+  try{
+    pdfDataUrl=await gerarPDF(treinamentoAtual);
+    hideLoading();
+    document.getElementById('protocoloGerado').textContent=treinamentoAtual.protocolo;
+    renderizarHome();showScreen('screenSucesso');
+  }catch(e){hideLoading();showToast('Treinamento salvo! Erro no PDF.','error');renderizarHome();showScreen('screenSucesso')}
+}
+
+// ================================================================
+//  GERAÇÃO DE PDF
+// ================================================================
+async function gerarPDF(t){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,marg=15;let y=marg;
+  const empresa=db.empresas.find(e=>e.id===t.empresaId);
+  const azul=[37,99,235],azulEsc=[30,58,138],cinza=[107,114,128],cinzaCl=[243,244,246],preto=[17,24,39];
+
+  // Cabeçalho
+  doc.setFillColor(...azulEsc);doc.rect(0,0,W,32,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont('helvetica','bold');doc.text('GestãoTrein',marg,14);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text('Sistema de Controle de Treinamentos',marg,20);
+  doc.text(`Protocolo: ${t.protocolo}`,W-marg,12,{align:'right'});
+  doc.text(`Emitido: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`,W-marg,19,{align:'right'});
+  doc.setDrawColor(255,255,255);doc.setLineWidth(.5);doc.line(marg,26,W-marg,26);
+  doc.setFontSize(13);doc.setFont('helvetica','bold');doc.text(`REGISTRO DE TREINAMENTO — ${t.tipo.toUpperCase()}`,W/2,31,{align:'center'});
+  y=42;
+
+  // Empresa
+  doc.setFillColor(...azul);doc.rect(marg,y,W-marg*2,6,'F');doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('DADOS DA EMPRESA',marg+3,y+4.2);y+=9;
+  doc.setFillColor(...cinzaCl);doc.rect(marg,y,W-marg*2,22,'F');doc.setTextColor(...preto);doc.setFontSize(8);
+  doc.setFont('helvetica','bold');doc.text('Razão Social:',marg+3,y+5);doc.setFont('helvetica','normal');doc.text(empresa?.nome||'—',marg+28,y+5);
+  doc.setFont('helvetica','bold');doc.text('CNPJ:',marg+3,y+11);doc.setFont('helvetica','normal');doc.text(empresa?.cnpj||'—',marg+15,y+11);
+  doc.setFont('helvetica','bold');doc.text('Endereço:',marg+3,y+17);doc.setFont('helvetica','normal');doc.text(`${empresa?.endereco||'—'} — ${empresa?.cidade||''}/${empresa?.uf||''}`,marg+22,y+17);
+  y+=26;
+
+  // Treinamento
+  doc.setFillColor(...azul);doc.rect(marg,y,W-marg*2,6,'F');doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('DADOS DO TREINAMENTO',marg+3,y+4.2);y+=9;
+  doc.setFillColor(...cinzaCl);doc.rect(marg,y,W-marg*2,22,'F');doc.setTextColor(...preto);
+  const meta=[['Tipo:',t.tipo],['Data:',formatarData(t.data)],['Horário:',`${t.horaInicio} às ${t.horaFim}`],['Instrutor:',t.instrutor],['Local:',t.local||'Não informado']];
+  meta.forEach((it,i)=>{const row=Math.floor(i/2),col=i%2,xx=marg+3+col*90,yy=y+6+row*6;doc.setFont('helvetica','bold');doc.text(it[0],xx,yy);doc.setFont('helvetica','normal');doc.text(it[1]||'—',xx+20,yy)});
+  y+=26;
+
+  // Anotações
+  if(t.anotacoesInstrutor){
+    doc.setFillColor(...cinzaCl);doc.rect(marg,y,W-marg*2,12,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...preto);doc.text('Anotações do Instrutor:',marg+3,y+4);
+    doc.setFont('helvetica','normal');const lines=doc.splitTextToSize(t.anotacoesInstrutor,W-marg*2-40);doc.text(lines[0]||'',marg+42,y+4);
+    if(lines[1])doc.text(lines[1],marg+3,y+9);y+=16;
+  }
+
+  // Observações
+  if(t.observacoes){
+    doc.setFillColor(...cinzaCl);doc.rect(marg,y,W-marg*2,10,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('Observações:',marg+3,y+4);
+    doc.setFont('helvetica','normal');const lines=doc.splitTextToSize(t.observacoes,W-marg*2-32);doc.text(lines[0]||'',marg+32,y+4);y+=14;
+  }
+
+  // Participantes
+  doc.setFillColor(...azul);doc.rect(marg,y,W-marg*2,6,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('LISTA DE PRESENÇA E ASSINATURAS',marg+3,y+4.2);y+=8;
+  doc.setFillColor(...azul);doc.rect(marg,y,W-marg*2,7,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+  doc.text('#',marg+3,y+4.8);doc.text('Nome Completo',marg+10,y+4.8);doc.text('Cargo',marg+80,y+4.8);doc.text('Assinatura',marg+140,y+4.8);y+=8;
+
+  (t.participantes||[]).forEach((p,i)=>{
+    if(y>247){doc.addPage();y=marg+10}
+    const rH=18;
+    doc.setFillColor(i%2===0?255:248,i%2===0?255:249,i%2===0?255:255);doc.rect(marg,y,W-marg*2,rH,'F');
+    doc.setDrawColor(229,231,235);doc.setLineWidth(.3);doc.line(marg,y+rH,W-marg,y+rH);
+    doc.setTextColor(...preto);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text(String(i+1),marg+3,y+7);
+    doc.setFont('helvetica','normal');doc.text(p.nome||'—',marg+10,y+7);doc.text(p.cargo||'—',marg+80,y+7);
+    if(p.assinou&&p.assinatura){try{doc.addImage(p.assinatura,'PNG',marg+138,y+1,50,15)}catch(e){}}
+    else{doc.setTextColor(220,38,38);doc.setFont('helvetica','italic');doc.setFontSize(7);doc.text('Não assinou',marg+140,y+9);doc.setTextColor(...preto);doc.setFont('helvetica','normal');doc.setFontSize(8)}
+    y+=rH;
+  });
+
+  // Evidências
+  if(t.evidencias&&t.evidencias.length>0&&y<220){
+    y+=8;
+    doc.setFillColor(...azul);doc.rect(marg,y,W-marg*2,6,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);doc.text('EVIDÊNCIAS FOTOGRÁFICAS',marg+3,y+4.2);y+=10;
+    const cols=3,imgW=50,imgH=35,gap=8;
+    t.evidencias.slice(0,6).forEach((ev,i)=>{
+      const col=i%cols,row=Math.floor(i/cols);
+      const xx=marg+col*(imgW+gap),yy=y+row*(imgH+gap);
+      if(yy+imgH<280){try{doc.addImage(ev.data,'JPEG',xx,yy,imgW,imgH)}catch(e){}}
+    });
+  }
+
+  // Rodapé
+  const fY=277;doc.setFillColor(...azulEsc);doc.rect(0,fY,W,20,'F');doc.setTextColor(255,255,255);doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+  doc.text('© GestãoTrein — Sistema de Controle de Treinamentos',marg,fY+7);
+  doc.text(`Protocolo: ${t.protocolo}`,W-marg,fY+7,{align:'right'});
+  doc.text('Documento com validade jurídica — assinaturas digitais coletadas via GestãoTrein',W/2,fY+14,{align:'center'});
+  return doc.output('datauristring');
+}
+
+function baixarPDF(){
+  if(!pdfDataUrl){showToast('PDF não disponível','error');return}
+  const a=document.createElement('a');a.href=pdfDataUrl;a.download=`${treinamentoAtual?.protocolo||'Treinamento'}.pdf`;a.click();showToast('PDF baixado!','success');
+}
+
+// ================================================================
+//  RENDERIZAÇÃO
+// ================================================================
+function renderizarHome(){
+  const mes=new Date().getMonth(),ano=new Date().getFullYear();
+  let lista=db.treinamentos;
+  if(usuarioAtual?.perfil==='instrutor')lista=lista.filter(t=>t.instrutorId===usuarioAtual.id||t.instrutor===usuarioAtual.nome);
+  const doMes=lista.filter(t=>{const d=new Date(t.criadoEm);return d.getMonth()===mes&&d.getFullYear()===ano});
+  document.getElementById('statTotal').textContent=doMes.length;
+  document.getElementById('statPending').textContent=lista.filter(t=>t.status==='em_andamento').length;
+  document.getElementById('statDone').textContent=lista.filter(t=>t.status==='concluido').length;
+  document.getElementById('statParticipants').textContent=lista.reduce((s,t)=>s+(t.participantes?.length||0),0);
+  const lEl=document.getElementById('listaTreinamentosHome');
+  const empty=document.getElementById('emptyHome');
+  const rec=lista.slice(0,5);
+  if(rec.length===0){lEl.innerHTML='';empty.style.display='block';return}
+  empty.style.display='none';lEl.innerHTML=rec.map(t=>cartaoTreinamento(t)).join('');
+}
+
+function cartaoTreinamento(t){
+  const statusBadge={'concluido':'<span class="badge badge-green">Concluído</span>','em_andamento':'<span class="badge badge-amber">Em andamento</span>','agendado':'<span class="badge badge-blue">Agendado</span>'}[t.status]||'';
+  const temEv=t.evidencias&&t.evidencias.length>0?`<span>📸 ${t.evidencias.length} foto(s)</span>`:'';
+  const temAno=t.anotacoesInstrutor?'<span>📝 Anotações</span>':'';
+  return`<div class="training-card" onclick="verDetalhe('${t.id}')">
+    <div class="training-card-header"><div class="training-company">${t.empresaNome}</div>${statusBadge}</div>
+    <div class="training-type">📚 ${t.tipo}</div>
+    <div class="training-meta"><span>📅 ${formatarData(t.data)}</span><span>👥 ${t.participantes?.length||0}</span><span>🪪 ${t.protocolo}</span>${temEv}${temAno}</div>
+  </div>`;
+}
+
+function renderizarListas(){
+  // lista completa
+  const lista=document.getElementById('listaCompleta');
+  const empty=document.getElementById('emptyLista');
+  let trein=db.treinamentos;
+  if(usuarioAtual?.perfil==='instrutor')trein=trein.filter(t=>t.instrutorId===usuarioAtual.id||t.instrutor===usuarioAtual.nome);
+  if(trein.length===0){lista.innerHTML='';if(empty)empty.style.display='block';return}
+  if(empty)empty.style.display='none';
+  lista.innerHTML=trein.map(t=>cartaoTreinamento(t)).join('');
+  // empresas
+  const empEl=document.getElementById('listaEmpresas');
+  const empEmpty=document.getElementById('emptyEmpresas');
+  if(!empEl)return;
+  if(db.empresas.length===0){empEl.innerHTML='';if(empEmpty)empEmpty.style.display='block';return}
+  if(empEmpty)empEmpty.style.display='none';
+  empEl.innerHTML=db.empresas.map(e=>`<div class="card" style="margin-bottom:10px"><div class="card-body"><div style="font-size:16px;font-weight:700;margin-bottom:4px">${e.nome}</div><div style="font-size:13px;color:var(--gray-500)">CNPJ: ${e.cnpj||'—'}</div><div style="font-size:13px;color:var(--gray-500)">${e.cidade||''}${e.uf?'/'+e.uf:''}</div>${e.email?`<div style="font-size:13px;color:var(--blue)">${e.email}</div>`:''}</div></div>`).join('');
+}
+
+function renderizarConfig(){
+  renderizarTiposConfig();renderizarParticipantesConfig();renderizarUsuarios();
+}
+
+function renderizarUsuarios(){
+  const cont=document.getElementById('listaUsuarios');
+  if(!cont)return;
+  cont.innerHTML=db.usuarios.map((u,i)=>`
+    <div class="user-row">
+      <div class="user-avatar-sm" style="background:${u.perfil==='master'?'#ede9fe':u.perfil==='comercial'?'#dbeafe':'#dcfce7'};color:${u.perfil==='master'?'#5b21b6':u.perfil==='comercial'?'#1d4ed8':'#15803d'}">${iniciais(u.nome)}</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600">${u.nome}</div>
+        <div style="font-size:12px;color:var(--gray-500)">${u.login} · <span class="profile-badge ${PERFIL_CORES[u.perfil]}" style="padding:2px 6px">${PERFIL_LABELS[u.perfil]}</span></div>
+      </div>
+      ${u.id!==usuarioAtual?.id?`<button onclick="toggleUsuario('${u.id}')" style="background:none;border:none;cursor:pointer;font-size:18px">${u.ativo?'✅':'🔴'}</button>`:''}
+    </div>`).join('');
+}
+
+function toggleUsuario(id){
+  const u=db.usuarios.find(x=>x.id===id);if(!u)return;
+  u.ativo=!u.ativo;salvarDB();renderizarUsuarios();
+  showToast(`${u.nome} ${u.ativo?'ativado':'desativado'}`,u.ativo?'success':'error');
+}
+
+function renderizarTiposConfig(){
+  const cont=document.getElementById('listaTipos');if(!cont)return;
+  cont.innerHTML=db.tipos.map((t,i)=>`<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--gray-100)"><span style="flex:1;font-size:14px">${t}</span><button onclick="removerTipo(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">✕</button></div>`).join('');
+}
+
+function renderizarParticipantesConfig(){
+  const cont=document.getElementById('listaParticipantesCadastrados');if(!cont)return;
+  if(db.participantes.length===0){cont.innerHTML='<div style="padding:16px;color:var(--gray-400);font-size:14px;text-align:center">Nenhum participante</div>';return}
+  cont.innerHTML=db.participantes.map((p,i)=>{
+    const emp=db.empresas.find(e=>e.id===p.empresaId);
+    return`<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--gray-100)"><div style="flex:1"><div style="font-size:14px;font-weight:600">${p.nome}</div><div style="font-size:12px;color:var(--gray-500)">${p.cargo||'—'}${emp?' · '+emp.nome:''}</div></div><button onclick="removerPartCadastrado(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">✕</button></div>`;
+  }).join('');
+}
+
+function verDetalhe(id){
+  const t=db.treinamentos.find(x=>x.id===id);if(!t)return;
+  const emp=db.empresas.find(e=>e.id===t.empresaId);
+  document.getElementById('conteudoDetalhe').innerHTML=`
+    <div class="modal-title">${t.tipo}</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:16px">
+      <span class="badge badge-${t.status==='concluido'?'green':'amber'}">${t.status==='concluido'?'Concluído':'Em andamento'}</span>
+      <span style="font-size:12px;color:var(--gray-500)">${t.protocolo}</span>
+    </div>
+    <div class="card" style="margin-bottom:12px"><div class="card-body" style="font-size:14px;display:flex;flex-direction:column;gap:6px">
+      <div><strong>Empresa:</strong> ${emp?.nome||t.empresaNome}</div>
+      <div><strong>Data:</strong> ${formatarData(t.data)}</div>
+      <div><strong>Horário:</strong> ${t.horaInicio} às ${t.horaFim||'—'}</div>
+      <div><strong>Instrutor:</strong> ${t.instrutor}</div>
+      <div><strong>Local:</strong> ${t.local||'—'}</div>
+      ${t.anotacoesInstrutor?`<div><strong>Anotações:</strong> ${t.anotacoesInstrutor}</div>`:''}
+    </div></div>
+    <div style="font-size:13px;font-weight:600;color:var(--gray-500);margin-bottom:8px">PARTICIPANTES (${t.participantes?.length||0})</div>
+    ${(t.participantes||[]).map(p=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="width:32px;height:32px;border-radius:50%;background:${p.assinou?'#dcfce7':'var(--gray-100)'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${p.assinou?'var(--green)':'var(--gray-500)'}">${p.assinou?'✓':iniciais(p.nome)}</div>
+      <div style="flex:1"><div style="font-size:14px;font-weight:600">${p.nome}</div><div style="font-size:12px;color:var(--gray-500)">${p.cargo||'—'}</div></div>
+      <span class="badge badge-${p.assinou?'green':'gray'}">${p.assinou?'Assinou':'Pendente'}</span>
+    </div>`).join('')}
+    ${t.evidencias&&t.evidencias.length>0?`<div style="margin-top:12px"><div style="font-size:13px;font-weight:600;color:var(--gray-500);margin-bottom:8px">EVIDÊNCIAS (${t.evidencias.length})</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${t.evidencias.map(ev=>`<img src="${ev.data}" class="evidencia-thumb" style="width:100%">`).join('')}</div></div>`:''}
+    ${t.status==='concluido'?`<button class="btn btn-primary" onclick="regenerarPDF('${t.id}')" style="margin-top:12px">📄 Baixar PDF</button>`:''}`;
+  openModal('modalDetalhe');
+}
+
+async function regenerarPDF(id){
+  const t=db.treinamentos.find(x=>x.id===id);if(!t)return;
+  showLoading('Gerando PDF...');
+  try{const u=await gerarPDF(t);hideLoading();const a=document.createElement('a');a.href=u;a.download=`${t.protocolo}.pdf`;a.click();showToast('PDF baixado!','success')}
+  catch(e){hideLoading();showToast('Erro ao gerar PDF','error')}
+}
+
+// ================================================================
+//  MINHA CONTA
+// ================================================================
+function carregarMinhaConta(){
+  if(!usuarioAtual)return;
+  document.getElementById('contaNome').textContent=usuarioAtual.nome;
+  document.getElementById('contaAvatar').textContent=iniciais(usuarioAtual.nome);
+  document.getElementById('contaPerfilBadge').innerHTML=`<span class="profile-badge ${PERFIL_CORES[usuarioAtual.perfil]}">${PERFIL_LABELS[usuarioAtual.perfil]}</span>`;
+  document.getElementById('editNome').value=usuarioAtual.nome;
+  document.getElementById('editEmail').value=usuarioAtual.email||'';
+  document.getElementById('editSenha').value='';
+}
+function salvarMinhaConta(){
+  const nome=document.getElementById('editNome').value.trim();
+  const email=document.getElementById('editEmail').value.trim();
+  const senha=document.getElementById('editSenha').value;
+  if(!nome){showToast('Nome é obrigatório','error');return}
+  const u=db.usuarios.find(x=>x.id===usuarioAtual.id);
+  if(!u)return;
+  u.nome=nome;u.email=email;
+  if(senha)u.senha=senha;
+  usuarioAtual=u;salvarDB();
+  // Atualizar UI
+  document.getElementById('userAvatar').textContent=iniciais(nome);
+  document.getElementById('homeGreeting').textContent=(new Date().getHours()<12?'Bom dia, ':new Date().getHours()<18?'Boa tarde, ':'Boa noite, ')+nome.split(' ')[0]+'!';
+  document.getElementById('contaNome').textContent=nome;
+  document.getElementById('contaAvatar').textContent=iniciais(nome);
+  document.getElementById('editSenha').value='';
+  showToast('Dados atualizados!','success');
+}
+
+// ================================================================
+//  MODAIS — AÇÕES
+// ================================================================
+function preencherSelectEmpresa(){
+  const s=document.getElementById('selectEmpresa');
+  s.innerHTML='<option value="">Selecione...</option>'+db.empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join('');
+}
+function preencherDadosEmpresa(){
+  const id=document.getElementById('selectEmpresa').value;
+  const div=document.getElementById('dadosEmpresaPreenchidos');
+  if(!id){div.style.display='none';return}
+  const emp=db.empresas.find(e=>e.id===id);if(!emp)return;
+  document.getElementById('inputCNPJ').value=emp.cnpj||'';
+  document.getElementById('inputEndereco').value=emp.endereco||'';
+  document.getElementById('inputCidade').value=emp.cidade||'';
+  document.getElementById('inputUF').value=emp.uf||'';
+  div.style.display='block';
+}
+function preencherSelectTipo(){
+  const s=document.getElementById('selectTipo');
+  s.innerHTML='<option value="">Selecione...</option>'+db.tipos.map(t=>`<option value="${t}">${t}</option>`).join('');
+}
+function preencherSelectInstrutores(){
+  const s=document.getElementById('selectInstrutor');
+  const instrutores=db.usuarios.filter(u=>u.perfil==='instrutor'&&u.ativo);
+  s.innerHTML='<option value="">Selecione...</option>'+instrutores.map(u=>`<option value="${u.id}">${u.nome}</option>`).join('');
+  // Se for instrutor logado, pré-selecionar
+  if(usuarioAtual?.perfil==='instrutor'){s.value=usuarioAtual.id}
+}
+
+function salvarEmpresa(){
+  const nome=document.getElementById('newEmpNome').value.trim();
+  if(!nome){showToast('Nome é obrigatório','error');return}
+  const emp={id:gerarId(),nome,cnpj:document.getElementById('newEmpCNPJ').value,endereco:document.getElementById('newEmpEndereco').value,cidade:document.getElementById('newEmpCidade').value,uf:document.getElementById('newEmpUF').value.toUpperCase(),email:document.getElementById('newEmpEmail').value};
+  db.empresas.push(emp);salvarDB();preencherSelectEmpresa();
+  document.getElementById('selectEmpresa').value=emp.id;preencherDadosEmpresa();
+  closeModal('modalNovaEmpresa');renderizarListas();showToast(`${nome} cadastrada!`,'success');
+  ['newEmpNome','newEmpCNPJ','newEmpEndereco','newEmpCidade','newEmpUF','newEmpEmail'].forEach(id=>document.getElementById(id).value='');
+}
+
+function openModalNovoParticipante(){
+  ['newPartNome','newPartCargo','newPartCPF','newPartEmail'].forEach(id=>document.getElementById(id).value='');
+  openModal('modalNovoParticipante');
+}
+function salvarParticipanteNovo(){
+  const nome=document.getElementById('newPartNome').value.trim();
+  if(!nome){showToast('Nome é obrigatório','error');return}
+  participantesAtual.push({id:gerarId(),nome,cargo:document.getElementById('newPartCargo').value,cpf:document.getElementById('newPartCPF').value,email:document.getElementById('newPartEmail').value,assinou:false,assinatura:null});
+  renderizarParticipantesStep3();closeModal('modalNovoParticipante');showToast(`${nome} adicionado!`,'success');
+}
+
+function openModalImportar(){
+  const cont=document.getElementById('listaParticipantesImportar');
+  const jaAdicionados=participantesAtual.map(p=>p.id);
+  const disp=db.participantes.filter(p=>!jaAdicionados.includes(p.id));
+  if(disp.length===0){cont.innerHTML='<div class="empty-state"><span class="empty-icon">👥</span><div class="empty-title">Nenhum disponível</div></div>'}
+  else cont.innerHTML=disp.map(p=>{const emp=db.empresas.find(e=>e.id===p.empresaId);return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100)"><input type="checkbox" id="imp_${p.id}" value="${p.id}" style="width:18px;height:18px;cursor:pointer"><label for="imp_${p.id}" style="flex:1;cursor:pointer"><div style="font-weight:600;font-size:14px">${p.nome}</div><div style="font-size:12px;color:var(--gray-500)">${p.cargo||'—'}${emp?' · '+emp.nome:''}</div></label></div>`}).join('');
+  openModal('modalImportar');
+}
+function confirmarImportacao(){
+  const cbs=document.querySelectorAll('#listaParticipantesImportar input:checked');
+  if(cbs.length===0){showToast('Selecione ao menos 1','error');return}
+  cbs.forEach(cb=>{const p=db.participantes.find(x=>x.id===cb.value);if(p)participantesAtual.push({...p,assinou:false,assinatura:null})});
+  renderizarParticipantesStep3();closeModal('modalImportar');showToast(`${cbs.length} importado(s)!`,'success');
+}
+
+function salvarNovoUsuario(){
+  const nome=document.getElementById('nuNome').value.trim();
+  const login=document.getElementById('nuLogin').value.trim();
+  const senha=document.getElementById('nuSenha').value;
+  const perfil=document.getElementById('nuPerfil').value;
+  if(!nome||!login||!senha||!perfil){showToast('Preencha todos os campos','error');return}
+  if(db.usuarios.find(u=>u.login===login)){showToast('Login já existe','error');return}
+  db.usuarios.push({id:gerarId(),nome,login,senha,email:document.getElementById('nuEmail').value,perfil,ativo:true});
+  salvarDB();renderizarUsuarios();closeModal('modalNovoUsuario');showToast(`Usuário ${nome} criado!`,'success');
+  ['nuNome','nuLogin','nuEmail','nuSenha'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('nuPerfil').value='';
+}
+
+function salvarParticipanteCadastrado(){
+  const nome=document.getElementById('cadPartNome').value.trim();
+  if(!nome){showToast('Nome é obrigatório','error');return}
+  db.participantes.push({id:gerarId(),nome,cargo:document.getElementById('cadPartCargo').value,email:document.getElementById('cadPartEmail').value,empresaId:document.getElementById('cadPartEmpresa').value});
+  salvarDB();renderizarParticipantesConfig();closeModal('modalParticipanteCadastrado');showToast('Participante cadastrado!','success');
+}
+
+function adicionarTipo(){
+  const val=document.getElementById('inputNovoTipo').value.trim();
+  if(!val)return;db.tipos.push(val);salvarDB();renderizarTiposConfig();preencherSelectTipo();document.getElementById('inputNovoTipo').value='';showToast('Tipo adicionado!','success');
+}
+function removerTipo(i){db.tipos.splice(i,1);salvarDB();renderizarTiposConfig();preencherSelectTipo()}
+function removerPartCadastrado(i){if(!confirm('Remover?'))return;db.participantes.splice(i,1);salvarDB();renderizarParticipantesConfig()}
+
+function filtrarLista(){
+  const q=document.getElementById('inputBusca').value.toLowerCase();
+  let trein=db.treinamentos;
+  if(usuarioAtual?.perfil==='instrutor')trein=trein.filter(t=>t.instrutorId===usuarioAtual.id||t.instrutor===usuarioAtual.nome);
+  const f=trein.filter(t=>t.empresaNome?.toLowerCase().includes(q)||t.tipo?.toLowerCase().includes(q)||t.protocolo?.toLowerCase().includes(q));
+  const lista=document.getElementById('listaCompleta'),empty=document.getElementById('emptyLista');
+  if(f.length===0){lista.innerHTML='';if(empty)empty.style.display='block'}
+  else{if(empty)empty.style.display='none';lista.innerHTML=f.map(t=>cartaoTreinamento(t)).join('')}
+}
+
+function exportarDados(){
+  const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`gestaotrein_v2_backup_${new Date().toISOString().split('T')[0]}.json`;a.click();
+}
+function limparDados(){
+  if(!confirm('Apagar todos os dados?'))return;if(!confirm('Confirmar exclusão total?'))return;
+  localStorage.removeItem('gt_v2_db');localStorage.removeItem('gt_v2_sessao');location.reload();
+}
+
+// ================================================================
+//  UTILITÁRIOS
+// ================================================================
+function gerarId(){return Date.now().toString(36)+Math.random().toString(36).substr(2,5)}
+function gerarProtocolo(){const n=String(db.counter++).padStart(5,'0'),a=new Date().getFullYear();salvarDB();return`TRN-${a}-${n}`}
+function iniciais(nome){if(!nome)return'?';const p=nome.trim().split(' ');return p.length>=2?(p[0][0]+p[p.length-1][0]).toUpperCase():p[0].substring(0,2).toUpperCase()}
+function formatarData(d){if(!d)return'—';try{return new Date(d+'T12:00:00').toLocaleDateString('pt-BR')}catch(e){return d}}
+function mascararCNPJ(i){let v=i.value.replace(/\D/g,'');if(v.length>14)v=v.substring(0,14);v=v.replace(/^(\d{2})(\d)/,'$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d)/,'.$1/$2').replace(/(\d{4})(\d)/,'$1-$2');i.value=v}
+function mascararCPF(i){let v=i.value.replace(/\D/g,'');if(v.length>11)v=v.substring(0,11);v=v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');i.value=v}
+function openModal(id){
+  const m=document.getElementById(id);if(!m)return;
+  if(id==='modalParticipanteCadastrado'){const s=document.getElementById('cadPartEmpresa');s.innerHTML='<option value="">Selecione...</option>'+db.empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join('')}
+  m.classList.add('open');
+}
+function closeModal(id){const m=document.getElementById(id);if(m)m.classList.remove('open')}
+function showToast(msg,type='default'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>{t.className='toast'},2800)}
+function showLoading(msg='Processando...'){document.getElementById('loadingText').textContent=msg;document.getElementById('loadingOverlay').classList.add('show')}
+function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show')}
+function verificarOnline(){const b=document.getElementById('offlineBar');const u=()=>{b.className='offline-bar'+(navigator.onLine?'':' show')};u();window.addEventListener('online',u);window.addEventListener('offline',u)}
+</script>
+</body>
+</html>
