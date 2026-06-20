@@ -234,6 +234,23 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 /* Divider */
 .divider{height:1px;background:var(--border);margin:16px 0}
 
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:480px){.modal-overlay{align-items:center;padding:16px}}
+.modal-box{background:var(--surface);width:100%;max-width:480px;border-radius:var(--r-xl) var(--r-xl) 0 0;max-height:90vh;display:flex;flex-direction:column;animation:slideUp .2s ease}
+@media(min-width:480px){.modal-box{border-radius:var(--r-xl);max-height:85vh}}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-title{font-size:16px;font-weight:600;color:var(--text-1)}
+.modal-close{background:none;border:none;cursor:pointer;color:var(--text-3);padding:4px;border-radius:var(--r-sm);display:flex}
+.modal-close:hover{background:var(--gray-100);color:var(--text-1)}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+/* Menu dropdown */
+.menu-item{padding:9px 14px;font-size:13px;color:var(--text-1);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+.menu-item:hover{background:var(--gray-100)}
+.menu-item.danger{color:var(--red)}
+.menu-item.danger:hover{background:var(--red-l)}
 /* Scroll suave */
 .scrollable{overflow-y:auto;-webkit-overflow-scrolling:touch}
 .scrollable::-webkit-scrollbar{width:4px}
@@ -378,6 +395,20 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
       <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
     </svg>
   </button>
+</div>
+
+<!-- Modal genérico -->
+<div class="modal-overlay" id="modalOverlay" style="display:none" onclick="fecharModalOverlay(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitulo"></div>
+      <button class="modal-close" onclick="fecharModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="modalCorpo"></div>
+    <div class="modal-footer" id="modalRodape"></div>
+  </div>
 </div>
 
 <!-- Toast container -->
@@ -995,34 +1026,232 @@ async function renderAgenda(){
 }
 
 // ============================================================
-//  ORGANIZAÇÕES (PROVEDOR)
+//  ORGANIZAÇÕES (PROVEDOR) — CRUD COMPLETO
 // ============================================================
+let _orgsCache = [];
+
 async function renderOrgs(){
   const{data:orgs,error}=await sb
     .from('organizacoes')
     .select('*')
     .order('nome');
-
   if(error) throw error;
+  _orgsCache = orgs||[];
+
+  setMobileHeader(`
+    <div class="mh-greeting">Provedor</div>
+    <div class="mh-name">Organizações</div>`);
 
   document.getElementById('fabBtn').style.display='flex';
-  fabCallback=()=>showToast('Cadastro de organizações em breve','info');
+  fabCallback=()=>abrirModalOrg();
 
+  _renderOrgsLista(_orgsCache);
+}
+
+function _renderOrgsLista(orgs){
+  const ativas=orgs.filter(o=>o.ativo).length;
   const html=`
-    <div class="card">
-      ${(orgs||[]).length===0
-        ?`<div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div><div class="empty-sub">Cadastre a primeira consultoria parceira.</div></div>`
-        :(orgs||[]).map(o=>`
-        <div class="list-item">
-          <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:13px;font-weight:700">${iniciais(o.nome)}</div>
-          <div class="li-info">
-            <div class="li-title">${o.nome}</div>
-            <div class="li-sub">${o.cnpj||'CNPJ não informado'}${o.email?` · ${o.email}`:''}</div>
-          </div>
-          <span class="badge ${o.ativo?'badge-green':'badge-gray'}">${o.ativo?'Ativa':'Inativa'}</span>
-        </div>`).join('')}
+    <div class="stats-grid" style="margin-bottom:16px">
+      <div class="stat-card blue">
+        <div class="stat-label">Total</div>
+        <div class="stat-value">${orgs.length}</div>
+        <div class="stat-sub">${ativas} ativas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Inativas</div>
+        <div class="stat-value">${orgs.length-ativas}</div>
+        <div class="stat-sub">Aguardando ativação</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarOrgs(this.value)">
+      <button class="btn btn-blue" onclick="abrirModalOrg()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova
+      </button>
+    </div>
+    <div class="card" id="listaOrgs">
+      ${_htmlListaOrgs(orgs)}
     </div>`;
   setConteudo(html);
+}
+
+function _htmlListaOrgs(orgs){
+  if(orgs.length===0) return`<div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div><div class="empty-sub">Clique em "Nova" para cadastrar a primeira consultoria parceira.</div></div>`;
+  return orgs.map(o=>`
+    <div class="list-item" style="padding:14px 4px">
+      <div class="li-icon" style="background:${o.ativo?'var(--blue-l)':'var(--gray-100)'};color:${o.ativo?'var(--blue-h)':'var(--gray-500)'};font-size:13px;font-weight:700;border-radius:var(--r-md)">${iniciais(o.nome)}</div>
+      <div class="li-info">
+        <div class="li-title">${o.nome}</div>
+        <div class="li-sub">${o.cnpj?`CNPJ ${o.cnpj} · `:''}${o.email||'Sem e-mail'}${o.cidade?` · ${o.cidade}/${o.uf||''}`:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="badge ${o.ativo?'badge-green':'badge-gray'}">${o.ativo?'Ativa':'Inativa'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="menuOrg(event,'${o.id}')" style="padding:6px;border-radius:var(--r-sm)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function filtrarOrgs(q){
+  const f=q.toLowerCase().trim();
+  const filtrados=f?_orgsCache.filter(o=>o.nome.toLowerCase().includes(f)||(o.cnpj||'').includes(f)||(o.email||'').toLowerCase().includes(f)):_orgsCache;
+  document.getElementById('listaOrgs').innerHTML=_htmlListaOrgs(filtrados);
+}
+
+function menuOrg(event, orgId){
+  event.stopPropagation();
+  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
+  const org=_orgsCache.find(o=>o.id===orgId);
+  if(!org) return;
+  const btn=event.currentTarget;
+  const rect=btn.getBoundingClientRect();
+  const menu=document.createElement('div');
+  menu.className='org-menu';
+  menu.style.cssText=`position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);z-index:200;min-width:190px;padding:4px 0;top:${Math.min(rect.bottom+4,window.innerHeight-170)}px;right:${window.innerWidth-rect.right}px`;
+  menu.innerHTML=`
+    <div class="menu-item" onclick="abrirModalOrg('${orgId}')">Editar organização</div>
+    <div class="menu-item" onclick="abrirModalAdminOrg('${orgId}')">Criar administrador</div>
+    <div style="height:1px;background:var(--border);margin:4px 0"></div>
+    <div class="menu-item${org.ativo?' danger':''}" onclick="toggleOrg('${orgId}',${org.ativo})">${org.ativo?'Desativar':'Ativar'} organização</div>`;
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
+}
+
+function abrirModalOrg(orgId=null){
+  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
+  const org=orgId?_orgsCache.find(o=>o.id===orgId):null;
+  abrirModal(org?'Editar organização':'Nova organização',`
+    <div class="field"><label>Nome da organização *</label>
+      <input type="text" id="mOrgNome" value="${org?org.nome:''}" placeholder="Ex.: Consultoria SST Brasil"></div>
+    <div class="field"><label>CNPJ</label>
+      <input type="text" id="mOrgCnpj" value="${org&&org.cnpj?org.cnpj:''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Cidade</label>
+        <input type="text" id="mOrgCidade" value="${org&&org.cidade?org.cidade:''}" placeholder="São Paulo"></div>
+      <div class="field" style="margin:0"><label>UF</label>
+        <input type="text" id="mOrgUf" value="${org&&org.uf?org.uf:''}" placeholder="SP" maxlength="2" style="text-transform:uppercase"></div>
+    </div>
+    <div class="field"><label>E-mail de contato</label>
+      <input type="email" id="mOrgEmail" value="${org&&org.email?org.email:''}" placeholder="contato@consultoria.com.br"></div>
+    <div class="field"><label>Telefone</label>
+      <input type="tel" id="mOrgTel" value="${org&&org.telefone?org.telefone:''}" placeholder="(11) 99999-9999"></div>`,
+  `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+   <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarOrg('${orgId||''}')">${org?'Salvar alterações':'Cadastrar'}</button>`);
+}
+
+async function salvarOrg(orgId){
+  const nome=document.getElementById('mOrgNome').value.trim();
+  if(!nome){showToast('Nome é obrigatório','error');return;}
+  const dados={
+    nome,
+    cnpj:document.getElementById('mOrgCnpj').value.trim()||null,
+    cidade:document.getElementById('mOrgCidade').value.trim()||null,
+    uf:(document.getElementById('mOrgUf').value.trim()||'').toUpperCase()||null,
+    email:document.getElementById('mOrgEmail').value.trim()||null,
+    telefone:document.getElementById('mOrgTel').value.trim()||null,
+  };
+  try{
+    setBtnModalLoading(true);
+    const{error}=orgId
+      ? await sb.from('organizacoes').update(dados).eq('id',orgId)
+      : await sb.from('organizacoes').insert({...dados,ativo:true});
+    if(error) throw error;
+    fecharModal();
+    showToast(orgId?'Organização atualizada!':'Organização cadastrada!','success');
+    await renderOrgs();
+  }catch(e){
+    setBtnModalLoading(false);
+    showToast(e.message||'Erro ao salvar','error');
+  }
+}
+
+async function toggleOrg(orgId,ativo){
+  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
+  if(!confirm(`Deseja ${ativo?'desativar':'ativar'} esta organização?`)) return;
+  try{
+    const{error}=await sb.from('organizacoes').update({ativo:!ativo}).eq('id',orgId);
+    if(error) throw error;
+    showToast(`Organização ${ativo?'desativada':'ativada'}!`,'success');
+    await renderOrgs();
+  }catch(e){showToast(e.message||'Erro','error');}
+}
+
+function abrirModalAdminOrg(orgId){
+  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
+  const org=_orgsCache.find(o=>o.id===orgId);
+  if(!org) return;
+  abrirModal(`Criar administrador — ${org.nome}`,`
+    <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.5">
+      Após preencher, você precisará criar o login no Supabase Dashboard e colar o UID aqui.
+    </div>
+    <div class="field"><label>Nome completo *</label>
+      <input type="text" id="mAdmNome" placeholder="Nome do administrador"></div>
+    <div class="field"><label>E-mail *</label>
+      <input type="email" id="mAdmEmail" placeholder="admin@consultoria.com.br"></div>`,
+  `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+   <button class="btn btn-blue" onclick="passarParaVinculo('${orgId}')">Próximo</button>`);
+}
+
+let _adminPendente=null;
+function passarParaVinculo(orgId){
+  const nome=document.getElementById('mAdmNome').value.trim();
+  const email=document.getElementById('mAdmEmail').value.trim();
+  if(!nome||!email){showToast('Preencha nome e e-mail','error');return;}
+  _adminPendente={orgId,nome,email};
+  fecharModal();
+  setTimeout(()=>abrirModalVinculo(),200);
+}
+
+function abrirModalVinculo(){
+  const {orgId,nome,email}=_adminPendente;
+  const org=_orgsCache.find(o=>o.id===orgId);
+  abrirModal('Vincular ao sistema',`
+    <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.5">
+      <div style="font-weight:600;margin-bottom:4px">Passo necessário no Supabase</div>
+      1. Abra <b>supabase.com</b> → seu projeto → <b>Authentication → Users</b><br>
+      2. Clique em <b>Add user → Create new user</b><br>
+      3. Use o e-mail <b>${email}</b> e defina uma senha<br>
+      4. Copie o <b>User UID</b> e cole abaixo
+    </div>
+    <div class="field"><label>Nome</label>
+      <input type="text" id="mVinNome" value="${nome}" readonly style="background:var(--gray-50)"></div>
+    <div class="field"><label>E-mail</label>
+      <input type="email" id="mVinEmail" value="${email}" readonly style="background:var(--gray-50)"></div>
+    <div class="field"><label>User UID *</label>
+      <input type="text" id="mVinUid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>`,
+  `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+   <button class="btn btn-blue" id="btnSalvarModal" onclick="vincularAdminOrg('${orgId}')">Vincular como administrador</button>`);
+}
+
+async function vincularAdminOrg(orgId){
+  const uid=document.getElementById('mVinUid').value.trim();
+  const nome=document.getElementById('mVinNome').value.trim();
+  const email=document.getElementById('mVinEmail').value.trim();
+  if(!uid){showToast('Cole o User UID do Supabase','error');return;}
+  try{
+    setBtnModalLoading(true);
+    const{error}=await sb.from('usuarios').insert({
+      id:uid,org_id:orgId,nome,email,perfil:'administrador',ativo:true
+    });
+    if(error) throw error;
+    fecharModal();
+    showToast('Administrador criado com sucesso!','success');
+    _adminPendente=null;
+  }catch(e){
+    setBtnModalLoading(false);
+    showToast(e.code==='23505'?'Este UID já está cadastrado':e.message||'Erro ao vincular','error');
+  }
+}
+
+function mascararCnpj(input){
+  let v=input.value.replace(/\D/g,'').slice(0,14);
+  if(v.length>12) v=v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/,'$1.$2.$3/$4-$5');
+  else if(v.length>8) v=v.replace(/^(\d{2})(\d{3})(\d{3})(\d*).*/,'$1.$2.$3/$4');
+  else if(v.length>5) v=v.replace(/^(\d{2})(\d{3})(\d*).*/,'$1.$2.$3');
+  else if(v.length>2) v=v.replace(/^(\d{2})(\d*).*/,'$1.$2');
+  input.value=v;
 }
 
 // ============================================================
@@ -1111,6 +1340,38 @@ function renderErro(msg){
       </div>
     </div>`;
   setConteudo(html);
+}
+
+// ============================================================
+//  MODAL GENÉRICO
+// ============================================================
+function abrirModal(titulo, corpo, rodape=''){
+  document.getElementById('modalTitulo').textContent=titulo;
+  document.getElementById('modalCorpo').innerHTML=corpo;
+  document.getElementById('modalRodape').innerHTML=rodape;
+  document.getElementById('modalOverlay').style.display='flex';
+  // Focus no primeiro input
+  setTimeout(()=>{
+    const inp=document.querySelector('#modalCorpo input:not([readonly])');
+    if(inp) inp.focus();
+  },100);
+}
+
+function fecharModal(){
+  document.getElementById('modalOverlay').style.display='none';
+}
+
+function fecharModalOverlay(e){
+  if(e.target===document.getElementById('modalOverlay')) fecharModal();
+}
+
+function setBtnModalLoading(loading){
+  const btn=document.getElementById('btnSalvarModal');
+  if(!btn) return;
+  btn.disabled=loading;
+  btn.textContent=loading?'Salvando...':btn.dataset.label||btn.textContent;
+  if(!loading) return;
+  if(!btn.dataset.label) btn.dataset.label=btn.textContent;
 }
 
 // ============================================================
