@@ -240,6 +240,10 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .scrollable::-webkit-scrollbar-track{background:transparent}
 .scrollable::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:2px}
 
+/* Mobile layout base */
+.mobile-header{display:none;flex-shrink:0}
+.mobile-content{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
+
 /* ============================================================
    RESPONSIVIDADE
    ============================================================ */
@@ -247,9 +251,9 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .sidebar{transform:none !important}
   .sidebar-overlay{display:none !important}
   .bottom-nav{display:none !important}
-  .main-content{display:flex}
-  .mobile-header{display:none}
-  .mobile-content{display:none}
+  .main-content{display:flex;flex:1}
+  .mobile-header{display:none !important}
+  .mobile-content{display:none !important}
   .hamburger{display:none !important}
   .fab{bottom:24px;right:24px}
 }
@@ -258,10 +262,11 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .sidebar{transform:translateX(-100%)}
   .sidebar.open{transform:translateX(0)}
   .bottom-nav{display:block}
-  .main-content{margin-left:0}
-  .main-header{display:none}
-  .main-body{display:none}
+  .main-content{display:none !important}
+  .mobile-header{display:block}
+  .mobile-content{display:block}
   .hamburger{display:flex}
+  #screenApp{flex-direction:column}
 }
 
 @media (min-width:768px) and (max-width:1024px) {
@@ -648,7 +653,7 @@ async function irPara(pagina, params={}){
     clientes:'Clientes', colaboradores:'Colaboradores',
     catalogo:'Catálogo de Treinamentos', relatorios:'Relatórios',
     equipe:'Equipe', agenda:'Minha Agenda',
-    historico:'Histórico', conta:'Minha Conta',
+    historico:'Histórico', conta:'Minha conta',
   };
   document.getElementById('headerTitle').textContent=titulos[pagina]||pagina;
 
