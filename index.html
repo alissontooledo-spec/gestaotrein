@@ -663,25 +663,6 @@ async function salvarColab(id){
     fecharModal();showToast(id?'Colaborador atualizado!':'Colaborador cadastrado!','success');await renderColaboradores();
   }catch(e){setBtnModalLoading(false);showToast(e.code==='23505'?'CPF ja cadastrado no sistema':e.message||'Erro ao salvar','error');}
 }
-function mascararCpf(input){
-  let v=input.value.replace(/\D/g,'').slice(0,11);
-  if(v.length>9)v=v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2}).*/,'$1.$2.$3-$4');
-  else if(v.length>6)v=v.replace(/(\d{3})(\d{3})(\d*).*/,'$1.$2.$3');
-  else if(v.length>3)v=v.replace(/(\d{3})(\d*).*/,'$1.$2');
-  input.value=v;
-}
-
-// CATALOGO
-let _catalogoCache=[];
-async function renderCatalogo(){
-  const oi=usuarioAtual.org_id;
-  const{data,error}=await sb.from('catalogo').select('*').eq('org_id',oi).order('nome');
-  if(error)throw error;
-  _catalogoCache=data||[];
-  setMobileHeader('<div class="mh-greeting">Treinamentos</div><div class="mh-name">Catalogo</div>');
-  document.getElementById('fabBtn').style.display='flex';fabCallback=()=>abrirModalCatalogo();
-  setConteudo('<div style="display:flex;gap:8px;margin-bottom:16px"><input type="search" id="buscaCatalogo" placeholder="Buscar treinamento..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarCatalogo(this.value)"><button class="btn btn-blue" onclick="abrirModalCatalogo()">+ Novo</button></div><div class="card" id="listaCatalogo">'+_htmlListaCatalogo(_catalogoCache)+'</div>');
-}
 function _htmlListaCatalogo(lista){
   if(!lista.length)return'<div class="empty"><div class="empty-icon">&#128218;</div><div class="empty-title">Nenhum treinamento</div><div class="empty-sub">Cadastre os tipos de treinamento oferecidos.</div></div>';
   return lista.map(t=>'<div class="list-item" style="padding:14px 4px"><div class="li-icon" style="background:var(--amber-l);color:var(--amber);font-size:12px;font-weight:700;border-radius:var(--r-md);text-align:center;line-height:1.2;padding:4px">'+t.carga_horaria+'h</div><div class="li-info"><div class="li-title">'+t.nome+'</div><div class="li-sub">'+(t.categoria?t.categoria+' - ':'')+'Validade: '+t.validade_meses+' '+(t.validade_meses===1?'mes':'meses')+' - '+t.carga_horaria+'h</div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><span class="badge '+(t.ativo?'badge-green':'badge-gray')+'">'+(t.ativo?'Ativo':'Inativo')+'</span><button class="btn btn-ghost btn-sm" onclick="menuCatalogo(event,\''+t.id+'\')" style="padding:6px;border-radius:var(--r-sm)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button></div></div>').join('');
@@ -743,7 +724,7 @@ let _turmasCache=[];
 async function renderTurmas(){
   const oi=usuarioAtual.org_id;
   const perfil=usuarioAtual.perfil;
-  let query=sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),usuarios!turmas_instrutor_id_fkey(nome)').eq('org_id',oi).order('created_at',{ascending:false});
+  let query=sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria)').eq('org_id',oi).order('created_at',{ascending:false});
   const{data,error}=await query;
   if(error)throw error;
   _turmasCache=data||[];
@@ -775,7 +756,7 @@ function _htmlListaTurmas(lista,statusLabel,statusBadge){
     (t.catalogo&&t.catalogo.carga_horaria?t.catalogo.carga_horaria+'h':'NR')+'</div>'+
     '<div class="li-info">'+
     '<div class="li-title">'+(t.catalogo&&t.catalogo.nome?t.catalogo.nome:'Treinamento')+'</div>'+
-    '<div class="li-sub">'+(t.clientes&&t.clientes.nome?t.clientes.nome:'')+(t.protocolo?' &middot; '+t.protocolo:'')+(t.usuarios&&t.usuarios.nome?' &middot; '+t.usuarios.nome:'')+'</div>'+
+    '<div class="li-sub">'+(t.clientes&&t.clientes.nome?t.clientes.nome:'')+(t.protocolo?' &middot; '+t.protocolo:'')+'</div>'+
     '</div>'+
     '<div style="flex-shrink:0"><span class="badge '+sb2[t.status||'agendada']+'">'+sl[t.status||'agendada']+'</span></div>'+
     '</div>').join('');
@@ -810,7 +791,7 @@ async function verTurma(id){
       '<div class="card-title">Informacoes</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
       '<div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Cliente</div><div style="font-size:14px;font-weight:500">'+(t.clientes&&t.clientes.nome?t.clientes.nome:'-')+'</div></div>'+
-      '<div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Instrutor</div><div style="font-size:14px;font-weight:500">'+(t.usuarios&&t.usuarios.nome?t.usuarios.nome:'-')+'</div></div>'+
+      '<div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Instrutor</div><div style="font-size:14px;font-weight:500">-</div></div>'+
       '<div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Carga Horaria</div><div style="font-size:14px;font-weight:500">'+(t.catalogo&&t.catalogo.carga_horaria?t.catalogo.carga_horaria+'h':'-')+'</div></div>'+
       '<div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500">'+(t.local||'-')+'</div></div>'+
       '</div>'+
@@ -964,6 +945,74 @@ function formatarData(iso){
   if(!iso)return'-';
   const[y,m,d]=iso.split('-');
   return d+'/'+m+'/'+y;
+}
+
+// CATALOGO
+let _catalogoCache=[];
+async function renderCatalogo(){
+  const oi=usuarioAtual.org_id;
+  const{data,error}=await sb.from('catalogo').select('*').eq('org_id',oi).order('nome');
+  if(error)throw error;
+  _catalogoCache=data||[];
+  setMobileHeader('<div class="mh-greeting">Treinamentos</div><div class="mh-name">Catalogo</div>');
+  document.getElementById('fabBtn').style.display='flex';fabCallback=()=>abrirModalCatalogo();
+  setConteudo('<div style="display:flex;gap:8px;margin-bottom:16px"><input type="search" id="buscaCatalogo" placeholder="Buscar treinamento..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarCatalogo(this.value)"><button class="btn btn-blue" onclick="abrirModalCatalogo()">+ Novo</button></div><div class="card" id="listaCatalogo">'+_htmlListaCatalogo(_catalogoCache)+'</div>');
+}
+function _htmlListaCatalogo(lista){
+  if(!lista.length)return'<div class="empty"><div class="empty-icon">&#128218;</div><div class="empty-title">Nenhum treinamento</div><div class="empty-sub">Cadastre os tipos de treinamento.</div></div>';
+  return lista.map(t=>'<div class="list-item" style="padding:14px 4px"><div class="li-icon" style="background:var(--amber-l);color:var(--amber);font-size:12px;font-weight:700;border-radius:var(--r-md);text-align:center;line-height:1.2;padding:4px">'+t.carga_horaria+'h</div><div class="li-info"><div class="li-title">'+t.nome+'</div><div class="li-sub">'+(t.categoria?t.categoria+' - ':'')+'Validade: '+t.validade_meses+' meses - '+t.carga_horaria+'h</div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><span class="badge '+(t.ativo?'badge-green':'badge-gray')+'">'+(t.ativo?'Ativo':'Inativo')+'</span><button class="btn btn-ghost btn-sm" onclick="menuCatalogo(event,''+t.id+'')" style="padding:6px;border-radius:var(--r-sm)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button></div></div>').join('');
+}
+function filtrarCatalogo(q){
+  const f=q.toLowerCase().trim();
+  const r=f?_catalogoCache.filter(t=>t.nome.toLowerCase().includes(f)||(t.categoria||'').toLowerCase().includes(f)):_catalogoCache;
+  document.getElementById('listaCatalogo').innerHTML=_htmlListaCatalogo(r);
+}
+function menuCatalogo(event,id){
+  event.stopPropagation();document.querySelectorAll('.org-menu').forEach(m=>m.remove());
+  const t=_catalogoCache.find(x=>x.id===id);if(!t)return;
+  const btn=event.currentTarget;const rect=btn.getBoundingClientRect();
+  const menu=document.createElement('div');menu.className='org-menu';
+  menu.style.cssText='position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);z-index:200;min-width:160px;padding:4px 0;top:'+Math.min(rect.bottom+4,window.innerHeight-110)+'px;right:'+(window.innerWidth-rect.right)+'px';
+  menu.innerHTML='<div class="menu-item" onclick="abrirModalCatalogo(''+id+'')">Editar</div><div class="menu-item'+(t.ativo?' danger':'')+'" onclick="toggleCatalogo(''+id+'','+t.ativo+')">'+(t.ativo?'Desativar':'Ativar')+'</div>';
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
+}
+function abrirModalCatalogo(id=null){
+  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
+  const t=id?_catalogoCache.find(x=>x.id===id):null;
+  abrirModal(t?'Editar treinamento':'Novo treinamento',
+    '<div class="field"><label>Nome *</label><input type="text" id="mCatNome" value="'+(t?t.nome:'')+'" placeholder="Ex.: NR-35 Trabalho em Altura"></div>'+
+    '<div class="field"><label>Descricao *</label><textarea id="mCatDesc" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Descricao...">'+(t&&t.descricao?t.descricao:'')+'</textarea></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+    '<div class="field" style="margin:0"><label>Carga horaria (h) *</label><input type="number" id="mCatCH" value="'+(t&&t.carga_horaria?t.carga_horaria:'')+'" placeholder="8" min="1" step="0.5"></div>'+
+    '<div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatVal" value="'+(t&&t.validade_meses?t.validade_meses:'')+'" placeholder="24" min="1"></div></div>'+
+    '<div class="field"><label>Categoria</label><input type="text" id="mCatCat" value="'+(t&&t.categoria?t.categoria:'')+'" placeholder="Ex.: NR, CIPA..."></div>'+
+    '<div class="field"><label>Conteudo programatico</label><textarea id="mCatCP" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Topicos abordados...">'+(t&&t.conteudo_programatico?t.conteudo_programatico:'')+'</textarea></div>',
+    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCatalogo(''+(id||'')+'')">'+(t?'Salvar':'Cadastrar')+'</button>');
+}
+async function salvarCatalogo(id){
+  const nome=document.getElementById('mCatNome').value.trim();
+  const desc=document.getElementById('mCatDesc').value.trim();
+  const ch=parseFloat(document.getElementById('mCatCH').value);
+  const val=parseInt(document.getElementById('mCatVal').value);
+  if(!nome){showToast('Nome obrigatorio','error');return;}
+  if(!desc){showToast('Descricao obrigatoria','error');return;}
+  if(!ch||ch<=0){showToast('Carga horaria invalida','error');return;}
+  if(!val||val<=0){showToast('Validade invalida','error');return;}
+  const dados={nome,descricao:desc,carga_horaria:ch,validade_meses:val,categoria:document.getElementById('mCatCat').value.trim()||null,conteudo_programatico:document.getElementById('mCatCP').value.trim()||null};
+  try{
+    setBtnModalLoading(true);
+    const{error}=id?await sb.from('catalogo').update(dados).eq('id',id):await sb.from('catalogo').insert({...dados,org_id:usuarioAtual.org_id,ativo:true});
+    if(error)throw error;
+    fecharModal();showToast(id?'Treinamento atualizado!':'Treinamento cadastrado!','success');await renderCatalogo();
+  }catch(e){setBtnModalLoading(false);showToast(e.message||'Erro ao salvar','error');}
+}
+async function toggleCatalogo(id,ativo){
+  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
+  if(!confirm('Deseja '+(ativo?'desativar':'ativar')+' este treinamento?'))return;
+  const{error}=await sb.from('catalogo').update({ativo:!ativo}).eq('id',id);
+  if(error){showToast(error.message,'error');return;}
+  showToast('Treinamento '+(ativo?'desativado':'ativado')+'!','success');await renderCatalogo();
 }
 
 // EQUIPE
