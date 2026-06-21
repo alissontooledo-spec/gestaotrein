@@ -864,7 +864,7 @@ async function renderColaboradores() {
   setConteudo(`
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarColabs(this.value)">
-      ${podeCriar?`<button class="btn btn-blue" onclick="abrirModalColab()">${ICONS.plus} Novo</button>`:''}
+      ${podeCriar?`<button class="btn btn-blue" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline" onclick="abrirModalImportacao()">⬆ Importar</button>`:''}
     </div>
     <div class="card" id="listaColabs">${_htmlListaColabs(_colabsCache)}</div>`);
 }
@@ -1004,6 +1004,9 @@ async function toggleCatalogo(id) {
 // ============================================================
 // TURMAS
 // ============================================================
+// ============================================================
+// TURMAS
+// ============================================================
 async function renderTurmas() {
   const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
   if (error) throw error;
@@ -1054,9 +1057,11 @@ function filtrarTurmas() {
 async function verTurma(id) {
   showLoading('Carregando turma...');
   try {
-    const {data:t,error} = await sb.from('turmas').select('*,clientes(*),catalogo(*),sessoes(*),turma_participantes(*,colaboradores(*))').eq('id',id).single();
+    const {data:t,error} = await sb.from('turmas')
+      .select('*,clientes(*),catalogo(*),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(*))')
+      .eq('id',id).single();
     if (error) throw error;
-    const sessoes      = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1);
+    const agendamentos = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1);
     const participantes= t.turma_participantes||[];
     const podeMgr      = ['administrador','comercial'].includes(usuarioAtual.perfil);
     const st           = t.status||'agendada';
@@ -1064,13 +1069,18 @@ async function verTurma(id) {
     const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
     const nomeT = t.catalogo?.nome||'Treinamento';
     const nomeC = t.clientes?.nome||'-';
+    const podeEditar = podeMgr && st !== 'concluida' && st !== 'cancelada';
 
-    let html = `
+    const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
-        <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div><div style="font-size:13px;color:var(--text-2)">${t.protocolo||''}</div></div>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
+          <div style="font-size:13px;color:var(--text-2)">${t.protocolo||''}</div>
+        </div>
         <span class="badge ${SB[st]}">${SL[st]}</span>
       </div>
+
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Informações</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1079,26 +1089,47 @@ async function verTurma(id) {
           <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500">${t.local||'-'}</div></div>
         </div>
         ${t.observacoes?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Observações</div><div style="font-size:13px;color:var(--text-2)">${t.observacoes}</div></div>`:''}
-        ${podeMgr&&st==='agendada'?`<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-blue btn-sm" data-action="editarTurma" data-id="${id}">Editar</button><button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="${id}">Cancelar</button></div>`:''}
+        ${podeMgr&&st==='agendada'?`<div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-blue btn-sm" data-action="editarTurma" data-id="${id}">Editar</button>
+          <button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="${id}">Cancelar turma</button>
+        </div>`:''}
       </div>
+
       <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Sessões (${sessoes.length})</div>
-        ${sessoes.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">Nenhuma sessão</div></div>':sessoes.map((s,i)=>`
+        <div class="card-title">Agendamentos (${agendamentos.length})</div>
+        ${agendamentos.length===0
+          ?'<div class="empty" style="padding:20px"><div class="empty-title">Nenhum agendamento</div><div class="empty-sub">Adicione a data e o instrutor do treinamento.</div></div>'
+          :agendamentos.map((ag,i)=>`
           <div class="list-item" style="padding:12px 0">
             <div class="li-icon" style="background:var(--gray-100);color:var(--text-2);font-size:12px;font-weight:700;border-radius:var(--r-md)">${i+1}</div>
-            <div class="li-info"><div class="li-title">${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}${s.hora_fim?' - '+s.hora_fim.slice(0,5):''}</div><div class="li-sub">${s.local||t.local||''}${s.modalidade?' · '+s.modalidade:''}</div></div>
-            <span class="badge ${s.concluida?'badge-green':'badge-gray'}">${s.concluida?'Concluída':'Pendente'}</span>
+            <div class="li-info">
+              <div class="li-title">${formatarData(ag.data)}${ag.hora_inicio?' · '+ag.hora_inicio.slice(0,5):''}${ag.hora_fim?' - '+ag.hora_fim.slice(0,5):''}</div>
+              <div class="li-sub">${ag.usuarios?.nome?'Instrutor: '+ag.usuarios.nome:'Sem instrutor'}${ag.local?' · '+ag.local:''}${ag.modalidade?' · '+ag.modalidade:''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <span class="badge ${ag.concluida?'badge-green':'badge-gray'}">${ag.concluida?'Concluído':'Pendente'}</span>
+              ${podeEditar?`<button class="btn btn-ghost btn-sm" style="padding:4px" data-action="menuAgendamento" data-id="${ag.id}" data-turma="${id}">${ICONS.dots}</button>`:''}
+            </div>
           </div>`).join('')}
-        ${podeMgr&&st!=='concluida'&&st!=='cancelada'?`<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addSessao" data-id="${id}">+ Adicionar sessão</button>`:''}
+        ${podeEditar?`<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addAgendamento" data-id="${id}">+ Adicionar agendamento</button>`:''}
       </div>
+
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Participantes (${participantes.length})</div>
-        ${participantes.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">Nenhum participante</div></div>':participantes.map(p=>`
+        ${participantes.length===0
+          ?'<div class="empty" style="padding:20px"><div class="empty-title">Nenhum participante</div><div class="empty-sub">Adicione os colaboradores desta turma.</div></div>'
+          :participantes.map(p=>`
           <div class="list-item" style="padding:10px 0">
             <div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:12px;font-weight:700;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">${iniciais(p.colaboradores?.nome||'?')}</div>
-            <div class="li-info"><div class="li-title">${p.colaboradores?.nome||''}</div><div class="li-sub">${p.empresa_vinculo||''}</div></div>
+            <div class="li-info">
+              <div class="li-title">${p.colaboradores?.nome||''}</div>
+              <div class="li-sub">${p.empresa_vinculo||''}${p.cargo_vinculo?' · '+p.cargo_vinculo:''}</div>
+            </div>
+            ${podeEditar?`<button class="btn btn-ghost btn-sm" style="padding:4px;color:var(--red)" data-action="removerParticipante" data-id="${p.id}" data-turma="${id}" title="Remover participante">✕</button>`:''}
           </div>`).join('')}
-        ${podeMgr&&st!=='concluida'&&st!=='cancelada'?`<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addParticipante" data-id="${id}" data-cli="${t.cliente_id||''}">+ Adicionar participante</button>`:''}
+        ${podeEditar?`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" data-action="addParticipante" data-id="${id}" data-cli="${t.cliente_id||''}">+ Adicionar participante</button>
+        </div>`:''}
       </div>`;
 
     setConteudo(html);
@@ -1106,9 +1137,9 @@ async function verTurma(id) {
   } finally { hideLoading(); }
 }
 
+// ---- Modal Turma ----
 async function abrirModalTurma(id=null) {
   _modalCurrentId = id;
-  // Garantir caches carregados
   if (!_clientesCache.length) {
     const {data} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = data||[];
@@ -1123,10 +1154,18 @@ async function abrirModalTurma(id=null) {
   const cliOpts = _clientesCache.map(c=>`<option value="${c.id}" ${t?.cliente_id===c.id?'selected':''}>${c.nome}</option>`).join('');
   const catOpts = _catalogoCache.map(c=>`<option value="${c.id}" ${t?.catalogo_id===c.id?'selected':''}>${c.nome}</option>`).join('');
   abrirModal(t?'Editar turma':'Nova turma', `
-    <div class="field"><label>Cliente *</label><select id="mTurCli" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"><option value="">Selecione o cliente...</option>${cliOpts}</select></div>
-    <div class="field"><label>Treinamento *</label><select id="mTurCat" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"><option value="">Selecione o treinamento...</option>${catOpts}</select></div>
-    <div class="field"><label>Local</label><input type="text" id="mTurLocal" value="${t?.local||''}" placeholder="Ex.: Planta da empresa, Sala A..."></div>
-    <div class="field"><label>Observações</label><textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${t?.observacoes||''}</textarea></div>`,
+    <div class="field"><label>Cliente *</label>
+      <select id="mTurCli" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="">Selecione o cliente...</option>${cliOpts}
+      </select></div>
+    <div class="field"><label>Treinamento *</label>
+      <select id="mTurCat" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="">Selecione o treinamento...</option>${catOpts}
+      </select></div>
+    <div class="field"><label>Local</label>
+      <input type="text" id="mTurLocal" value="${t?.local||''}" placeholder="Ex.: Planta da empresa, Sala A..."></div>
+    <div class="field"><label>Observações</label>
+      <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${t?.observacoes||''}</textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
 }
@@ -1139,7 +1178,9 @@ async function salvarTurma() {
   const dados = {cliente_id:cli, catalogo_id:cat, local:document.getElementById('mTurLocal')?.value.trim()||null, observacoes:document.getElementById('mTurObs')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
-    const {error} = _modalCurrentId ? await sb.from('turmas').update(dados).eq('id',_modalCurrentId) : await sb.from('turmas').insert({...dados,org_id:usuarioAtual.org_id,status:'agendada',criado_por:usuarioAtual.id});
+    const {error} = _modalCurrentId
+      ? await sb.from('turmas').update(dados).eq('id',_modalCurrentId)
+      : await sb.from('turmas').insert({...dados,org_id:usuarioAtual.org_id,status:'agendada',criado_por:usuarioAtual.id});
     if (error) throw error;
     fecharModal(); showToast(_modalCurrentId?'Turma atualizada!':'Turma criada!','success');
     await renderTurmas();
@@ -1147,70 +1188,138 @@ async function salvarTurma() {
 }
 
 async function cancelarTurma(id) {
-  if (!confirm('Deseja cancelar esta turma?')) return;
+  if (!confirm('Deseja cancelar esta turma? Esta ação não pode ser desfeita.')) return;
   const {error} = await sb.from('turmas').update({status:'cancelada'}).eq('id',id);
   if (error) { showToast(error.message,'error'); return; }
   showToast('Turma cancelada','info');
   await renderTurmas();
 }
 
-function abrirModalSessao(turmaId) {
-  _modalCurrentId = turmaId;
-  abrirModal('Nova sessão', `
-    <div class="field"><label>Data *</label><input type="date" id="mSesData"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Hora início</label><input type="time" id="mSesIni"></div>
-      <div class="field" style="margin:0"><label>Hora término</label><input type="time" id="mSesFim"></div>
-    </div>
-    <div class="field"><label>Modalidade</label>
-      <select id="mSesMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="presencial">Presencial</option>
-        <option value="online">Online</option>
-        <option value="hibrido">Híbrido</option>
-      </select></div>
-    <div class="field"><label>Local (opcional)</label><input type="text" id="mSesLocal" placeholder="Ex.: Sala de treinamento..."></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarSessao()">Adicionar</button>`);
+// ---- Agendamentos ----
+async function _carregarInstrutores() {
+  if (window._instrutoresCache && window._instrutoresCache.length) return window._instrutoresCache;
+  const {data} = await sb.from('usuarios').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('perfil','instrutor').eq('ativo',true).order('nome');
+  window._instrutoresCache = data||[];
+  return window._instrutoresCache;
 }
 
-async function salvarSessao() {
+async function abrirModalAgendamento(turmaId, agendamentoId=null) {
+  _modalCurrentId = turmaId;
+  window._agendamentoEditId = agendamentoId||null;
+  const instrutores = await _carregarInstrutores();
+  let ag = null;
+  if (agendamentoId) {
+    const {data} = await sb.from('sessoes').select('*').eq('id',agendamentoId).single();
+    ag = data;
+  }
+  const instOpts = instrutores.map(i=>`<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${i.nome}</option>`).join('');
+  abrirModal(ag?'Editar agendamento':'Novo agendamento', `
+    <div class="field"><label>Data *</label>
+      <input type="date" id="mAgData" value="${ag?.data||''}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Hora início</label>
+        <input type="time" id="mAgIni" value="${ag?.hora_inicio?.slice(0,5)||''}"></div>
+      <div class="field" style="margin:0"><label>Hora término</label>
+        <input type="time" id="mAgFim" value="${ag?.hora_fim?.slice(0,5)||''}"></div>
+    </div>
+    <div class="field"><label>Instrutor responsável</label>
+      <select id="mAgInstrutor" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="">Selecione o instrutor...</option>${instOpts}
+      </select></div>
+    <div class="field"><label>Modalidade</label>
+      <select id="mAgMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="presencial" ${(!ag||ag?.modalidade==='presencial')?'selected':''}>Presencial</option>
+        <option value="online" ${ag?.modalidade==='online'?'selected':''}>Online</option>
+        <option value="hibrido" ${ag?.modalidade==='hibrido'?'selected':''}>Híbrido</option>
+      </select></div>
+    <div class="field"><label>Local (opcional)</label>
+      <input type="text" id="mAgLocal" value="${ag?.local||''}" placeholder="Ex.: Sala de treinamento..."></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarAgendamento()">
+       ${ag?'Salvar':'Adicionar agendamento'}
+     </button>`);
+}
+
+async function salvarAgendamento() {
   const turmaId = _modalCurrentId;
   if (!turmaId) { showToast('Erro: ID da turma não encontrado','error'); return; }
-  const data = document.getElementById('mSesData')?.value;
+  const data = document.getElementById('mAgData')?.value;
   if (!data) { showToast('Informe a data','error'); return; }
-  const dados = {turma_id:turmaId, org_id:usuarioAtual.org_id, data, hora_inicio:document.getElementById('mSesIni')?.value||null, hora_fim:document.getElementById('mSesFim')?.value||null, modalidade:document.getElementById('mSesMod')?.value||'presencial', local:document.getElementById('mSesLocal')?.value.trim()||null};
+  const dados = {
+    turma_id:    turmaId,
+    org_id:      usuarioAtual.org_id,
+    data,
+    hora_inicio: document.getElementById('mAgIni')?.value||null,
+    hora_fim:    document.getElementById('mAgFim')?.value||null,
+    instrutor_id:document.getElementById('mAgInstrutor')?.value||null,
+    modalidade:  document.getElementById('mAgMod')?.value||'presencial',
+    local:       document.getElementById('mAgLocal')?.value.trim()||null,
+  };
   try {
     setBtnModalLoading(true);
-    const {error} = await sb.from('sessoes').insert(dados);
+    const {error} = window._agendamentoEditId
+      ? await sb.from('sessoes').update(dados).eq('id',window._agendamentoEditId)
+      : await sb.from('sessoes').insert(dados);
     if (error) throw error;
-    fecharModal(); showToast('Sessão adicionada!','success');
+    fecharModal();
+    showToast(window._agendamentoEditId?'Agendamento atualizado!':'Agendamento adicionado!','success');
+    window._agendamentoEditId = null;
     await verTurma(turmaId);
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
 
+function menuAgendamento(btn, agId, turmaId) {
+  _menuDropdown(btn, [
+    {action:'editarAgendamento', id:agId, extra:turmaId, label:'Editar agendamento'},
+    '---',
+    {action:'excluirAgendamento', id:agId, extra:turmaId, label:'Excluir agendamento', danger:true},
+  ]);
+}
+
+async function excluirAgendamento(agId, turmaId) {
+  if (!confirm('Deseja excluir este agendamento?')) return;
+  const {error} = await sb.from('sessoes').delete().eq('id',agId);
+  if (error) { showToast(error.message,'error'); return; }
+  showToast('Agendamento excluído','info');
+  await verTurma(turmaId);
+}
+
+// ---- Participantes ----
+async function removerParticipante(presencaId, turmaId) {
+  if (!confirm('Deseja remover este participante da turma?')) return;
+  const {error} = await sb.from('turma_participantes').delete().eq('id',presencaId);
+  if (error) { showToast(error.message,'error'); return; }
+  showToast('Participante removido','info');
+  await verTurma(turmaId);
+}
+
 async function abrirModalAddParticipante(turmaId, clienteId) {
   _modalCurrentId = turmaId;
-  const {data:todos}       = await sb.from('colaboradores').select('id,nome,cpf').order('nome').limit(500);
-  const {data:jaAdicionados} = await sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId);
-  const jaIds = new Set((jaAdicionados||[]).map(x=>x.colaborador_id));
-  const disponiveis = (todos||[]).filter(c=>!jaIds.has(c.id));
-  window._partDisp = disponiveis;
   window._partCliId = clienteId;
+  const {data:todos}        = await sb.from('colaboradores').select('id,nome,cpf,cargo').order('nome').limit(500);
+  const {data:jaAdicionados}= await sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId);
+  const jaIds = new Set((jaAdicionados||[]).map(x=>x.colaborador_id));
+  window._partDisp = (todos||[]).filter(c=>!jaIds.has(c.id));
   abrirModal('Adicionar participante', `
-    <div class="field">
-      <label>Buscar colaborador</label>
-      <input type="text" id="buscaPartModal" placeholder="Nome ou CPF..." oninput="filtrarPartModal(this.value)" style="margin-bottom:8px">
-      <div id="listaPartModal" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">${_htmlPartModal(disponiveis)}</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input type="text" id="buscaPartModal" placeholder="Buscar por nome ou CPF..." oninput="filtrarPartModal(this.value)" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none">
+      <button class="btn btn-outline btn-sm" data-action="cadastroRapidoColab" title="Cadastrar novo colaborador">+ Novo</button>
+    </div>
+    <div id="listaPartModal" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
+      ${_htmlPartModal(window._partDisp)}
     </div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`);
 }
 
 function _htmlPartModal(lista) {
-  if (!lista.length) return `<div class="empty" style="padding:20px"><div class="empty-title">Nenhum colaborador disponível</div></div>`;
+  if (!lista.length) return `<div class="empty" style="padding:24px"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador disponível</div><div class="empty-sub">Clique em "+ Novo" para cadastrar.</div></div>`;
   return lista.map(c=>`
     <div class="list-item" style="padding:10px 12px;cursor:pointer" data-action="selecionarPart" data-col="${c.id}">
       <div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:11px;font-weight:700;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">${iniciais(c.nome)}</div>
-      <div class="li-info"><div class="li-title">${c.nome}</div><div class="li-sub">${c.cpf?'CPF '+c.cpf:'Sem CPF'}</div></div>
+      <div class="li-info">
+        <div class="li-title">${c.nome}</div>
+        <div class="li-sub">${c.cpf?'CPF '+c.cpf:'Sem CPF'}${c.cargo?' · '+c.cargo:''}</div>
+      </div>
     </div>`).join('');
 }
 
@@ -1221,13 +1330,16 @@ function filtrarPartModal(q) {
 }
 
 async function selecionarParticipante(colId) {
-  const turmaId  = _modalCurrentId;
+  const turmaId   = _modalCurrentId;
   const clienteId = window._partCliId;
   if (!turmaId||!colId) return;
   try {
     const {data:col} = await sb.from('colaboradores').select('nome,cargo').eq('id',colId).single();
     const {data:cli} = clienteId ? await sb.from('clientes').select('nome').eq('id',clienteId).single() : {data:null};
-    const {error} = await sb.from('turma_participantes').insert({turma_id:turmaId, colaborador_id:colId, org_id:usuarioAtual.org_id, empresa_vinculo:cli?.nome||null, cargo_vinculo:col?.cargo||null});
+    const {error} = await sb.from('turma_participantes').insert({
+      turma_id:turmaId, colaborador_id:colId, org_id:usuarioAtual.org_id,
+      empresa_vinculo:cli?.nome||null, cargo_vinculo:col?.cargo||null
+    });
     if (error) throw error;
     showToast(`${col?.nome||'Participante'} adicionado!`,'success');
     fecharModal();
@@ -1237,9 +1349,128 @@ async function selecionarParticipante(colId) {
   }
 }
 
-// ============================================================
-// AGENDA (INSTRUTOR)
-// ============================================================
+// Cadastro rápido de colaborador dentro do modal de participante
+function abrirCadastroRapidoColab() {
+  const turmaId   = _modalCurrentId;
+  const clienteId = window._partCliId;
+  abrirModal('Novo colaborador (cadastro rápido)', `
+    <div class="field"><label>Nome completo *</label>
+      <input type="text" id="mCRNome" placeholder="Nome completo"></div>
+    <div class="field"><label>CPF</label>
+      <input type="text" id="mCRCpf" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>
+    <div class="field"><label>Cargo</label>
+      <input type="text" id="mCRCargo" placeholder="Ex.: Operador, Eletricista..."></div>`,
+    `<button class="btn btn-outline" onclick="reabrirModalParticipante()">Cancelar</button>
+     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCadastroRapido()">Cadastrar e adicionar</button>`);
+  window._crTurmaId   = turmaId;
+  window._crClienteId = clienteId;
+}
+
+async function salvarCadastroRapido() {
+  const nome  = document.getElementById('mCRNome')?.value.trim();
+  if (!nome) { showToast('Nome é obrigatório','error'); return; }
+  const cpf   = document.getElementById('mCRCpf')?.value.trim()||null;
+  const cargo = document.getElementById('mCRCargo')?.value.trim()||null;
+  try {
+    setBtnModalLoading(true);
+    const {data:col,error} = await sb.from('colaboradores').insert({nome,cpf,cargo}).select().single();
+    if (error) throw error;
+    // Adicionar direto à turma
+    const {data:cli} = window._crClienteId ? await sb.from('clientes').select('nome').eq('id',window._crClienteId).single() : {data:null};
+    const {error:e2} = await sb.from('turma_participantes').insert({
+      turma_id:window._crTurmaId, colaborador_id:col.id, org_id:usuarioAtual.org_id,
+      empresa_vinculo:cli?.nome||null, cargo_vinculo:cargo
+    });
+    if (e2) throw e2;
+    fecharModal();
+    showToast(`${nome} cadastrado e adicionado!`,'success');
+    await verTurma(window._crTurmaId);
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.code==='23505'?'CPF já cadastrado no sistema':e.message||'Erro','error');
+  }
+}
+
+async function reabrirModalParticipante() {
+  const turmaId   = window._crTurmaId   || _modalCurrentId;
+  const clienteId = window._crClienteId || window._partCliId;
+  fecharModal();
+  await abrirModalAddParticipante(turmaId, clienteId);
+}
+
+// ---- Importação de colaboradores ----
+function baixarModeloImportacao() {
+  const csv = 'nome,cpf,cargo,email,telefone\nJoão da Silva,000.000.000-00,Operador,joao@empresa.com,(47) 99999-9999\nMaria Souza,111.111.111-11,Técnica,maria@empresa.com,(47) 88888-8888';
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'modelo-colaboradores.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function abrirModalImportacao() {
+  abrirModal('Importar colaboradores', `
+    <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.6">
+      <div style="font-weight:600;margin-bottom:4px">Como importar:</div>
+      1. Baixe o modelo de planilha abaixo<br>
+      2. Preencha com os dados dos colaboradores<br>
+      3. Salve como CSV e selecione o arquivo
+    </div>
+    <button class="btn btn-outline" style="width:100%;margin-bottom:16px" onclick="baixarModeloImportacao()">
+      ⬇ Baixar modelo CSV
+    </button>
+    <div class="field"><label>Selecione o arquivo CSV *</label>
+      <input type="file" id="mImpArquivo" accept=".csv" style="width:100%;padding:9px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit"></div>
+    <div id="mImpPreview" style="margin-top:8px;font-size:13px;color:var(--text-2)"></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-blue" id="btnSalvarModal" onclick="executarImportacao()">Importar</button>`);
+  document.getElementById('mImpArquivo').addEventListener('change', previewImportacao);
+}
+
+let _dadosImportacao = [];
+function previewImportacao(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const lines = ev.target.result.split('\n').filter(l=>l.trim());
+    const header = lines[0].toLowerCase().split(',').map(h=>h.trim());
+    const nomeIdx  = header.indexOf('nome');
+    const cpfIdx   = header.indexOf('cpf');
+    const cargoIdx = header.indexOf('cargo');
+    const emailIdx = header.indexOf('email');
+    const telIdx   = header.indexOf('telefone');
+    if (nomeIdx < 0) { document.getElementById('mImpPreview').innerHTML='<span style="color:var(--red)">Coluna "nome" não encontrada no arquivo.</span>'; return; }
+    _dadosImportacao = lines.slice(1).map(line=>{
+      const cols = line.split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+      return {
+        nome:  cols[nomeIdx]||'',
+        cpf:   cpfIdx>=0?cols[cpfIdx]||null:null,
+        cargo: cargoIdx>=0?cols[cargoIdx]||null:null,
+        email: emailIdx>=0?cols[emailIdx]||null:null,
+        telefone:telIdx>=0?cols[telIdx]||null:null,
+      };
+    }).filter(r=>r.nome);
+    document.getElementById('mImpPreview').innerHTML=`<span style="color:var(--green);font-weight:500">✓ ${_dadosImportacao.length} colaboradores encontrados no arquivo.</span>`;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+async function executarImportacao() {
+  if (!_dadosImportacao.length) { showToast('Selecione um arquivo CSV válido','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const {data,error} = await sb.from('colaboradores').upsert(_dadosImportacao, {onConflict:'cpf',ignoreDuplicates:false}).select();
+    if (error) throw error;
+    fecharModal();
+    showToast(`${data?.length||_dadosImportacao.length} colaboradores importados com sucesso!`,'success');
+    await renderColaboradores();
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message||'Erro ao importar','error');
+  }
+}
+
 async function renderAgenda() {
   const {data:turmas} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(data,hora_inicio)').eq('instrutor_id',usuarioAtual.id).order('created_at',{ascending:false});
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus treinamentos</div>`);
@@ -1370,10 +1601,15 @@ document.addEventListener('click', function(e) {
     // Turmas
     case 'editarTurma':     abrirModalTurma(id); break;
     case 'cancelarTurma':   cancelarTurma(id); break;
-    case 'addSessao':       abrirModalSessao(id); break;
+    case 'addAgendamento':  abrirModalAgendamento(id); break;
+    case 'menuAgendamento':  menuAgendamento(el,id,el.getAttribute('data-turma')); break;
+    case 'editarAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalAgendamento(extra,id); break;
+    case 'excluirAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); excluirAgendamento(id,extra); break;
     case 'addParticipante': abrirModalAddParticipante(id, cli); break;
     // Participante
-    case 'selecionarPart':  selecionarParticipante(col); break;
+    case 'selecionarPart':        selecionarParticipante(el.getAttribute('data-col')); break;
+    case 'removerParticipante':   removerParticipante(id,el.getAttribute('data-turma')); break;
+    case 'cadastroRapidoColab':   abrirCadastroRapidoColab(); break;
   }
 });
 
@@ -1390,6 +1626,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   showScreen('screenLogin');
 });
+
+
 
 </script>
 </body>
