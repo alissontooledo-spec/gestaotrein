@@ -619,7 +619,7 @@ async function renderHomeComercial() {
 async function renderHomeInstrutor() {
   const {data:sessoes} = await sb
     .from('sessoes')
-    .select('*,turmas(*,clientes(nome),catalogo(nome,carga_horaria))')
+    .select('id,turma_id,data,hora_inicio,local,concluida,turmas(id,status,clientes(nome),catalogo(nome,carga_horaria))')
     .eq('instrutor_id',usuarioAtual.id)
     .eq('concluida',false)
     .order('data',{ascending:true})
@@ -1515,7 +1515,7 @@ async function renderAgenda() {
   // Buscar agendamentos onde este instrutor está designado
   const {data:sessoes} = await sb
     .from('sessoes')
-    .select('*,turmas(*,clientes(nome),catalogo(nome,carga_horaria))')
+    .select('id,turma_id,data,hora_inicio,hora_fim,local,modalidade,concluida,turmas(id,status,cliente_id,clientes(nome),catalogo(nome,carga_horaria))')
     .eq('instrutor_id',usuarioAtual.id)
     .order('data',{ascending:true});
 
@@ -1528,9 +1528,10 @@ async function renderAgenda() {
   const concluidas= (sessoes||[]).filter(s=>s.concluida);
 
   const renderSessao = s => {
-    const t  = s.turmas||{};
-    const st = t.status||'agendada';
-    return `<div class="list-item" data-action="verTurma" data-id="${t.id||''}" style="cursor:pointer">
+    const t    = s.turmas||{};
+    const turmaId = t.id || s.turma_id || '';
+    const st   = t.status||'agendada';
+    return `<div class="list-item" data-action="verTurma" data-id="${turmaId}" style="cursor:pointer;padding:14px 0">
       <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.catalogo?.carga_horaria||'?'}h</div>
       <div class="li-info">
         <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
