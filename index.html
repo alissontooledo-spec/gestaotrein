@@ -804,7 +804,7 @@ async function verTurma(id){
       '<div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500">'+(t.local||'-')+'</div></div>'+
       '</div>'+
       (t.observacoes?'<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Observacoes</div><div style="font-size:13px;color:var(--text-2)">'+t.observacoes+'</div></div>':'')+
-      (podeMgr&&t.status==='agendada'?'<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-blue btn-sm" onclick="abrirModalTurma(&apos;&apos;+id+&apos;&apos;)">Editar</button><button class="btn btn-outline btn-sm" onclick="cancelarTurma(&apos;&apos;+id+&apos;&apos;)">Cancelar</button></div>':'')+
+      (podeMgr&&t.status==='agendada'?'<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-blue btn-sm" data-action="editarTurma" data-id="'+id+'">Editar</button><button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="'+id+'">Cancelar</button></div>':'')+
       '</div>'+
       '<div class="card" style="margin-bottom:16px">'+
       '<div class="card-title">Sessoes ('+sessoes.length+')</div>'+
@@ -815,7 +815,7 @@ async function verTurma(id){
         '<div class="li-sub">'+(s.local||t.local||'')+(s.modalidade?' &middot; '+s.modalidade:'')+'</div></div>'+
         '<span class="badge '+(s.concluida?'badge-green':'badge-gray')+'">'+(s.concluida?'Concluida':'Pendente')+'</span>'+
         '</div>').join(''))+
-      (podeMgr&&t.status!=='concluida'&&t.status!=='cancelada'?'<button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="abrirModalSessao(&apos;&apos;+id+&apos;&apos;)">+ Adicionar sessao</button>':'')+
+      (podeMgr&&t.status!=='concluida'&&t.status!=='cancelada'?'<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addSessao" data-id="'+id+'">+ Adicionar sessao</button>':'')+
       '</div>'+
       '<div class="card" style="margin-bottom:16px">'+
       '<div class="card-title">Participantes ('+participantes.length+')</div>'+
@@ -825,7 +825,7 @@ async function verTurma(id){
         '<div class="li-info"><div class="li-title">'+(p.colaboradores&&p.colaboradores.nome?p.colaboradores.nome:'')+'</div>'+
         '<div class="li-sub">'+(p.empresa_vinculo||'')+(p.cargo_vinculo?' &middot; '+p.cargo_vinculo:'')+'</div></div>'+
         '</div>').join(''))+
-      (podeMgr&&t.status!=='concluida'&&t.status!=='cancelada'?'<button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="abrirModalAddParticipante(&apos;&apos;+id+&apos;&apos;,&apos;&apos;+t.cliente_id+&apos;&apos;)">+ Adicionar participante</button>':'')+
+      (podeMgr&&t.status!=='concluida'&&t.status!=='cancelada'?'<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addParticipante" data-id="'+id+'" data-cli="'+t.cliente_id+'">+ Adicionar participante</button>':'')+
       '</div>';
     setConteudo(html);
     setMobileHeader('<div class="mh-greeting">Turma</div><div class="mh-name">'+(t.catalogo&&t.catalogo.nome?t.catalogo.nome:'Treinamento')+'</div>');
@@ -840,7 +840,7 @@ function abrirModalSessao(turmaId){
     '<div class="field" style="margin:0"><label>Hora termino</label><input type="time" id="mSesFim"></div></div>'+
     '<div class="field"><label>Modalidade</label><select id="mSesMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"><option value="presencial">Presencial</option><option value="online">Online</option><option value="hibrido">Hibrido</option></select></div>'+
     '<div class="field"><label>Local (opcional)</label><input type="text" id="mSesLocal" placeholder="Ex.: Sala de treinamento, planta da empresa..."></div>',
-    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarSessao(&apos;&apos;+turmaId+&apos;&apos;)">Adicionar</button>');
+    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" data-action="salvarSessao">Adicionar</button>');
 }
 
 async function salvarSessao(turmaId){
@@ -864,7 +864,7 @@ async function abrirModalAddParticipante(turmaId,clienteId){
     '<div class="field"><label>Buscar colaborador</label><input type="text" id="buscaPartModal" placeholder="Nome ou CPF..." oninput="filtrarPartModal(this.value)" style="margin-bottom:8px">'+
     '<div id="listaPartModal" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">'+
     (disponiveis.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">Nenhum colaborador disponivel</div></div>':
-    disponiveis.map(c=>'<div class="list-item" style="padding:10px 12px;cursor:pointer" onclick="selecionarParticipante(&apos;&apos;+turmaId+&apos;&apos;,&apos;&apos;+c.id+&apos;&apos;,&apos;&apos;+clienteId+&apos;&apos;)">'+
+    disponiveis.map(c=>'<div class="list-item" style="padding:10px 12px;cursor:pointer" data-action="selecionarPart" data-turma="'+turmaId+'" data-col="'+c.id+'" data-cli="'+clienteId+'">'+
       '<div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:11px;font-weight:700;border-radius:50%;width:32px;height:32px">'+iniciais(c.nome)+'</div>'+
       '<div class="li-info"><div class="li-title">'+c.nome+'</div><div class="li-sub">'+(c.cpf?'CPF '+c.cpf:'Sem CPF')+'</div></div>'+
       '</div>').join(''))+
@@ -878,7 +878,7 @@ function filtrarPartModal(q){
   const lista=window._partModalData||[];
   const r=f?lista.filter(c=>c.nome.toLowerCase().includes(f)||(c.cpf||'').includes(f)):lista;
   document.getElementById('listaPartModal').innerHTML=r.length===0?'<div class="empty" style="padding:20px"><div class="empty-title">Nenhum resultado</div></div>':
-    r.map(c=>'<div class="list-item" style="padding:10px 12px;cursor:pointer" onclick="selecionarParticipante(&apos;&apos;+c.id+&apos;&apos;,&apos;&apos;+c.turmaId+&apos;&apos;)">'+
+    r.map(c=>'<div class="list-item" style="padding:10px 12px;cursor:pointer" data-action="selecionarPart" data-turma="'+(_modalCurrentId||'')+'" data-col="'+c.id+'" data-cli="'+('' )+'">'+
     '<div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:11px;font-weight:700;border-radius:50%;width:32px;height:32px">'+iniciais(c.nome)+'</div>'+
     '<div class="li-info"><div class="li-title">'+c.nome+'</div><div class="li-sub">'+(c.cpf?'CPF '+c.cpf:'Sem CPF')+'</div></div></div>').join('');
 }
@@ -969,7 +969,7 @@ async function renderCatalogo(){
 }
 function _htmlListaCatalogo(lista){
   if(!lista.length)return'<div class="empty"><div class="empty-icon">&#128218;</div><div class="empty-title">Nenhum treinamento</div><div class="empty-sub">Cadastre os tipos de treinamento.</div></div>';
-  return lista.map(t=>'<div class="list-item" style="padding:14px 4px"><div class="li-icon" style="background:var(--amber-l);color:var(--amber);font-size:12px;font-weight:700;border-radius:var(--r-md);text-align:center;line-height:1.2;padding:4px">'+t.carga_horaria+'h</div><div class="li-info"><div class="li-title">'+t.nome+'</div><div class="li-sub">'+(t.categoria?t.categoria+' - ':'')+'Validade: '+t.validade_meses+' meses - '+t.carga_horaria+'h</div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><span class="badge '+(t.ativo?'badge-green':'badge-gray')+'">'+(t.ativo?'Ativo':'Inativo')+'</span><button class="btn btn-ghost btn-sm" onclick="menuCatalogo(event,&apos;&apos;+t.id+&apos;&apos;)" style="padding:6px;border-radius:var(--r-sm)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button></div></div>').join('');
+  return lista.map(t=>'<div class="list-item" style="padding:14px 4px"><div class="li-icon" style="background:var(--amber-l);color:var(--amber);font-size:12px;font-weight:700;border-radius:var(--r-md);text-align:center;line-height:1.2;padding:4px">'+t.carga_horaria+'h</div><div class="li-info"><div class="li-title">'+t.nome+'</div><div class="li-sub">'+(t.categoria?t.categoria+' - ':'')+'Validade: '+t.validade_meses+' meses - '+t.carga_horaria+'h</div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><span class="badge '+(t.ativo?'badge-green':'badge-gray')+'">'+(t.ativo?'Ativo':'Inativo')+'</span><button class="btn btn-ghost btn-sm" data-action="menuCatalogo" data-id="'+t.id+'" style="padding:6px;border-radius:var(--r-sm)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button></div></div>').join('');
 }
 function filtrarCatalogo(q){
   const f=q.toLowerCase().trim();
@@ -982,7 +982,7 @@ function menuCatalogo(event,id){
   const btn=event.currentTarget;const rect=btn.getBoundingClientRect();
   const menu=document.createElement('div');menu.className='org-menu';
   menu.style.cssText='position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);z-index:200;min-width:160px;padding:4px 0;top:'+Math.min(rect.bottom+4,window.innerHeight-110)+'px;right:'+(window.innerWidth-rect.right)+'px';
-  menu.innerHTML='<div class="menu-item" onclick="abrirModalCatalogo(&apos;&apos;+id+&apos;&apos;)">Editar</div><div class="menu-item'+(t.ativo?' danger':'')+'" onclick="toggleCatalogo(&apos;&apos;+id+&apos;&apos;,&apos;+t.ativo+&apos;)">'+(t.ativo?'Desativar':'Ativar')+'</div>';
+  menu.innerHTML='<div class="menu-item" data-action="editarCatalogo" data-id="'+id+'">Editar</div><div class="menu-item'+(t.ativo?' danger':'')+'" data-action="toggleCat" data-id="'+id+'" data-ativo="'+t.ativo+'">'+(t.ativo?'Desativar':'Ativar')+'</div>';
   document.body.appendChild(menu);
   setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
 }
@@ -1041,10 +1041,29 @@ function renderEmBreve(nome){setConteudo('<div style="display:flex;align-items:c
 function renderErro(msg){setConteudo('<div style="display:flex;align-items:center;justify-content:center;min-height:300px"><div class="empty"><div class="empty-icon">&#9888;&#65039;</div><div class="empty-title">Ocorreu um erro</div><div class="empty-sub">'+(msg||'Tente novamente.')+'</div><button class="btn btn-outline" style="margin-top:16px" onclick="irPara(paginaAtual)">Tentar novamente</button></div></div>')}
 
 // INIT
-// Delegação de eventos para turmas
+// Delegação de eventos — todos os data-action
 document.addEventListener('click',function(e){
-  const item=e.target.closest('[data-turma-id]');
-  if(item){const id=item.getAttribute('data-turma-id');if(id)verTurma(id);}
+  const el=e.target.closest('[data-action]');
+  const turmaItem=e.target.closest('[data-turma-id]');
+  if(turmaItem&&!el){
+    const id=turmaItem.getAttribute('data-turma-id');
+    if(id)verTurma(id);
+    return;
+  }
+  if(!el)return;
+  const action=el.getAttribute('data-action');
+  const id=el.getAttribute('data-id');
+  switch(action){
+    case 'editarTurma':     abrirModalTurma(id); break;
+    case 'cancelarTurma':   cancelarTurma(id); break;
+    case 'addSessao':       abrirModalSessao(id); break;
+    case 'addParticipante': abrirModalAddParticipante(id,el.getAttribute('data-cli')); break;
+    case 'salvarSessao':    salvarSessao(_modalCurrentId); break;
+    case 'selecionarPart':  selecionarParticipante(el.getAttribute('data-turma'),el.getAttribute('data-col'),el.getAttribute('data-cli')); break;
+    case 'menuCatalogo':    menuCatalogo(e,id); break;
+    case 'editarCatalogo':  abrirModalCatalogo(id); break;
+    case 'toggleCat':       toggleCatalogo(id,el.getAttribute('data-ativo')==='true'); break;
+  }
 });
 
 window.addEventListener('DOMContentLoaded',async()=>{
