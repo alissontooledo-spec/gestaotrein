@@ -683,6 +683,7 @@ function menuCatalogo(event,id){
   setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
 }
 function abrirModalCatalogo(id=null){
+  _modalCurrentId=id||null;
   document.querySelectorAll('.org-menu').forEach(m=>m.remove());
   const t=id?_catalogoCache.find(x=>x.id===id):null;
   abrirModal(t?'Editar treinamento':'Novo treinamento',
@@ -692,7 +693,7 @@ function abrirModalCatalogo(id=null){
     '<div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatVal" value="'+(t&&t.validade_meses?t.validade_meses:'')+'" placeholder="24" min="1"></div></div>'+
     '<div class="field"><label>Categoria</label><input type="text" id="mCatCat" value="'+(t&&t.categoria?t.categoria:'')+'" placeholder="Ex.: NR, CIPA..."></div>'+
     '<div class="field"><label>Conteudo programatico</label><textarea id="mCatCP" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Topicos abordados...">'+(t&&t.conteudo_programatico?t.conteudo_programatico:'')+'</textarea></div>',
-    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCatalogo(\''+(id||'')+'\')">'+(t?'Salvar':'Cadastrar')+'</button>');
+    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCatalogo(_modalCurrentId)">'+(t?'Salvar':'Cadastrar')+'</button>');
 }
 async function salvarCatalogo(id){
   const nome=document.getElementById('mCatNome').value.trim();
@@ -906,6 +907,7 @@ async function cancelarTurma(id){
 }
 
 async function abrirModalTurma(id=null){
+  _modalCurrentId=id||null;
   document.querySelectorAll('.org-menu').forEach(m=>m.remove());
   // Garantir que os caches estão carregados
   if(!_clientesCache.length){
@@ -926,7 +928,7 @@ async function abrirModalTurma(id=null){
     '<div class="field"><label>Treinamento *</label><select id="mTurCat" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"><option value="">Selecione o treinamento...</option>'+catOptions+'</select></div>'+
     '<div class="field"><label>Local</label><input type="text" id="mTurLocal" value="'+(t&&t.local?t.local:'')+'" placeholder="Ex.: Planta da empresa, Sala A..."></div>'+
     '<div class="field"><label>Observacoes</label><textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Informacoes complementares...">'+(t&&t.observacoes?t.observacoes:'')+'</textarea></div>',
-    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarTurma(&apos;&apos;+(id||&apos;&apos;)+&apos;&apos;)">'+(t?'Salvar':'Criar turma')+'</button>');
+    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarTurma(_modalCurrentId)">'+(t?'Salvar':'Criar turma')+'</button>');
 }
 
 async function salvarTurma(id){
@@ -985,6 +987,7 @@ function menuCatalogo(event,id){
   setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
 }
 function abrirModalCatalogo(id=null){
+  _modalCurrentId=id||null;
   document.querySelectorAll('.org-menu').forEach(m=>m.remove());
   const t=id?_catalogoCache.find(x=>x.id===id):null;
   abrirModal(t?'Editar treinamento':'Novo treinamento',
@@ -995,7 +998,7 @@ function abrirModalCatalogo(id=null){
     '<div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatVal" value="'+(t&&t.validade_meses?t.validade_meses:'')+'" placeholder="24" min="1"></div></div>'+
     '<div class="field"><label>Categoria</label><input type="text" id="mCatCat" value="'+(t&&t.categoria?t.categoria:'')+'" placeholder="Ex.: NR, CIPA..."></div>'+
     '<div class="field"><label>Conteudo programatico</label><textarea id="mCatCP" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Topicos abordados...">'+(t&&t.conteudo_programatico?t.conteudo_programatico:'')+'</textarea></div>',
-    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCatalogo(&apos;&apos;+(id||&apos;&apos;)+&apos;&apos;)">'+(t?'Salvar':'Cadastrar')+'</button>');
+    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCatalogo(_modalCurrentId)">'+(t?'Salvar':'Cadastrar')+'</button>');
 }
 async function salvarCatalogo(id){
   const nome=document.getElementById('mCatNome').value.trim();
