@@ -833,6 +833,7 @@ async function verTurma(id){
 }
 
 function abrirModalSessao(turmaId){
+  _modalCurrentId=turmaId;
   abrirModal('Nova sessao',
     '<div class="field"><label>Data *</label><input type="date" id="mSesData"></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
@@ -856,6 +857,7 @@ async function salvarSessao(turmaId){
 }
 
 async function abrirModalAddParticipante(turmaId,clienteId){
+  _modalCurrentId=turmaId;
   const{data:todos}=await sb.from('colaboradores').select('id,nome,cpf').order('nome').limit(500);
   const{data:jaAdicionados}=await sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId);
   const jaIds=new Set((jaAdicionados||[]).map(x=>x.colaborador_id));
