@@ -610,15 +610,25 @@ async function renderHomeComercial() {
 }
 
 async function renderHomeInstrutor() {
-  const {data:turmas} = await sb.from('turmas').select('id,status,protocolo,clientes(nome),catalogo(nome)').eq('instrutor_id',usuarioAtual.id).in('status',['agendada','em_andamento']).limit(5);
+  const {data:sessoes} = await sb
+    .from('sessoes')
+    .select('*,turmas(*,clientes(nome),catalogo(nome,carga_horaria))')
+    .eq('instrutor_id',usuarioAtual.id)
+    .eq('concluida',false)
+    .order('data',{ascending:true})
+    .limit(5);
+  const total = (sessoes||[]).length;
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Instrutor</div>`);
   setConteudo(`
     <div class="stats-grid">
-      <div class="stat-card blue"><div class="stat-label">Minhas turmas</div><div class="stat-value">${(turmas||[]).length}</div><div class="stat-sub">Em aberto</div></div>
+      <div class="stat-card blue"><div class="stat-label">Agendamentos</div><div class="stat-value">${total}</div><div class="stat-sub">Pendentes</div></div>
     </div>
     <div class="home-section">
-      <div class="section-header"><div class="section-title">Próximas turmas</div><span class="section-link" data-nav="agenda">Ver agenda</span></div>
-      <div class="card">${(turmas||[]).length===0?'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhuma turma</div></div>':(turmas||[]).map(t=>`<div class="list-item"><div class="li-icon" style="background:var(--blue-l);color:var(--blue-h)">📋</div><div class="li-info"><div class="li-title">${t.catalogo?.nome||'Treinamento'}</div><div class="li-sub">${t.clientes?.nome||'—'}</div></div><span class="badge ${t.status==='em_andamento'?'badge-blue':'badge-gray'}">${t.status==='em_andamento'?'Em andamento':'Agendada'}</span></div>`).join('')}</div>
+      <div class="section-header"><div class="section-title">Próximos agendamentos</div><span class="section-link" data-nav="agenda">Ver todos</span></div>
+      <div class="card">${total===0
+        ?'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento</div></div>'
+        :(sessoes||[]).map(s=>`<div class="list-item" data-action="verTurma" data-id="${s.turmas?.id||''}" style="cursor:pointer"><div class="li-icon" style="background:var(--blue-l);color:var(--blue-h)">📋</div><div class="li-info"><div class="li-title">${s.turmas?.catalogo?.nome||'Treinamento'}</div><div class="li-sub">${s.turmas?.clientes?.nome||'—'} · ${formatarData(s.data)}</div></div><span class="badge badge-gray">Agendado</span></div>`).join('')}
+      </div>
     </div>
     <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair</button>`);
 }
@@ -1475,28 +1485,46 @@ async function executarImportacao() {
 }
 
 async function renderAgenda() {
-  const {data:turmas} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(data,hora_inicio)').eq('instrutor_id',usuarioAtual.id).order('created_at',{ascending:false});
-  setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus treinamentos</div>`);
-  const abertas    = (turmas||[]).filter(t=>['agendada','em_andamento'].includes(t.status));
-  const concluidas = (turmas||[]).filter(t=>t.status==='concluida');
+  // Buscar agendamentos onde este instrutor está designado
+  const {data:sessoes} = await sb
+    .from('sessoes')
+    .select('*,turmas(*,clientes(nome),catalogo(nome,carga_horaria))')
+    .eq('instrutor_id',usuarioAtual.id)
+    .order('data',{ascending:true});
+
+  setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
+
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
-  const renderT = t => {
-    const prox = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
-    return `<div class="list-item" data-action="verTurma" data-id="${t.id}" style="cursor:pointer">
-      <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h)">📋</div>
-      <div class="li-info"><div class="li-title">${t.catalogo?.nome||'Treinamento'}</div><div class="li-sub">${t.clientes?.nome||''}${prox?` · ${formatarData(prox.data)}`:''}</div></div>
-      <span class="badge ${SB[t.status||'agendada']}">${SL[t.status||'agendada']}</span>
+
+  const proximas  = (sessoes||[]).filter(s=>!s.concluida);
+  const concluidas= (sessoes||[]).filter(s=>s.concluida);
+
+  const renderSessao = s => {
+    const t  = s.turmas||{};
+    const st = t.status||'agendada';
+    return `<div class="list-item" data-action="verTurma" data-id="${t.id||''}" style="cursor:pointer">
+      <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.catalogo?.carga_horaria||'?'}h</div>
+      <div class="li-info">
+        <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
+        <div class="li-sub">${t.clientes?.nome||'—'} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}${s.local?' · '+s.local:''}</div>
+      </div>
+      <span class="badge ${SB[st]}">${SL[st]}</span>
     </div>`;
   };
+
   setConteudo(`
     <div class="home-section">
-      <div class="section-header"><div class="section-title">Em aberto (${abertas.length})</div></div>
-      <div class="card">${abertas.length===0?'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhuma turma em aberto</div></div>':abertas.map(renderT).join('')}</div>
+      <div class="section-header"><div class="section-title">Próximos (${proximas.length})</div></div>
+      <div class="card">${proximas.length===0
+        ?'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento</div><div class="empty-sub">Você não possui agendamentos pendentes.</div></div>'
+        :proximas.map(renderSessao).join('')}</div>
     </div>
     <div class="home-section">
-      <div class="section-header"><div class="section-title">Concluídas (${concluidas.length})</div></div>
-      <div class="card">${concluidas.length===0?'<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Nenhuma concluída</div></div>':concluidas.map(renderT).join('')}</div>
+      <div class="section-header"><div class="section-title">Concluídos (${concluidas.length})</div></div>
+      <div class="card">${concluidas.length===0
+        ?'<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Nenhum concluído ainda</div></div>'
+        :concluidas.map(renderSessao).join('')}</div>
     </div>`);
 }
 
