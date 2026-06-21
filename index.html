@@ -153,6 +153,13 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 @media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column}}
 @media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:200px}.stats-grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}}
+
+/* Abas de execução */
+.exec-tab{flex:1;padding:10px 8px;background:none;border:none;border-bottom:2px solid transparent;font-size:14px;font-weight:500;color:var(--text-3);cursor:pointer;font-family:inherit;transition:all .15s}
+.exec-tab:hover{color:var(--text-1)}
+.exec-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.exec-aba{animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -1107,6 +1114,26 @@ async function verTurma(id) {
 
       </div>
 
+      ${usuarioAtual.perfil==='instrutor'&&st==='agendada'?`
+      <div class="card" style="margin-bottom:16px;background:var(--blue);border-color:var(--blue)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600;color:#fff">Pronto para iniciar?</div>
+            <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">Inicie a execução para registrar presenças e assinaturas.</div>
+          </div>
+          <button class="btn" style="background:#fff;color:var(--blue);font-weight:600;flex-shrink:0" data-action="iniciarExecucao" data-id="${id}">▶ Iniciar</button>
+        </div>
+      </div>`:``}
+      ${usuarioAtual.perfil==='instrutor'&&st==='em_andamento'?`
+      <div class="card" style="margin-bottom:16px;background:var(--green);border-color:var(--green)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600;color:#fff">Treinamento em andamento</div>
+            <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">Registre presenças, assinaturas e evidências.</div>
+          </div>
+          <button class="btn" style="background:#fff;color:var(--green);font-weight:600;flex-shrink:0" data-action="abrirExecucao" data-id="${id}">▶ Continuar</button>
+        </div>
+      </div>`:``}
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Agendamentos (${agendamentos.length})</div>
         ${agendamentos.length===0
@@ -1529,6 +1556,405 @@ async function renderAgenda() {
 }
 
 // ============================================================
+// EXECUÇÃO DE TURMA
+// Fluxo: instrutor abre a turma → inicia execução → registra
+// presença → coleta assinaturas → adiciona fotos → finaliza
+// ============================================================
+
+// ---- Iniciar execução ----
+async function iniciarExecucao(turmaId) {
+  if (!confirm('Deseja iniciar a execução desta turma? O status será alterado para "Em andamento".')) return;
+  const {error} = await sb.from('turmas').update({status:'em_andamento'}).eq('id',turmaId);
+  if (error) { showToast(error.message,'error'); return; }
+  showToast('Execução iniciada!','success');
+  await abrirExecucao(turmaId);
+}
+
+// ---- Tela de execução ----
+async function abrirExecucao(turmaId) {
+  showLoading('Carregando execução...');
+  try {
+    const {data:t,error} = await sb.from('turmas')
+      .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*),turma_participantes(*,colaboradores(*))')
+      .eq('id',turmaId).single();
+    if (error) throw error;
+
+    window._execTurmaId   = turmaId;
+    window._execClienteId = t.cliente_id;
+    window._execParticipantes = t.turma_participantes||[];
+
+    // Buscar presenças já registradas
+    const {data:presencas} = await sb.from('presencas').select('*').eq('turma_id',turmaId);
+    window._execPresencas = {};
+    (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
+
+    // Buscar evidências
+    const {data:evidencias} = await sb.from('evidencias').select('*').eq('turma_id',turmaId);
+    window._execEvidencias = evidencias||[];
+
+    const nomeT = t.catalogo?.nome||'Treinamento';
+    const nomeC = t.clientes?.nome||'';
+
+    const html = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
+          <div style="font-size:13px;color:var(--text-2)">${nomeC}</div>
+        </div>
+        <span class="badge badge-blue">Em andamento</span>
+      </div>
+
+      <!-- Abas de execução -->
+      <div style="display:flex;border-bottom:2px solid var(--border);margin-bottom:20px;gap:0">
+        <button class="exec-tab active" data-tab="presenca" onclick="trocarAbaExec('presenca',this)">
+          Presenças
+        </button>
+        <button class="exec-tab" data-tab="evidencias" onclick="trocarAbaExec('evidencias',this)">
+          Evidências
+        </button>
+        <button class="exec-tab" data-tab="finalizar" onclick="trocarAbaExec('finalizar',this)">
+          Finalizar
+        </button>
+      </div>
+
+      <!-- Aba Presenças -->
+      <div id="abaPresenca" class="exec-aba">
+        <div class="card">
+          <div class="card-title">Lista de presença</div>
+          <div id="listaPresencas">
+            ${_htmlListaPresencas(t.turma_participantes||[])}
+          </div>
+        </div>
+      </div>
+
+      <!-- Aba Evidências -->
+      <div id="abaEvidencias" class="exec-aba" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Fotos e registros</div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+            <label class="btn btn-outline" style="cursor:pointer">
+              📷 Tirar foto
+              <input type="file" accept="image/*" capture="environment" style="display:none" onchange="adicionarEvidencia(this,'foto')">
+            </label>
+            <label class="btn btn-outline" style="cursor:pointer">
+              🖼 Galeria
+              <input type="file" accept="image/*" style="display:none" onchange="adicionarEvidencia(this,'foto')">
+            </label>
+          </div>
+          <div id="listaEvidencias">
+            ${_htmlListaEvidencias(window._execEvidencias)}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Anotações do instrutor</div>
+          <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${t.anotacoes_instrutor||''}</textarea>
+          <button class="btn btn-blue btn-sm" style="margin-top:8px" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
+        </div>
+      </div>
+
+      <!-- Aba Finalizar -->
+      <div id="abaFinalizar" class="exec-aba" style="display:none">
+        <div class="card">
+          <div class="card-title">Resumo da execução</div>
+          <div style="display:grid;gap:12px;margin-bottom:20px">
+            <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
+              <span style="font-size:14px;color:var(--text-2)">Total de participantes</span>
+              <span style="font-size:14px;font-weight:600">${(t.turma_participantes||[]).length}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
+              <span style="font-size:14px;color:var(--text-2)">Com assinatura</span>
+              <span style="font-size:14px;font-weight:600" id="totalAssinados">
+                ${Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length}
+              </span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
+              <span style="font-size:14px;color:var(--text-2)">Evidências registradas</span>
+              <span style="font-size:14px;font-weight:600">${window._execEvidencias.length}</span>
+            </div>
+          </div>
+          <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:20px;font-size:13px;line-height:1.5">
+            <div style="font-weight:600;margin-bottom:4px">⚠️ Atenção</div>
+            Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>. 
+            Os documentos ficarão disponíveis para geração.
+          </div>
+          <button class="btn btn-blue" style="width:100%" onclick="finalizarTurma('${turmaId}')">
+            ✓ Finalizar treinamento
+          </button>
+        </div>
+      </div>`;
+
+    setConteudo(html);
+    setMobileHeader(`<div class="mh-greeting">Execução</div><div class="mh-name">${nomeT}</div>`);
+
+  } finally { hideLoading(); }
+}
+
+function trocarAbaExec(aba, btn) {
+  document.querySelectorAll('.exec-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.exec-aba').forEach(a=>a.style.display='none');
+  btn.classList.add('active');
+  document.getElementById('aba'+aba.charAt(0).toUpperCase()+aba.slice(1)).style.display='block';
+}
+
+// ---- Lista de presenças ----
+function _htmlListaPresencas(participantes) {
+  if (!participantes.length) return `<div class="empty" style="padding:20px"><div class="empty-title">Nenhum participante</div><div class="empty-sub">Adicione participantes à turma primeiro.</div></div>`;
+  return participantes.map(p => {
+    const col    = p.colaboradores||{};
+    const presen = window._execPresencas[p.colaborador_id];
+    const assinou= presen && (presen.assinatura_path || presen.presente);
+    return `
+      <div class="list-item" style="padding:12px 0">
+        <div class="li-icon" style="background:${assinou?'var(--green-l)':'var(--gray-100)'};color:${assinou?'var(--green)':'var(--text-3)'};font-size:12px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
+          ${assinou?'✓':iniciais(col.nome||'?')}
+        </div>
+        <div class="li-info">
+          <div class="li-title">${col.nome||'—'}</div>
+          <div class="li-sub">${p.cargo_vinculo||col.cargo||''}${presen&&presen.assinatura_path?' · Assinado':''}${presen&&presen.presente&&!presen.assinatura_path?' · Presente':''}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          ${assinou
+            ?`<span class="badge badge-green">✓ Assinou</span>`
+            :`<button class="btn btn-blue btn-sm" data-action="abrirAssinatura" data-col="${p.colaborador_id}" data-nome="${col.nome||''}">Assinar</button>`
+          }
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ---- Assinatura digital ----
+function abrirAssinatura(colId, nomeCol) {
+  window._assinaturaColId = colId;
+  window._assinaturaNome  = nomeCol;
+  abrirModal(`Assinatura — ${nomeCol}`, `
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">
+      ${nomeCol}, assine no espaço abaixo:
+    </div>
+    <canvas id="canvasAssinatura" width="440" height="180"
+      style="border:2px solid var(--border);border-radius:var(--r-md);touch-action:none;width:100%;display:block;background:#fff;cursor:crosshair">
+    </canvas>
+    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="limparAssinatura()">
+      🗑 Limpar
+    </button>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-blue" id="btnSalvarModal" onclick="confirmarAssinatura()">Confirmar assinatura</button>`);
+
+  // Inicializar canvas após modal abrir
+  setTimeout(()=>_initCanvas(), 100);
+}
+
+function _initCanvas() {
+  const canvas = document.getElementById('canvasAssinatura');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  // Ajustar resolução para telas de alta densidade
+  const ratio = window.devicePixelRatio||1;
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+  canvas.width  = w * ratio;
+  canvas.height = h * ratio;
+  canvas.style.width  = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(ratio, ratio);
+  ctx.strokeStyle = '#0F172A';
+  ctx.lineWidth   = 2;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+
+  let desenhando = false;
+  let lastX = 0, lastY = 0;
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const src  = e.touches ? e.touches[0] : e;
+    return {x: src.clientX - rect.left, y: src.clientY - rect.top};
+  }
+  function start(e) {
+    e.preventDefault();
+    desenhando = true;
+    const {x,y} = getPos(e);
+    lastX = x; lastY = y;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+  }
+  function draw(e) {
+    if (!desenhando) return;
+    e.preventDefault();
+    const {x,y} = getPos(e);
+    ctx.lineTo(x,y);
+    ctx.stroke();
+    lastX = x; lastY = y;
+  }
+  function end(e) { desenhando = false; }
+
+  canvas.addEventListener('mousedown',  start, {passive:false});
+  canvas.addEventListener('mousemove',  draw,  {passive:false});
+  canvas.addEventListener('mouseup',    end);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove',  draw,  {passive:false});
+  canvas.addEventListener('touchend',   end);
+}
+
+function limparAssinatura() {
+  const canvas = document.getElementById('canvasAssinatura');
+  if (!canvas) return;
+  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+}
+
+async function confirmarAssinatura() {
+  const canvas = document.getElementById('canvasAssinatura');
+  if (!canvas) return;
+
+  // Verificar se há traços
+  const ctx   = canvas.getContext('2d');
+  const pixels= ctx.getImageData(0,0,canvas.width,canvas.height).data;
+  const hasData = pixels.some((v,i)=>i%4===3&&v>0);
+  if (!hasData) { showToast('Por favor, realize a assinatura antes de confirmar','error'); return; }
+
+  try {
+    setBtnModalLoading(true);
+    const turmaId = window._execTurmaId;
+    const colId   = window._assinaturaColId;
+    const dataUrl = canvas.toDataURL('image/png');
+
+    // Upload da assinatura para o Storage
+    const blob    = await (await fetch(dataUrl)).blob();
+    const path    = `${usuarioAtual.org_id}/${turmaId}/${colId}.png`;
+    const {error:upErr} = await sb.storage.from('assinaturas').upload(path, blob, {upsert:true, contentType:'image/png'});
+    if (upErr) throw upErr;
+
+    // Registrar presença
+    const {error:dbErr} = await sb.from('presencas').upsert({
+      turma_id:     turmaId,
+      colaborador_id:colId,
+      org_id:       usuarioAtual.org_id,
+      presente:     true,
+      assinatura_path: path,
+      assinado_em:  new Date().toISOString(),
+    }, {onConflict:'turma_id,colaborador_id'});
+    if (dbErr) throw dbErr;
+
+    // Atualizar cache local
+    window._execPresencas[colId] = {
+      colaborador_id:colId,
+      presente:true,
+      assinatura_path:path,
+      assinado_em:new Date().toISOString(),
+    };
+
+    fecharModal();
+    showToast(`Assinatura de ${window._assinaturaNome} registrada!`,'success');
+
+    // Atualizar lista sem recarregar tudo
+    document.getElementById('listaPresencas').innerHTML =
+      _htmlListaPresencas(window._execParticipantes);
+
+    // Atualizar contador na aba finalizar
+    const totalEl = document.getElementById('totalAssinados');
+    if (totalEl) totalEl.textContent = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
+
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message||'Erro ao salvar assinatura','error');
+  }
+}
+
+// ---- Evidências fotográficas ----
+function _htmlListaEvidencias(evidencias) {
+  if (!evidencias.length) return `<div class="empty" style="padding:20px"><div class="empty-icon">📷</div><div class="empty-title">Nenhuma evidência</div><div class="empty-sub">Adicione fotos do treinamento.</div></div>`;
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">` +
+    evidencias.map(ev=>`
+      <div style="position:relative;border-radius:var(--r-md);overflow:hidden;aspect-ratio:1;background:var(--gray-100)">
+        <img src="${ev.url_temp||''}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">
+        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);padding:4px 6px;font-size:10px;color:#fff">
+          ${ev.tipo||'foto'}
+        </div>
+        <button style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.5);border:none;border-radius:50%;width:20px;height:20px;color:#fff;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center"
+          data-action="removerEvidencia" data-id="${ev.id}" data-path="${ev.arquivo_path||''}">✕</button>
+      </div>`).join('') + '</div>';
+}
+
+async function adicionarEvidencia(input, tipo) {
+  const file = input.files[0];
+  if (!file) return;
+  const turmaId = window._execTurmaId;
+  try {
+    showLoading('Enviando foto...');
+    const ext  = file.type.split('/')[1]||'jpg';
+    const uuid = crypto.randomUUID();
+    const path = `${usuarioAtual.org_id}/${turmaId}/${uuid}.${ext}`;
+
+    const {error:upErr} = await sb.storage.from('evidencias').upload(path, file, {upsert:false, contentType:file.type});
+    if (upErr) throw upErr;
+
+    const {data:ev, error:dbErr} = await sb.from('evidencias').insert({
+      org_id:       usuarioAtual.org_id,
+      turma_id:     turmaId,
+      tipo,
+      arquivo_path: path,
+    }).select().single();
+    if (dbErr) throw dbErr;
+
+    // URL temporária para exibição
+    const {data:urlData} = await sb.storage.from('evidencias').createSignedUrl(path, 3600);
+    ev.url_temp = urlData?.signedUrl||'';
+    window._execEvidencias.push(ev);
+
+    document.getElementById('listaEvidencias').innerHTML = _htmlListaEvidencias(window._execEvidencias);
+    showToast('Foto adicionada!','success');
+    input.value = '';
+  } catch(e) {
+    showToast(e.message||'Erro ao enviar foto','error');
+  } finally { hideLoading(); }
+}
+
+async function removerEvidencia(evId, path) {
+  if (!confirm('Deseja remover esta evidência?')) return;
+  try {
+    if (path) await sb.storage.from('evidencias').remove([path]);
+    const {error} = await sb.from('evidencias').delete().eq('id',evId);
+    if (error) throw error;
+    window._execEvidencias = window._execEvidencias.filter(e=>e.id!==evId);
+    document.getElementById('listaEvidencias').innerHTML = _htmlListaEvidencias(window._execEvidencias);
+    showToast('Evidência removida','info');
+  } catch(e) { showToast(e.message||'Erro','error'); }
+}
+
+async function salvarAnotacoes(turmaId) {
+  const texto = document.getElementById('anotacoesInstrutor')?.value.trim();
+  const {error} = await sb.from('turmas').update({anotacoes_instrutor:texto}).eq('id',turmaId);
+  if (error) { showToast(error.message,'error'); return; }
+  showToast('Anotações salvas!','success');
+}
+
+// ---- Finalizar turma ----
+async function finalizarTurma(turmaId) {
+  const total    = window._execParticipantes.length;
+  const assinou  = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
+  if (total > 0 && assinou === 0) {
+    if (!confirm('Nenhum participante assinou ainda. Deseja finalizar mesmo assim?')) return;
+  }
+  if (!confirm('Confirma a finalização do treinamento? Esta ação não pode ser desfeita.')) return;
+  try {
+    showLoading('Finalizando...');
+    const {error} = await sb.from('turmas').update({
+      status:'concluida',
+      finalizada_em: new Date().toISOString(),
+      docs_gerados:  false,
+    }).eq('id',turmaId);
+    if (error) throw error;
+    showToast('Treinamento finalizado com sucesso!','success');
+    await verTurma(turmaId);
+  } catch(e) {
+    showToast(e.message||'Erro ao finalizar','error');
+  } finally { hideLoading(); }
+}
+
+
+
+// ============================================================
 // EQUIPE
 // ============================================================
 async function renderEquipe() {
@@ -1640,6 +2066,11 @@ document.addEventListener('click', function(e) {
     // Participante
     case 'selecionarPart':        selecionarParticipante(el.getAttribute('data-col')); break;
     case 'removerParticipante':   removerParticipante(id,el.getAttribute('data-turma')); break;
+    // Execução
+    case 'iniciarExecucao':       iniciarExecucao(id); break;
+    case 'abrirExecucao':         abrirExecucao(id); break;
+    case 'abrirAssinatura':       abrirAssinatura(el.getAttribute('data-col'),el.getAttribute('data-nome')); break;
+    case 'removerEvidencia':      removerEvidencia(id,el.getAttribute('data-path')); break;
     case 'cadastroRapidoColab':   abrirCadastroRapidoColab(); break;
   }
 });
