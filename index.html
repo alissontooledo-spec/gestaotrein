@@ -1090,6 +1090,10 @@ async function verTurma(id) {
           <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500">${t.local||'-'}</div></div>
         </div>
         ${t.observacoes?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Observações</div><div style="font-size:13px;color:var(--text-2)">${t.observacoes}</div></div>`:''}
+        ${podeMgr&&st==='agendada'?`<div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-blue btn-sm" data-action="editarTurma" data-id="${id}">Editar</button>
+          <button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="${id}">Cancelar turma</button>
+        </div>`:``}
 
       </div>
 
@@ -1106,14 +1110,11 @@ async function verTurma(id) {
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <span class="badge ${ag.concluida?'badge-green':'badge-gray'}">${ag.concluida?'Concluído':'Pendente'}</span>
-              ${podeEditar?`<button class="btn btn-ghost btn-sm" style="padding:4px" data-action="menuAgendamento" data-id="${ag.id}" data-turma="${id}">${ICONS.dots}</button>`:''}
+              ${podeEditar?`<button class="btn btn-blue btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
+              <button class="btn btn-outline btn-sm" data-action="excluirAgendamento" data-id="${ag.id}" data-extra="${id}" style="color:var(--red);border-color:var(--red)">Excluir</button>`:``}
             </div>
           </div>`).join('')}
-        ${podeEditar?`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" data-action="addAgendamento" data-id="${id}">+ Adicionar agendamento</button>
-          <button class="btn btn-blue btn-sm" data-action="editarTurma" data-id="${id}">Editar turma</button>
-          <button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="${id}" style="color:var(--red);border-color:var(--red)">Cancelar turma</button>
-        </div>`:''}
+        ${podeEditar?`<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addAgendamento" data-id="${id}">+ Adicionar agendamento</button>`:``}
       </div>
 
       <div class="card" style="margin-bottom:16px">
