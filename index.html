@@ -1112,7 +1112,11 @@ function menuOrg(event, orgId){
   menu.style.cssText=`position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);z-index:200;min-width:190px;padding:4px 0;top:${Math.min(rect.bottom+4,window.innerHeight-170)}px;right:${window.innerWidth-rect.right}px`;
   menu.innerHTML=`
     <div class="menu-item" onclick="abrirModalOrg('${orgId}')">Editar organização</div>
-    <div class="menu-item" onclick="abrirModalAdminOrg('${orgId}')">Criar administrador</div>
+    <div style="height:1px;background:var(--border);margin:4px 0"></div>
+    <div style="padding:4px 14px 2px;font-size:10px;font-weight:600;color:var(--text-3);letter-spacing:.5px;text-transform:uppercase">Criar usuário</div>
+    <div class="menu-item" onclick="abrirModalUsuarioOrg('${orgId}','administrador')">Administrador</div>
+    <div class="menu-item" onclick="abrirModalUsuarioOrg('${orgId}','comercial')">Comercial</div>
+    <div class="menu-item" onclick="abrirModalUsuarioOrg('${orgId}','instrutor')">Instrutor</div>
     <div style="height:1px;background:var(--border);margin:4px 0"></div>
     <div class="menu-item${org.ativo?' danger':''}" onclick="toggleOrg('${orgId}',${org.ativo})">${org.ativo?'Desativar':'Ativar'} organização</div>`;
   document.body.appendChild(menu);
@@ -1179,69 +1183,61 @@ async function toggleOrg(orgId,ativo){
 }
 
 function abrirModalAdminOrg(orgId){
-  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
-  const org=_orgsCache.find(o=>o.id===orgId);
-  if(!org) return;
-  abrirModal(`Criar administrador — ${org.nome}`,`
-    <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.5">
-      Após preencher, você precisará criar o login no Supabase Dashboard e colar o UID aqui.
-    </div>
-    <div class="field"><label>Nome completo *</label>
-      <input type="text" id="mAdmNome" placeholder="Nome do administrador"></div>
-    <div class="field"><label>E-mail *</label>
-      <input type="email" id="mAdmEmail" placeholder="admin@consultoria.com.br"></div>`,
-  `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-   <button class="btn btn-blue" onclick="passarParaVinculo('${orgId}')">Próximo</button>`);
+  abrirModalUsuarioOrg(orgId,'administrador');
 }
 
 let _adminPendente=null;
-function passarParaVinculo(orgId){
-  const nome=document.getElementById('mAdmNome').value.trim();
-  const email=document.getElementById('mAdmEmail').value.trim();
-  if(!nome||!email){showToast('Preencha nome e e-mail','error');return;}
-  _adminPendente={orgId,nome,email};
-  fecharModal();
-  setTimeout(()=>abrirModalVinculo(),200);
-}
 
-function abrirModalVinculo(){
-  const {orgId,nome,email}=_adminPendente;
+function abrirModalUsuarioOrg(orgId, perfilInicial='administrador'){
+  document.querySelectorAll('.org-menu').forEach(m=>m.remove());
   const org=_orgsCache.find(o=>o.id===orgId);
-  abrirModal('Vincular ao sistema',`
-    <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.5">
-      <div style="font-weight:600;margin-bottom:4px">Passo necessário no Supabase</div>
-      1. Abra <b>supabase.com</b> → seu projeto → <b>Authentication → Users</b><br>
-      2. Clique em <b>Add user → Create new user</b><br>
-      3. Use o e-mail <b>${email}</b> e defina uma senha<br>
-      4. Copie o <b>User UID</b> e cole abaixo
+  if(!org) return;
+  abrirModal(`Novo usuário — ${org.nome}`,`
+    <div class="field"><label>Nome completo *</label>
+      <input type="text" id="mUsrNome" placeholder="Nome completo"></div>
+    <div class="field"><label>E-mail *</label>
+      <input type="email" id="mUsrEmail" placeholder="email@exemplo.com.br"></div>
+    <div class="field"><label>Senha provisória *</label>
+      <input type="password" id="mUsrSenha" placeholder="Mínimo 6 caracteres">
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">O usuário poderá alterar a senha após o primeiro acesso.</div>
     </div>
-    <div class="field"><label>Nome</label>
-      <input type="text" id="mVinNome" value="${nome}" readonly style="background:var(--gray-50)"></div>
-    <div class="field"><label>E-mail</label>
-      <input type="email" id="mVinEmail" value="${email}" readonly style="background:var(--gray-50)"></div>
-    <div class="field"><label>User UID *</label>
-      <input type="text" id="mVinUid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>`,
+    <div class="field"><label>Perfil *</label>
+      <select id="mUsrPerfil" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:15px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="administrador" ${perfilInicial==='administrador'?'selected':''}>Administrador</option>
+        <option value="comercial" ${perfilInicial==='comercial'?'selected':''}>Comercial</option>
+        <option value="instrutor" ${perfilInicial==='instrutor'?'selected':''}>Instrutor</option>
+      </select>
+    </div>`,
   `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-   <button class="btn btn-blue" id="btnSalvarModal" onclick="vincularAdminOrg('${orgId}')">Vincular como administrador</button>`);
+   <button class="btn btn-blue" id="btnSalvarModal" onclick="criarUsuarioOrg('${orgId}')">Criar usuário</button>`);
 }
 
-async function vincularAdminOrg(orgId){
-  const uid=document.getElementById('mVinUid').value.trim();
-  const nome=document.getElementById('mVinNome').value.trim();
-  const email=document.getElementById('mVinEmail').value.trim();
-  if(!uid){showToast('Cole o User UID do Supabase','error');return;}
+async function criarUsuarioOrg(orgId){
+  const nome=document.getElementById('mUsrNome')?.value.trim();
+  const email=document.getElementById('mUsrEmail')?.value.trim();
+  const senha=document.getElementById('mUsrSenha')?.value;
+  const perfil=document.getElementById('mUsrPerfil')?.value;
+  if(!nome||!email||!senha){showToast('Preencha todos os campos','error');return;}
+  if(senha.length<6){showToast('Senha deve ter no mínimo 6 caracteres','error');return;}
   try{
     setBtnModalLoading(true);
-    const{error}=await sb.from('usuarios').insert({
-      id:uid,org_id:orgId,nome,email,perfil:'administrador',ativo:true
+    const{data:{session}}=await sb.auth.getSession();
+    const res=await fetch(`${SUPABASE_URL}/functions/v1/criar-usuario`,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':`Bearer ${session.access_token}`,
+        'apikey':SUPABASE_KEY,
+      },
+      body:JSON.stringify({nome,email,senha,perfil,org_id:orgId}),
     });
-    if(error) throw error;
+    const resultado=await res.json();
+    if(!res.ok) throw new Error(resultado.error||'Erro ao criar usuário');
     fecharModal();
-    showToast('Administrador criado com sucesso!','success');
-    _adminPendente=null;
+    showToast(`${nome} criado com sucesso!`,'success');
   }catch(e){
     setBtnModalLoading(false);
-    showToast(e.code==='23505'?'Este UID já está cadastrado':e.message||'Erro ao vincular','error');
+    showToast(e.message||'Erro ao criar usuário','error');
   }
 }
 
