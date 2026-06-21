@@ -751,15 +751,22 @@ function _htmlListaTurmas(lista,statusLabel,statusBadge){
   const sl=statusLabel||{agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluida',cancelada:'Cancelada'};
   const sb2=statusBadge||{agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
   if(!lista.length)return'<div class="empty"><div class="empty-icon">&#128203;</div><div class="empty-title">Nenhuma turma</div><div class="empty-sub">Agende o primeiro treinamento.</div></div>';
-  return lista.map(t=>'<div class="list-item" style="padding:14px 4px;cursor:pointer" onclick="verTurma(''+t.id+'')">'+
-    '<div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;line-height:1.2;padding:4px">'+
-    (t.catalogo&&t.catalogo.carga_horaria?t.catalogo.carga_horaria+'h':'NR')+'</div>'+
-    '<div class="li-info">'+
-    '<div class="li-title">'+(t.catalogo&&t.catalogo.nome?t.catalogo.nome:'Treinamento')+'</div>'+
-    '<div class="li-sub">'+(t.clientes&&t.clientes.nome?t.clientes.nome:'')+(t.protocolo?' &middot; '+t.protocolo:'')+'</div>'+
-    '</div>'+
-    '<div style="flex-shrink:0"><span class="badge '+sb2[t.status||'agendada']+'">'+sl[t.status||'agendada']+'</span></div>'+
-    '</div>').join('');
+  return lista.map(t=>{
+    const id=t.id;
+    const nomeT=(t.catalogo&&t.catalogo.nome)?t.catalogo.nome:'Treinamento';
+    const nomeC=(t.clientes&&t.clientes.nome)?t.clientes.nome:'';
+    const ch=(t.catalogo&&t.catalogo.carga_horaria)?t.catalogo.carga_horaria+'h':'NR';
+    const proto=t.protocolo?(' &middot; '+t.protocolo):'';
+    const st=t.status||'agendada';
+    return '<div class="list-item" style="padding:14px 4px;cursor:pointer" data-turma-id="'+id+'">'+
+      '<div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;line-height:1.2;padding:4px">'+ch+'</div>'+
+      '<div class="li-info">'+
+      '<div class="li-title">'+nomeT+'</div>'+
+      '<div class="li-sub">'+nomeC+proto+'</div>'+
+      '</div>'+
+      '<div style="flex-shrink:0"><span class="badge '+sb2[st]+'">'+sl[st]+'</span></div>'+
+      '</div>';
+  }).join('');
 }
 function filtrarTurmas(){
   const s=document.getElementById('filtrStatusTurma')&&document.getElementById('filtrStatusTurma').value;
@@ -1031,6 +1038,12 @@ function renderEmBreve(nome){setConteudo('<div style="display:flex;align-items:c
 function renderErro(msg){setConteudo('<div style="display:flex;align-items:center;justify-content:center;min-height:300px"><div class="empty"><div class="empty-icon">&#9888;&#65039;</div><div class="empty-title">Ocorreu um erro</div><div class="empty-sub">'+(msg||'Tente novamente.')+'</div><button class="btn btn-outline" style="margin-top:16px" onclick="irPara(paginaAtual)">Tentar novamente</button></div></div>')}
 
 // INIT
+// Delegação de eventos para turmas
+document.addEventListener('click',function(e){
+  const item=e.target.closest('[data-turma-id]');
+  if(item){const id=item.getAttribute('data-turma-id');if(id)verTurma(id);}
+});
+
 window.addEventListener('DOMContentLoaded',async()=>{
   const{data:{session}}=await sb.auth.getSession();
   if(session){
