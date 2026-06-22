@@ -617,14 +617,27 @@ async function renderHomeComercial() {
 }
 
 async function renderHomeInstrutor() {
+  // Buscar sessoes pendentes do instrutor
   const {data:sessoes} = await sb
     .from('sessoes')
-    .select('id,turma_id,data,hora_inicio,local,concluida,turmas(id,status,clientes(nome),catalogo(nome,carga_horaria))')
+    .select('id,turma_id,data,hora_inicio,local,concluida')
     .eq('instrutor_id',usuarioAtual.id)
     .eq('concluida',false)
     .order('data',{ascending:true})
     .limit(5);
-  const total = (sessoes||[]).length;
+
+  // Buscar turmas vinculadas
+  const tIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
+  let tMap = {};
+  if (tIds.length) {
+    const {data:tData} = await sb
+      .from('turmas')
+      .select('id,status,clientes(nome),catalogo(nome,carga_horaria)')
+      .in('id',tIds);
+    (tData||[]).forEach(t=>{ tMap[t.id]=t; });
+  }
+  const sessoesHome = (sessoes||[]).map(s=>({...s,turmas:tMap[s.turma_id]||null}));
+  const total = sessoesHome.length;
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Instrutor</div>`);
   setConteudo(`
     <div class="stats-grid">
@@ -634,7 +647,7 @@ async function renderHomeInstrutor() {
       <div class="section-header"><div class="section-title">Próximos agendamentos</div><span class="section-link" data-nav="agenda">Ver todos</span></div>
       <div class="card">${total===0
         ?'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento</div></div>'
-        :(sessoes||[]).map(s=>`<div class="list-item" data-action="verTurma" data-id="${s.turmas?.id||''}" style="cursor:pointer"><div class="li-icon" style="background:var(--blue-l);color:var(--blue-h)">📋</div><div class="li-info"><div class="li-title">${s.turmas?.catalogo?.nome||'Treinamento'}</div><div class="li-sub">${s.turmas?.clientes?.nome||'—'} · ${formatarData(s.data)}</div></div><span class="badge badge-gray">Agendado</span></div>`).join('')}
+        :sessoesHome.map(s=>`<div class="list-item" data-action="verTurma" data-id="${s.turma_id||''}" style="cursor:pointer"><div class="li-icon" style="background:var(--blue-l);color:var(--blue-h)">📋</div><div class="li-info"><div class="li-title">${s.turmas?.catalogo?.nome||'Treinamento'}</div><div class="li-sub">${s.turmas?.clientes?.nome||'—'} · ${formatarData(s.data)}</div></div><span class="badge badge-gray">Agendado</span></div>`).join('')}
       </div>
     </div>
     <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair</button>`);
@@ -1513,23 +1526,38 @@ async function executarImportacao() {
 
 async function renderAgenda() {
   // Buscar agendamentos onde este instrutor está designado
+  // Buscar sessoes do instrutor
   const {data:sessoes} = await sb
     .from('sessoes')
-    .select('id,turma_id,data,hora_inicio,hora_fim,local,modalidade,concluida,turmas(id,status,cliente_id,clientes(nome),catalogo(nome,carga_horaria))')
+    .select('id,turma_id,data,hora_inicio,hora_fim,local,modalidade,concluida')
     .eq('instrutor_id',usuarioAtual.id)
     .order('data',{ascending:true});
+
+  // Buscar turmas vinculadas separadamente
+  const turmaIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
+  let turmasMap = {};
+  if (turmaIds.length) {
+    const {data:turmasData} = await sb
+      .from('turmas')
+      .select('id,status,catalogo_id,cliente_id,clientes(nome),catalogo(nome,carga_horaria)')
+      .in('id',turmaIds);
+    (turmasData||[]).forEach(t => { turmasMap[t.id] = t; });
+  }
+
+  // Combinar dados
+  const sessoesComTurma = (sessoes||[]).map(s=>({...s, turmas: turmasMap[s.turma_id]||null}));
 
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
 
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
 
-  const proximas  = (sessoes||[]).filter(s=>!s.concluida);
-  const concluidas= (sessoes||[]).filter(s=>s.concluida);
+  const proximas  = sessoesComTurma.filter(s=>!s.concluida);
+  const concluidas= sessoesComTurma.filter(s=>s.concluida);
 
   const renderSessao = s => {
     const t    = s.turmas||{};
-    const turmaId = t.id || s.turma_id || '';
+    const turmaId = s.turma_id || t.id || '';
     const st   = t.status||'agendada';
     return `<div class="list-item" data-action="verTurma" data-id="${turmaId}" style="cursor:pointer;padding:14px 0">
       <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.catalogo?.carga_horaria||'?'}h</div>
