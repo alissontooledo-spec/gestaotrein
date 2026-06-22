@@ -1088,10 +1088,12 @@ async function verTurma(id) {
   fabOcultar();
   showLoading('Carregando turma...');
   try {
-    const {data:t,error} = await sb.from('turmas')
+    const {data:rows,error} = await sb.from('turmas')
       .select('*,clientes(*),catalogo(*),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(*))')
-      .eq('id',id).single();
+      .eq('id',id).limit(1);
     if (error) throw error;
+    if (!rows||!rows.length) throw new Error('Turma não encontrada ou sem permissão de acesso.');
+    const t = rows[0];
     const agendamentos = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1);
     const participantes= t.turma_participantes||[];
     const podeMgr      = ['administrador','comercial'].includes(usuarioAtual.perfil);
