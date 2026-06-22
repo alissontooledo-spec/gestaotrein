@@ -1043,7 +1043,7 @@ async function renderTurmas() {
   _turmasCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Operação</div><div class="mh-name">Turmas</div>`);
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  if (podeCriar) fabMostrar(()=>abrirModalTurma());
+  fabOcultar();
   setConteudo(`
     <div class="stats-grid" style="margin-bottom:16px">
       <div class="stat-card blue"><div class="stat-label">Agendadas</div><div class="stat-value">${_turmasCache.filter(t=>t.status==='agendada').length}</div></div>
@@ -1068,13 +1068,17 @@ function _htmlListaTurmas(lista) {
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
   return lista.map(t=>`
-    <div class="list-item" style="padding:14px 4px;cursor:pointer" data-action="verTurma" data-id="${t.id}">
+    <div class="list-item" style="padding:16px 4px;cursor:pointer;border-bottom:1px solid var(--border)" data-action="verTurma" data-id="${t.id}">
       <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.catalogo?.carga_horaria||'?'}h</div>
       <div class="li-info">
         <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
         <div class="li-sub">${t.clientes?.nome||''}${t.protocolo?' · '+t.protocolo:''}</div>
       </div>
-      <span class="badge ${SB[t.status||'agendada']}">${SL[t.status||'agendada']}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span class="badge ${SB[t.status||'agendada']}">${SL[t.status||'agendada']}</span>
+        ${['agendada','em_andamento'].includes(t.status||'agendada')&&['administrador','comercial'].includes(usuarioAtual.perfil)?`
+        <button class="btn btn-ghost btn-sm" style="padding:4px" data-action="menuTurmaCard" data-id="${t.id}">${ICONS.dots}</button>`:``}
+      </div>
     </div>`).join('');
 }
 
@@ -1193,6 +1197,20 @@ async function verTurma(id) {
 }
 
 // ---- Modal Turma ----
+function _menuTurmaCard(btn, id) {
+  const t = _turmasCache.find(x=>x.id===id);
+  if (!t) return;
+  const items = [
+    {action:'editarTurma', id, label:'Editar turma'},
+    '---',
+    {action:'cancelarTurma', id, label:'Cancelar turma', danger:true},
+  ];
+  if (usuarioAtual.perfil === 'administrador') {
+    items.push({action:'excluirTurma', id, label:'Excluir turma', danger:true});
+  }
+  _menuDropdown(btn, items);
+}
+
 async function abrirModalTurma(id=null) {
   _modalCurrentId = id;
   if (!_clientesCache.length) {
@@ -1242,12 +1260,75 @@ async function salvarTurma() {
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
 
+function abrirModalCancelarTurma(id) {
+  _modalCurrentId = id;
+  abrirModal('Cancelar turma', `
+    <div style="background:var(--red-l,#FEF2F2);border:1px solid #FECACA;border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.5">
+      <div style="font-weight:600;color:var(--red);margin-bottom:4px">⚠️ Atenção</div>
+      O cancelamento não pode ser desfeito. Todos os dados da turma serão preservados para histórico.
+    </div>
+    <div class="field">
+      <label>Motivo do cancelamento *</label>
+      <textarea id="mCancelMotivo" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Descreva o motivo do cancelamento..."></textarea>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Voltar</button>
+     <button class="btn btn-danger" id="btnSalvarModal" onclick="confirmarCancelarTurma()" style="background:var(--red);color:#fff;border-color:var(--red)">Confirmar cancelamento</button>`);
+}
+
+async function confirmarCancelarTurma() {
+  const motivo = document.getElementById('mCancelMotivo')?.value.trim();
+  if (!motivo) { showToast('Informe o motivo do cancelamento','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const {error} = await sb.from('turmas').update({
+      status:'cancelada',
+      motivo_cancelamento: motivo,
+    }).eq('id',_modalCurrentId);
+    if (error) throw error;
+    fecharModal();
+    showToast('Turma cancelada','info');
+    await renderTurmas();
+  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro','error'); }
+}
+
 async function cancelarTurma(id) {
-  if (!confirm('Deseja cancelar esta turma? Esta ação não pode ser desfeita.')) return;
-  const {error} = await sb.from('turmas').update({status:'cancelada'}).eq('id',id);
-  if (error) { showToast(error.message,'error'); return; }
-  showToast('Turma cancelada','info');
-  await renderTurmas();
+  abrirModalCancelarTurma(id);
+}
+
+function abrirModalExcluirTurma(id) {
+  if (usuarioAtual.perfil !== 'administrador') { showToast('Apenas administradores podem excluir turmas','error'); return; }
+  _modalCurrentId = id;
+  abrirModal('Excluir turma', `
+    <div style="background:var(--red-l,#FEF2F2);border:1px solid #FECACA;border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.5">
+      <div style="font-weight:600;color:var(--red);margin-bottom:4px">⛔ Ação irreversível</div>
+      Esta ação excluirá permanentemente a turma e todos os dados relacionados:
+      agendamentos, participantes, presenças e evidências.
+    </div>
+    <div class="field">
+      <label>Digite <strong>EXCLUIR</strong> para confirmar</label>
+      <input type="text" id="mExcluirConfirm" placeholder="EXCLUIR">
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-danger" id="btnSalvarModal" onclick="confirmarExcluirTurma()" style="background:var(--red);color:#fff;border-color:var(--red)">Excluir permanentemente</button>`);
+}
+
+async function confirmarExcluirTurma() {
+  const confirm = document.getElementById('mExcluirConfirm')?.value.trim();
+  if (confirm !== 'EXCLUIR') { showToast('Digite EXCLUIR para confirmar','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const id = _modalCurrentId;
+    // Excluir dados relacionados em cascata
+    await sb.from('presencas').delete().eq('turma_id',id);
+    await sb.from('evidencias').delete().eq('turma_id',id);
+    await sb.from('turma_participantes').delete().eq('turma_id',id);
+    await sb.from('sessoes').delete().eq('turma_id',id);
+    const {error} = await sb.from('turmas').delete().eq('id',id);
+    if (error) throw error;
+    fecharModal();
+    showToast('Turma excluída permanentemente','info');
+    await renderTurmas();
+  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao excluir','error'); }
 }
 
 // ---- Agendamentos ----
@@ -1550,6 +1631,7 @@ async function renderAgenda() {
   const sessoesComTurma = (sessoes||[]).map(s=>({...s, turmas: turmasMap[s.turma_id]||null}));
 
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
+  fabOcultar();
 
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
@@ -1857,14 +1939,20 @@ async function confirmarAssinatura() {
     if (upErr) throw upErr;
 
     // Registrar presença
-    const {error:dbErr} = await sb.from('presencas').upsert({
-      turma_id:     turmaId,
-      colaborador_id:colId,
-      org_id:       usuarioAtual.org_id,
-      presente:     true,
-      assinatura_path: path,
-      assinado_em:  new Date().toISOString(),
-    }, {onConflict:'turma_id,colaborador_id'});
+    // Verificar se já existe presença para atualizar ou inserir
+    const {data:presExist} = await sb.from('presencas')
+      .select('id').eq('turma_id',turmaId).eq('colaborador_id',colId).maybeSingle();
+    let dbErr;
+    if (presExist) {
+      ({error:dbErr} = await sb.from('presencas').update({
+        presente:true, assinatura_path:path, assinado_em:new Date().toISOString(),
+      }).eq('id',presExist.id));
+    } else {
+      ({error:dbErr} = await sb.from('presencas').insert({
+        turma_id:turmaId, colaborador_id:colId, org_id:usuarioAtual.org_id,
+        presente:true, assinatura_path:path, assinado_em:new Date().toISOString(),
+      }));
+    }
     if (dbErr) throw dbErr;
 
     // Atualizar cache local
@@ -2014,6 +2102,7 @@ async function renderEquipe() {
 async function renderConta() {
   const u = usuarioAtual;
   setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Minha conta</div>`);
+  fabOcultar();
   setConteudo(`
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
@@ -2087,7 +2176,9 @@ document.addEventListener('click', function(e) {
     case 'editarCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCatalogo(id); break;
     case 'toggleCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCatalogo(id); break;
     // Turmas
-    case 'editarTurma':     abrirModalTurma(id); break;
+    case 'menuTurmaCard':         _menuTurmaCard(el,id); break;
+    case 'excluirTurma':          document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalExcluirTurma(id); break;
+    case 'editarTurma':           document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalTurma(id); break;
     case 'cancelarTurma':   cancelarTurma(id); break;
     case 'addAgendamento':  abrirModalAgendamento(id); break;
     case 'menuAgendamento':  menuAgendamento(el,id,el.getAttribute('data-turma')); break;
