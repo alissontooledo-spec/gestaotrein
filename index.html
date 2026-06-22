@@ -617,26 +617,31 @@ async function renderHomeComercial() {
 }
 
 async function renderHomeInstrutor() {
-  // Buscar sessoes pendentes do instrutor
+  // Buscar sessoes pendentes do instrutor (apenas turmas ativas)
   const {data:sessoes} = await sb
     .from('sessoes')
     .select('id,turma_id,data,hora_inicio,local,concluida')
     .eq('instrutor_id',usuarioAtual.id)
     .eq('concluida',false)
     .order('data',{ascending:true})
-    .limit(5);
+    .limit(10);
 
-  // Buscar turmas vinculadas
+  // Buscar turmas vinculadas filtrando apenas agendadas e em_andamento
   const tIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
   let tMap = {};
   if (tIds.length) {
     const {data:tData} = await sb
       .from('turmas')
       .select('id,status,clientes(nome),catalogo(nome,carga_horaria)')
-      .in('id',tIds);
+      .in('id',tIds)
+      .in('status',['agendada','em_andamento']);
     (tData||[]).forEach(t=>{ tMap[t.id]=t; });
   }
-  const sessoesHome = (sessoes||[]).map(s=>({...s,turmas:tMap[s.turma_id]||null}));
+  // Filtrar apenas sessões de turmas ativas
+  const sessoesHome = (sessoes||[])
+    .map(s=>({...s,turmas:tMap[s.turma_id]||null}))
+    .filter(s=>s.turmas !== null)
+    .slice(0,5);
   const total = sessoesHome.length;
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Instrutor</div>`);
   setConteudo(`
@@ -1616,19 +1621,22 @@ async function renderAgenda() {
     .eq('instrutor_id',usuarioAtual.id)
     .order('data',{ascending:true});
 
-  // Buscar turmas vinculadas separadamente
+  // Buscar turmas vinculadas (apenas não canceladas/excluídas)
   const turmaIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
   let turmasMap = {};
   if (turmaIds.length) {
     const {data:turmasData} = await sb
       .from('turmas')
       .select('id,status,catalogo_id,cliente_id,clientes(nome),catalogo(nome,carga_horaria)')
-      .in('id',turmaIds);
+      .in('id',turmaIds)
+      .neq('status','cancelada');
     (turmasData||[]).forEach(t => { turmasMap[t.id] = t; });
   }
 
-  // Combinar dados
-  const sessoesComTurma = (sessoes||[]).map(s=>({...s, turmas: turmasMap[s.turma_id]||null}));
+  // Combinar dados — ignorar sessões de turmas canceladas
+  const sessoesComTurma = (sessoes||[])
+    .map(s=>({...s, turmas: turmasMap[s.turma_id]||null}))
+    .filter(s=>s.turmas !== null);
 
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
   fabOcultar();
@@ -1695,6 +1703,16 @@ async function abrirExecucao(turmaId) {
     window._execTurmaId   = turmaId;
     window._execClienteId = t.cliente_id;
     window._execParticipantes = t.turma_participantes||[];
+
+    // Buscar o sessao_id do agendamento deste instrutor nesta turma
+    const {data:sessaoInstrutor} = await sb.from('sessoes')
+      .select('id')
+      .eq('turma_id', turmaId)
+      .eq('instrutor_id', usuarioAtual.id)
+      .order('data', {ascending:true})
+      .limit(1)
+      .maybeSingle();
+    window._execSessaoId = sessaoInstrutor?.id || null;
 
     // Buscar presenças já registradas
     const {data:presencas} = await sb.from('presencas').select('*').eq('turma_id',turmaId);
@@ -1942,14 +1960,18 @@ async function confirmarAssinatura() {
     // Verificar se já existe presença para atualizar ou inserir
     const {data:presExist} = await sb.from('presencas')
       .select('id').eq('turma_id',turmaId).eq('colaborador_id',colId).maybeSingle();
+    const sessaoId = window._execSessaoId;
+    if (!sessaoId) throw new Error('Sessão não encontrada. Certifique-se de que há um agendamento vinculado a você nesta turma.');
     let dbErr;
     if (presExist) {
       ({error:dbErr} = await sb.from('presencas').update({
         presente:true, assinatura_path:path, assinado_em:new Date().toISOString(),
+        sessao_id:sessaoId,
       }).eq('id',presExist.id));
     } else {
       ({error:dbErr} = await sb.from('presencas').insert({
-        turma_id:turmaId, colaborador_id:colId, org_id:usuarioAtual.org_id,
+        sessao_id:sessaoId, turma_id:turmaId,
+        colaborador_id:colId, org_id:usuarioAtual.org_id,
         presente:true, assinatura_path:path, assinado_em:new Date().toISOString(),
       }));
     }
