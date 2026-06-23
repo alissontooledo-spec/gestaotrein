@@ -2522,15 +2522,33 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
     const {error:upErr} = await sb.storage.from('documentos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
     if (upErr) { console.warn('Storage documentos:', upErr.message); return; }
 
-    const {error:dbErr} = await sb.from('documentos').upsert({
-      org_id:           orgId,
-      turma_id:         turmaId,
-      colaborador_id:   colaboradorId || null,
-      tipo,
-      arquivo_path:     path,
-      codigo_validacao: codigoValidacao,
-      gerado_em:        new Date().toISOString(),
-    }, {onConflict:'turma_id,colaborador_id,tipo'});
+    // Verificar se já existe registro para evitar o ON CONFLICT problemático
+    let query = sb.from('documentos').select('id').eq('turma_id', turmaId).eq('tipo', tipo);
+    if (colaboradorId) {
+      query = query.eq('colaborador_id', colaboradorId);
+    } else {
+      query = query.is('colaborador_id', null);
+    }
+    const {data: existente} = await query.maybeSingle();
+
+    let dbErr;
+    if (existente) {
+      ({error: dbErr} = await sb.from('documentos').update({
+        arquivo_path:     path,
+        codigo_validacao: codigoValidacao,
+        gerado_em:        new Date().toISOString(),
+      }).eq('id', existente.id));
+    } else {
+      ({error: dbErr} = await sb.from('documentos').insert({
+        org_id:           orgId,
+        turma_id:         turmaId,
+        colaborador_id:   colaboradorId || null,
+        tipo,
+        arquivo_path:     path,
+        codigo_validacao: codigoValidacao,
+        gerado_em:        new Date().toISOString(),
+      }));
+    }
     if (dbErr) console.warn('DB documentos:', dbErr.message);
   } catch(e) {
     console.warn('salvarDocumentoSupabase:', e.message);
@@ -3216,13 +3234,22 @@ async function enviarDocumentosPorEmail(turmaId) {
     const resp = await sb.functions.invoke('enviar-documentos', {body: payload});
     if (resp.error) throw new Error(resp.error.message || 'Erro na Edge Function');
 
-    await sb.from('envios_email').upsert({
-      turma_id:      turmaId,
-      org_id:        usuarioAtual.org_id,
-      email_destino: t.clientes?.email||'',
-      enviado_em:    new Date().toISOString(),
-      status:        'enviado',
-    }, {onConflict: 'turma_id'});
+    const {data: envioExistente} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
+    if (envioExistente) {
+      await sb.from('envios_email').update({
+        email_destino: t.clientes?.email||'',
+        enviado_em:    new Date().toISOString(),
+        status:        'enviado',
+      }).eq('id', envioExistente.id);
+    } else {
+      await sb.from('envios_email').insert({
+        turma_id:      turmaId,
+        org_id:        usuarioAtual.org_id,
+        email_destino: t.clientes?.email||'',
+        enviado_em:    new Date().toISOString(),
+        status:        'enviado',
+      });
+    }
 
     showToast('Documentos enviados com sucesso!', 'success');
     await renderDocumentosTurma(turmaId);
