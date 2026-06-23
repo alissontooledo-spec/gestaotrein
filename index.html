@@ -2936,24 +2936,40 @@ async function renderDocumentosTurma(turmaId) {
   showLoading('Carregando documentos...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome),catalogo(nome,carga_horaria),turma_participantes(*,colaboradores(nome))')
+      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*),turma_participantes(*,colaboradores(nome))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
     const participantes = t.turma_participantes||[];
+    const agendamentos  = t.sessoes||[];
     const nomeT = t.catalogo?.nome||'Treinamento';
     const nomeC = t.clientes?.nome||'-';
+    const emailCliente = t.clientes?.email||'';
+
+    // Verificar se todos agendamentos estão concluídos
+    const totalAg     = agendamentos.length;
+    const concluidosAg = agendamentos.filter(a => a.concluida).length;
+    const todosConcluidos = totalAg === 0 || concluidosAg === totalAg;
 
     // Documentos já gerados
     const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
     const docsMap = {};
     (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')] = d; });
 
+    // Verificar se todos os documentos necessários foram gerados
+    const temLista     = !!docsMap['lista_presenca'];
+    const temColetivo  = !!docsMap['certificado_coletivo'];
+    const temTodosInd  = participantes.length > 0 && participantes.every(p => !!docsMap['certificado_individual'+p.colaborador_id]);
+    const podosEnviar  = temLista && temColetivo && temTodosInd && emailCliente;
+
+    // Status de envio anterior
+    const {data:envio} = await sb.from('envios_email').select('*').eq('turma_id', turmaId).maybeSingle();
+
     const htmlParticipantes = participantes.length===0
       ? `<div class="empty" style="padding:16px"><div class="empty-title">Nenhum participante</div></div>`
       : participantes.map(p => {
           const col = p.colaboradores||{};
-          const jaGerado = docsMap['certificado_individual'+(p.colaborador_id||'')];
+          const jaGerado = docsMap['certificado_individual'+p.colaborador_id];
           const subInfo = jaGerado
             ? `<div class="li-sub" style="color:var(--green)">✓ Gerado em ${formatarDataHora(jaGerado.gerado_em)}</div>`
             : `<div class="li-sub">Aguardando geração</div>`;
@@ -2966,6 +2982,41 @@ async function renderDocumentosTurma(turmaId) {
           ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"><button class="btn btn-outline" style="width:100%" onclick="gerarTodosCertificados('${turmaId}')">⬇ Gerar todos os certificados individuais</button></div>`
           : '');
 
+    // Bloco de status dos agendamentos
+    const htmlAgendamentos = totalAg === 0 ? '' : `
+      <div class="card" style="margin-bottom:16px;border-color:${todosConcluidos?'var(--green)':'#fde68a'}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:${todosConcluidos?'0':'10px'}">
+          <div style="font-size:20px">${todosConcluidos?'✅':'⏳'}</div>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text-1)">${todosConcluidos?'Todos os agendamentos concluídos':'Agendamentos pendentes'}</div>
+            <div style="font-size:12px;color:var(--text-2)">${concluidosAg} de ${totalAg} concluído(s)</div>
+          </div>
+        </div>
+        ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">
+          O envio automático só ocorrerá após todos os agendamentos serem marcados como concluídos.
+        </div>` : ''}
+      </div>`;
+
+    // Bloco de envio
+    const htmlEnvio = `
+      <div class="card" style="margin-bottom:16px;${todosConcluidos&&emailCliente?'border-color:var(--blue)':''}" id="cardEnvio">
+        <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:8px">✉️ Envio automático</div>
+        ${!emailCliente ? `
+          <div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">
+            ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail do cliente para habilitar o envio.
+          </div>` : `
+          <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">
+            Destinatário: <strong>${emailCliente}</strong>
+          </div>
+          ${envio ? `<div style="font-size:12px;color:var(--green);margin-bottom:12px">✓ Enviado em ${formatarDataHora(envio.enviado_em)}</div>` : ''}
+          ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber)">Aguardando conclusão de todos os agendamentos.</div>` :
+            !podosEnviar ? `<div style="font-size:12px;color:var(--text-3)">Gere todos os documentos acima para habilitar o envio.</div>` :
+            `<button class="btn btn-blue" style="width:100%" onclick="enviarDocumentosPorEmail('${turmaId}')">
+              ✉️ ${envio ? 'Reenviar documentos' : 'Enviar documentos por e-mail'}
+            </button>`
+          }`}
+      </div>`;
+
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" data-action="verTurma" data-id="${turmaId}">${ICONS.back} Voltar</button>
@@ -2976,16 +3027,19 @@ async function renderDocumentosTurma(turmaId) {
         <span class="badge badge-green">Concluída</span>
       </div>
 
+      ${htmlAgendamentos}
+      ${htmlEnvio}
+
       <!-- Lista de Presença -->
       <div class="card" style="margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div>
             <div style="font-size:15px;font-weight:600;color:var(--text-1)">📋 Lista de Presença</div>
-            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Todos os participantes com assinaturas</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Consolidada por todos os agendamentos</div>
           </div>
           <button class="btn btn-blue btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ Gerar PDF</button>
         </div>
-        ${docsMap['lista_presenca'] ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
+        ${temLista ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
       </div>
 
       <!-- Certificado Coletivo -->
@@ -2997,7 +3051,7 @@ async function renderDocumentosTurma(turmaId) {
           </div>
           <button class="btn btn-blue btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ Gerar PDF</button>
         </div>
-        ${docsMap['certificado_coletivo'] ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
+        ${temColetivo ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
       </div>
 
       <!-- Certificados Individuais -->
@@ -3008,6 +3062,75 @@ async function renderDocumentosTurma(turmaId) {
 
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Documentos</div><div class="mh-name">${nomeT}</div>`);
+  } finally { hideLoading(); }
+}
+
+// ============================================================
+// ENVIO DE DOCUMENTOS POR E-MAIL
+// ============================================================
+async function enviarDocumentosPorEmail(turmaId) {
+  if (!confirm('Confirma o envio dos documentos por e-mail para a empresa cliente?')) return;
+  showLoading('Enviando documentos...');
+  try {
+    // Buscar dados completos da turma
+    const {data:t, error} = await sb.from('turmas')
+      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cpf,cargo))')
+      .eq('id', turmaId).single();
+    if (error) throw error;
+
+    // Buscar documentos gerados com paths do Storage
+    const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
+    if (!docs || docs.length === 0) throw new Error('Nenhum documento gerado. Gere os documentos antes de enviar.');
+
+    // Gerar URLs assinadas para cada documento (válidas por 1 hora)
+    const arquivos = [];
+    for (const doc of docs) {
+      const {data:urlData} = await sb.storage.from('documentos').createSignedUrl(doc.arquivo_path, 3600);
+      if (urlData?.signedUrl) {
+        arquivos.push({
+          tipo:      doc.tipo,
+          nome:      doc.arquivo_path.split('/').pop(),
+          url:       urlData.signedUrl,
+          colaborador_id: doc.colaborador_id || null,
+        });
+      }
+    }
+
+    const ag = (t.sessoes||[]).sort((a,b) => a.data > b.data ? 1 : -1);
+    const datasRealizacao = ag.map(a => formatarData(a.data)).join(', ');
+
+    // Payload para a Edge Function
+    const payload = {
+      turma_id:       turmaId,
+      treinamento:    t.catalogo?.nome||'Treinamento',
+      empresa:        t.clientes?.nome||'',
+      email_destino:  t.clientes?.email||'',
+      carga_horaria:  t.catalogo?.carga_horaria||'',
+      datas:          datasRealizacao,
+      local:          t.local||'',
+      instrutor:      ag[0]?.usuarios?.nome||'',
+      participantes:  (t.turma_participantes||[]).map(p => p.colaboradores?.nome||'').filter(Boolean),
+      arquivos,
+      org_id:         usuarioAtual.org_id,
+    };
+
+    const resp = await sb.functions.invoke('enviar-documentos', {body: payload});
+    if (resp.error) throw new Error(resp.error.message || 'Erro na Edge Function');
+
+    // Registrar envio
+    await sb.from('envios_email').upsert({
+      turma_id:    turmaId,
+      org_id:      usuarioAtual.org_id,
+      email_destino: t.clientes?.email||'',
+      enviado_em:  new Date().toISOString(),
+      status:      'enviado',
+    }, {onConflict: 'turma_id'});
+
+    showToast('Documentos enviados com sucesso!', 'success');
+    await renderDocumentosTurma(turmaId);
+  } catch(e) {
+    console.error(e);
+    showToast(e.message||'Erro ao enviar documentos', 'error');
   } finally { hideLoading(); }
 }
 
