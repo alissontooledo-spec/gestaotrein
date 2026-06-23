@@ -1765,8 +1765,10 @@ async function abrirExecucao(turmaId) {
     window._execPresencas = {};
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
 
-    // Buscar evidências
-    const {data:evidencias} = await sb.from('evidencias').select('*').eq('turma_id',turmaId);
+    // Buscar evidências pela sessão ativa
+    const {data:evidencias} = window._execSessaoId
+      ? await sb.from('evidencias').select('*').eq('sessao_id', window._execSessaoId)
+      : {data:[]};
     window._execEvidencias = evidencias||[];
 
     const nomeT = t.catalogo?.nome||'Treinamento';
@@ -2110,9 +2112,11 @@ async function adicionarEvidencia(input, tipo) {
     const {error:upErr} = await sb.storage.from('evidencias').upload(path, file, {upsert:false, contentType:file.type});
     if (upErr) throw upErr;
 
+    const sessaoId = window._execSessaoId;
+    if (!sessaoId) throw new Error('Agendamento não encontrado. Verifique se há um agendamento vinculado a você nesta turma.');
     const {data:ev, error:dbErr} = await sb.from('evidencias').insert({
       org_id:       usuarioAtual.org_id,
-      turma_id:     turmaId,
+      sessao_id:    sessaoId,
       tipo,
       arquivo_path: path,
     }).select().single();
