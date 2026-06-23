@@ -3070,60 +3070,61 @@ async function renderDocumentosTurma(turmaId) {
 // ============================================================
 async function enviarDocumentosPorEmail(turmaId) {
   if (!confirm('Confirma o envio dos documentos por e-mail para a empresa cliente?')) return;
-  showLoading('Enviando documentos...');
+  showLoading('Preparando documentos para envio...');
   try {
-    // Buscar dados completos da turma
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cpf,cargo))')
+      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
-    // Buscar documentos gerados com paths do Storage
     const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
     if (!docs || docs.length === 0) throw new Error('Nenhum documento gerado. Gere os documentos antes de enviar.');
 
-    // Gerar URLs assinadas para cada documento (válidas por 1 hora)
+    // Baixar cada PDF do Storage e converter para base64 no browser
     const arquivos = [];
     for (const doc of docs) {
-      const {data:urlData} = await sb.storage.from('documentos').createSignedUrl(doc.arquivo_path, 3600);
-      if (urlData?.signedUrl) {
-        arquivos.push({
-          tipo:      doc.tipo,
-          nome:      doc.arquivo_path.split('/').pop(),
-          url:       urlData.signedUrl,
-          colaborador_id: doc.colaborador_id || null,
-        });
-      }
+      const {data:blob, error:dlErr} = await sb.storage.from('documentos').download(doc.arquivo_path);
+      if (dlErr || !blob) { console.warn('Não foi possível baixar:', doc.arquivo_path); continue; }
+      const base64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(blob);
+      });
+      arquivos.push({
+        tipo:           doc.tipo,
+        nome:           doc.arquivo_path.split('/').pop(),
+        conteudo_b64:   base64,
+        colaborador_id: doc.colaborador_id || null,
+      });
     }
 
-    const ag = (t.sessoes||[]).sort((a,b) => a.data > b.data ? 1 : -1);
-    const datasRealizacao = ag.map(a => formatarData(a.data)).join(', ');
+    if (arquivos.length === 0) throw new Error('Não foi possível baixar nenhum documento do Storage.');
 
-    // Payload para a Edge Function
+    const ag = (t.sessoes||[]).sort((a,b) => a.data > b.data ? 1 : -1);
+
     const payload = {
-      turma_id:       turmaId,
-      treinamento:    t.catalogo?.nome||'Treinamento',
-      empresa:        t.clientes?.nome||'',
-      email_destino:  t.clientes?.email||'',
-      carga_horaria:  t.catalogo?.carga_horaria||'',
-      datas:          datasRealizacao,
-      local:          t.local||'',
-      instrutor:      ag[0]?.usuarios?.nome||'',
-      participantes:  (t.turma_participantes||[]).map(p => p.colaboradores?.nome||'').filter(Boolean),
+      turma_id:      turmaId,
+      treinamento:   t.catalogo?.nome||'Treinamento',
+      empresa:       t.clientes?.nome||'',
+      email_destino: t.clientes?.email||'',
+      carga_horaria: t.catalogo?.carga_horaria||'',
+      datas:         ag.map(a => formatarData(a.data)).join(', '),
+      local:         t.local||'',
+      instrutor:     ag[0]?.usuarios?.nome||'',
+      participantes: (t.turma_participantes||[]).map(p => p.colaboradores?.nome||'').filter(Boolean),
       arquivos,
-      org_id:         usuarioAtual.org_id,
+      org_id:        usuarioAtual.org_id,
     };
 
     const resp = await sb.functions.invoke('enviar-documentos', {body: payload});
     if (resp.error) throw new Error(resp.error.message || 'Erro na Edge Function');
 
-    // Registrar envio
     await sb.from('envios_email').upsert({
-      turma_id:    turmaId,
-      org_id:      usuarioAtual.org_id,
+      turma_id:      turmaId,
+      org_id:        usuarioAtual.org_id,
       email_destino: t.clientes?.email||'',
-      enviado_em:  new Date().toISOString(),
-      status:      'enviado',
+      enviado_em:    new Date().toISOString(),
+      status:        'enviado',
     }, {onConflict: 'turma_id'});
 
     showToast('Documentos enviados com sucesso!', 'success');
