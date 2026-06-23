@@ -160,11 +160,6 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .exec-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
 .exec-aba{animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-/* Mobile: sticky exec tabs + bigger touch targets */
-@media(max-width:767px){
-  .exec-tab{padding:12px 6px;font-size:13px}
-  .exec-tabs-bar{position:sticky;top:0;background:var(--surface);z-index:10;border-bottom:2px solid var(--border)}
-}
 </style>
 </head>
 <body>
@@ -1118,7 +1113,74 @@ async function verTurma(id) {
     const nomeC = t.clientes?.nome||'-';
     const podeEditar = podeMgr && st !== 'concluida' && st !== 'cancelada';
 
-    const html = `
+    // Agendamento do instrutor logado (para exibir data/hora)
+    const agMeuAgend = usuarioAtual.perfil === 'instrutor'
+      ? agendamentos.find(ag => ag.instrutor_id === usuarioAtual.id) || agendamentos[0]
+      : null;
+
+    const html = usuarioAtual.perfil === 'instrutor' ? `
+      <!-- ===== TELA INSTRUTOR ===== -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
+      </div>
+
+      <!-- Hero card -->
+      <div style="background:var(--navy);border-radius:var(--r-lg);padding:20px;margin-bottom:12px">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border-radius:20px;padding:3px 10px;margin-bottom:10px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${st==='em_andamento'?'#34d399':st==='concluida'?'#6ee7b7':'#93c5fd'}"></span>
+          <span style="font-size:11px;color:rgba(255,255,255,.8);font-weight:600;letter-spacing:.3px">${SL[st]}</span>
+        </div>
+        <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:4px">${nomeT}</div>
+        <div style="font-size:15px;color:rgba(255,255,255,.65);font-weight:500;margin-bottom:16px">${nomeC}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:${st==='agendada'||st==='em_andamento'?'16px':'0'}">
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Data</div>
+            <div style="font-size:13px;color:#fff;font-weight:500">${agMeuAgend?formatarData(agMeuAgend.data):'—'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Horário</div>
+            <div style="font-size:13px;color:#fff;font-weight:500">${agMeuAgend&&agMeuAgend.hora_inicio?agMeuAgend.hora_inicio.slice(0,5)+(agMeuAgend.hora_fim?' – '+agMeuAgend.hora_fim.slice(0,5):''):'—'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Local</div>
+            <div style="font-size:13px;color:#fff;font-weight:500">${agMeuAgend?.local||t.local||'—'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Carga</div>
+            <div style="font-size:13px;color:#fff;font-weight:500">${t.catalogo?.carga_horaria||'—'}h</div>
+          </div>
+        </div>
+        ${st==='agendada'?`
+          <button class="btn" style="width:100%;background:var(--blue);color:#fff;font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="iniciarExecucao" data-id="${id}">
+            ▶ Iniciar treinamento
+          </button>`:``}
+        ${st==='em_andamento'?`
+          <button class="btn" style="width:100%;background:var(--green);color:#fff;font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="abrirExecucao" data-id="${id}">
+            ▶ Continuar treinamento
+          </button>`:``}
+        ${st==='concluida'?`
+          <div style="text-align:center;padding:6px;font-size:13px;color:rgba(255,255,255,.5)">✓ Treinamento concluído</div>`:``}
+      </div>
+
+      <!-- Participantes -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:600;color:var(--text-1)">Participantes</div>
+          <span class="badge badge-gray">${participantes.length}</span>
+        </div>
+        ${participantes.length===0
+          ?`<div class="empty" style="padding:16px"><div class="empty-title" style="font-size:13px">Nenhum participante</div></div>`
+          :participantes.map(p=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(p.colaboradores?.nome||'?')}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.colaboradores?.nome||''}</div>
+              <div style="font-size:11px;color:var(--text-3)">${p.empresa_vinculo||p.colaboradores?.empresa||''}${p.cargo_vinculo?' · '+p.cargo_vinculo:''}</div>
+            </div>
+          </div>`).join('')}
+      </div>` : `
+
+      <!-- ===== TELA GESTOR ===== -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
         <div style="flex:1;min-width:0">
@@ -1128,37 +1190,6 @@ async function verTurma(id) {
         <span class="badge ${SB[st]}" style="flex-shrink:0">${SL[st]}</span>
       </div>
 
-      ${usuarioAtual.perfil==='instrutor'?`
-      <!-- Bloco hero para instrutor no mobile -->
-      <div style="background:var(--navy);border-radius:var(--r-lg);padding:20px;margin-bottom:16px">
-        <div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px;line-height:1.2">${nomeT}</div>
-        <div style="font-size:15px;color:rgba(255,255,255,.7);margin-bottom:16px;font-weight:500">${nomeC}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Local</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${t.local||'—'}</div>
-          </div>
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Carga</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${t.catalogo?.carga_horaria||'—'}h</div>
-          </div>
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Participantes</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${participantes.length}</div>
-          </div>
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Agendamentos</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${agendamentos.length}</div>
-          </div>
-        </div>
-        ${st==='agendada'?`
-          <button class="btn" style="width:100%;background:var(--blue);color:#fff;font-size:15px;font-weight:600;padding:14px" data-action="iniciarExecucao" data-id="${id}">▶ Iniciar treinamento</button>`:''}
-        ${st==='em_andamento'?`
-          <button class="btn" style="width:100%;background:var(--green);color:#fff;font-size:15px;font-weight:600;padding:14px" data-action="abrirExecucao" data-id="${id}">▶ Continuar treinamento</button>`:''}
-        ${st==='concluida'?`
-          <div style="text-align:center;padding:8px;font-size:14px;color:rgba(255,255,255,.6)">✓ Treinamento concluído</div>`:''}
-      </div>`:`
-      <!-- Layout padrão para gestores -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Informações</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1172,27 +1203,7 @@ async function verTurma(id) {
           <button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="${id}">Cancelar turma</button>
         </div>`:``}
       </div>
-      ${st==='agendada'?`
-      <div class="card" style="margin-bottom:16px;background:var(--blue);border-color:var(--blue)">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
-            <div style="font-size:15px;font-weight:600;color:#fff">Pronto para iniciar?</div>
-            <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">Inicie a execução para registrar presenças e assinaturas.</div>
-          </div>
-          <button class="btn" style="background:#fff;color:var(--blue);font-weight:600;flex-shrink:0" data-action="iniciarExecucao" data-id="${id}">▶ Iniciar</button>
-        </div>
-      </div>`:''}
-      ${st==='em_andamento'?`
-      <div class="card" style="margin-bottom:16px;background:var(--green);border-color:var(--green)">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
-            <div style="font-size:15px;font-weight:600;color:#fff">Treinamento em andamento</div>
-            <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">Registre presenças, assinaturas e evidências.</div>
-          </div>
-          <button class="btn" style="background:#fff;color:var(--green);font-weight:600;flex-shrink:0" data-action="abrirExecucao" data-id="${id}">▶ Continuar</button>
-        </div>
-      </div>`:''}
-      `}
+
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Agendamentos (${agendamentos.length})</div>
         ${agendamentos.length===0
@@ -1747,18 +1758,15 @@ async function abrirExecucao(turmaId) {
       .order('data', {ascending:true})
       .limit(1)
       .maybeSingle();
-    // Buscar evidências do agendamento ativo
-    const sessaoId = sessaoInstrutor?.id || null;
-    window._execSessaoId = sessaoId;
+    window._execSessaoId = sessaoInstrutor?.id || null;
 
     // Buscar presenças já registradas
     const {data:presencas} = await sb.from('presencas').select('*').eq('turma_id',turmaId);
     window._execPresencas = {};
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
 
-    const {data:evidencias} = sessaoId
-      ? await sb.from('evidencias').select('*').eq('sessao_id', sessaoId)
-      : {data:[]};
+    // Buscar evidências
+    const {data:evidencias} = await sb.from('evidencias').select('*').eq('turma_id',turmaId);
     window._execEvidencias = evidencias||[];
 
     const nomeT = t.catalogo?.nome||'Treinamento';
@@ -1775,7 +1783,7 @@ async function abrirExecucao(turmaId) {
       </div>
 
       <!-- Abas de execução -->
-      <div class="exec-tabs-bar" style="display:flex;border-bottom:2px solid var(--border);margin-bottom:20px;gap:0">
+      <div style="display:flex;border-bottom:2px solid var(--border);margin-bottom:20px;gap:0">
         <button class="exec-tab active" data-tab="presenca" onclick="trocarAbaExec('presenca',this)">
           Presenças
         </button>
@@ -1802,14 +1810,10 @@ async function abrirExecucao(turmaId) {
         <div class="card" style="margin-bottom:16px">
           <div class="card-title">Fotos e registros</div>
           <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-            <button class="btn btn-outline" onclick="document.getElementById('inputCamera').click()">
-              📷 Tirar foto
-            </button>
-            <input id="inputCamera" type="file" accept="image/*" capture="environment" style="display:none" onchange="adicionarEvidencia(this,'foto')">
-            <button class="btn btn-outline" onclick="document.getElementById('inputGaleria').click()">
-              🖼 Galeria
-            </button>
-            <input id="inputGaleria" type="file" accept="image/*" style="display:none" onchange="adicionarEvidencia(this,'foto')">
+            <button class="btn btn-outline" type="button" onclick="this.nextElementSibling.click()">📷 Tirar foto</button>
+            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="adicionarEvidencia(this,'foto')">
+            <button class="btn btn-outline" type="button" onclick="this.nextElementSibling.click()">🖼 Galeria</button>
+            <input type="file" accept="image/*" style="display:none" onchange="adicionarEvidencia(this,'foto')">
           </div>
           <div id="listaEvidencias">
             ${_htmlListaEvidencias(window._execEvidencias)}
@@ -1848,7 +1852,7 @@ async function abrirExecucao(turmaId) {
           </div>
           <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:20px;font-size:13px;line-height:1.5">
             <div style="font-weight:600;margin-bottom:4px">⚠️ Atenção</div>
-            Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>. 
+            Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>.
             Os documentos ficarão disponíveis para geração.
           </div>
           <button class="btn btn-blue" style="width:100%" onclick="finalizarTurma('${turmaId}')">
@@ -1863,28 +1867,43 @@ async function abrirExecucao(turmaId) {
   } finally { hideLoading(); }
 }
 
+// Retorna o container de execução visível (mobile ou desktop)
+function _execContainer() {
+  const mobile = document.getElementById('mobileBody');
+  const desktop = document.getElementById('mainBody');
+  // No mobile o mobileBody está visível (display:block via CSS media query)
+  if (window.innerWidth < 768) return mobile;
+  return desktop;
+}
+
+// Busca um elemento pelo ID dentro do container correto
+function execEl(id) {
+  return _execContainer().querySelector('#'+id) || document.getElementById(id);
+}
+
 function trocarAbaExec(aba, btn) {
-  document.querySelectorAll('.exec-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.exec-aba').forEach(a=>a.style.display='none');
+  const container = btn.closest('#mainBody, #mobileBody') || _execContainer();
+  container.querySelectorAll('.exec-tab').forEach(t => t.classList.remove('active'));
+  container.querySelectorAll('.exec-aba').forEach(a => a.style.display = 'none');
   btn.classList.add('active');
-  const abaEl = document.getElementById('aba'+aba.charAt(0).toUpperCase()+aba.slice(1));
-  if (abaEl) abaEl.style.display='block';
-  // Re-render presencas sempre que a aba for aberta para garantir persistência no mobile
+  const abaId = 'aba' + aba.charAt(0).toUpperCase() + aba.slice(1);
+  const abaEl = container.querySelector('#' + abaId);
+  if (abaEl) abaEl.style.display = 'block';
+
   if (aba === 'presenca') {
-    const listaEl = document.getElementById('listaPresencas');
-    if (listaEl && window._execParticipantes) {
-      listaEl.innerHTML = _htmlListaPresencas(window._execParticipantes);
+    const lista = container.querySelector('#listaPresencas');
+    if (lista && window._execParticipantes) {
+      lista.innerHTML = _htmlListaPresencas(window._execParticipantes);
     }
   }
-  // Atualiza contadores na aba Finalizar
   if (aba === 'finalizar') {
-    const totalEl = document.getElementById('totalAssinados');
-    if (totalEl && window._execPresencas) {
-      totalEl.textContent = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
+    const totalAssin = container.querySelector('#totalAssinados');
+    if (totalAssin && window._execPresencas) {
+      totalAssin.textContent = Object.values(window._execPresencas).filter(p => p.assinatura_path || p.presente).length;
     }
-    const evEl = document.getElementById('totalEvidencias');
-    if (evEl && window._execEvidencias) {
-      evEl.textContent = window._execEvidencias.length;
+    const totalEv = container.querySelector('#totalEvidencias');
+    if (totalEv && window._execEvidencias) {
+      totalEv.textContent = window._execEvidencias.length;
     }
   }
 }
@@ -2050,11 +2069,11 @@ async function confirmarAssinatura() {
     showToast(`Assinatura de ${window._assinaturaNome} registrada!`,'success');
 
     // Atualizar lista sem recarregar tudo
-    document.getElementById('listaPresencas').innerHTML =
-      _htmlListaPresencas(window._execParticipantes);
+    const listaEl = execEl('listaPresencas');
+    if (listaEl) listaEl.innerHTML = _htmlListaPresencas(window._execParticipantes);
 
     // Atualizar contador na aba finalizar
-    const totalEl = document.getElementById('totalAssinados');
+    const totalEl = execEl('totalAssinados');
     if (totalEl) totalEl.textContent = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
 
   } catch(e) {
@@ -2091,11 +2110,9 @@ async function adicionarEvidencia(input, tipo) {
     const {error:upErr} = await sb.storage.from('evidencias').upload(path, file, {upsert:false, contentType:file.type});
     if (upErr) throw upErr;
 
-    const sessaoId = window._execSessaoId;
-    if (!sessaoId) throw new Error('Agendamento não encontrado. Recarregue a tela e tente novamente.');
     const {data:ev, error:dbErr} = await sb.from('evidencias').insert({
       org_id:       usuarioAtual.org_id,
-      sessao_id:    sessaoId,
+      turma_id:     turmaId,
       tipo,
       arquivo_path: path,
     }).select().single();
@@ -2106,7 +2123,8 @@ async function adicionarEvidencia(input, tipo) {
     ev.url_temp = urlData?.signedUrl||'';
     window._execEvidencias.push(ev);
 
-    document.getElementById('listaEvidencias').innerHTML = _htmlListaEvidencias(window._execEvidencias);
+    const listaEvEl = execEl('listaEvidencias');
+    if (listaEvEl) listaEvEl.innerHTML = _htmlListaEvidencias(window._execEvidencias);
     showToast('Foto adicionada!','success');
     input.value = '';
   } catch(e) {
@@ -2121,13 +2139,14 @@ async function removerEvidencia(evId, path) {
     const {error} = await sb.from('evidencias').delete().eq('id',evId);
     if (error) throw error;
     window._execEvidencias = window._execEvidencias.filter(e=>e.id!==evId);
-    document.getElementById('listaEvidencias').innerHTML = _htmlListaEvidencias(window._execEvidencias);
+    const listaEvEl2 = execEl('listaEvidencias');
+    if (listaEvEl2) listaEvEl2.innerHTML = _htmlListaEvidencias(window._execEvidencias);
     showToast('Evidência removida','info');
   } catch(e) { showToast(e.message||'Erro','error'); }
 }
 
 async function salvarAnotacoes(turmaId) {
-  const textarea = document.getElementById('anotacoesInstrutor');
+  const textarea = execEl('anotacoesInstrutor');
   if (!textarea) return;
   const texto = textarea.value.trim();
   const {error} = await sb.from('turmas').update({anotacoes_instrutor:texto}).eq('id',turmaId);
@@ -2135,9 +2154,9 @@ async function salvarAnotacoes(turmaId) {
   textarea.readOnly = true;
   textarea.style.background = 'var(--gray-50)';
   textarea.style.color = 'var(--text-2)';
-  const btnSalvar  = document.getElementById('btnSalvarAnotacoes');
-  const btnEditar  = document.getElementById('btnEditarAnotacoes');
-  const labelSalvo = document.getElementById('anotacoesSalvas');
+  const btnSalvar  = execEl('btnSalvarAnotacoes');
+  const btnEditar  = execEl('btnEditarAnotacoes');
+  const labelSalvo = execEl('anotacoesSalvas');
   if (btnSalvar)  btnSalvar.style.display  = 'none';
   if (btnEditar)  btnEditar.style.display  = 'inline-flex';
   if (labelSalvo) labelSalvo.style.display = 'inline';
@@ -2145,15 +2164,15 @@ async function salvarAnotacoes(turmaId) {
 }
 
 function editarAnotacoes() {
-  const textarea = document.getElementById('anotacoesInstrutor');
+  const textarea = execEl('anotacoesInstrutor');
   if (!textarea) return;
   textarea.readOnly = false;
   textarea.style.background = '';
   textarea.style.color = '';
   textarea.focus();
-  const btnSalvar  = document.getElementById('btnSalvarAnotacoes');
-  const btnEditar  = document.getElementById('btnEditarAnotacoes');
-  const labelSalvo = document.getElementById('anotacoesSalvas');
+  const btnSalvar  = execEl('btnSalvarAnotacoes');
+  const btnEditar  = execEl('btnEditarAnotacoes');
+  const labelSalvo = execEl('anotacoesSalvas');
   if (btnSalvar)  btnSalvar.style.display  = 'inline-flex';
   if (btnEditar)  btnEditar.style.display  = 'none';
   if (labelSalvo) labelSalvo.style.display = 'none';
