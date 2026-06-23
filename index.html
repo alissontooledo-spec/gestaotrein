@@ -2202,10 +2202,8 @@ async function finalizarTurma(turmaId) {
   try {
     showLoading('Finalizando...');
     const {error} = await sb.from('turmas').update({
-      status:'concluida',
-      finalizada_em: new Date().toISOString(),
-      docs_gerados:  false,
-    }).eq('id',turmaId);
+      status: 'concluida',
+    }).eq('id', turmaId);
     if (error) throw error;
     showToast('Treinamento finalizado com sucesso!','success');
     await verTurma(turmaId);
@@ -2420,24 +2418,28 @@ function fmtDataExtenso(iso) {
 
 // Salva o PDF no Supabase Storage e registra na tabela documentos
 async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colaboradorId, codigoValidacao) {
-  const pdfBytes  = pdfDoc.output('arraybuffer');
-  const blob      = new Blob([pdfBytes], {type:'application/pdf'});
-  const orgId     = usuarioAtual.org_id;
-  const path      = `${orgId}/${turmaId}/${nomeArquivo}`;
+  try {
+    const pdfBytes = pdfDoc.output('arraybuffer');
+    const blob     = new Blob([pdfBytes], {type:'application/pdf'});
+    const orgId    = usuarioAtual.org_id;
+    const path     = `${orgId}/${turmaId}/${nomeArquivo}`;
 
-  const {error:upErr} = await sb.storage.from('documentos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
-  if (upErr) throw upErr;
+    const {error:upErr} = await sb.storage.from('documentos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
+    if (upErr) { console.warn('Storage documentos:', upErr.message); return; }
 
-  const {error:dbErr} = await sb.from('documentos').upsert({
-    org_id:            orgId,
-    turma_id:          turmaId,
-    colaborador_id:    colaboradorId || null,
-    tipo,
-    arquivo_path:      path,
-    codigo_validacao:  codigoValidacao,
-    gerado_em:         new Date().toISOString(),
-  }, {onConflict:'turma_id,colaborador_id,tipo'});
-  if (dbErr) console.warn('Registro documentos:', dbErr.message);
+    const {error:dbErr} = await sb.from('documentos').upsert({
+      org_id:           orgId,
+      turma_id:         turmaId,
+      colaborador_id:   colaboradorId || null,
+      tipo,
+      arquivo_path:     path,
+      codigo_validacao: codigoValidacao,
+      gerado_em:        new Date().toISOString(),
+    }, {onConflict:'turma_id,colaborador_id,tipo'});
+    if (dbErr) console.warn('DB documentos:', dbErr.message);
+  } catch(e) {
+    console.warn('salvarDocumentoSupabase:', e.message);
+  }
 }
 
 // ============================================================
@@ -2492,7 +2494,7 @@ async function gerarListaPresenca(turmaId) {
 
     y += 40;
 
-    // Cabeçalho tabela
+    // Cabeçalho tabela — sem coluna Cargo
     doc.setFillColor(15, 23, 42);
     doc.rect(mg, y, W - mg*2, 8, 'F');
     doc.setFontSize(8);
@@ -2500,9 +2502,8 @@ async function gerarListaPresenca(turmaId) {
     doc.setFont('helvetica','bold');
     doc.text('Nº', mg+3, y+5.5);
     doc.text('Nome do Participante', mg+14, y+5.5);
-    doc.text('Cargo', mg+90, y+5.5);
-    doc.text('CPF', mg+130, y+5.5);
-    doc.text('Assinatura', mg+155, y+5.5);
+    doc.text('CPF', mg+110, y+5.5);
+    doc.text('Assinatura', mg+145, y+5.5);
 
     y += 8;
 
@@ -2520,9 +2521,20 @@ async function gerarListaPresenca(turmaId) {
       if (y > H - 40) {
         doc.addPage();
         y = mg;
+        // Repetir cabeçalho na nova página
+        doc.setFillColor(15, 23, 42);
+        doc.rect(mg, y, W - mg*2, 8, 'F');
+        doc.setFontSize(8);
+        doc.setTextColor(255,255,255);
+        doc.setFont('helvetica','bold');
+        doc.text('Nº', mg+3, y+5.5);
+        doc.text('Nome do Participante', mg+14, y+5.5);
+        doc.text('CPF', mg+110, y+5.5);
+        doc.text('Assinatura', mg+145, y+5.5);
+        y += 8;
       }
 
-      const rowH = 14;
+      const rowH = 16;
       doc.setFillColor(i%2===0 ? 248 : 255, i%2===0 ? 250 : 255, i%2===0 ? 252 : 255);
       doc.rect(mg, y, W - mg*2, rowH, 'F');
       doc.setDrawColor(226, 232, 240);
@@ -2531,18 +2543,17 @@ async function gerarListaPresenca(turmaId) {
       doc.setFontSize(8);
       doc.setTextColor(15, 23, 42);
       doc.setFont('helvetica','normal');
-      doc.text(String(i+1), mg+3, y+9);
-      doc.text((col.nome||'').slice(0,38), mg+14, y+9);
-      doc.text((p.cargo_vinculo||col.cargo||'').slice(0,22), mg+90, y+9);
-      doc.text(col.cpf||'-', mg+130, y+9);
+      doc.text(String(i+1), mg+3, y+10);
+      doc.text((col.nome||'').slice(0,46), mg+14, y+10);
+      doc.text(col.cpf||'-', mg+110, y+10);
 
-      // Assinatura
+      // Assinatura — contida dentro da linha
       if (pr?.assinatura_path) {
         try {
           const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(pr.assinatura_path, 60);
           if (urlData?.signedUrl) {
             const imgData = await carregarImagemComoDataURL(urlData.signedUrl);
-            if (imgData) doc.addImage(imgData, 'PNG', mg+152, y+1, 36, 10);
+            if (imgData) doc.addImage(imgData, 'PNG', mg+143, y+1, 28, rowH-3);
           }
         } catch(e) { /* sem assinatura */ }
       }
@@ -2583,7 +2594,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome),catalogo(nome,carga_horaria,norma_regulamentadora),sessoes(*)')
+      .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*)')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -2677,14 +2688,6 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nomeT = t.catalogo?.nome||'Treinamento';
     doc.text(nomeT, W/2, 105, {align:'center'});
 
-    // NR se disponível
-    if (t.catalogo?.norma_regulamentadora) {
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.setFont('helvetica','normal');
-      doc.text(t.catalogo.norma_regulamentadora, W/2, 113, {align:'center'});
-    }
-
     // Dados do certificado
     doc.setFontSize(9);
     doc.setTextColor(71, 85, 105);
@@ -2743,7 +2746,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,norma_regulamentadora),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cargo,cpf))')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cargo,cpf))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -2816,14 +2819,6 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setLineWidth(1.5);
     doc.line(mg, y, mg + 60, y);
     y += 7;
-
-    if (t.catalogo?.norma_regulamentadora) {
-      doc.setFontSize(8.5);
-      doc.setTextColor(100, 116, 139);
-      doc.setFont('helvetica','normal');
-      doc.text(t.catalogo.norma_regulamentadora, mg, y);
-      y += 6;
-    }
 
     // Info grid
     doc.setFontSize(8.5);
