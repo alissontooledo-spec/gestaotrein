@@ -1668,66 +1668,110 @@ async function executarImportacao() {
 }
 
 async function renderAgenda() {
-  // Buscar agendamentos onde este instrutor está designado
-  // Buscar sessoes do instrutor
   const {data:sessoes} = await sb
     .from('sessoes')
     .select('id,turma_id,data,hora_inicio,hora_fim,local,modalidade,concluida')
-    .eq('instrutor_id',usuarioAtual.id)
-    .order('data',{ascending:true});
+    .eq('instrutor_id', usuarioAtual.id)
+    .order('data', {ascending:true});
 
-  // Buscar turmas vinculadas (apenas não canceladas/excluídas)
   const turmaIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
   let turmasMap = {};
   if (turmaIds.length) {
     const {data:turmasData} = await sb
       .from('turmas')
       .select('id,status,catalogo_id,cliente_id,clientes(nome),catalogo(nome,carga_horaria)')
-      .in('id',turmaIds)
+      .in('id', turmaIds)
       .neq('status','cancelada');
     (turmasData||[]).forEach(t => { turmasMap[t.id] = t; });
   }
 
-  // Combinar dados — ignorar sessões de turmas canceladas
-  const sessoesComTurma = (sessoes||[])
-    .map(s=>({...s, turmas: turmasMap[s.turma_id]||null}))
-    .filter(s=>s.turmas !== null);
+  // Agrupar sessões por turma
+  const turmasAgrupadas = {};
+  (sessoes||[]).forEach(s => {
+    const t = turmasMap[s.turma_id];
+    if (!t) return;
+    if (!turmasAgrupadas[s.turma_id]) {
+      turmasAgrupadas[s.turma_id] = { turma: t, sessoes: [] };
+    }
+    turmasAgrupadas[s.turma_id].sessoes.push(s);
+  });
 
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
   fabOcultar();
 
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
+  const hoje = new Date().toISOString().split('T')[0];
 
-  const proximas  = sessoesComTurma.filter(s=>!s.concluida);
-  const concluidas= sessoesComTurma.filter(s=>s.concluida);
+  const grupos = Object.values(turmasAgrupadas);
+  const pendentes  = grupos.filter(g => g.turma.status !== 'concluida');
+  const concluidas = grupos.filter(g => g.turma.status === 'concluida');
 
-  const renderSessao = s => {
-    const t    = s.turmas||{};
-    const turmaId = s.turma_id || t.id || '';
-    const st   = t.status||'agendada';
-    return `<div class="list-item" data-action="verTurma" data-id="${turmaId}" style="cursor:pointer;padding:14px 0">
-      <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.catalogo?.carga_horaria||'?'}h</div>
-      <div class="li-info">
-        <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
-        <div class="li-sub">${t.clientes?.nome||'—'} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}${s.local?' · '+s.local:''}</div>
+  const renderGrupo = g => {
+    const t  = g.turma;
+    const st = t.status||'agendada';
+    const totalS    = g.sessoes.length;
+    const concluidosS = g.sessoes.filter(s=>s.concluida).length;
+
+    // Sessão de hoje ou próxima não concluída
+    const sessaoHoje    = g.sessoes.find(s => s.data === hoje && !s.concluida);
+    const proximaSessao = g.sessoes.find(s => s.data >= hoje && !s.concluida);
+    const sessaoAtiva   = sessaoHoje || proximaSessao;
+
+    const datasHtml = g.sessoes.map(s => {
+      const isConcluida = s.concluida;
+      const isHoje = s.data === hoje;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px">${isConcluida?'✅':'📅'}</span>
+        <div style="flex:1">
+          <span style="font-size:13px;font-weight:${isHoje?'600':'400'};color:${isHoje?'var(--blue)':'var(--text-1)'}">${formatarData(s.data)}</span>
+          ${s.hora_inicio?`<span style="font-size:12px;color:var(--text-3)"> · ${s.hora_inicio.slice(0,5)}${s.hora_fim?' – '+s.hora_fim.slice(0,5):''}</span>`:''}
+          ${isHoje?`<span style="font-size:10px;font-weight:700;color:var(--blue);margin-left:6px">HOJE</span>`:''}
+        </div>
+        <span style="font-size:11px;color:${isConcluida?'var(--green)':'var(--text-3)'}">${isConcluida?'Concluído':'Pendente'}</span>
+      </div>`;
+    }).join('');
+
+    // Botão de ação — só mostra para sessão de hoje
+    let btnAcao = '';
+    if (sessaoHoje && st === 'agendada') {
+      btnAcao = `<button class="btn btn-blue" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Iniciar treinamento de hoje</button>`;
+    } else if (sessaoHoje && st === 'em_andamento') {
+      btnAcao = `<button class="btn" style="width:100%;margin-top:12px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Continuar treinamento de hoje</button>`;
+    } else if (!sessaoHoje && st === 'em_andamento' && proximaSessao) {
+      btnAcao = `<div style="margin-top:10px;font-size:12px;color:var(--text-3);text-align:center">Próxima data: ${formatarData(proximaSessao.data)}</div>`;
+    } else if (st === 'concluida') {
+      btnAcao = `<button class="btn btn-outline" style="width:100%;margin-top:12px" data-action="abrirDocumentos" data-id="${t.id}">📄 Ver documentos</button>`;
+    }
+
+    return `<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:2px">${t.catalogo?.nome||'Treinamento'}</div>
+          <div style="font-size:13px;color:var(--text-2)">${t.clientes?.nome||'—'}</div>
+        </div>
+        <span class="badge ${SB[st]}" style="flex-shrink:0;margin-left:8px">${SL[st]}</span>
       </div>
-      <span class="badge ${SB[st]}">${SL[st]}</span>
+      <div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">
+        Datas — ${concluidosS} de ${totalS} concluída(s)
+      </div>
+      ${datasHtml}
+      ${btnAcao}
     </div>`;
   };
 
   setConteudo(`
     <div class="home-section">
-      <div class="section-header"><div class="section-title">Próximos (${proximas.length})</div></div>
-      <div class="card">${proximas.length===0
-        ?'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento</div><div class="empty-sub">Você não possui agendamentos pendentes.</div></div>'
-        :proximas.map(renderSessao).join('')}</div>
+      <div class="section-header"><div class="section-title">Pendentes (${pendentes.length})</div></div>
+      ${pendentes.length===0
+        ?'<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento pendente</div></div></div>'
+        :pendentes.map(renderGrupo).join('')}
     </div>
     <div class="home-section">
       <div class="section-header"><div class="section-title">Concluídos (${concluidas.length})</div></div>
-      <div class="card">${concluidas.length===0
-        ?'<div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Nenhum concluído ainda</div></div>'
-        :concluidas.map(renderSessao).join('')}</div>
+      ${concluidas.length===0
+        ?'<div class="card"><div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Nenhum concluído ainda</div></div></div>'
+        :concluidas.map(renderGrupo).join('')}
     </div>`);
 }
 
@@ -1737,7 +1781,15 @@ async function renderAgenda() {
 // presença → coleta assinaturas → adiciona fotos → finaliza
 // ============================================================
 
-// ---- Iniciar execução ----
+// ---- Iniciar execução (sessão específica) ----
+async function iniciarExecucaoSessao(turmaId, sessaoId) {
+  if (!confirm('Deseja iniciar o treinamento de hoje? O status será alterado para "Em andamento".')) return;
+  const {error} = await sb.from('turmas').update({status:'em_andamento'}).eq('id',turmaId);
+  if (error) { showToast(error.message,'error'); return; }
+  showToast('Execução iniciada!','success');
+  await abrirExecucao(turmaId, sessaoId);
+}
+
 async function iniciarExecucao(turmaId) {
   if (!confirm('Deseja iniciar a execução desta turma? O status será alterado para "Em andamento".')) return;
   const {error} = await sb.from('turmas').update({status:'em_andamento'}).eq('id',turmaId);
@@ -1746,8 +1798,12 @@ async function iniciarExecucao(turmaId) {
   await abrirExecucao(turmaId);
 }
 
-// ---- Tela de execução ----
-async function abrirExecucao(turmaId) {
+// ---- Abrir execução (sessão específica ou primeira pendente) ----
+async function abrirExecucaoSessao(turmaId, sessaoId) {
+  await abrirExecucao(turmaId, sessaoId);
+}
+
+async function abrirExecucao(turmaId, sessaoIdParam) {
   showLoading('Carregando execução...');
   try {
     const {data:t,error} = await sb.from('turmas')
@@ -1759,22 +1815,30 @@ async function abrirExecucao(turmaId) {
     window._execClienteId = t.cliente_id;
     window._execParticipantes = t.turma_participantes||[];
 
-    // Buscar o sessao_id do agendamento deste instrutor nesta turma
-    const {data:sessaoInstrutor} = await sb.from('sessoes')
-      .select('id')
-      .eq('turma_id', turmaId)
-      .eq('instrutor_id', usuarioAtual.id)
-      .order('data', {ascending:true})
-      .limit(1)
-      .maybeSingle();
-    window._execSessaoId = sessaoInstrutor?.id || null;
+    // Determinar sessão ativa: parâmetro > hoje > primeira pendente do instrutor
+    const hoje = new Date().toISOString().split('T')[0];
+    let sessaoAtiva = null;
+    if (sessaoIdParam) {
+      sessaoAtiva = (t.sessoes||[]).find(s => s.id === sessaoIdParam) || null;
+    }
+    if (!sessaoAtiva) {
+      const sessoesInstrutor = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id);
+      sessaoAtiva = sessoesInstrutor.find(s => s.data === hoje && !s.concluida)
+        || sessoesInstrutor.find(s => !s.concluida)
+        || sessoesInstrutor[sessoesInstrutor.length - 1]
+        || null;
+    }
 
-    // Buscar presenças já registradas
-    const {data:presencas} = await sb.from('presencas').select('*').eq('turma_id',turmaId);
+    window._execSessaoId = sessaoAtiva?.id || null;
+
+    // Presenças da sessão ativa
+    const {data:presencas} = window._execSessaoId
+      ? await sb.from('presencas').select('*').eq('sessao_id', window._execSessaoId)
+      : await sb.from('presencas').select('*').eq('turma_id', turmaId);
     window._execPresencas = {};
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
 
-    // Buscar evidências pela sessão ativa
+    // Evidências da sessão ativa
     const {data:evidencias} = window._execSessaoId
       ? await sb.from('evidencias').select('*').eq('sessao_id', window._execSessaoId)
       : {data:[]};
@@ -1782,13 +1846,18 @@ async function abrirExecucao(turmaId) {
 
     const nomeT = t.catalogo?.nome||'Treinamento';
     const nomeC = t.clientes?.nome||'';
+    const totalSessoes    = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id).length;
+    const concluidasSessoes = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id && s.concluida).length;
+    const infoSessao = sessaoAtiva
+      ? `${formatarData(sessaoAtiva.data)}${totalSessoes > 1 ? ` · Dia ${concluidasSessoes + 1} de ${totalSessoes}` : ''}`
+      : '';
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
         <div style="flex:1">
           <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
-          <div style="font-size:13px;color:var(--text-2)">${nomeC}</div>
+          <div style="font-size:13px;color:var(--text-2)">${nomeC}${infoSessao ? ' · '+infoSessao : ''}</div>
         </div>
         <span class="badge badge-blue">Em andamento</span>
       </div>
@@ -2193,19 +2262,43 @@ function editarAnotacoes() {
 
 // ---- Finalizar turma ----
 async function finalizarTurma(turmaId) {
-  const total    = window._execParticipantes.length;
-  const assinou  = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
+  const total   = window._execParticipantes.length;
+  const assinou = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
   if (total > 0 && assinou === 0) {
     if (!confirm('Nenhum participante assinou ainda. Deseja finalizar mesmo assim?')) return;
   }
-  if (!confirm('Confirma a finalização do treinamento? Esta ação não pode ser desfeita.')) return;
+  if (!confirm('Confirma a finalização desta etapa do treinamento?')) return;
   try {
     showLoading('Finalizando...');
-    const {error} = await sb.from('turmas').update({
-      status: 'concluida',
-    }).eq('id', turmaId);
-    if (error) throw error;
-    showToast('Treinamento finalizado com sucesso!','success');
+
+    // 1. Marcar a sessão atual como concluída
+    const sessaoId = window._execSessaoId;
+    if (sessaoId) {
+      const {error:errSessao} = await sb.from('sessoes')
+        .update({concluida: true})
+        .eq('id', sessaoId);
+      if (errSessao) throw errSessao;
+    }
+
+    // 2. Verificar se TODAS as sessões da turma estão concluídas
+    const {data:todasSessoes} = await sb.from('sessoes')
+      .select('id,concluida')
+      .eq('turma_id', turmaId);
+
+    const todasConcluidas = (todasSessoes||[]).length > 0
+      && (todasSessoes||[]).every(s => s.concluida || s.id === sessaoId);
+
+    // 3. Só marca turma como concluída se todas as sessões terminaram
+    if (todasConcluidas) {
+      const {error:errTurma} = await sb.from('turmas')
+        .update({status: 'concluida'})
+        .eq('id', turmaId);
+      if (errTurma) throw errTurma;
+      showToast('Treinamento concluído! Todos os dias finalizados.', 'success');
+    } else {
+      showToast('Etapa finalizada! Retorne na próxima data para continuar.', 'success');
+    }
+
     await verTurma(turmaId);
   } catch(e) {
     showToast(e.message||'Erro ao finalizar','error');
@@ -2329,7 +2422,9 @@ document.addEventListener('click', function(e) {
     // Participante
     case 'selecionarPart':        selecionarParticipante(el.getAttribute('data-col')); break;
     case 'removerParticipante':   removerParticipante(id,el.getAttribute('data-turma')); break;
-    case 'abrirDocumentos':        renderDocumentosTurma(id); break;
+    case 'abrirDocumentos':           renderDocumentosTurma(id); break;
+    case 'iniciarExecucaoSessao':     iniciarExecucaoSessao(id, el.dataset.sessao); break;
+    case 'abrirExecucaoSessao':       abrirExecucaoSessao(id, el.dataset.sessao); break;
     // Execução
     case 'iniciarExecucao':       iniciarExecucao(id); break;
     case 'abrirExecucao':         abrirExecucao(id); break;
@@ -2946,9 +3041,9 @@ async function renderDocumentosTurma(turmaId) {
     const nomeC = t.clientes?.nome||'-';
     const emailCliente = t.clientes?.email||'';
 
-    // Verificar se todos agendamentos estão concluídos
-    const totalAg     = agendamentos.length;
-    const concluidosAg = agendamentos.filter(a => a.concluida).length;
+    // Verificar se todos agendamentos estão concluídos (sessoes.concluida)
+    const totalAg      = agendamentos.length;
+    const concluidosAg = agendamentos.filter(a => a.concluida === true).length;
     const todosConcluidos = totalAg === 0 || concluidosAg === totalAg;
 
     // Documentos já gerados
