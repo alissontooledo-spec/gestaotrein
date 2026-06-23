@@ -3041,10 +3041,12 @@ async function renderDocumentosTurma(turmaId) {
     const nomeC = t.clientes?.nome||'-';
     const emailCliente = t.clientes?.email||'';
 
-    // Verificar se todos agendamentos estão concluídos (sessoes.concluida)
+    // Se a turma já está concluída, todos os agendamentos são considerados concluídos
+    // Isso cobre casos históricos e finalizações manuais pelo gestor
+    const turmaJaConcluida = t.status === 'concluida';
     const totalAg      = agendamentos.length;
     const concluidosAg = agendamentos.filter(a => a.concluida === true).length;
-    const todosConcluidos = totalAg === 0 || concluidosAg === totalAg;
+    const todosConcluidos = turmaJaConcluida || totalAg === 0 || concluidosAg === totalAg;
 
     // Documentos já gerados
     const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
