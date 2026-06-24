@@ -3,163 +3,245 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="theme-color" content="#0F172A">
+<meta name="theme-color" content="#1E2A4A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Treinamentos</title>
+<title>Toledo Labs — Treinamentos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
-:root{--navy:#0F172A;--navy-2:#1E293B;--navy-3:#334155;--blue:#2563EB;--blue-h:#1D4ED8;--blue-l:#EFF6FF;--blue-m:#BFDBFE;--green:#059669;--green-l:#D1FAE5;--amber:#D97706;--amber-l:#FEF3C7;--red:#DC2626;--red-l:#FEE2E2;--gray-50:#F8FAFC;--gray-100:#F1F5F9;--gray-200:#E2E8F0;--gray-300:#CBD5E1;--gray-400:#94A3B8;--gray-500:#64748B;--gray-600:#475569;--gray-700:#334155;--gray-800:#1E293B;--text-1:#0F172A;--text-2:#475569;--text-3:#94A3B8;--surface:#FFFFFF;--bg:#F8FAFC;--border:#E2E8F0;--r-sm:6px;--r-md:10px;--r-lg:14px;--r-xl:20px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.1);--nav-h:64px;--sidebar-w:240px;--header-h:60px}
+:root{
+  /* ── Navy Clean v2 — Toledo Labs ── */
+  --navy:#1E2A4A;--navy-2:#263554;--navy-3:#2E3F6B;
+  --amber:#F59E0B;--amber-h:#D97706;--amber-l:#FEF3C7;--amber-text:#92400E;
+  --blue:#1D4ED8;--blue-h:#1E40AF;--blue-l:#DBEAFE;--blue-text:#1E40AF;
+  --green:#059669;--green-l:#D1FAE5;--green-text:#065F46;
+  --red:#DC2626;--red-l:#FEE2E2;--red-text:#991B1B;
+  --warn:#D97706;--warn-l:#FEF3C7;--warn-text:#92400E;
+  --gray-50:#F8FAFC;--gray-100:#F1F5F9;--gray-200:#E2E8F0;--gray-300:#CBD5E1;--gray-400:#94A3B8;--gray-500:#64748B;--gray-600:#475569;
+  --text-1:#1E2A4A;--text-2:#64748B;--text-3:#94A3B8;
+  --surface:#FFFFFF;--bg:#F4F6FA;--border:#E2E8F0;--border-2:#CBD5E1;
+  --r-sm:6px;--r-md:8px;--r-lg:12px;--r-xl:16px;--r-2xl:20px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08);
+  --nav-h:64px;--sidebar-w:228px;--header-h:58px
+}
+/* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text-1);font-size:15px;line-height:1.5}
 .screen{display:none;position:fixed;inset:0;overflow:hidden;flex-direction:column}
 .screen.active{display:flex}
-#screenLogin{background:var(--navy);align-items:center;justify-content:center;padding:24px}
-.login-card{background:var(--surface);border-radius:var(--r-xl);padding:36px 32px;width:100%;max-width:400px;box-shadow:var(--shadow-md)}
-.login-logo{display:flex;align-items:center;gap:10px;margin-bottom:32px}
-.login-logo-icon{width:42px;height:42px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center}
-.login-logo-text{font-size:20px;font-weight:700;color:var(--navy);letter-spacing:-.3px}
-.login-logo-sub{font-size:11px;color:var(--text-3);font-weight:500;letter-spacing:.5px;text-transform:uppercase;margin-top:1px}
-.login-title{font-size:22px;font-weight:700;color:var(--navy);margin-bottom:4px}
+
+/* ── Login Screen ── */
+#screenLogin{background:var(--navy);align-items:center;justify-content:center;padding:24px;background-image:radial-gradient(ellipse at 60% 20%,rgba(46,63,107,.6) 0%,transparent 60%)}
+.login-card{background:var(--surface);border-radius:var(--r-2xl);padding:40px 36px;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:36px}
+.login-logo-icon{width:44px;height:44px;background:var(--amber);border-radius:10px;display:flex;align-items:center;justify-content:center}
+.login-logo-icon svg{stroke:var(--navy)}
+.login-logo-text{font-size:18px;font-weight:700;color:var(--navy);letter-spacing:-.3px;line-height:1.2}
+.login-logo-sub{font-size:11px;color:var(--text-3);font-weight:500;letter-spacing:.5px;text-transform:uppercase;margin-top:2px}
+.login-title{font-size:22px;font-weight:700;color:var(--navy);margin-bottom:4px;letter-spacing:-.3px}
 .login-sub{font-size:14px;color:var(--text-2);margin-bottom:28px}
 .field{margin-bottom:16px}
 .field label{display:block;font-size:13px;font-weight:500;color:var(--text-2);margin-bottom:6px}
-.field input,.field textarea,.field select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:15px;font-family:inherit;color:var(--text-1);background:var(--surface);transition:border-color .15s,box-shadow .15s;outline:none}
-.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.field input,.field textarea,.field select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;color:var(--text-1);background:var(--surface);transition:border-color .15s,box-shadow .15s;outline:none}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
 .field input::placeholder,.field textarea::placeholder{color:var(--text-3)}
-.btn-primary{width:100%;padding:13px;background:var(--blue);color:#fff;border:none;border-radius:var(--r-md);font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s,transform .1s;letter-spacing:-.1px}
-.btn-primary:hover{background:var(--blue-h)}
+.btn-primary{width:100%;padding:13px;background:var(--navy);color:#fff;border:none;border-radius:var(--r-md);font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s,transform .1s;letter-spacing:-.1px}
+.btn-primary:hover{background:var(--navy-2)}
 .btn-primary:active{transform:scale(.98)}
 .btn-primary:disabled{background:var(--gray-300);cursor:not-allowed;transform:none}
 .login-footer{margin-top:24px;text-align:center;font-size:12px;color:var(--text-3)}
-.login-error{background:var(--red-l);color:var(--red);border-radius:var(--r-md);padding:10px 14px;font-size:13px;margin-bottom:16px;display:none}
+.login-error{background:var(--red-l);color:var(--red-text);border-radius:var(--r-md);padding:10px 14px;font-size:13px;margin-bottom:16px;display:none;border:1px solid #FECACA}
 .login-error.show{display:block}
+
+/* ── App shell ── */
 #screenApp{background:var(--bg)}
+
+/* ── Sidebar ── */
 .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--navy);display:flex;flex-direction:column;z-index:100;transition:transform .25s}
-.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.07)}
 .sidebar-logo-row{display:flex;align-items:center;gap:10px}
-.sidebar-logo-icon{width:34px;height:34px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.sidebar-logo-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.2px}
-.sidebar-logo-tag{font-size:10px;color:rgba(255,255,255,.4);font-weight:500;letter-spacing:.4px;text-transform:uppercase}
+.sidebar-logo-icon{width:34px;height:34px;background:var(--amber);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sidebar-logo-icon svg{stroke:var(--navy)}
+.sidebar-logo-name{font-size:14px;font-weight:700;color:#fff;letter-spacing:-.2px;line-height:1.3}
+.sidebar-logo-tag{font-size:10px;color:rgba(255,255,255,.38);font-weight:500;letter-spacing:.4px;text-transform:uppercase}
 .sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
-.sidebar-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.6);font-size:14px;font-weight:500;transition:background .15s,color .15s;margin-bottom:2px}
-.sidebar-item:hover{background:rgba(255,255,255,.08);color:#fff}
-.sidebar-item.active{background:rgba(37,99,235,.3);color:#fff}
-.si-icon{font-size:18px;width:22px;text-align:center;flex-shrink:0}
-.sidebar-bottom{padding:14px 10px;border-top:1px solid rgba(255,255,255,.08)}
-.sidebar-user{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-md);cursor:pointer;transition:background .15s}
-.sidebar-user:hover{background:rgba(255,255,255,.08)}
-.su-avatar{width:32px;height:32px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
-.su-name{font-size:13px;font-weight:500;color:#fff;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.su-role{font-size:11px;color:rgba(255,255,255,.4)}
+.sidebar-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.28);padding:14px 8px 5px;font-weight:500}
+.sidebar-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;transition:background .12s,color .12s;margin-bottom:1px}
+.sidebar-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.9)}
+.sidebar-item.active{background:rgba(245,158,11,.14);color:var(--amber)}
+.si-icon{font-size:17px;width:20px;text-align:center;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.si-icon svg{width:17px;height:17px}
+.sidebar-badge{margin-left:auto;background:rgba(220,38,38,.85);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;line-height:1.6}
+.sidebar-bottom{padding:12px 10px;border-top:1px solid rgba(255,255,255,.07)}
+.sidebar-user{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--r-md);cursor:pointer;transition:background .15s}
+.sidebar-user:hover{background:rgba(255,255,255,.06)}
+.su-avatar{width:30px;height:30px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy);flex-shrink:0}
+.su-name{font-size:12px;font-weight:500;color:#fff;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.su-role{font-size:10px;color:rgba(255,255,255,.38)}
+
+/* ── Main content area ── */
 .main-content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
 .main-header{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
-.main-header-title{font-size:17px;font-weight:600;color:var(--text-1);flex:1}
+.main-header-title{font-size:16px;font-weight:600;color:var(--text-1);flex:1;letter-spacing:-.2px}
 .main-body{flex:1;overflow-y:auto;padding:24px}
-.hamburger{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text-1)}
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--navy)}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
 .sidebar-overlay.show{display:block}
-.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+
+/* ── Mobile bottom nav ── */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy);border-top:none;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
 .bn-items{display:flex}
-.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;cursor:pointer;color:var(--text-3);font-size:10px;font-weight:500;gap:3px;transition:color .15s;border:none;background:none;font-family:inherit}
-.bn-item.active{color:var(--blue)}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 8px;cursor:pointer;color:rgba(255,255,255,.38);font-size:10px;font-weight:500;gap:3px;transition:color .15s;border:none;background:none;font-family:inherit}
+.bn-item.active{color:var(--amber)}
 .bn-item svg{width:22px;height:22px}
-.bn-dot{width:4px;height:4px;border-radius:50%;background:var(--blue);margin-top:1px;opacity:0}
+.bn-dot{width:4px;height:4px;border-radius:50%;background:var(--amber);margin-top:1px;opacity:0}
 .bn-item.active .bn-dot{opacity:1}
-.mobile-header{display:none;flex-shrink:0;background:var(--navy);padding:20px 16px 16px;padding-top:calc(20px + env(safe-area-inset-top))}
-.mh-greeting{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:2px}
-.mh-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.3px}
-.mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:20px;font-size:12px;color:rgba(255,255,255,.8);font-weight:500}
+
+/* ── Mobile header ── */
+.mobile-header{display:none;flex-shrink:0;background:var(--navy);padding:20px 16px 18px;padding-top:calc(20px + env(safe-area-inset-top))}
+.mh-greeting{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:2px;font-weight:400}
+.mh-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.4px}
+.mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(245,158,11,.18);padding:4px 10px;border-radius:999px;font-size:11px;color:var(--amber);font-weight:500;border:1px solid rgba(245,158,11,.25)}
 .mobile-content{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow)}
+
+/* ── Cards & surfaces ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.card-title{font-size:13px;font-weight:600;color:var(--text-1);display:flex;align-items:center;gap:6px}
+.card-link{font-size:12px;color:var(--amber-h);font-weight:500;cursor:pointer;display:flex;align-items:center;gap:2px}
+
+/* ── Stats / KPI grid ── */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow)}
-.stat-label{font-size:12px;color:var(--text-3);font-weight:500;margin-bottom:6px}
-.stat-value{font-size:26px;font-weight:700;color:var(--text-1);letter-spacing:-.5px;line-height:1}
-.stat-sub{font-size:11px;color:var(--text-3);margin-top:4px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;position:relative;overflow:hidden}
+.stat-card.accent{border-top:3px solid var(--amber)}
+.stat-label{font-size:11px;color:var(--text-3);font-weight:500;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.stat-value{font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.5px;line-height:1}
+.stat-sub{font-size:11px;color:var(--text-3);margin-top:4px;display:flex;align-items:center;gap:3px}
+.stat-sub.up{color:var(--green)}
+.stat-sub.warn{color:var(--warn)}
+.stat-sub.down{color:var(--red)}
+.stat-card.navy{background:var(--navy);border-color:var(--navy);border-top:3px solid var(--amber)}
+.stat-card.navy .stat-label{color:rgba(255,255,255,.55)}
+.stat-card.navy .stat-value{color:#fff}
+.stat-card.navy .stat-sub{color:rgba(255,255,255,.5)}
 .stat-card.blue{background:var(--blue);border-color:var(--blue)}
 .stat-card.blue .stat-label,.stat-card.blue .stat-value,.stat-card.blue .stat-sub{color:#fff}
 .stat-card.blue .stat-label,.stat-card.blue .stat-sub{color:rgba(255,255,255,.75)}
-.list-item{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+
+/* ── List items ── */
+.list-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
 .list-item:last-child{border-bottom:none}
-.li-icon{width:40px;height:40px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;font-weight:700}
+.list-item:hover{background:var(--gray-50);margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:var(--r-sm)}
+.li-icon{width:38px;height:38px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;font-weight:700}
 .li-info{flex:1;min-width:0}
 .li-title{font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.li-sub{font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:.1px}
-.badge-blue{background:var(--blue-l);color:var(--blue-h)}
-.badge-green{background:var(--green-l);color:var(--green)}
-.badge-amber{background:var(--amber-l);color:var(--amber)}
-.badge-red{background:var(--red-l);color:var(--red)}
+.li-sub{font-size:12px;color:var(--text-2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── Badges / Pills ── */
+.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;letter-spacing:.05px}
+.badge-blue{background:var(--blue-l);color:var(--blue-text)}
+.badge-green{background:var(--green-l);color:var(--green-text)}
+.badge-amber{background:var(--amber-l);color:var(--amber-text)}
+.badge-red{background:var(--red-l);color:var(--red-text)}
 .badge-gray{background:var(--gray-100);color:var(--gray-600)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--r-md);font-size:14px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:all .15s;text-decoration:none}
-.btn-sm{padding:6px 12px;font-size:13px}
+.badge-navy{background:rgba(30,42,74,.1);color:var(--navy)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--r-md);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:all .15s;text-decoration:none;white-space:nowrap}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-amber{background:var(--amber);color:var(--navy);font-weight:600}
+.btn-amber:hover{background:var(--amber-h)}
 .btn-blue{background:var(--blue);color:#fff}
 .btn-blue:hover{background:var(--blue-h)}
-.btn-outline{background:transparent;color:var(--text-1);border:1px solid var(--border)}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-navy:hover{background:var(--navy-2)}
+.btn-outline{background:transparent;color:var(--text-1);border:1px solid var(--border-2)}
 .btn-outline:hover{background:var(--gray-100)}
 .btn-ghost{background:transparent;color:var(--text-2)}
 .btn-ghost:hover{background:var(--gray-100);color:var(--text-1)}
-.btn-danger{background:var(--red-l);color:var(--red)}
-.fab{position:fixed;right:20px;bottom:calc(var(--nav-h) + 16px);width:52px;height:52px;border-radius:50%;background:var(--blue);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,99,235,.4);z-index:80;transition:transform .15s,box-shadow .15s}
-.fab:hover{transform:scale(1.05)}
+.btn-danger{background:var(--red-l);color:var(--red-text);border:1px solid #FECACA}
+.btn-danger:hover{background:#FEE2E2}
+
+/* ── FAB ── */
+.fab{position:fixed;right:20px;bottom:calc(var(--nav-h) + 16px);width:52px;height:52px;border-radius:50%;background:var(--amber);color:var(--navy);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(245,158,11,.45);z-index:80;transition:transform .15s,box-shadow .15s}
+.fab:hover{transform:scale(1.06)}
 .fab svg{width:24px;height:24px}
+
+/* ── Section layout ── */
 .home-section{margin-bottom:24px}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.section-title{font-size:14px;font-weight:600;color:var(--text-1)}
-.section-link{font-size:13px;color:var(--blue);font-weight:500;cursor:pointer}
+.section-title{font-size:13px;font-weight:600;color:var(--text-1);text-transform:uppercase;letter-spacing:.05em}
+.section-link{font-size:12px;color:var(--amber-h);font-weight:500;cursor:pointer;display:flex;align-items:center;gap:3px}
+
+/* ── Empty states ── */
 .empty{text-align:center;padding:40px 20px}
-.empty-icon{font-size:40px;margin-bottom:12px;opacity:.4}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.35}
 .empty-title{font-size:15px;font-weight:600;color:var(--text-2);margin-bottom:4px}
 .empty-sub{font-size:13px;color:var(--text-3)}
+
+/* ── Quick actions grid ── */
 .quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
-.qa-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s;font-family:inherit}
-.qa-btn:hover{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-l)}
+.qa-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s;font-family:inherit}
+.qa-btn:hover{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-l)}
 .qa-icon{width:36px;height:36px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;margin-bottom:10px;font-size:18px}
 .qa-label{font-size:13px;font-weight:600;color:var(--text-1)}
 .qa-sub{font-size:11px;color:var(--text-3);margin-top:2px}
+
+/* ── Misc ── */
 .divider{height:1px;background:var(--border);margin:16px 0}
 .scrollable{overflow-y:auto;-webkit-overflow-scrolling:touch}
 .scrollable::-webkit-scrollbar{width:4px}
 .scrollable::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:2px}
+
+/* ── Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center}
 @media(min-width:480px){.modal-overlay{align-items:center;padding:16px}}
 .modal-box{background:var(--surface);width:100%;max-width:480px;border-radius:var(--r-xl) var(--r-xl) 0 0;max-height:90vh;display:flex;flex-direction:column;animation:slideUp .2s ease}
 @media(min-width:480px){.modal-box{border-radius:var(--r-xl);max-height:85vh}}
 @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
-.modal-title{font-size:16px;font-weight:600;color:var(--text-1)}
-.modal-close{background:none;border:none;cursor:pointer;color:var(--text-3);padding:4px;border-radius:var(--r-sm);display:flex}
+.modal-title{font-size:15px;font-weight:600;color:var(--text-1);letter-spacing:-.2px}
+.modal-close{background:none;border:none;cursor:pointer;color:var(--text-3);padding:4px;border-radius:var(--r-sm);display:flex;transition:color .15s}
+.modal-close:hover{color:var(--text-1)}
 .modal-body{padding:20px;overflow-y:auto;flex:1}
 .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+
+/* ── Dropdown menu ── */
 .menu-item{padding:9px 14px;font-size:13px;color:var(--text-1);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
 .menu-item:hover{background:var(--gray-100)}
 .menu-item.danger{color:var(--red)}
 .menu-item.danger:hover{background:var(--red-l)}
+
+/* ── Toast notifications ── */
 #toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{background:var(--navy);color:#fff;padding:12px 16px;border-radius:var(--r-md);font-size:13px;font-weight:500;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:8px;transform:translateX(120%);transition:transform .25s;pointer-events:auto;max-width:320px}
 .toast.show{transform:translateX(0)}
 .toast.success{background:#064E3B;border-left:3px solid var(--green)}
 .toast.error{background:#7F1D1D;border-left:3px solid var(--red)}
-.toast.info{background:var(--navy-2);border-left:3px solid var(--blue)}
-#loading-overlay{position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:9998;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.toast.info{background:var(--navy-2);border-left:3px solid var(--amber)}
+
+/* ── Loading overlay ── */
+#loading-overlay{position:fixed;inset:0;background:rgba(30,42,74,.75);z-index:9998;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px}
 #loading-overlay.show{display:flex}
-.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
-.loading-text{color:rgba(255,255,255,.8);font-size:14px}
+.spinner{width:38px;height:38px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite}
+.loading-text{color:rgba(255,255,255,.75);font-size:13px;font-weight:500}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Responsive breakpoints ── */
 @media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.fab{bottom:24px;right:24px}}
 @media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column}}
-@media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:200px}.stats-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}}
 
-/* Abas de execução */
-.exec-tab{flex:1;padding:10px 8px;background:none;border:none;border-bottom:2px solid transparent;font-size:14px;font-weight:500;color:var(--text-3);cursor:pointer;font-family:inherit;transition:all .15s}
+/* ── Execution tabs ── */
+.exec-tab{flex:1;padding:10px 8px;background:none;border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--text-3);cursor:pointer;font-family:inherit;transition:all .15s}
 .exec-tab:hover{color:var(--text-1)}
-.exec-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.exec-tab.active{color:var(--navy);border-bottom-color:var(--amber)}
 .exec-aba{animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 </style>
@@ -169,11 +251,11 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   <div class="login-card">
     <div class="login-logo">
       <div class="login-logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
       </div>
       <div>
-        <div class="login-logo-text">Treinamentos</div>
-        <div class="login-logo-sub">Gestao de Treinamentos</div>
+        <div class="login-logo-text">Toledo Labs</div>
+        <div class="login-logo-sub">Gestão de Treinamentos</div>
       </div>
     </div>
     <div class="login-title">Bem-vindo de volta</div>
@@ -182,7 +264,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
     <div class="field"><label for="loginEmail">E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email" inputmode="email"></div>
     <div class="field"><label for="loginPass">Senha</label><input type="password" id="loginPass" placeholder="..." autocomplete="current-password"></div>
     <button class="btn-primary" id="loginBtn" onclick="fazerLogin()">Entrar</button>
-    <div class="login-footer">Treinamentos - Toledo Labs 2025</div>
+    <div class="login-footer">Toledo Labs · Treinamentos NR · 2026</div>
   </div>
 </div>
 
@@ -192,11 +274,11 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
     <div class="sidebar-logo">
       <div class="sidebar-logo-row">
         <div class="sidebar-logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
         </div>
         <div>
-          <div class="sidebar-logo-name">Treinamentos</div>
-          <div class="sidebar-logo-tag">Toledo Labs</div>
+          <div class="sidebar-logo-name">Toledo Labs</div>
+          <div class="sidebar-logo-tag">Treinamentos NR</div>
         </div>
       </div>
     </div>
@@ -473,9 +555,9 @@ async function fazerLogout() {
 // ============================================================
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'conta',l:'Minha conta',icon:'user'}],
-  administrador: [{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{id:'conta',l:'Minha conta',icon:'user'}],
-  comercial:     [{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conta',l:'Minha conta',icon:'user'}],
-  instrutor:     [{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{id:'conta',l:'Minha conta',icon:'user'}],
+  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 const NAV_BOTTOM = {
   provedor:['home','orgs','conta'],
@@ -489,12 +571,13 @@ function configurarNavegacao() {
   const itens  = NAV[perfil] || [];
   const bottom = NAV_BOTTOM[perfil] || [];
 
-  document.getElementById('sidebarNav').innerHTML = itens.map(i=>`
-    <div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}">
-      <span class="si-icon">${ICONS[i.icon]||''}</span><span>${i.l}</span>
-    </div>`).join('');
+  document.getElementById('sidebarNav').innerHTML = itens.map(i=>{
+    if (i.sec) return `<div class="sidebar-section-label">${i.sec}</div>`;
+    return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}"><span class="si-icon">${ICONS[i.icon]||''}</span><span>${i.l}</span></div>`;
+  }).join('');
 
-  const bnItens = itens.filter(i=>bottom.includes(i.id));
+  const navItens = itens.filter(i=>i.id);
+  const bnItens = navItens.filter(i=>bottom.includes(i.id));
   document.getElementById('bnItems').innerHTML = bnItens.map(i=>`
     <button class="bn-item" id="bn-${i.id}" data-nav="${i.id}">
       ${ICONS[i.icon]||''}<span>${i.l}</span><div class="bn-dot"></div>
@@ -502,7 +585,8 @@ function configurarNavegacao() {
 
   const av = document.getElementById('sidebarAvatar');
   av.textContent = iniciais(usuarioAtual.nome);
-  av.style.background = corPerfil(perfil);
+  av.style.background = '#F59E0B';
+  av.style.color = '#1E2A4A';
   document.getElementById('sidebarNome').textContent = usuarioAtual.nome;
   document.getElementById('sidebarPerfil').textContent = labelPerfil(perfil);
 }
@@ -563,8 +647,8 @@ async function renderHomeProvedor() {
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Provedor · Toledo Labs</div>`);
   setConteudo(`
     <div class="stats-grid">
-      <div class="stat-card blue"><div class="stat-label">Total de organizações</div><div class="stat-value">${total}</div><div class="stat-sub">${ativas} ativas</div></div>
-      <div class="stat-card"><div class="stat-label">Inativas</div><div class="stat-value">${total-ativas}</div><div class="stat-sub">Aguardando ativação</div></div>
+      <div class="stat-card navy"><div class="stat-label">Total de organizações</div><div class="stat-value">${total}</div><div class="stat-sub">${ativas} ativas</div></div>
+      <div class="stat-card accent"><div class="stat-label">Inativas</div><div class="stat-value">${total-ativas}</div><div class="stat-sub">Aguardando ativação</div></div>
     </div>
     <div class="home-section">
       <div class="section-header"><div class="section-title">Organizações</div><span class="section-link" data-nav="orgs">Ver todas</span></div>
@@ -582,21 +666,22 @@ async function renderHomeAdmin() {
   ]);
   const ativas    = (turmas||[]).filter(t=>t.status==='em_andamento').length;
   const concluidas= (turmas||[]).filter(t=>t.status==='concluida').length;
+  const agendadas = (turmas||[]).filter(t=>t.status==='agendada').length;
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Administrador</div>`);
   setConteudo(`
     <div class="stats-grid">
-      <div class="stat-card blue"><div class="stat-label">Turmas ativas</div><div class="stat-value">${ativas}</div><div class="stat-sub">Em andamento</div></div>
-      <div class="stat-card"><div class="stat-label">Concluídas</div><div class="stat-value">${concluidas}</div></div>
-      <div class="stat-card"><div class="stat-label">Clientes</div><div class="stat-value">${(clientes||[]).length}</div></div>
-      <div class="stat-card"><div class="stat-label">Colaboradores</div><div class="stat-value">${(colabs||[]).length}</div></div>
+      <div class="stat-card navy"><div class="stat-label">Turmas ativas</div><div class="stat-value">${ativas}</div><div class="stat-sub">Em andamento</div></div>
+      <div class="stat-card accent"><div class="stat-label">Concluídas</div><div class="stat-value">${concluidas}</div><div class="stat-sub">Total histórico</div></div>
+      <div class="stat-card accent"><div class="stat-label">Agendadas</div><div class="stat-value">${agendadas}</div><div class="stat-sub">Próximas datas</div></div>
+      <div class="stat-card accent"><div class="stat-label">Clientes ativos</div><div class="stat-value">${(clientes||[]).length}</div><div class="stat-sub">Empresas</div></div>
     </div>
     <div class="quick-actions">
-      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:var(--blue-l)">📋</div><div class="qa-label">Nova turma</div><div class="qa-sub">Agendar treinamento</div></button>
-      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">🏢</div><div class="qa-label">Novo cliente</div><div class="qa-sub">Cadastrar empresa</div></button>
-      <button class="qa-btn" data-nav="colaboradores"><div class="qa-icon" style="background:var(--amber-l)">👥</div><div class="qa-label">Colaboradores</div><div class="qa-sub">Gerenciar pessoas</div></button>
-      <button class="qa-btn" data-nav="relatorios"><div class="qa-icon" style="background:#F3E8FF">📊</div><div class="qa-label">Relatórios</div><div class="qa-sub">Vencimentos e mais</div></button>
+      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:rgba(245,158,11,.12)">${ICONS.clip}</div><div class="qa-label">Nova turma</div><div class="qa-sub">Agendar treinamento</div></button>
+      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">${ICONS.building}</div><div class="qa-label">Novo cliente</div><div class="qa-sub">Cadastrar empresa</div></button>
+      <button class="qa-btn" data-nav="colaboradores"><div class="qa-icon" style="background:var(--blue-l)">${ICONS.users}</div><div class="qa-label">Colaboradores</div><div class="qa-sub">Gerenciar pessoas</div></button>
+      <button class="qa-btn" data-nav="relatorios"><div class="qa-icon" style="background:#F3E8FF">${ICONS.chart}</div><div class="qa-label">Relatórios</div><div class="qa-sub">Vencimentos e mais</div></button>
     </div>
-    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair</button>`);
+    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>`);
 }
 
 async function renderHomeComercial() {
@@ -608,14 +693,15 @@ async function renderHomeComercial() {
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Comercial</div>`);
   setConteudo(`
     <div class="stats-grid">
-      <div class="stat-card blue"><div class="stat-label">Agendadas</div><div class="stat-value">${(turmas||[]).filter(t=>t.status==='agendada').length}</div></div>
-      <div class="stat-card"><div class="stat-label">Clientes</div><div class="stat-value">${(clientes||[]).length}</div></div>
+      <div class="stat-card navy"><div class="stat-label">Agendadas</div><div class="stat-value">${(turmas||[]).filter(t=>t.status==='agendada').length}</div><div class="stat-sub">Turmas</div></div>
+      <div class="stat-card accent"><div class="stat-label">Em andamento</div><div class="stat-value">${(turmas||[]).filter(t=>t.status==='em_andamento').length}</div></div>
+      <div class="stat-card accent"><div class="stat-label">Clientes ativos</div><div class="stat-value">${(clientes||[]).length}</div></div>
     </div>
     <div class="quick-actions">
-      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:var(--blue-l)">📋</div><div class="qa-label">Agendar turma</div></button>
-      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">🏢</div><div class="qa-label">Clientes</div></button>
+      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:rgba(245,158,11,.12)">${ICONS.clip}</div><div class="qa-label">Agendar turma</div></button>
+      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">${ICONS.building}</div><div class="qa-label">Clientes</div></button>
     </div>
-    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair</button>`);
+    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>`);
 }
 
 async function renderHomeInstrutor() {
@@ -648,7 +734,7 @@ async function renderHomeInstrutor() {
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Instrutor</div>`);
   setConteudo(`
     <div class="stats-grid">
-      <div class="stat-card blue"><div class="stat-label">Agendamentos</div><div class="stat-value">${total}</div><div class="stat-sub">Pendentes</div></div>
+      <div class="stat-card navy"><div class="stat-label">Agendamentos</div><div class="stat-value">${total}</div><div class="stat-sub">Pendentes</div></div>
     </div>
     <div class="home-section">
       <div class="section-header"><div class="section-title">Próximos agendamentos</div><span class="section-link" data-nav="agenda">Ver todos</span></div>
@@ -681,7 +767,7 @@ function _renderOrgsLista(orgs) {
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarOrgs(this.value)">
-      <button class="btn btn-blue" onclick="abrirModalOrg()">${ICONS.plus} Nova</button>
+      <button class="btn btn-navy" onclick="abrirModalOrg()">${ICONS.plus} Nova</button>
     </div>
     <div class="card" id="listaOrgs">${_htmlListaOrgs(orgs)}</div>`);
 }
@@ -740,7 +826,7 @@ function abrirModalOrg(id=null) {
     <div class="field"><label>E-mail</label><input type="email" id="mOrgEmail" value="${org?.email||''}" placeholder="contato@consultoria.com.br"></div>
     <div class="field"><label>Telefone</label><input type="tel" id="mOrgTel" value="${org?.telefone||''}" placeholder="(11) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarOrg()">${org?'Salvar':'Cadastrar'}</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarOrg()">${org?'Salvar':'Cadastrar'}</button>`);
 }
 
 async function salvarOrg() {
@@ -779,7 +865,7 @@ function abrirModalUsuarioOrg(orgId) {
         <option value="instrutor">Instrutor</option>
       </select></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="criarUsuarioOrg()">Criar usuário</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="criarUsuarioOrg()">Criar usuário</button>`);
 }
 
 async function criarUsuarioOrg() {
@@ -816,7 +902,7 @@ async function renderClientes() {
   setConteudo(`
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <input type="search" id="buscaCliente" placeholder="Buscar cliente..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarClientes(this.value)">
-      ${podeCriar?`<button class="btn btn-blue" onclick="abrirModalCliente()">${ICONS.plus} Novo</button>`:''}
+      ${podeCriar?`<button class="btn btn-navy" onclick="abrirModalCliente()">${ICONS.plus} Novo</button>`:''}
     </div>
     <div class="card" id="listaClientes">${_htmlListaClientes(_clientesCache)}</div>`);
 }
@@ -863,7 +949,7 @@ function abrirModalCliente(id=null) {
     <div class="field"><label>E-mail</label><input type="email" id="mCliEmail" value="${c?.email||''}" placeholder="contato@empresa.com.br"></div>
     <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCliente()">${c?'Salvar':'Cadastrar'}</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCliente()">${c?'Salvar':'Cadastrar'}</button>`);
 }
 
 async function salvarCliente() {
@@ -901,7 +987,7 @@ async function renderColaboradores() {
   setConteudo(`
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarColabs(this.value)">
-      ${podeCriar?`<button class="btn btn-blue" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline" onclick="abrirModalImportacao()">⬆ Importar</button>`:''}
+      ${podeCriar?`<button class="btn btn-navy" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline" onclick="abrirModalImportacao()">⬆ Importar</button>`:''}
     </div>
     <div class="card" id="listaColabs">${_htmlListaColabs(_colabsCache)}</div>`);
 }
@@ -932,7 +1018,7 @@ function abrirModalColab(id=null) {
     <div class="field"><label>E-mail</label><input type="email" id="mColEmail" value="${c?.email||''}" placeholder="colaborador@empresa.com.br"></div>
     <div class="field"><label>Telefone</label><input type="tel" id="mColTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarColab()">${c?'Salvar':'Cadastrar'}</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarColab()">${c?'Salvar':'Cadastrar'}</button>`);
 }
 
 async function salvarColab() {
@@ -960,7 +1046,7 @@ async function renderCatalogo() {
   setConteudo(`
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <input type="search" id="buscaCatalogo" placeholder="Buscar treinamento..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarCatalogo(this.value)">
-      ${['administrador'].includes(usuarioAtual.perfil)?`<button class="btn btn-blue" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>`:''}
+      ${['administrador'].includes(usuarioAtual.perfil)?`<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>`:''}
     </div>
     <div class="card" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache)}</div>`);
 }
@@ -1007,7 +1093,7 @@ function abrirModalCatalogo(id=null) {
     <div class="field"><label>Categoria</label><input type="text" id="mCatCat" value="${t?.categoria||''}" placeholder="Ex.: NR, CIPA..."></div>
     <div class="field"><label>Conteúdo programático</label><textarea id="mCatCP" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Tópicos abordados...">${t?.conteudo_programatico||''}</textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCatalogo()">${t?'Salvar':'Cadastrar'}</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCatalogo()">${t?'Salvar':'Cadastrar'}</button>`);
 }
 
 async function salvarCatalogo() {
@@ -1065,7 +1151,7 @@ async function renderTurmas() {
         <option value="concluida">Concluídas</option>
         <option value="cancelada">Canceladas</option>
       </select>
-      ${podeCriar?`<button class="btn btn-blue" onclick="abrirModalTurma()">${ICONS.plus} Nova</button>`:''}
+      ${podeCriar?`<button class="btn btn-navy" onclick="abrirModalTurma()">${ICONS.plus} Nova</button>`:''}
     </div>
     <div class="card" id="listaTurmas">${_htmlListaTurmas(_turmasCache)}</div>`);
 }
@@ -1153,7 +1239,7 @@ async function verTurma(id) {
           </div>
         </div>
         ${st==='agendada'?`
-          <button class="btn" style="width:100%;background:var(--blue);color:#fff;font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="iniciarExecucao" data-id="${id}">
+          <button class="btn" style="width:100%;background:var(--amber);color:var(--navy);font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="iniciarExecucao" data-id="${id}">
             ▶ Iniciar treinamento
           </button>`:``}
         ${st==='em_andamento'?`
@@ -1205,11 +1291,11 @@ async function verTurma(id) {
         </div>
         ${t.observacoes?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Observações</div><div style="font-size:13px;color:var(--text-2)">${t.observacoes}</div></div>`:''}
         ${podeMgr&&st==='agendada'?`<div style="margin-top:14px;display:flex;gap:8px">
-          <button class="btn btn-blue btn-sm" data-action="editarTurma" data-id="${id}">Editar</button>
+          <button class="btn btn-navy btn-sm" data-action="editarTurma" data-id="${id}">Editar</button>
           <button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="${id}">Cancelar turma</button>
         </div>`:``}
         ${st==='concluida'?`<div style="margin-top:14px">
-          <button class="btn btn-blue" data-action="abrirDocumentos" data-id="${id}" style="width:100%">📄 Gerar documentos e certificados</button>
+          <button class="btn btn-navy" data-action="abrirDocumentos" data-id="${id}" style="width:100%">📄 Gerar documentos e certificados</button>
         </div>`:``}
       </div>
 
@@ -1226,7 +1312,7 @@ async function verTurma(id) {
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <span class="badge ${ag.concluida?'badge-green':'badge-gray'}">${ag.concluida?'Concluído':'Pendente'}</span>
-              ${podeEditar?`<button class="btn btn-blue btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
+              ${podeEditar?`<button class="btn btn-navy btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
               <button class="btn btn-outline btn-sm" data-action="excluirAgendamento" data-id="${ag.id}" data-extra="${id}" style="color:var(--red);border-color:var(--red)">Excluir</button>`:``}
             </div>
           </div>`).join('')}
@@ -1300,7 +1386,7 @@ async function abrirModalTurma(id=null) {
     <div class="field"><label>Observações</label>
       <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${t?.observacoes||''}</textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
 }
 
 async function salvarTurma() {
@@ -1431,7 +1517,7 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
     <div class="field"><label>Local (opcional)</label>
       <input type="text" id="mAgLocal" value="${ag?.local||''}" placeholder="Ex.: Sala de treinamento..."></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarAgendamento()">
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarAgendamento()">
        ${ag?'Salvar':'Adicionar agendamento'}
      </button>`);
 }
@@ -1557,7 +1643,7 @@ function abrirCadastroRapidoColab() {
     <div class="field"><label>Cargo</label>
       <input type="text" id="mCRCargo" placeholder="Ex.: Operador, Eletricista..."></div>`,
     `<button class="btn btn-outline" onclick="reabrirModalParticipante()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="salvarCadastroRapido()">Cadastrar e adicionar</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCadastroRapido()">Cadastrar e adicionar</button>`);
   window._crTurmaId   = turmaId;
   window._crClienteId = clienteId;
 }
@@ -1619,7 +1705,7 @@ function abrirModalImportacao() {
       <input type="file" id="mImpArquivo" accept=".csv" style="width:100%;padding:9px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit"></div>
     <div id="mImpPreview" style="margin-top:8px;font-size:13px;color:var(--text-2)"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="executarImportacao()">Importar</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="executarImportacao()">Importar</button>`);
   document.getElementById('mImpArquivo').addEventListener('change', previewImportacao);
 }
 
@@ -1735,7 +1821,7 @@ async function renderAgenda() {
     // Botão de ação — só mostra para sessão de hoje
     let btnAcao = '';
     if (sessaoHoje && st === 'agendada') {
-      btnAcao = `<button class="btn btn-blue" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Iniciar treinamento de hoje</button>`;
+      btnAcao = `<button class="btn btn-navy" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Iniciar treinamento de hoje</button>`;
     } else if (sessaoHoje && st === 'em_andamento') {
       btnAcao = `<button class="btn" style="width:100%;margin-top:12px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Continuar treinamento de hoje</button>`;
     } else if (!sessaoHoje && st === 'em_andamento' && proximaSessao) {
@@ -1903,7 +1989,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
           <div class="card-title">Anotações do instrutor</div>
           <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${t.anotacoes_instrutor||''}</textarea>
           <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-            <button class="btn btn-blue btn-sm" id="btnSalvarAnotacoes" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
+            <button class="btn btn-navy btn-sm" id="btnSalvarAnotacoes" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
             <button class="btn btn-outline btn-sm" id="btnEditarAnotacoes" style="display:none" onclick="editarAnotacoes()">✏ Editar</button>
             <span id="anotacoesSalvas" style="display:none;font-size:13px;color:var(--green);font-weight:500">✓ Salvo</span>
           </div>
@@ -1935,7 +2021,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
             Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>.
             Os documentos ficarão disponíveis para geração.
           </div>
-          <button class="btn btn-blue" style="width:100%" onclick="finalizarTurma('${turmaId}')">
+          <button class="btn btn-navy" style="width:100%" onclick="finalizarTurma('${turmaId}')">
             ✓ Finalizar treinamento
           </button>
         </div>
@@ -2007,7 +2093,7 @@ function _htmlListaPresencas(participantes) {
         <div style="display:flex;gap:6px;flex-shrink:0">
           ${assinou
             ?`<span class="badge badge-green">✓ Assinou</span>`
-            :`<button class="btn btn-blue btn-sm" data-action="abrirAssinatura" data-col="${p.colaborador_id}" data-nome="${col.nome||''}">Assinar</button>`
+            :`<button class="btn btn-navy btn-sm" data-action="abrirAssinatura" data-col="${p.colaborador_id}" data-nome="${col.nome||''}">Assinar</button>`
           }
         </div>
       </div>`;
@@ -2029,7 +2115,7 @@ function abrirAssinatura(colId, nomeCol) {
       🗑 Limpar
     </button>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-blue" id="btnSalvarModal" onclick="confirmarAssinatura()">Confirmar assinatura</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="confirmarAssinatura()">Confirmar assinatura</button>`);
 
   // Inicializar canvas após modal abrir
   setTimeout(()=>_initCanvas(), 100);
@@ -2317,7 +2403,7 @@ async function renderEquipe() {
   fabMostrar(()=>abrirModalUsuarioOrg(usuarioAtual.org_id));
   setConteudo(`
     <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-      <button class="btn btn-blue" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
+      <button class="btn btn-navy" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
     </div>
     <div class="card">${(data||[]).length===0?'<div class="empty"><div class="empty-icon">👤</div><div class="empty-title">Nenhum usuário</div></div>':(data||[]).map(u=>`
       <div class="list-item" style="padding:14px 4px">
@@ -2350,7 +2436,7 @@ async function renderConta() {
       <div class="divider"></div>
       <div class="field"><label>Nome completo</label><input type="text" id="editNome" value="${u.nome}"></div>
       <div class="field"><label>E-mail</label><input type="email" id="editEmail" value="${u.email||''}"></div>
-      <button class="btn btn-blue" onclick="salvarConta()" style="width:100%">Salvar alterações</button>
+      <button class="btn btn-navy" onclick="salvarConta()" style="width:100%">Salvar alterações</button>
     </div>
     <div class="card">
       <div class="card-title">Segurança</div>
@@ -3091,7 +3177,7 @@ async function renderDocumentosTurma(turmaId) {
           return `<div class="list-item" style="padding:12px 0">
               <div class="li-icon" style="background:var(--blue-l);color:var(--blue);font-size:11px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">${iniciais(col.nome||'?')}</div>
               <div class="li-info"><div class="li-title">${col.nome||'—'}</div>${subInfo}</div>
-              <button class="btn btn-blue btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">⬇ PDF</button>
+              <button class="btn btn-navy btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">⬇ PDF</button>
             </div>`;
         }).join('') + (participantes.length > 0
           ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"><button class="btn btn-outline" style="width:100%" onclick="gerarTodosCertificados('${turmaId}')">⬇ Gerar todos os certificados individuais</button></div>`
@@ -3126,7 +3212,7 @@ async function renderDocumentosTurma(turmaId) {
           ${envio ? `<div style="font-size:12px;color:var(--green);margin-bottom:12px">✓ Enviado em ${formatarDataHora(envio.enviado_em)}</div>` : ''}
           ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber)">Aguardando conclusão de todos os agendamentos.</div>` :
             !podosEnviar ? `<div style="font-size:12px;color:var(--text-3)">Gere todos os documentos acima para habilitar o envio.</div>` :
-            `<button class="btn btn-blue" style="width:100%" onclick="enviarDocumentosPorEmail('${turmaId}')">
+            `<button class="btn btn-navy" style="width:100%" onclick="enviarDocumentosPorEmail('${turmaId}')">
               ✉️ ${envio ? 'Reenviar documentos' : 'Enviar documentos por e-mail'}
             </button>`
           }`}
@@ -3152,7 +3238,7 @@ async function renderDocumentosTurma(turmaId) {
             <div style="font-size:15px;font-weight:600;color:var(--text-1)">📋 Lista de Presença</div>
             <div style="font-size:12px;color:var(--text-3);margin-top:2px">Consolidada por todos os agendamentos</div>
           </div>
-          <button class="btn btn-blue btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ Gerar PDF</button>
+          <button class="btn btn-navy btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ Gerar PDF</button>
         </div>
         ${temLista ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
       </div>
@@ -3164,7 +3250,7 @@ async function renderDocumentosTurma(turmaId) {
             <div style="font-size:15px;font-weight:600;color:var(--text-1)">🏢 Certificado Coletivo</div>
             <div style="font-size:12px;color:var(--text-3);margin-top:2px">Para a empresa — ${participantes.length} participante(s)</div>
           </div>
-          <button class="btn btn-blue btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ Gerar PDF</button>
+          <button class="btn btn-navy btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ Gerar PDF</button>
         </div>
         ${temColetivo ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
       </div>
