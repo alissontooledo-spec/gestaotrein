@@ -618,6 +618,7 @@ async function irPara(pagina, params={}) {
       case 'turmas':        await renderTurmas(); break;
       case 'equipe':        await renderEquipe(); break;
       case 'agenda':        await renderAgenda(); break;
+      case 'relatorios':    await renderRelatorios(); break;
       case 'conta':         await renderConta(); break;
       default: renderEmBreve(TITULOS[pagina]||pagina);
     }
@@ -910,14 +911,42 @@ async function renderClientes() {
 function _htmlListaClientes(lista) {
   if (!lista.length) return `<div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Nenhum cliente</div><div class="empty-sub">Cadastre a primeira empresa-cliente.</div></div>`;
   return lista.map(c=>`
-    <div class="list-item" style="padding:14px 4px">
-      <div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:13px;font-weight:700;border-radius:var(--r-md)">${iniciais(c.nome)}</div>
+    <div class="list-item" style="padding:14px 4px" data-action="verCliente" data-id="${c.id}">
+      <div class="li-icon" style="background:var(--green-l);color:var(--green-text);font-size:13px;font-weight:700;border-radius:var(--r-md)">${iniciais(c.nome)}</div>
       <div class="li-info"><div class="li-title">${c.nome}</div><div class="li-sub">${c.cnpj?`CNPJ ${c.cnpj} · `:''}${c.cidade?`${c.cidade}/${c.uf||''} · `:''}${c.email||''}</div></div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="menuCliente" data-id="${c.id}">${ICONS.dots}</button>
-      </div>
+      <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
     </div>`).join('');
+}
+
+function verCliente(id) {
+  const c = _clientesCache.find(x=>x.id===id);
+  if (!c) return;
+  const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="clientes">${ICONS.back} Voltar</button>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="width:52px;height:52px;border-radius:var(--r-lg);background:var(--green-l);color:var(--green-text);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:700;color:var(--navy)">${c.nome}</div>
+          <span class="badge ${c.ativo?'badge-green':'badge-gray'}" style="margin-top:4px">${c.ativo?'Ativo':'Inativo'}</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;gap:10px">
+        ${c.cnpj?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">CNPJ</span><span style="color:var(--text-1);font-weight:500">${c.cnpj}</span></div>`:''}
+        ${c.cidade?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">Cidade</span><span style="color:var(--text-1);font-weight:500">${c.cidade}${c.uf?'/'+c.uf:''}</span></div>`:''}
+        ${c.email?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">E-mail</span><span style="color:var(--text-1);font-weight:500">${c.email}</span></div>`:''}
+        ${c.telefone?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">Telefone</span><span style="color:var(--text-1);font-weight:500">${c.telefone}</span></div>`:''}
+      </div>
+    </div>
+    ${podeMgr?`
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-navy" data-action="editarCliente" data-id="${c.id}">${ICONS.plus} Editar</button>
+      <button class="btn btn-outline" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar':'Ativar'}</button>
+    </div>`:''}
+  `);
 }
 
 function filtrarClientes(q) {
@@ -995,11 +1024,40 @@ async function renderColaboradores() {
 function _htmlListaColabs(lista) {
   if (!lista.length) return `<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador</div><div class="empty-sub">Cadastre os colaboradores das empresas-clientes.</div></div>`;
   return lista.map(c=>`
-    <div class="list-item" style="padding:14px 4px">
-      <div class="li-icon" style="background:var(--amber-l);color:var(--amber);font-size:12px;font-weight:700;border-radius:50%">${iniciais(c.nome)}</div>
+    <div class="list-item" style="padding:14px 4px" data-action="verColab" data-id="${c.id}">
+      <div class="li-icon" style="background:rgba(245,158,11,.12);color:var(--amber-h);font-size:12px;font-weight:700;border-radius:50%">${iniciais(c.nome)}</div>
       <div class="li-info"><div class="li-title">${c.nome}</div><div class="li-sub">${c.cpf?`CPF ${c.cpf}`:''} ${c.cargo?`· ${c.cargo}`:''}</div></div>
-      <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="editarColab" data-id="${c.id}">${ICONS.dots}</button>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
     </div>`).join('');
+}
+
+function verColab(id) {
+  const c = _colabsCache.find(x=>x.id===id);
+  if (!c) return;
+  const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="width:52px;height:52px;border-radius:50%;background:rgba(245,158,11,.12);color:var(--amber-h);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--navy)">${c.nome}</div>
+          ${c.cargo?`<div style="font-size:13px;color:var(--text-2);margin-top:2px">${c.cargo}</div>`:''}
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;gap:10px">
+        ${c.cpf?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">CPF</span><span style="font-weight:500">${c.cpf}</span></div>`:''}
+        ${c.email?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">E-mail</span><span style="font-weight:500">${c.email}</span></div>`:''}
+        ${c.telefone?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Telefone</span><span style="font-weight:500">${c.telefone}</span></div>`:''}
+      </div>
+    </div>
+    ${podeMgr?`
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">${ICONS.plus} Editar</button>
+    </div>`:''}
+  `);
 }
 
 function filtrarColabs(q) {
@@ -1054,14 +1112,46 @@ async function renderCatalogo() {
 function _htmlListaCatalogo(lista) {
   if (!lista.length) return `<div class="empty"><div class="empty-icon">📚</div><div class="empty-title">Nenhum treinamento</div><div class="empty-sub">Cadastre os tipos de treinamento.</div></div>`;
   return lista.map(t=>`
-    <div class="list-item" style="padding:14px 4px">
-      <div class="li-icon" style="background:var(--amber-l);color:var(--amber);font-size:12px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.carga_horaria}h</div>
-      <div class="li-info"><div class="li-title">${t.nome}</div><div class="li-sub">${t.categoria?t.categoria+' · ':''}Validade: ${t.validade_meses} meses · ${t.carga_horaria}h</div></div>
+    <div class="list-item" style="padding:14px 4px" data-action="verCatalogo" data-id="${t.id}">
+      <div class="li-icon" style="background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.carga_horaria}h</div>
+      <div class="li-info"><div class="li-title">${t.nome}</div><div class="li-sub">${t.categoria?t.categoria+' · ':''}Validade: ${t.validade_meses} meses</div></div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="menuCatalogo" data-id="${t.id}">${ICONS.dots}</button>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>`).join('');
+}
+
+function verCatalogo(id) {
+  const t = _catalogoCache.find(x=>x.id===id);
+  if (!t) return;
+  const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="catalogo">${ICONS.back} Voltar</button>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="width:52px;height:52px;border-radius:var(--r-lg);background:rgba(30,42,74,.08);color:var(--navy);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.carga_horaria}h</div>
+        <div style="flex:1">
+          <div style="font-size:17px;font-weight:700;color:var(--navy);line-height:1.3">${t.nome}</div>
+          <span class="badge ${t.ativo?'badge-green':'badge-gray'}" style="margin-top:5px">${t.ativo?'Ativo':'Inativo'}</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;gap:10px">
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Carga horária</span><span style="font-weight:500">${t.carga_horaria}h</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Validade</span><span style="font-weight:500">${t.validade_meses} meses</span></div>
+        ${t.categoria?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Categoria</span><span style="font-weight:500">${t.categoria}</span></div>`:''}
+        ${t.descricao?`<div style="font-size:13px;padding-top:8px;border-top:1px solid var(--border)"><div style="color:var(--text-2);margin-bottom:4px">Descrição</div><div style="color:var(--text-1);line-height:1.5">${t.descricao}</div></div>`:''}
+        ${t.conteudo_programatico?`<div style="font-size:13px;padding-top:8px;border-top:1px solid var(--border)"><div style="color:var(--text-2);margin-bottom:4px">Conteúdo programático</div><div style="color:var(--text-1);line-height:1.5">${t.conteudo_programatico}</div></div>`:''}
+      </div>
+    </div>
+    ${podeMgr?`
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-navy" data-action="editarCatalogo" data-id="${t.id}">${ICONS.plus} Editar</button>
+      <button class="btn btn-outline" data-action="toggleCatalogo" data-id="${t.id}">${t.ativo?'Desativar':'Ativar'}</button>
+    </div>`:''}
+  `);
 }
 
 function filtrarCatalogo(q) {
@@ -1137,35 +1227,54 @@ async function renderTurmas() {
   setMobileHeader(`<div class="mh-greeting">Operação</div><div class="mh-name">Turmas</div>`);
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   fabOcultar();
+  const nAg = _turmasCache.filter(t=>t.status==='agendada').length;
+  const nAn = _turmasCache.filter(t=>t.status==='em_andamento').length;
+  const nCo = _turmasCache.filter(t=>t.status==='concluida').length;
+  const nCa = _turmasCache.filter(t=>t.status==='cancelada').length;
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:16px">
-      <div class="stat-card blue"><div class="stat-label">Agendadas</div><div class="stat-value">${_turmasCache.filter(t=>t.status==='agendada').length}</div></div>
-      <div class="stat-card"><div class="stat-label">Em andamento</div><div class="stat-value">${_turmasCache.filter(t=>t.status==='em_andamento').length}</div></div>
-      <div class="stat-card"><div class="stat-label">Concluídas</div><div class="stat-value">${_turmasCache.filter(t=>t.status==='concluida').length}</div></div>
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card accent" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='agendada';filtrarTurmas()">
+        <div class="stat-label">Agendadas</div><div class="stat-value">${nAg}</div>
+        <div class="stat-sub">Aguardando execução</div>
+      </div>
+      <div class="stat-card navy" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='em_andamento';filtrarTurmas()">
+        <div class="stat-label">Em andamento</div><div class="stat-value">${nAn}</div>
+        <div class="stat-sub">Em execução</div>
+      </div>
+      <div class="stat-card accent" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='concluida';filtrarTurmas()">
+        <div class="stat-label">Concluídas</div><div class="stat-value">${nCo}</div>
+        <div class="stat-sub">Finalizadas</div>
+      </div>
+      <div class="stat-card accent" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='cancelada';filtrarTurmas()">
+        <div class="stat-label">Canceladas</div><div class="stat-value">${nCa}</div>
+        <div class="stat-sub">Total</div>
+      </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <select id="filtrStatusTurma" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);outline:none" onchange="filtrarTurmas()">
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <select id="filtrStatusTurma" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);outline:none;color:var(--text-1)" onchange="filtrarTurmas()">
         <option value="">Todos os status</option>
         <option value="agendada">Agendadas</option>
         <option value="em_andamento">Em andamento</option>
         <option value="concluida">Concluídas</option>
         <option value="cancelada">Canceladas</option>
       </select>
-      ${podeCriar?`<button class="btn btn-navy" onclick="abrirModalTurma()">${ICONS.plus} Nova</button>`:''}
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()">${ICONS.plus} Nova turma</button>`:''}
     </div>
-    <div class="card" id="listaTurmas">${_htmlListaTurmas(_turmasCache)}</div>`);
+    <div class="card" style="padding:0" id="listaTurmas">${_htmlListaTurmas(_turmasCache)}</div>`);
 }
 
 function _htmlListaTurmas(lista) {
-  if (!lista.length) return `<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma turma</div><div class="empty-sub">Agende o primeiro treinamento.</div></div>`;
+  if (!lista.length) return `<div class="empty" style="padding:32px 20px"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma turma</div><div class="empty-sub">Agende o primeiro treinamento.</div></div>`;
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
-  const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
-  return lista.map(t=>`
-    <div class="list-item" style="padding:16px 4px;cursor:pointer;border-bottom:1px solid var(--border)" data-action="verTurma" data-id="${t.id}">
-      <div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.catalogo?.carga_horaria||'?'}h</div>
-      <div class="li-info">
-        <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
-        <div class="li-sub">${t.clientes?.nome||''}${t.protocolo?' · '+t.protocolo:''}</div>
+  const SB = {agendada:'badge-gray',em_andamento:'badge-amber',concluida:'badge-green',cancelada:'badge-red'};
+  const DOT = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626'};
+  return lista.map((t,i)=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:${i<lista.length-1?'1px solid var(--border)':'none'};cursor:pointer;transition:background .1s" data-action="verTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:8px;height:8px;border-radius:50%;background:${DOT[t.status||'agendada']};flex-shrink:0"></div>
+      <div style="width:38px;height:38px;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center">${t.catalogo?.carga_horaria||'?'}h</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.catalogo?.nome||'Treinamento'}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}${t.protocolo?' · <span style="color:var(--text-3);font-size:11px">'+t.protocolo+'</span>':''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <span class="badge ${SB[t.status||'agendada']}">${SL[t.status||'agendada']}</span>
@@ -1367,26 +1476,72 @@ async function abrirModalTurma(id=null) {
     const {data} = await sb.from('catalogo').select('id,nome,carga_horaria').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _catalogoCache = data||[];
   }
-  if (!_clientesCache.length) { showToast('Cadastre clientes antes de criar turmas','error'); return; }
   if (!_catalogoCache.length) { showToast('Cadastre o catálogo de treinamentos antes de criar turmas','error'); return; }
   const t = id ? _turmasCache.find(x=>x.id===id) : null;
+  const podeCriarCliente = ['administrador','comercial'].includes(usuarioAtual.perfil);
   const cliOpts = _clientesCache.map(c=>`<option value="${c.id}" ${t?.cliente_id===c.id?'selected':''}>${c.nome}</option>`).join('');
   const catOpts = _catalogoCache.map(c=>`<option value="${c.id}" ${t?.catalogo_id===c.id?'selected':''}>${c.nome}</option>`).join('');
   abrirModal(t?'Editar turma':'Nova turma', `
-    <div class="field"><label>Cliente *</label>
+    <div class="field">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label style="margin:0">Cliente *</label>
+        ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.plus} Novo cliente</button>`:''}
+      </div>
       <select id="mTurCli" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="">Selecione o cliente...</option>${cliOpts}
-      </select></div>
+      </select>
+    </div>
     <div class="field"><label>Treinamento *</label>
       <select id="mTurCat" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="">Selecione o treinamento...</option>${catOpts}
       </select></div>
-    <div class="field"><label>Local</label>
-      <input type="text" id="mTurLocal" value="${t?.local||''}" placeholder="Ex.: Planta da empresa, Sala A..."></div>
     <div class="field"><label>Observações</label>
       <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${t?.observacoes||''}</textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
+}
+
+async function abrirModalClienteRapido() {
+  const cliAtualId = document.getElementById('mTurCli')?.value;
+  abrirModal('Novo cliente', `
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:var(--r-md);padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--amber-text)">
+      O cliente será selecionado automaticamente após o cadastro.
+    </div>
+    <div class="field"><label>Nome *</label><input type="text" id="mCRNome" placeholder="Razão social" autofocus></div>
+    <div class="field"><label>CNPJ</label><input type="text" id="mCRCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
+      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
+    </div>
+    <div class="field"><label>E-mail</label><input type="email" id="mCREmail" placeholder="contato@empresa.com.br"></div>`,
+    `<button class="btn btn-outline" onclick="abrirModalTurma(${_modalCurrentId?`'${_modalCurrentId}'`:'null'})">Voltar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarClienteRapido()">Cadastrar e selecionar</button>`);
+}
+
+async function salvarClienteRapido() {
+  const nome = document.getElementById('mCRNome')?.value.trim();
+  if (!nome) { showToast('Nome é obrigatório','error'); return; }
+  const dados = {
+    nome,
+    cnpj: document.getElementById('mCRCnpj')?.value.trim()||null,
+    cidade: document.getElementById('mCRCidade')?.value.trim()||null,
+    uf: (document.getElementById('mCRUf')?.value.trim()||'').toUpperCase()||null,
+    email: document.getElementById('mCREmail')?.value.trim()||null,
+    org_id: usuarioAtual.org_id,
+    ativo: true,
+  };
+  try {
+    setBtnModalLoading(true);
+    const {data, error} = await sb.from('clientes').insert(dados).select().single();
+    if (error) throw error;
+    _clientesCache = [];
+    const {data:clis} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    _clientesCache = clis||[];
+    fecharModal();
+    showToast(`${nome} cadastrado!`,'success');
+    await abrirModalTurma(_modalCurrentId||null);
+    setTimeout(()=>{ const sel = document.getElementById('mTurCli'); if(sel && data) sel.value = data.id; },100);
+  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
 
 async function salvarTurma() {
@@ -1394,7 +1549,7 @@ async function salvarTurma() {
   const cat = document.getElementById('mTurCat')?.value;
   if (!cli) { showToast('Selecione o cliente','error'); return; }
   if (!cat) { showToast('Selecione o treinamento','error'); return; }
-  const dados = {cliente_id:cli, catalogo_id:cat, local:document.getElementById('mTurLocal')?.value.trim()||null, observacoes:document.getElementById('mTurObs')?.value.trim()||null};
+  const dados = {cliente_id:cli, catalogo_id:cat, observacoes:document.getElementById('mTurObs')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId
@@ -2394,6 +2549,218 @@ async function finalizarTurma(turmaId) {
 
 
 // ============================================================
+// RELATÓRIOS
+// ============================================================
+async function renderRelatorios() {
+  const oi = usuarioAtual.org_id;
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
+
+  // Buscar todos os dados necessários
+  const [{data:turmas},{data:clientes},{data:colabs},{data:sessoes},{data:usuarios}] = await Promise.all([
+    sb.from('turmas').select('id,status,cliente_id,catalogo_id,created_at,clientes(nome),catalogo(nome)').eq('org_id',oi),
+    sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
+    sb.from('colaboradores').select('id').limit(1),
+    sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(nome)').eq('concluida',true),
+    sb.from('usuarios').select('id,nome,perfil').eq('org_id',oi).eq('ativo',true),
+  ]);
+
+  const tAll    = turmas||[];
+  const cliAll  = clientes||[];
+  const sesAll  = sessoes||[];
+  const usrAll  = usuarios||[];
+
+  const tAtivas    = tAll.filter(t=>t.status==='em_andamento').length;
+  const tAgendadas = tAll.filter(t=>t.status==='agendada').length;
+  const tConcluidas= tAll.filter(t=>t.status==='concluida').length;
+  const tCanceladas= tAll.filter(t=>t.status==='cancelada').length;
+  const cliAtivos  = cliAll.filter(c=>c.ativo).length;
+
+  // Turmas por mês (últimos 6 meses)
+  const hoje = new Date();
+  const meses = [];
+  for (let i=5;i>=0;i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    meses.push({
+      label: d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}),
+      ano: d.getFullYear(),
+      mes: d.getMonth()+1,
+    });
+  }
+  const turmasPorMes = meses.map(m=>{
+    const n = tAll.filter(t=>{
+      const d = new Date(t.created_at);
+      return d.getFullYear()===m.ano && d.getMonth()+1===m.mes;
+    }).length;
+    return {...m, n};
+  });
+  const maxN = Math.max(...turmasPorMes.map(m=>m.n), 1);
+
+  // Ranking clientes
+  const cliCount = {};
+  tAll.forEach(t=>{ if(t.cliente_id) cliCount[t.cliente_id]=(cliCount[t.cliente_id]||0)+1; });
+  const rankCli = Object.entries(cliCount)
+    .map(([id,n])=>({nome:cliAll.find(c=>c.id===id)?.nome||'—', n}))
+    .sort((a,b)=>b.n-a.n).slice(0,5);
+
+  // Ranking treinamentos
+  const catCount = {};
+  tAll.forEach(t=>{ if(t.catalogo_id) catCount[t.catalogo_id]=(catCount[t.catalogo_id]||0)+1; });
+  const rankCat = Object.entries(catCount)
+    .map(([id,n])=>({nome:tAll.find(t=>t.catalogo_id===id)?.catalogo?.nome||'—', n}))
+    .sort((a,b)=>b.n-a.n).slice(0,5);
+
+  const instrutores = usrAll.filter(u=>u.perfil==='instrutor');
+
+  const barsHtml = turmasPorMes.map(m=>{
+    const pct = Math.round((m.n/maxN)*100);
+    return `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1)">${m.n||''}</div>
+        <div style="width:100%;background:var(--gray-100);border-radius:4px;height:80px;display:flex;align-items:flex-end;overflow:hidden">
+          <div style="width:100%;background:${m.n>0?'var(--navy)':'var(--gray-200)'};height:${Math.max(pct,m.n>0?8:0)}%;border-radius:4px 4px 0 0;transition:height .3s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text-3);text-align:center">${m.label}</div>
+      </div>`;
+  }).join('');
+
+  const rankCliHtml = rankCli.length ? rankCli.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:22px;height:22px;border-radius:50%;background:${i===0?'var(--amber)':i===1?'var(--gray-300)':i===2?'rgba(180,120,0,.2)':'var(--gray-100)'};color:${i===0?'var(--navy)':'var(--text-2)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+      <div style="flex:1;font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+      <span class="badge badge-navy">${r.n} turma${r.n!==1?'s':''}</span>
+    </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:12px 0">Nenhum dado</div>';
+
+  const rankCatHtml = rankCat.length ? rankCat.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:22px;height:22px;border-radius:50%;background:${i===0?'var(--amber)':i===1?'var(--gray-300)':i===2?'rgba(180,120,0,.2)':'var(--gray-100)'};color:${i===0?'var(--navy)':'var(--text-2)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+      <div style="flex:1;font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+      <span class="badge badge-navy">${r.n} turma${r.n!==1?'s':''}</span>
+    </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:12px 0">Nenhum dado</div>';
+
+  const instHtml = instrutores.length ? instrutores.map(u=>{
+    const nsess = sesAll.filter(s=>s.instrutor_id===u.id).length;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+        <div style="flex:1;font-size:13px;font-weight:500;color:var(--text-1)">${u.nome}</div>
+        <span class="badge badge-green">${nsess} sessão${nsess!==1?'ões':''}</span>
+      </div>`;
+  }).join('') : '<div style="font-size:13px;color:var(--text-3);padding:12px 0">Nenhum instrutor</div>';
+
+  setConteudo(`
+    <!-- KPIs -->
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card navy">
+        <div class="stat-label">Turmas ativas</div>
+        <div class="stat-value">${tAtivas}</div>
+        <div class="stat-sub up">Em andamento</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Agendadas</div>
+        <div class="stat-value">${tAgendadas}</div>
+        <div class="stat-sub">Próximas</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Concluídas</div>
+        <div class="stat-value">${tConcluidas}</div>
+        <div class="stat-sub up">Total histórico</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Canceladas</div>
+        <div class="stat-value">${tCanceladas}</div>
+        <div class="stat-sub down">Total</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Clientes ativos</div>
+        <div class="stat-value">${cliAtivos}</div>
+        <div class="stat-sub">Empresas</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Total turmas</div>
+        <div class="stat-value">${tAll.length}</div>
+        <div class="stat-sub">Todas</div>
+      </div>
+    </div>
+
+    <!-- Gráfico de evolução mensal -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:16px;display:flex;align-items:center;gap:6px">
+        ${ICONS.chart} Evolução de turmas — últimos 6 meses
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;height:120px">
+        ${barsHtml}
+      </div>
+    </div>
+
+    <!-- Rankings -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">🏆 Ranking — clientes</div>
+        ${rankCliHtml}
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">📚 Treinamentos mais realizados</div>
+        ${rankCatHtml}
+      </div>
+    </div>
+
+    <!-- Instrutores -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">👤 Desempenho dos instrutores</div>
+      ${instHtml}
+    </div>
+
+    <!-- Exportação -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">Exportar dados</div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:14px">Exporte as turmas com todos os dados para análise externa</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioCSV()">⬇ Exportar CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioJSON()">⬇ Exportar JSON</button>
+      </div>
+    </div>
+  `);
+}
+
+function exportarRelatorioCSV() {
+  const tAll = _turmasCache;
+  if (!tAll.length) { showToast('Nenhuma turma para exportar','info'); return; }
+  const header = ['Protocolo','Treinamento','Cliente','Status','Criado em'];
+  const rows = tAll.map(t=>[
+    t.protocolo||'',
+    (t.catalogo?.nome||'').replace(/,/g,';'),
+    (t.clientes?.nome||'').replace(/,/g,';'),
+    t.status||'',
+    t.created_at?new Date(t.created_at).toLocaleDateString('pt-BR'):'',
+  ]);
+  const csv = [header,...rows].map(r=>r.join(',')).join('\n');
+  const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `relatorio-turmas-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('CSV exportado!','success');
+}
+
+function exportarRelatorioJSON() {
+  const tAll = _turmasCache;
+  if (!tAll.length) { showToast('Nenhuma turma para exportar','info'); return; }
+  const dados = tAll.map(t=>({
+    protocolo: t.protocolo,
+    treinamento: t.catalogo?.nome,
+    cliente: t.clientes?.nome,
+    status: t.status,
+    criado_em: t.created_at,
+  }));
+  const blob = new Blob([JSON.stringify(dados,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `relatorio-turmas-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  showToast('JSON exportado!','success');
+}
+
+// ============================================================
 // EQUIPE
 // ============================================================
 async function renderEquipe() {
@@ -2479,6 +2846,7 @@ document.addEventListener('click', function(e) {
   switch(action) {
     // Navegação
     case 'irParaTurmas':    irPara('turmas'); break;
+    case 'irPara':          if(id) irPara(id); break;
     case 'verTurma':        if(id) verTurma(id); break;
     // Organizações
     case 'menuOrg':         menuOrg(el, id); break;
@@ -2486,12 +2854,15 @@ document.addEventListener('click', function(e) {
     case 'criarUserOrg':    document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalUsuarioOrg(id); break;
     case 'toggleOrg':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleOrg(id); break;
     // Clientes
+    case 'verCliente':      verCliente(id); break;
     case 'menuCliente':     menuCliente(el, id); break;
     case 'editarCliente':   document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCliente(id); break;
     case 'toggleCliente':   document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCliente(id); break;
     // Colaboradores
+    case 'verColab':        verColab(id); break;
     case 'editarColab':     abrirModalColab(id); break;
     // Catálogo
+    case 'verCatalogo':     verCatalogo(id); break;
     case 'menuCatalogo':    menuCatalogo(el, id); break;
     case 'editarCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCatalogo(id); break;
     case 'toggleCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCatalogo(id); break;
