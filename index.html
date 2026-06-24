@@ -618,6 +618,7 @@ async function irPara(pagina, params={}) {
       case 'turmas':        await renderTurmas(); break;
       case 'equipe':        await renderEquipe(); break;
       case 'agenda':        await renderAgenda(); break;
+      case 'historico':     await renderHistorico(); break;
       case 'relatorios':    await renderRelatorios(); break;
       case 'conta':         await renderConta(); break;
       default: renderEmBreve(TITULOS[pagina]||pagina);
@@ -2095,10 +2096,244 @@ async function renderAgenda() {
 }
 
 // ============================================================
-// EXECUÇÃO DE TURMA
-// Fluxo: instrutor abre a turma → inicia execução → registra
-// presença → coleta assinaturas → adiciona fotos → finaliza
+// HISTÓRICO — INSTRUTOR
 // ============================================================
+async function renderHistorico() {
+  setMobileHeader(`<div class="mh-greeting">Instrutor</div><div class="mh-name">Histórico</div>`);
+  fabOcultar();
+
+  // Buscar todas as sessões concluídas deste instrutor
+  const {data:sessoes, error:erS} = await sb
+    .from('sessoes')
+    .select('id,turma_id,data,hora_inicio,hora_fim,local,concluida')
+    .eq('instrutor_id', usuarioAtual.id)
+    .eq('concluida', true)
+    .order('data', {ascending:false});
+  if (erS) throw erS;
+
+  // Buscar turmas concluídas vinculadas
+  const turmaIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
+  let turmasMap = {};
+  if (turmaIds.length) {
+    const {data:td} = await sb
+      .from('turmas')
+      .select('id,status,catalogo_id,cliente_id,observacoes,clientes(nome),catalogo(nome,carga_horaria),turma_participantes(id)')
+      .in('id', turmaIds)
+      .eq('status','concluida');
+    (td||[]).forEach(t=>{ turmasMap[t.id]=t; });
+  }
+
+  // Agrupar sessões por turma (apenas turmas concluídas)
+  const grupos = {};
+  (sessoes||[]).forEach(s=>{
+    const t = turmasMap[s.turma_id];
+    if (!t) return;
+    if (!grupos[s.turma_id]) grupos[s.turma_id] = {turma:t, sessoes:[]};
+    grupos[s.turma_id].sessoes.push(s);
+  });
+  const lista = Object.values(grupos).sort((a,b)=>{
+    const da = a.sessoes[0]?.data||'';
+    const db = b.sessoes[0]?.data||'';
+    return db.localeCompare(da);
+  });
+
+  // Métricas
+  const totalTurmas   = lista.length;
+  const totalAlunos   = lista.reduce((acc,g)=>(acc+(g.turma.turma_participantes?.length||0)),0);
+  const totalHoras    = lista.reduce((acc,g)=>{
+    const ch  = g.turma.catalogo?.carga_horaria||0;
+    return acc + (ch * g.sessoes.length);
+  },0);
+  const hoje = new Date();
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  const turmasMes = lista.filter(g=>g.sessoes.some(s=>s.data?.startsWith(mesAtual))).length;
+  const clientesUnicos = new Set(lista.map(g=>g.turma.cliente_id).filter(Boolean)).size;
+
+  // Filtros ativos
+  const clientesSet = [...new Set(lista.map(g=>g.turma.clientes?.nome).filter(Boolean))].sort();
+  const treinamentosSet = [...new Set(lista.map(g=>g.turma.catalogo?.nome).filter(Boolean))].sort();
+
+  const cliOpts = clientesSet.map(n=>`<option value="${n}">${n}</option>`).join('');
+  const catOpts = treinamentosSet.map(n=>`<option value="${n}">${n}</option>`).join('');
+
+  const htmlItems = lista.length===0
+    ? `<div class="empty" style="padding:40px 20px"><div class="empty-icon">📋</div><div class="empty-title">Nenhum treinamento concluído</div><div class="empty-sub">Seu histórico aparecerá aqui após finalizar os primeiros treinamentos.</div></div>`
+    : lista.map(g=>{
+        const t    = g.turma;
+        const nomeT = t.catalogo?.nome||'Treinamento';
+        const nomeC = t.clientes?.nome||'—';
+        const nPart = t.turma_participantes?.length||0;
+        const ch    = t.catalogo?.carga_horaria||0;
+        const datas = g.sessoes.map(s=>formatarData(s.data));
+        const primeiraData = g.sessoes[g.sessoes.length-1]?.data||'';
+        const local = g.sessoes[0]?.local||'—';
+        return `
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verHistoricoTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+          <div style="width:42px;height:42px;border-radius:10px;background:rgba(5,150,105,.1);color:#059669;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${ch}h</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeC} · ${formatarData(primeiraData)} · ${nPart} aluno${nPart!==1?'s':''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <span class="badge badge-green">Concluída</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>`;
+      }).join('');
+
+  setConteudo(`
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card navy">
+        <div class="stat-label">Treinamentos</div>
+        <div class="stat-value">${totalTurmas}</div>
+        <div class="stat-sub">Concluídos</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Alunos treinados</div>
+        <div class="stat-value">${totalAlunos}</div>
+        <div class="stat-sub">Total histórico</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Horas ministradas</div>
+        <div class="stat-value">${totalHoras}</div>
+        <div class="stat-sub up">Acumuladas</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Este mês</div>
+        <div class="stat-value">${turmasMes}</div>
+        <div class="stat-sub">Turmas</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Clientes</div>
+        <div class="stat-value">${clientesUnicos}</div>
+        <div class="stat-sub">Atendidos</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <select id="filtHistCli" style="flex:1;min-width:140px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarHistorico()">
+        <option value="">Todos os clientes</option>${cliOpts}
+      </select>
+      <select id="filtHistCat" style="flex:1;min-width:140px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarHistorico()">
+        <option value="">Todos os treinamentos</option>${catOpts}
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="limparFiltrosHistorico()">Limpar</button>
+    </div>
+
+    <div class="card" style="padding:0" id="listaHistorico">${htmlItems}</div>
+  `);
+}
+
+function filtrarHistorico() {
+  const cli = document.getElementById('filtHistCli')?.value;
+  const cat = document.getElementById('filtHistCat')?.value;
+  // Re-render from stored data isn't available — trigger full reload
+  renderHistorico();
+}
+
+function limparFiltrosHistorico() {
+  const sc = document.getElementById('filtHistCli');
+  const st = document.getElementById('filtHistCat');
+  if (sc) sc.value='';
+  if (st) st.value='';
+}
+
+async function verHistoricoTurma(turmaId) {
+  showLoading('Carregando histórico...');
+  try {
+    const {data:t,error} = await sb.from('turmas')
+      .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*),turma_participantes(*,colaboradores(nome,cpf,cargo)),evidencias(*)')
+      .eq('id', turmaId).single();
+    if (error) throw error;
+
+    const participantes = t.turma_participantes||[];
+    const agendamentos  = (t.sessoes||[]).filter(s=>s.instrutor_id===usuarioAtual.id||true).sort((a,b)=>a.data>b.data?1:-1);
+    const evidencias    = t.evidencias||[];
+    const nomeT  = t.catalogo?.nome||'Treinamento';
+    const nomeC  = t.clientes?.nome||'—';
+    const ch     = t.catalogo?.carga_horaria||'—';
+    const nPart  = participantes.length;
+    const datas  = agendamentos.map(s=>formatarData(s.data)).join(', ');
+    const local  = agendamentos[0]?.local||'—';
+
+    const htmlPart = participantes.length===0
+      ? `<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum participante registrado.</div>`
+      : participantes.map((p,i)=>{
+          const col = p.colaboradores||{};
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+            <div style="width:30px;height:30px;border-radius:50%;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:500;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${col.nome||'—'}</div>
+              ${col.cargo?`<div style="font-size:11px;color:var(--text-3)">${col.cargo}</div>`:''}
+            </div>
+            <span style="font-size:11px;color:var(--green);font-weight:600">✓ Presente</span>
+          </div>`;
+        }).join('');
+
+    const htmlEvidencias = evidencias.length===0
+      ? `<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhuma evidência anexada.</div>`
+      : `<div style="font-size:13px;color:var(--text-2);padding:8px 0">${evidencias.length} evidência${evidencias.length!==1?'s':''} registrada${evidencias.length!==1?'s':''}.</div>`;
+
+    hideLoading();
+    setConteudo(`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+        <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="historico">${ICONS.back} Voltar</button>
+      </div>
+
+      <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
+        <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.3);border-radius:999px;padding:3px 10px;margin-bottom:10px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#34d399"></span>
+          <span style="font-size:11px;color:#6EE7B7;font-weight:600">Concluído</span>
+        </div>
+        <div style="font-size:20px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:4px">${nomeT}</div>
+        <div style="font-size:14px;color:rgba(255,255,255,.6);margin-bottom:16px">${nomeC}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Data(s)</div>
+            <div style="font-size:12px;color:#fff;font-weight:500">${datas||'—'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Carga horária</div>
+            <div style="font-size:12px;color:#fff;font-weight:500">${ch}h</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Local</div>
+            <div style="font-size:12px;color:#fff;font-weight:500">${local}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Participantes</div>
+            <div style="font-size:12px;color:#fff;font-weight:500">${nPart} aluno${nPart!==1?'s':''}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Participantes (${nPart})</div>
+        ${htmlPart}
+      </div>
+
+      ${t.observacoes?`
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Observações</div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6">${t.observacoes}</div>
+      </div>`:''}
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Evidências</div>
+        ${htmlEvidencias}
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="abrirDocumentos" data-id="${turmaId}">📄 Ver certificados e documentos</button>
+      </div>
+    `);
+  } catch(e) {
+    hideLoading();
+    renderErro(e.message);
+  }
+}
+
+
 
 // ---- Iniciar execução (sessão específica) ----
 async function iniciarExecucaoSessao(turmaId, sessaoId) {
@@ -3030,6 +3265,7 @@ document.addEventListener('click', function(e) {
     case 'irParaTurmas':    irPara('turmas'); break;
     case 'irPara':          if(id) irPara(id); break;
     case 'verTurma':        if(id) verTurma(id); break;
+    case 'verHistoricoTurma': verHistoricoTurma(id); break;
     // Organizações
     case 'menuOrg':         menuOrg(el, id); break;
     case 'editarOrg':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalOrg(id); break;
