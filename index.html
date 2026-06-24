@@ -900,51 +900,94 @@ async function renderClientes() {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Clientes</div>`);
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   if (podeCriar) fabMostrar(()=>abrirModalCliente());
+  const total  = _clientesCache.length;
+  const ativos = _clientesCache.filter(c=>c.ativo).length;
   setConteudo(`
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <input type="search" id="buscaCliente" placeholder="Buscar cliente..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarClientes(this.value)">
-      ${podeCriar?`<button class="btn btn-navy" onclick="abrirModalCliente()">${ICONS.plus} Novo</button>`:''}
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card navy">
+        <div class="stat-label">Total de clientes</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">${ativos} ativo${ativos!==1?'s':''}</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Ativos</div>
+        <div class="stat-value">${ativos}</div>
+        <div class="stat-sub up">Em operação</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Inativos</div>
+        <div class="stat-value">${total-ativos}</div>
+        <div class="stat-sub">Pausados</div>
+      </div>
     </div>
-    <div class="card" id="listaClientes">${_htmlListaClientes(_clientesCache)}</div>`);
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarClientes(this.value)">
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo</button>`:''}
+    </div>
+    <div class="card" style="padding:0" id="listaClientes">${_htmlListaClientes(_clientesCache)}</div>`);
 }
 
 function _htmlListaClientes(lista) {
-  if (!lista.length) return `<div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Nenhum cliente</div><div class="empty-sub">Cadastre a primeira empresa-cliente.</div></div>`;
-  return lista.map(c=>`
-    <div class="list-item" style="padding:14px 4px" data-action="verCliente" data-id="${c.id}">
-      <div class="li-icon" style="background:var(--green-l);color:var(--green-text);font-size:13px;font-weight:700;border-radius:var(--r-md)">${iniciais(c.nome)}</div>
-      <div class="li-info"><div class="li-title">${c.nome}</div><div class="li-sub">${c.cnpj?`CNPJ ${c.cnpj} · `:''}${c.cidade?`${c.cidade}/${c.uf||''} · `:''}${c.email||''}</div></div>
-      <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
-    </div>`).join('');
+  if (!lista.length) return `<div class="empty" style="padding:32px 20px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhum cliente cadastrado</div><div class="empty-sub">Cadastre a primeira empresa-cliente.</div></div>`;
+  const CORES = ['#1E2A4A','#059669','#1D4ED8','#D97706','#7C3AED','#DC2626'];
+  return lista.map((c,i)=>{
+    const cor = CORES[i % CORES.length];
+    const corBg = cor+'14';
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verCliente" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:40px;height:40px;border-radius:10px;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.3px">${iniciais(c.nome)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${c.cidade}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function verCliente(id) {
   const c = _clientesCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  const campos = [
+    c.cnpj        ? {label:'CNPJ',       val:c.cnpj}                          : null,
+    c.cidade      ? {label:'Cidade',      val:`${c.cidade}${c.uf?'/'+c.uf:''}`} : null,
+    c.email       ? {label:'E-mail',      val:c.email}                         : null,
+    c.telefone    ? {label:'Telefone',    val:c.telefone}                      : null,
+  ].filter(Boolean);
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="clientes">${ICONS.back} Voltar</button>
+      <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="clientes">${ICONS.back} Voltar</button>
     </div>
-    <div class="card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-        <div style="width:52px;height:52px;border-radius:var(--r-lg);background:var(--green-l);color:var(--green-text);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
-        <div style="flex:1">
-          <div style="font-size:18px;font-weight:700;color:var(--navy)">${c.nome}</div>
-          <span class="badge ${c.ativo?'badge-green':'badge-gray'}" style="margin-top:4px">${c.ativo?'Ativo':'Inativo'}</span>
+
+    <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:52px;height:52px;border-radius:12px;background:rgba(245,158,11,.2);color:var(--amber);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.5px">${iniciais(c.nome)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+          <div style="margin-top:6px">
+            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${c.ativo?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${c.ativo?'#6EE7B7':'#94A3B8'};border:1px solid ${c.ativo?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${c.ativo?'Ativo':'Inativo'}</span>
+          </div>
         </div>
       </div>
-      <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;gap:10px">
-        ${c.cnpj?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">CNPJ</span><span style="color:var(--text-1);font-weight:500">${c.cnpj}</span></div>`:''}
-        ${c.cidade?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">Cidade</span><span style="color:var(--text-1);font-weight:500">${c.cidade}${c.uf?'/'+c.uf:''}</span></div>`:''}
-        ${c.email?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">E-mail</span><span style="color:var(--text-1);font-weight:500">${c.email}</span></div>`:''}
-        ${c.telefone?`<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--text-2)">Telefone</span><span style="color:var(--text-1);font-weight:500">${c.telefone}</span></div>`:''}
-      </div>
     </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Informações cadastradas</div>
+      ${campos.length ? campos.map(f=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px;color:var(--text-2)">${f.label}</span>
+          <span style="font-size:13px;font-weight:500;color:var(--navy)">${f.val}</span>
+        </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
+    </div>
+
     ${podeMgr?`
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-navy" data-action="editarCliente" data-id="${c.id}">${ICONS.plus} Editar</button>
-      <button class="btn btn-outline" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar':'Ativar'}</button>
+      <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="editarCliente" data-id="${c.id}">${ICONS.plus} Editar dados</button>
+      <button class="btn btn-outline" style="flex:1;justify-content:center" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar cliente':'Reativar cliente'}</button>
     </div>`:''}
   `);
 }
@@ -1013,49 +1056,84 @@ async function renderColaboradores() {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Colaboradores</div>`);
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   if (podeCriar) fabMostrar(()=>abrirModalColab());
+  const total = _colabsCache.length;
+  const comCargo = _colabsCache.filter(c=>c.cargo).length;
   setConteudo(`
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarColabs(this.value)">
-      ${podeCriar?`<button class="btn btn-navy" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline" onclick="abrirModalImportacao()">⬆ Importar</button>`:''}
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card navy">
+        <div class="stat-label">Total</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">Colaboradores</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Com cargo</div>
+        <div class="stat-value">${comCargo}</div>
+        <div class="stat-sub">Cadastrados</div>
+      </div>
     </div>
-    <div class="card" id="listaColabs">${_htmlListaColabs(_colabsCache)}</div>`);
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarColabs(this.value)">
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacao()" style="white-space:nowrap">⬆ Importar</button>`:''}
+    </div>
+    <div class="card" style="padding:0" id="listaColabs">${_htmlListaColabs(_colabsCache)}</div>`);
 }
 
 function _htmlListaColabs(lista) {
-  if (!lista.length) return `<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador</div><div class="empty-sub">Cadastre os colaboradores das empresas-clientes.</div></div>`;
-  return lista.map(c=>`
-    <div class="list-item" style="padding:14px 4px" data-action="verColab" data-id="${c.id}">
-      <div class="li-icon" style="background:rgba(245,158,11,.12);color:var(--amber-h);font-size:12px;font-weight:700;border-radius:50%">${iniciais(c.nome)}</div>
-      <div class="li-info"><div class="li-title">${c.nome}</div><div class="li-sub">${c.cpf?`CPF ${c.cpf}`:''} ${c.cargo?`· ${c.cargo}`:''}</div></div>
+  if (!lista.length) return `<div class="empty" style="padding:32px 20px"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador</div><div class="empty-sub">Cadastre os colaboradores das empresas-clientes.</div></div>`;
+  const CORES_BG  = ['rgba(30,42,74,.1)','rgba(5,150,105,.1)','rgba(245,158,11,.1)','rgba(29,78,216,.1)','rgba(124,58,237,.1)'];
+  const CORES_FG  = ['#1E2A4A','#059669','#D97706','#1D4ED8','#7C3AED'];
+  return lista.map((c,i)=>{
+    const cor   = CORES_FG[i%CORES_FG.length];
+    const corBg = CORES_BG[i%CORES_BG.length];
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verColab" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:40px;height:40px;border-radius:50%;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cpf?`CPF ${c.cpf}`:null,c.cargo||null].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
+      </div>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function verColab(id) {
   const c = _colabsCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  const campos = [
+    c.cpf      ? {label:'CPF',      val:c.cpf}      : null,
+    c.cargo    ? {label:'Cargo',    val:c.cargo}    : null,
+    c.email    ? {label:'E-mail',   val:c.email}    : null,
+    c.telefone ? {label:'Telefone', val:c.telefone} : null,
+  ].filter(Boolean);
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
+      <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
     </div>
-    <div class="card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-        <div style="width:52px;height:52px;border-radius:50%;background:rgba(245,158,11,.12);color:var(--amber-h);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
-        <div>
-          <div style="font-size:18px;font-weight:700;color:var(--navy)">${c.nome}</div>
-          ${c.cargo?`<div style="font-size:13px;color:var(--text-2);margin-top:2px">${c.cargo}</div>`:''}
+
+    <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:52px;height:52px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+          ${c.cargo?`<div style="font-size:13px;color:rgba(255,255,255,.55);margin-top:3px">${c.cargo}</div>`:''}
         </div>
       </div>
-      <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;gap:10px">
-        ${c.cpf?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">CPF</span><span style="font-weight:500">${c.cpf}</span></div>`:''}
-        ${c.email?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">E-mail</span><span style="font-weight:500">${c.email}</span></div>`:''}
-        ${c.telefone?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Telefone</span><span style="font-weight:500">${c.telefone}</span></div>`:''}
-      </div>
     </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Informações cadastradas</div>
+      ${campos.length ? campos.map(f=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px;color:var(--text-2)">${f.label}</span>
+          <span style="font-size:13px;font-weight:500;color:var(--navy)">${f.val}</span>
+        </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
+    </div>
+
     ${podeMgr?`
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">${ICONS.plus} Editar</button>
+      <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="editarColab" data-id="${c.id}">${ICONS.plus} Editar dados</button>
     </div>`:''}
   `);
 }
@@ -2766,21 +2844,125 @@ function exportarRelatorioJSON() {
 async function renderEquipe() {
   const {data,error} = await sb.from('usuarios').select('*').eq('org_id',usuarioAtual.org_id).order('nome');
   if (error) throw error;
+  const usuarios = data||[];
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Equipe</div>`);
   fabMostrar(()=>abrirModalUsuarioOrg(usuarioAtual.org_id));
+
+  const total   = usuarios.length;
+  const ativos  = usuarios.filter(u=>u.ativo).length;
+  const instrutores = usuarios.filter(u=>u.perfil==='instrutor').length;
+
+  // Paleta por perfil no novo design
+  const PERFIL_STYLE = {
+    provedor:      {bg:'rgba(124,58,237,.12)', cor:'#7C3AED',  badge:'badge-navy'},
+    administrador: {bg:'rgba(30,42,74,.12)',   cor:'#1E2A4A',  badge:'badge-navy'},
+    comercial:     {bg:'rgba(5,150,105,.12)',  cor:'#059669',  badge:'badge-green'},
+    instrutor:     {bg:'rgba(245,158,11,.12)', cor:'#D97706',  badge:'badge-amber'},
+  };
+
+  const listaHtml = usuarios.length===0
+    ? `<div class="empty" style="padding:32px 20px"><div class="empty-icon">👤</div><div class="empty-title">Nenhum usuário</div><div class="empty-sub">Crie o primeiro membro da equipe.</div></div>`
+    : usuarios.map(u=>{
+        const st = PERFIL_STYLE[u.perfil] || {bg:'rgba(100,116,139,.12)',cor:'#64748B',badge:'badge-gray'};
+        return `
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+          <div style="width:40px;height:40px;border-radius:50%;background:${st.bg};color:${st.cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email||'Sem e-mail'}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <span class="badge ${st.badge}" style="text-transform:capitalize">${labelPerfil(u.perfil)}</span>
+            <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>`;
+      }).join('');
+
   setConteudo(`
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-      <button class="btn btn-navy" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card navy">
+        <div class="stat-label">Total da equipe</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">${ativos} ativo${ativos!==1?'s':''}</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Instrutores</div>
+        <div class="stat-value">${instrutores}</div>
+        <div class="stat-sub">Em campo</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Inativos</div>
+        <div class="stat-value">${total-ativos}</div>
+        <div class="stat-sub">Pausados</div>
+      </div>
     </div>
-    <div class="card">${(data||[]).length===0?'<div class="empty"><div class="empty-icon">👤</div><div class="empty-title">Nenhum usuário</div></div>':(data||[]).map(u=>`
-      <div class="list-item" style="padding:14px 4px">
-        <div class="li-icon" style="background:${corPerfil(u.perfil)}22;color:${corPerfil(u.perfil)};font-size:12px;font-weight:700;border-radius:50%">${iniciais(u.nome)}</div>
-        <div class="li-info"><div class="li-title">${u.nome}</div><div class="li-sub">${u.email||'Sem e-mail'}</div></div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <span class="badge badge-gray" style="text-transform:capitalize">${labelPerfil(u.perfil)}</span>
-          <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+      <button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
+    </div>
+    <div class="card" style="padding:0">${listaHtml}</div>`);
+}
+
+function verUsuarioEquipe(id) {
+  // Re-fetch from DOM data — get user from the usuarios list rendered
+  // We need to re-query because we don't cache equipe
+  sb.from('usuarios').select('*').eq('id',id).single().then(({data:u,error})=>{
+    if (error||!u) { showToast('Usuário não encontrado','error'); return; }
+    const podeMgr = usuarioAtual.perfil === 'administrador' || usuarioAtual.perfil === 'provedor';
+    const PERFIL_STYLE = {
+      provedor:      {bg:'rgba(124,58,237,.2)', cor:'#7C3AED'},
+      administrador: {bg:'rgba(245,158,11,.2)', cor:'var(--amber)'},
+      comercial:     {bg:'rgba(16,185,129,.2)', cor:'#6EE7B7'},
+      instrutor:     {bg:'rgba(245,158,11,.2)', cor:'var(--amber)'},
+    };
+    const st = PERFIL_STYLE[u.perfil]||{bg:'rgba(148,163,184,.2)',cor:'#94A3B8'};
+    setConteudo(`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+        <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="equipe">${ICONS.back} Voltar</button>
+      </div>
+
+      <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:52px;height:52px;border-radius:50%;background:${st.bg};color:${st.cor};font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+              <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(245,158,11,.18);color:var(--amber);border:1px solid rgba(245,158,11,.3);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
+              <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${u.ativo?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${u.ativo?'#6EE7B7':'#94A3B8'};border:1px solid ${u.ativo?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${u.ativo?'Ativo':'Inativo'}</span>
+            </div>
+          </div>
         </div>
-      </div>`).join('')}</div>`);
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Informações da conta</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px;color:var(--text-2)">E-mail</span>
+          <span style="font-size:13px;font-weight:500;color:var(--navy)">${u.email||'—'}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0">
+          <span style="font-size:13px;color:var(--text-2)">Perfil de acesso</span>
+          <span style="font-size:13px;font-weight:500;color:var(--navy);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
+        </div>
+      </div>
+
+      ${podeMgr && u.id !== usuarioAtual.id ? `
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline" style="flex:1;justify-content:center" onclick="toggleUsuarioEquipe('${u.id}','${u.ativo}','${u.nome}')">${u.ativo?'Desativar usuário':'Reativar usuário'}</button>
+      </div>`:''}
+    `);
+  });
+}
+
+async function toggleUsuarioEquipe(id, ativoStr, nome) {
+  const ativo = ativoStr === 'true';
+  if (!confirm(`Deseja ${ativo?'desativar':'reativar'} ${nome}?`)) return;
+  showLoading();
+  const {error} = await sb.from('usuarios').update({ativo:!ativo}).eq('id',id);
+  hideLoading();
+  if (error) { showToast(error.message,'error'); return; }
+  showToast(`${nome} ${ativo?'desativado':'reativado'}!`, ativo?'info':'success');
+  await renderEquipe();
 }
 
 // ============================================================
@@ -2866,6 +3048,8 @@ document.addEventListener('click', function(e) {
     case 'menuCatalogo':    menuCatalogo(el, id); break;
     case 'editarCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCatalogo(id); break;
     case 'toggleCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCatalogo(id); break;
+    // Equipe
+    case 'verUsuarioEquipe': verUsuarioEquipe(id); break;
     // Turmas
     case 'menuTurmaCard':         _menuTurmaCard(el,id); break;
     case 'excluirTurma':          document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalExcluirTurma(id); break;
