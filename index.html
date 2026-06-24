@@ -672,10 +672,10 @@ async function renderHomeAdmin() {
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Administrador</div>`);
   setConteudo(`
     <div class="stats-grid">
-      <div class="stat-card navy"><div class="stat-label">Turmas ativas</div><div class="stat-value">${ativas}</div><div class="stat-sub">Em andamento</div></div>
-      <div class="stat-card accent"><div class="stat-label">Concluídas</div><div class="stat-value">${concluidas}</div><div class="stat-sub">Total histórico</div></div>
-      <div class="stat-card accent"><div class="stat-label">Agendadas</div><div class="stat-value">${agendadas}</div><div class="stat-sub">Próximas datas</div></div>
-      <div class="stat-card accent"><div class="stat-label">Clientes ativos</div><div class="stat-value">${(clientes||[]).length}</div><div class="stat-sub">Empresas</div></div>
+      <div class="stat-card navy" style="cursor:pointer" onclick="irParaTurmasFiltradas('em_andamento')"><div class="stat-label">Turmas ativas</div><div class="stat-value">${ativas}</div><div class="stat-sub">Em andamento →</div></div>
+      <div class="stat-card accent" style="cursor:pointer" onclick="irParaTurmasFiltradas('concluida')"><div class="stat-label">Concluídas</div><div class="stat-value">${concluidas}</div><div class="stat-sub">Ver histórico →</div></div>
+      <div class="stat-card accent" style="cursor:pointer" onclick="irParaTurmasFiltradas('agendada')"><div class="stat-label">Agendadas</div><div class="stat-value">${agendadas}</div><div class="stat-sub">Próximas →</div></div>
+      <div class="stat-card accent" style="cursor:pointer" onclick="irPara('clientes')"><div class="stat-label">Clientes ativos</div><div class="stat-value">${(clientes||[]).length}</div><div class="stat-sub">Ver clientes →</div></div>
     </div>
     <div class="quick-actions">
       <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:rgba(245,158,11,.12)">${ICONS.clip}</div><div class="qa-label">Nova turma</div><div class="qa-sub">Agendar treinamento</div></button>
@@ -2868,19 +2868,17 @@ async function renderRelatorios() {
   const oi = usuarioAtual.org_id;
   setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
 
-  // Buscar todos os dados necessários
-  const [{data:turmas},{data:clientes},{data:colabs},{data:sessoes},{data:usuarios}] = await Promise.all([
+  const [{data:turmas},{data:clientes},{data:sessoes},{data:usuarios}] = await Promise.all([
     sb.from('turmas').select('id,status,cliente_id,catalogo_id,created_at,clientes(nome),catalogo(nome)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
-    sb.from('colaboradores').select('id').limit(1),
     sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(nome)').eq('concluida',true),
     sb.from('usuarios').select('id,nome,perfil').eq('org_id',oi).eq('ativo',true),
   ]);
 
-  const tAll    = turmas||[];
-  const cliAll  = clientes||[];
-  const sesAll  = sessoes||[];
-  const usrAll  = usuarios||[];
+  const tAll   = turmas||[];
+  const cliAll = clientes||[];
+  const sesAll = sessoes||[];
+  const usrAll = usuarios||[];
 
   const tAtivas    = tAll.filter(t=>t.status==='em_andamento').length;
   const tAgendadas = tAll.filter(t=>t.status==='agendada').length;
@@ -2888,15 +2886,14 @@ async function renderRelatorios() {
   const tCanceladas= tAll.filter(t=>t.status==='cancelada').length;
   const cliAtivos  = cliAll.filter(c=>c.ativo).length;
 
-  // Turmas por mês (últimos 6 meses)
+  // Evolução mensal — últimos 6 meses
   const hoje = new Date();
   const meses = [];
   for (let i=5;i>=0;i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
     meses.push({
-      label: d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}),
-      ano: d.getFullYear(),
-      mes: d.getMonth()+1,
+      label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),
+      ano: d.getFullYear(), mes: d.getMonth()+1,
     });
   }
   const turmasPorMes = meses.map(m=>{
@@ -2908,14 +2905,13 @@ async function renderRelatorios() {
   });
   const maxN = Math.max(...turmasPorMes.map(m=>m.n), 1);
 
-  // Ranking clientes
+  // Rankings
   const cliCount = {};
   tAll.forEach(t=>{ if(t.cliente_id) cliCount[t.cliente_id]=(cliCount[t.cliente_id]||0)+1; });
   const rankCli = Object.entries(cliCount)
-    .map(([id,n])=>({nome:cliAll.find(c=>c.id===id)?.nome||'—', n}))
+    .map(([id,n])=>({id, nome:cliAll.find(c=>c.id===id)?.nome||'—', n}))
     .sort((a,b)=>b.n-a.n).slice(0,5);
 
-  // Ranking treinamentos
   const catCount = {};
   tAll.forEach(t=>{ if(t.catalogo_id) catCount[t.catalogo_id]=(catCount[t.catalogo_id]||0)+1; });
   const rankCat = Object.entries(catCount)
@@ -2924,115 +2920,162 @@ async function renderRelatorios() {
 
   const instrutores = usrAll.filter(u=>u.perfil==='instrutor');
 
-  const barsHtml = turmasPorMes.map(m=>{
+  // Gráfico de barras — responsivo com SVG inline
+  const barW = 36; const barGap = 8; const chartH = 80; const labelH = 20; const valH = 18;
+  const totalW = (barW + barGap) * 6 - barGap;
+  const barsHtml = turmasPorMes.map((m,i)=>{
     const pct = Math.round((m.n/maxN)*100);
+    const barH = Math.max(m.n>0?Math.round(chartH*(pct/100)):0, m.n>0?6:0);
+    const x = i*(barW+barGap);
+    const filled = m.n>0;
     return `
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:var(--text-1)">${m.n||''}</div>
-        <div style="width:100%;background:var(--gray-100);border-radius:4px;height:80px;display:flex;align-items:flex-end;overflow:hidden">
-          <div style="width:100%;background:${m.n>0?'var(--navy)':'var(--gray-200)'};height:${Math.max(pct,m.n>0?8:0)}%;border-radius:4px 4px 0 0;transition:height .3s"></div>
-        </div>
-        <div style="font-size:10px;color:var(--text-3);text-align:center">${m.label}</div>
-      </div>`;
+      <g>
+        <rect x="${x}" y="${chartH-barH}" width="${barW}" height="${barH}" fill="${filled?'#1E2A4A':'#E2E8F0'}" rx="3"/>
+        ${m.n>0?`<text x="${x+barW/2}" y="${chartH-barH-4}" text-anchor="middle" font-size="10" font-weight="600" fill="#1E2A4A">${m.n}</text>`:''}
+        <text x="${x+barW/2}" y="${chartH+labelH}" text-anchor="middle" font-size="9" fill="#94A3B8">${m.label}</text>
+      </g>`;
   }).join('');
 
-  const rankCliHtml = rankCli.length ? rankCli.map((r,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="width:22px;height:22px;border-radius:50%;background:${i===0?'var(--amber)':i===1?'var(--gray-300)':i===2?'rgba(180,120,0,.2)':'var(--gray-100)'};color:${i===0?'var(--navy)':'var(--text-2)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-      <div style="flex:1;font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
-      <span class="badge badge-navy">${r.n} turma${r.n!==1?'s':''}</span>
-    </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:12px 0">Nenhum dado</div>';
+  const medalCores = ['#F59E0B','#B0B7C3','rgba(180,120,0,.4)','#F1F5F9','#F1F5F9'];
+  const medalTexto = ['#1E2A4A','#475569','#92400E','#64748B','#64748B'];
 
-  const rankCatHtml = rankCat.length ? rankCat.map((r,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="width:22px;height:22px;border-radius:50%;background:${i===0?'var(--amber)':i===1?'var(--gray-300)':i===2?'rgba(180,120,0,.2)':'var(--gray-100)'};color:${i===0?'var(--navy)':'var(--text-2)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-      <div style="flex:1;font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
-      <span class="badge badge-navy">${r.n} turma${r.n!==1?'s':''}</span>
-    </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:12px 0">Nenhum dado</div>';
+  const rankCliHtml = rankCli.length ? rankCli.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="irPara('clientes')" title="Ver clientes">
+      <div style="width:22px;height:22px;border-radius:50%;background:${medalCores[i]};color:${medalTexto[i]};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+      <div style="flex:1;font-size:12px;font-weight:500;color:var(--text-1);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+      <span class="badge badge-navy" style="flex-shrink:0">${r.n}</span>
+    </div>`).join('') : `<div style="font-size:12px;color:var(--text-3);padding:10px 0">Nenhum dado</div>`;
+
+  const rankCatHtml = rankCat.length ? rankCat.map((r,i)=>{
+    const barPct = Math.round((r.n/rankCat[0].n)*100);
+    return `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="irPara('catalogo')" title="Ver catálogo">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="width:20px;height:20px;border-radius:50%;background:${medalCores[i]};color:${medalTexto[i]};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+        <div style="flex:1;font-size:12px;font-weight:500;color:var(--text-1);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+        <span class="badge badge-amber" style="flex-shrink:0">${r.n}</span>
+      </div>
+      <div style="height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden;margin-left:28px">
+        <div style="height:4px;background:var(--amber);width:${barPct}%;border-radius:2px"></div>
+      </div>
+    </div>`;
+  }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:10px 0">Nenhum dado</div>`;
 
   const instHtml = instrutores.length ? instrutores.map(u=>{
-    const nsess = sesAll.filter(s=>s.instrutor_id===u.id).length;
+    const ns = sesAll.filter(s=>s.instrutor_id===u.id).length;
+    const maxS = Math.max(...instrutores.map(x=>sesAll.filter(s=>s.instrutor_id===x.id).length),1);
+    const pct = Math.round((ns/maxS)*100);
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="width:32px;height:32px;border-radius:50%;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
-        <div style="flex:1;font-size:13px;font-weight:500;color:var(--text-1)">${u.nome}</div>
-        <span class="badge badge-green">${nsess} sessão${nsess!==1?'ões':''}</span>
+      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
+          <div style="width:30px;height:30px;border-radius:50%;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+          </div>
+          <span class="badge badge-green" style="flex-shrink:0">${ns} sessão${ns!==1?'ões':''}</span>
+        </div>
+        <div style="height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden;margin-left:40px">
+          <div style="height:4px;background:var(--green);width:${pct}%;border-radius:2px"></div>
+        </div>
       </div>`;
-  }).join('') : '<div style="font-size:13px;color:var(--text-3);padding:12px 0">Nenhum instrutor</div>';
+  }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:10px 0">Nenhum instrutor</div>`;
 
   setConteudo(`
-    <!-- KPIs -->
-    <div class="stats-grid" style="margin-bottom:20px">
-      <div class="stat-card navy">
-        <div class="stat-label">Turmas ativas</div>
-        <div class="stat-value">${tAtivas}</div>
-        <div class="stat-sub up">Em andamento</div>
+    <style>
+      .relat-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+      .relat-kpi{border-radius:var(--r-lg);padding:14px;cursor:pointer;transition:opacity .12s;border:1px solid var(--border)}
+      .relat-kpi:hover{opacity:.85}
+      .relat-kpi.navy-k{background:var(--navy);border-color:var(--navy)}
+      .relat-kpi.accent-k{background:var(--surface);border-top:3px solid var(--amber)}
+      .relat-kpi .rl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+      .relat-kpi.navy-k .rl{color:rgba(255,255,255,.55)}
+      .relat-kpi.accent-k .rl{color:var(--text-3)}
+      .relat-kpi .rv{font-size:22px;font-weight:700;line-height:1}
+      .relat-kpi.navy-k .rv{color:#fff}
+      .relat-kpi.accent-k .rv{color:var(--navy)}
+      .relat-kpi .rs{font-size:10px;margin-top:3px}
+      .relat-kpi.navy-k .rs{color:rgba(255,255,255,.45)}
+      .relat-kpi.accent-k .rs{color:var(--text-3)}
+      .relat-rankings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+      .relat-chart-svg{width:100%;overflow:visible}
+      @media(max-width:480px){
+        .relat-kpis{grid-template-columns:repeat(2,1fr)}
+        .relat-rankings{grid-template-columns:1fr}
+      }
+    </style>
+
+    <div class="relat-kpis">
+      <div class="relat-kpi navy-k" onclick="irParaTurmasFiltradas('em_andamento')" title="Ver turmas ativas">
+        <div class="rl">Ativas</div><div class="rv">${tAtivas}</div><div class="rs">Em andamento →</div>
       </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Agendadas</div>
-        <div class="stat-value">${tAgendadas}</div>
-        <div class="stat-sub">Próximas</div>
+      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('agendada')" title="Ver turmas agendadas">
+        <div class="rl">Agendadas</div><div class="rv">${tAgendadas}</div><div class="rs">Próximas →</div>
       </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Concluídas</div>
-        <div class="stat-value">${tConcluidas}</div>
-        <div class="stat-sub up">Total histórico</div>
+      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('concluida')" title="Ver turmas concluídas">
+        <div class="rl">Concluídas</div><div class="rv">${tConcluidas}</div><div class="rs">Histórico →</div>
       </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Canceladas</div>
-        <div class="stat-value">${tCanceladas}</div>
-        <div class="stat-sub down">Total</div>
+      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('cancelada')" title="Ver turmas canceladas">
+        <div class="rl">Canceladas</div><div class="rv">${tCanceladas}</div><div class="rs">Ver listagem →</div>
       </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Clientes ativos</div>
-        <div class="stat-value">${cliAtivos}</div>
-        <div class="stat-sub">Empresas</div>
+      <div class="relat-kpi accent-k" onclick="irPara('clientes')" title="Ver clientes">
+        <div class="rl">Clientes</div><div class="rv">${cliAtivos}</div><div class="rs">Ativos →</div>
       </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Total turmas</div>
-        <div class="stat-value">${tAll.length}</div>
-        <div class="stat-sub">Todas</div>
+      <div class="relat-kpi accent-k" onclick="irPara('turmas')" title="Ver todas as turmas">
+        <div class="rl">Total</div><div class="rv">${tAll.length}</div><div class="rs">Todas turmas →</div>
       </div>
     </div>
 
-    <!-- Gráfico de evolução mensal -->
-    <div class="card" style="margin-bottom:16px">
-      <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:16px;display:flex;align-items:center;gap:6px">
-        ${ICONS.chart} Evolução de turmas — últimos 6 meses
+    <div class="card" style="margin-bottom:14px;overflow:hidden">
+      <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:5px">
+        ${ICONS.chart} Evolução mensal — últimos 6 meses
       </div>
-      <div style="display:flex;gap:8px;align-items:flex-end;height:120px">
-        ${barsHtml}
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <svg class="relat-chart-svg" viewBox="0 0 ${totalW} ${chartH+labelH+valH}" style="min-width:${Math.max(totalW,260)}px;height:${chartH+labelH+valH}px">
+          ${barsHtml}
+        </svg>
       </div>
     </div>
 
-    <!-- Rankings -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div class="relat-rankings">
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">🏆 Ranking — clientes</div>
+        <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          Ranking clientes
+          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500" onclick="irPara('clientes')">Ver todos →</span>
+        </div>
         ${rankCliHtml}
       </div>
       <div class="card">
-        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">📚 Treinamentos mais realizados</div>
+        <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          Treinamentos
+          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500" onclick="irPara('catalogo')">Ver todos →</span>
+        </div>
         ${rankCatHtml}
       </div>
     </div>
 
-    <!-- Instrutores -->
-    <div class="card" style="margin-bottom:16px">
-      <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">👤 Desempenho dos instrutores</div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px">Instrutores</div>
       ${instHtml}
     </div>
 
-    <!-- Exportação -->
     <div class="card">
-      <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">Exportar dados</div>
-      <div style="font-size:12px;color:var(--text-2);margin-bottom:14px">Exporte as turmas com todos os dados para análise externa</div>
+      <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:3px">Exportar dados</div>
+      <div style="font-size:11px;color:var(--text-2);margin-bottom:12px">Exportar turmas com filtros atuais</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioCSV()">⬇ Exportar CSV</button>
-        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioJSON()">⬇ Exportar JSON</button>
+        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioCSV()">⬇ CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioJSON()">⬇ JSON</button>
       </div>
     </div>
   `);
+}
+
+function irParaTurmasFiltradas(status) {
+  irPara('turmas').then(()=>{
+    setTimeout(()=>{
+      const sel = document.getElementById('filtrStatusTurma');
+      if (sel) { sel.value = status; filtrarTurmas(); }
+    }, 200);
+  });
 }
 
 function exportarRelatorioCSV() {
