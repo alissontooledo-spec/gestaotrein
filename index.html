@@ -556,13 +556,13 @@ async function fazerLogout() {
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'conta',l:'Minha conta',icon:'user'}],
   administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
-  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 const NAV_BOTTOM = {
   provedor:['home','orgs','conta'],
   administrador:['home','turmas','clientes','relatorios'],
-  comercial:['home','turmas','relatorios','clientes','conta'],
+  comercial:['home','turmas','clientes','conta'],
   instrutor:['home','agenda','historico','conta'],
 };
 
@@ -938,10 +938,11 @@ function _htmlListaClientes(lista) {
     <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verCliente" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
       <div style="width:40px;height:40px;border-radius:10px;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.3px">${iniciais(c.nome)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:15px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
-        <div style="font-size:12px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.cnpj?`CNPJ ${c.cnpj}`:'CNPJ não informado'}</div>
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${c.cidade}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>`;
@@ -1348,15 +1349,16 @@ function _htmlListaTurmas(lista) {
   const DOT = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626'};
   return lista.map((t,i)=>`
     <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:${i<lista.length-1?'1px solid var(--border)':'none'};cursor:pointer;transition:background .1s" data-action="verTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-      <div style="width:4px;height:36px;border-radius:2px;background:${DOT[t.status||'agendada']};flex-shrink:0"></div>
+      <div style="width:8px;height:8px;border-radius:50%;background:${DOT[t.status||'agendada']};flex-shrink:0"></div>
+      <div style="width:38px;height:38px;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center">${t.catalogo?.carga_horaria||'?'}h</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:15px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}</div>
-        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.catalogo?.nome||'Treinamento'}</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.catalogo?.nome||'Treinamento'}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}${t.protocolo?' · <span style="color:var(--text-3);font-size:11px">'+t.protocolo+'</span>':''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span class="badge ${SB[t.status||'agendada']}">${SL[t.status||'agendada']}</span>
         ${['agendada','em_andamento'].includes(t.status||'agendada')&&['administrador','comercial'].includes(usuarioAtual.perfil)?`
         <button class="btn btn-ghost btn-sm" style="padding:4px" data-action="menuTurmaCard" data-id="${t.id}">${ICONS.dots}</button>`:``}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>`).join('');
 }
@@ -2747,6 +2749,7 @@ async function adicionarEvidencia(input, tipo) {
     const {data:ev, error:dbErr} = await sb.from('evidencias').insert({
       org_id:       usuarioAtual.org_id,
       sessao_id:    sessaoId,
+      turma_id:     turmaId,
       tipo,
       arquivo_path: path,
     }).select().single();
