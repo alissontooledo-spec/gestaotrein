@@ -2983,71 +2983,79 @@ async function renderRelatorios() {
   setConteudo(`
     <style>
       .relat-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
-      .relat-kpi{border-radius:var(--r-lg);padding:14px;cursor:pointer;transition:opacity .12s;border:1px solid var(--border)}
+      .relat-kpi{border-radius:var(--r-lg);padding:14px 12px;cursor:pointer;transition:opacity .12s;border:1px solid var(--border);min-width:0}
       .relat-kpi:hover{opacity:.85}
       .relat-kpi.navy-k{background:var(--navy);border-color:var(--navy)}
       .relat-kpi.accent-k{background:var(--surface);border-top:3px solid var(--amber)}
-      .relat-kpi .rl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+      .relat-kpi .rl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .relat-kpi.navy-k .rl{color:rgba(255,255,255,.55)}
       .relat-kpi.accent-k .rl{color:var(--text-3)}
       .relat-kpi .rv{font-size:22px;font-weight:700;line-height:1}
       .relat-kpi.navy-k .rv{color:#fff}
       .relat-kpi.accent-k .rv{color:var(--navy)}
-      .relat-kpi .rs{font-size:10px;margin-top:3px}
+      .relat-kpi .rs{font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .relat-kpi.navy-k .rs{color:rgba(255,255,255,.45)}
       .relat-kpi.accent-k .rs{color:var(--text-3)}
       .relat-rankings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-      .relat-chart-svg{width:100%;overflow:visible}
-      @media(max-width:480px){
+      .relat-chart-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
+      .relat-chart-svg{display:block;min-width:260px}
+      @media(max-width:600px){
         .relat-kpis{grid-template-columns:repeat(2,1fr)}
         .relat-rankings{grid-template-columns:1fr}
+        .relat-kpi .rv{font-size:20px}
+      }
+      @media(max-width:360px){
+        .relat-kpis{grid-template-columns:1fr 1fr}
+        .relat-kpi{padding:10px 8px}
+        .relat-kpi .rv{font-size:18px}
+        .relat-kpi .rl,.relat-kpi .rs{font-size:9px}
       }
     </style>
 
     <div class="relat-kpis">
-      <div class="relat-kpi navy-k" onclick="irParaTurmasFiltradas('em_andamento')" title="Ver turmas ativas">
+      <div class="relat-kpi navy-k" onclick="irParaTurmasFiltradas('em_andamento')">
         <div class="rl">Ativas</div><div class="rv">${tAtivas}</div><div class="rs">Em andamento →</div>
       </div>
-      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('agendada')" title="Ver turmas agendadas">
+      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('agendada')">
         <div class="rl">Agendadas</div><div class="rv">${tAgendadas}</div><div class="rs">Próximas →</div>
       </div>
-      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('concluida')" title="Ver turmas concluídas">
+      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('concluida')">
         <div class="rl">Concluídas</div><div class="rv">${tConcluidas}</div><div class="rs">Histórico →</div>
       </div>
-      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('cancelada')" title="Ver turmas canceladas">
+      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('cancelada')">
         <div class="rl">Canceladas</div><div class="rv">${tCanceladas}</div><div class="rs">Ver listagem →</div>
       </div>
-      <div class="relat-kpi accent-k" onclick="irPara('clientes')" title="Ver clientes">
+      <div class="relat-kpi accent-k" onclick="irPara('clientes')">
         <div class="rl">Clientes</div><div class="rv">${cliAtivos}</div><div class="rs">Ativos →</div>
       </div>
-      <div class="relat-kpi accent-k" onclick="irPara('turmas')" title="Ver todas as turmas">
+      <div class="relat-kpi accent-k" onclick="irPara('turmas')">
         <div class="rl">Total</div><div class="rv">${tAll.length}</div><div class="rs">Todas turmas →</div>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;overflow:hidden">
+    <div class="card" style="margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:5px">
         ${ICONS.chart} Evolução mensal — últimos 6 meses
       </div>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-        <svg class="relat-chart-svg" viewBox="0 0 ${totalW} ${chartH+labelH+valH}" style="min-width:${Math.max(totalW,260)}px;height:${chartH+labelH+valH}px">
+      <div class="relat-chart-wrap">
+        <svg class="relat-chart-svg" viewBox="0 0 ${totalW} ${chartH+labelH+valH}" height="${chartH+labelH+valH}" style="width:100%">
           ${barsHtml}
         </svg>
       </div>
     </div>
 
     <div class="relat-rankings">
-      <div class="card">
+      <div class="card" style="min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-          Ranking clientes
-          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500" onclick="irPara('clientes')">Ver todos →</span>
+          <span>Ranking clientes</span>
+          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500;flex-shrink:0" onclick="irPara('clientes')">Ver todos →</span>
         </div>
         ${rankCliHtml}
       </div>
-      <div class="card">
+      <div class="card" style="min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-          Treinamentos
-          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500" onclick="irPara('catalogo')">Ver todos →</span>
+          <span>Treinamentos</span>
+          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500;flex-shrink:0" onclick="irPara('catalogo')">Ver todos →</span>
         </div>
         ${rankCatHtml}
       </div>
@@ -3226,7 +3234,8 @@ function verUsuarioEquipe(id) {
 
       ${podeMgr && u.id !== usuarioAtual.id ? `
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline" style="flex:1;justify-content:center" onclick="toggleUsuarioEquipe('${u.id}','${u.ativo}','${u.nome}')">${u.ativo?'Desativar usuário':'Reativar usuário'}</button>
+        <button class="btn btn-navy" style="flex:1;justify-content:center" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}','${u.id}')">${ICONS.plus} Editar usuário</button>
+        <button class="btn btn-outline" style="flex:1;justify-content:center" onclick="toggleUsuarioEquipe('${u.id}','${u.ativo}','${u.nome}')">${u.ativo?'Inativar':'Reativar'}</button>
       </div>`:''}
     `);
   });
@@ -3479,7 +3488,7 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
 // PDF — LISTA DE PRESENÇA
 // ============================================================
 async function gerarListaPresenca(turmaId) {
-  showLoading('Gerando lista de presença...');
+  showLoading('Gerando ficha de presença...');
   try {
     const {data:t, error} = await sb.from('turmas')
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cpf,cargo))')
@@ -3489,131 +3498,175 @@ async function gerarListaPresenca(turmaId) {
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
     const W = 210, H = 297;
-    const mg = 18;
-    let y = mg;
+    const mg = 14;
 
-    // Fundo cabeçalho
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, W, 42, 'F');
+    const NAVY = [30, 42, 74];
+    const AMBER = [245, 158, 11];
+    const WHITE = [255, 255, 255];
+    const GRAY50 = [244, 246, 250];
+    const BORDER = [226, 232, 240];
+    const TEXT1 = [30, 42, 74];
+    const TEXT2 = [100, 116, 139];
+    const TEXT3 = [148, 163, 184];
 
-    // Logo
-    doc.addImage(LOGO_AVANTESEG, 'PNG', mg, 8, 52, 16);
+    const ag = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
+    const instrutor = ag?.usuarios?.nome||'—';
+    const dataAula = ag?.data ? fmtDataExtenso(ag.data) : '—';
+    const local = ag?.local||t.local||'—';
+    const protocolo = t.protocolo||turmaId.slice(0,12).toUpperCase();
 
-    // Título
-    doc.setFontSize(10);
-    doc.setTextColor(148, 163, 184);
-    doc.setFont('helvetica','normal');
-    doc.text('LISTA DE PRESENÇA', W - mg, 14, {align:'right'});
-    doc.setFontSize(7);
-    doc.text(`Protocolo: ${t.protocolo||turmaId.slice(0,8).toUpperCase()}`, W - mg, 20, {align:'right'});
-    doc.text(`Emitido em: ${fmtDataExtenso(new Date().toISOString().split('T')[0])}`, W - mg, 25, {align:'right'});
+    // ── Borda dupla externa ──
+    doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
+    doc.rect(mg-4, mg-4, W-mg*2+8, H-mg*2+8, 'S');
+    doc.setDrawColor(...NAVY); doc.setLineWidth(0.3);
+    doc.rect(mg-2, mg-2, W-mg*2+4, H-mg*2+4, 'S');
 
-    y = 50;
+    // ── Cantos âmbar ──
+    const cs = 8; // corner size
+    doc.setDrawColor(...AMBER); doc.setLineWidth(1.5);
+    // TL
+    doc.line(mg-4, mg-4+cs, mg-4, mg-4); doc.line(mg-4, mg-4, mg-4+cs, mg-4);
+    // TR
+    doc.line(W-mg+4-cs, mg-4, W-mg+4, mg-4); doc.line(W-mg+4, mg-4, W-mg+4, mg-4+cs);
+    // BL
+    doc.line(mg-4, H-mg+4-cs, mg-4, H-mg+4); doc.line(mg-4, H-mg+4, mg-4+cs, H-mg+4);
+    // BR
+    doc.line(W-mg+4-cs, H-mg+4, W-mg+4, H-mg+4); doc.line(W-mg+4, H-mg+4, W-mg+4, H-mg+4-cs);
 
-    // Bloco info turma
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(mg, y, W - mg*2, 32, 3, 3, 'F');
-    doc.setFontSize(13);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont('helvetica','bold');
-    doc.text(t.catalogo?.nome||'Treinamento', mg+6, y+9);
-    doc.setFontSize(9);
-    doc.setFont('helvetica','normal');
-    doc.setTextColor(71, 85, 105);
-    doc.text(`Empresa: ${t.clientes?.nome||'-'}`, mg+6, y+16);
-    doc.text(`Local: ${t.local||'-'}`, mg+6, y+22);
-    const ag = (t.sessoes||[])[0];
-    doc.text(`Data: ${ag?fmtDataExtenso(ag.data):'-'}  ·  Carga: ${t.catalogo?.carga_horaria||'-'}h  ·  Instrutor: ${ag?.usuarios?.nome||'-'}`, mg+6, y+28);
+    // ── Header navy ──
+    doc.setFillColor(...NAVY);
+    doc.rect(mg, mg, W-mg*2, 30, 'F');
 
-    y += 40;
+    // Linha âmbar sob header
+    doc.setFillColor(...AMBER);
+    doc.rect(mg, mg+30, W-mg*2, 1.5, 'F');
 
-    // Cabeçalho tabela — sem coluna Cargo
-    doc.setFillColor(15, 23, 42);
-    doc.rect(mg, y, W - mg*2, 8, 'F');
-    doc.setFontSize(8);
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica','bold');
-    doc.text('Nº', mg+3, y+5.5);
-    doc.text('Nome do Participante', mg+14, y+5.5);
-    doc.text('CPF', mg+110, y+5.5);
-    doc.text('Assinatura', mg+145, y+5.5);
+    // Logo no header
+    doc.addImage(LOGO_AVANTESEG, 'PNG', mg+4, mg+5, 46, 14);
 
-    y += 8;
+    // Badge "Ficha de Presença" no header
+    doc.setFillColor(245, 158, 11, 0.18);
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.3);
+    doc.roundedRect(W-mg-52, mg+8, 48, 10, 2, 2, 'FD');
+    doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('FICHA DE PRESENÇA', W-mg-28, mg+14.5, {align:'center'});
+
+    // Protocolo header
+    doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+    doc.text(protocolo, W-mg-4, mg+24, {align:'right'});
+
+    // ── Título do treinamento ──
+    let y = mg + 38;
+    doc.setFontSize(13); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
+    const nomeT = t.catalogo?.nome||'Treinamento';
+    const linhasT = doc.splitTextToSize(nomeT, W-mg*2-4);
+    linhasT.forEach((l,i)=>doc.text(l, mg+2, y+i*6));
+    y += linhasT.length * 6 + 2;
+    doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(...TEXT2);
+    doc.text(`${t.clientes?.nome||'—'}`, mg+2, y); y += 5;
+
+    // ── Bloco de metadados (3 colunas) ──
+    doc.setFillColor(...GRAY50);
+    doc.rect(mg, y, W-mg*2, 16, 'F');
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
+    doc.rect(mg, y, W-mg*2, 16, 'S');
+
+    const colW = (W-mg*2)/3;
+    const metas = [
+      {l:'Data',v:dataAula},
+      {l:'Instrutor',v:instrutor},
+      {l:'Carga horária',v:`${t.catalogo?.carga_horaria||'—'}h`},
+      {l:'Local',v:local},
+      {l:'CNPJ Cliente',v:t.clientes?.cnpj||'—'},
+      {l:'Protocolo',v:protocolo},
+    ];
+    const metaRows = [[metas[0],metas[1],metas[2]],[metas[3],metas[4],metas[5]]];
+    metaRows.forEach((row,ri)=>{
+      row.forEach((m,ci)=>{
+        const mx = mg + ci*colW + 4;
+        const my = y + 4 + ri*8;
+        doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+        doc.text(m.l.toUpperCase(), mx, my);
+        doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
+        doc.text((m.v||'—').slice(0,28), mx, my+4);
+      });
+    });
+    y += 22;
+
+    // ── Cabeçalho tabela ──
+    doc.setFillColor(...NAVY);
+    doc.rect(mg, y, W-mg*2, 7, 'F');
+    doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    const cols = [{x:mg+2,w:6,t:'Nº'},{x:mg+10,w:60,t:'Participante'},{x:mg+72,w:34,t:'CPF'},{x:mg+108,w:52,t:'Assinatura'}];
+    cols.forEach(c=>doc.text(c.t, c.x, y+5));
+    y += 7;
 
     const participantes = t.turma_participantes||[];
-    // Buscar presenças com assinaturas
     const {data:presencas} = await sb.from('presencas').select('*').eq('turma_id', turmaId);
     const presMap = {};
-    (presencas||[]).forEach(p => { presMap[p.colaborador_id] = p; });
+    (presencas||[]).forEach(p=>{ presMap[p.colaborador_id]=p; });
 
-    for (let i = 0; i < participantes.length; i++) {
-      const p   = participantes[i];
+    for (let i=0;i<participantes.length;i++) {
+      const p = participantes[i];
       const col = p.colaboradores||{};
-      const pr  = presMap[p.colaborador_id];
+      const pr = presMap[p.colaborador_id];
+      const rowH = 14;
 
-      if (y > H - 40) {
+      if (y + rowH > H - mg - 24) {
+        // Nova página com mesmo visual
         doc.addPage();
+        // Bordas
+        doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
+        doc.rect(mg-4,mg-4,W-mg*2+8,H-mg*2+8,'S');
+        doc.setLineWidth(0.3); doc.rect(mg-2,mg-2,W-mg*2+4,H-mg*2+4,'S');
+        doc.setDrawColor(...AMBER); doc.setLineWidth(1.5);
+        doc.line(mg-4,mg-4+cs,mg-4,mg-4); doc.line(mg-4,mg-4,mg-4+cs,mg-4);
+        doc.line(W-mg+4-cs,mg-4,W-mg+4,mg-4); doc.line(W-mg+4,mg-4,W-mg+4,mg-4+cs);
+        doc.line(mg-4,H-mg+4-cs,mg-4,H-mg+4); doc.line(mg-4,H-mg+4,mg-4+cs,H-mg+4);
+        doc.line(W-mg+4-cs,H-mg+4,W-mg+4,H-mg+4); doc.line(W-mg+4,H-mg+4,W-mg+4,H-mg+4-cs);
         y = mg;
-        // Repetir cabeçalho na nova página
-        doc.setFillColor(15, 23, 42);
-        doc.rect(mg, y, W - mg*2, 8, 'F');
-        doc.setFontSize(8);
-        doc.setTextColor(255,255,255);
-        doc.setFont('helvetica','bold');
-        doc.text('Nº', mg+3, y+5.5);
-        doc.text('Nome do Participante', mg+14, y+5.5);
-        doc.text('CPF', mg+110, y+5.5);
-        doc.text('Assinatura', mg+145, y+5.5);
-        y += 8;
+        doc.setFillColor(...NAVY); doc.rect(mg,y,W-mg*2,7,'F');
+        doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+        cols.forEach(c=>doc.text(c.t,c.x,y+5));
+        y+=7;
       }
 
-      const rowH = 16;
-      doc.setFillColor(i%2===0 ? 248 : 255, i%2===0 ? 250 : 255, i%2===0 ? 252 : 255);
-      doc.rect(mg, y, W - mg*2, rowH, 'F');
-      doc.setDrawColor(226, 232, 240);
-      doc.rect(mg, y, W - mg*2, rowH, 'S');
+      doc.setFillColor(i%2===0?244:255, i%2===0?246:255, i%2===0?250:255);
+      doc.rect(mg,y,W-mg*2,rowH,'F');
+      doc.setDrawColor(...BORDER); doc.setLineWidth(0.2);
+      doc.rect(mg,y,W-mg*2,rowH,'S');
 
-      doc.setFontSize(8);
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica','normal');
-      doc.text(String(i+1), mg+3, y+10);
-      doc.text((col.nome||'').slice(0,46), mg+14, y+10);
-      doc.text(col.cpf||'-', mg+110, y+10);
+      doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','normal');
+      doc.text(String(i+1).padStart(2,'0'), mg+3, y+9);
+      doc.text((col.nome||'').slice(0,36), mg+10, y+9);
+      doc.text(col.cpf||'—', mg+72, y+9);
 
-      // Assinatura — contida dentro da linha
       if (pr?.assinatura_path) {
         try {
-          const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(pr.assinatura_path, 60);
+          const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(pr.assinatura_path,60);
           if (urlData?.signedUrl) {
             const imgData = await carregarImagemComoDataURL(urlData.signedUrl);
-            if (imgData) doc.addImage(imgData, 'PNG', mg+143, y+1, 28, rowH-3);
+            if (imgData) doc.addImage(imgData,'PNG',mg+108,y+1,42,rowH-3);
           }
-        } catch(e) { /* sem assinatura */ }
+        } catch(e){}
       }
-
       y += rowH;
     }
 
-    // Rodapé
-    y = Math.max(y + 16, H - 38);
-    doc.setDrawColor(226, 232, 240);
-    doc.line(mg, y, W - mg, y);
-    y += 8;
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica','italic');
-    doc.text('Declaro que participei do treinamento acima identificado.', mg, y);
-    y += 6;
-    doc.setFont('helvetica','normal');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos  ·  CNPJ: 00.000.000/0001-00', W/2, H-10, {align:'center'});
+    // ── Rodapé ──
+    const fy = H-mg-16;
+    doc.setFillColor(...NAVY);
+    doc.rect(mg, fy, W-mg*2, 14, 'F');
+    doc.setFontSize(7); doc.setTextColor(245,158,11); doc.setFont('helvetica','bold');
+    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', mg+4, fy+5.5);
+    doc.setTextColor(148,163,184); doc.setFont('helvetica','normal');
+    doc.text('CNPJ: 17.883.200/0001-32  ·  Av. Arno Carlo Gracher, 69 - Sl 4, Brusque-SC  ·  toledolabs.com.br/validar', mg+4, fy+10.5);
+    doc.text(protocolo, W-mg-4, fy+8, {align:'right'});
 
-    // Download
-    doc.save(`lista-presenca-${(t.catalogo?.nome||'treinamento').replace(/\s+/g,'-').toLowerCase()}.pdf`);
-
-    // Salvar no Storage
+    doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}.pdf`);
     const codigo = crypto.randomUUID();
     await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}.pdf`, 'lista_presenca', turmaId, null, codigo);
-    showToast('Lista de presença gerada!','success');
+    showToast('Ficha de presença gerada!','success');
   } catch(e) {
     console.error(e);
     showToast(e.message||'Erro ao gerar PDF','error');
@@ -3627,141 +3680,286 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*)')
+      .select('*,clientes(nome),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
-    // Dados do colaborador
-    const {data:col} = await sb.from('colaboradores').select('*').eq('id', colaboradorId).single();
+    const {data:col} = await sb.from('colaboradores').select('*').eq('id',colaboradorId).single();
     if (!col) throw new Error('Colaborador não encontrado');
 
-    const {data:partic} = await sb.from('turma_participantes')
-      .select('cargo_vinculo,empresa_vinculo').eq('turma_id', turmaId).eq('colaborador_id', colaboradorId).maybeSingle();
+    const ag       = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
+    const dataCert = ag?.data || t.created_at?.split('T')[0];
+    const instrutor= ag?.usuarios?.nome||'—';
+    const ch       = t.catalogo?.carga_horaria||0;
+    const nomeT    = t.catalogo?.nome||'Treinamento';
+    const valMeses = t.catalogo?.validade_meses||12;
 
-    const ag      = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
-    const dataCert= ag?.data || t.created_at?.split('T')[0];
+    // Validade
+    const dtObj  = new Date(dataCert+'T12:00:00');
+    const dtVal  = new Date(dtObj);
+    dtVal.setMonth(dtVal.getMonth()+valMeses);
+    const fmtVal = dtVal.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
 
-    const codigo  = crypto.randomUUID();
-    const urlValid= `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
-    const qrData  = await gerarQRCodeDataURL(urlValid);
+    // Código único
+    const codigo   = crypto.randomUUID();
+    const codigoShort = codigo.slice(0,8).toUpperCase();
+    const urlValid = `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
+    const qrData   = await gerarQRCodeDataURL(urlValid);
+
+    // Extrair número NR do nome do treinamento
+    const nrMatch  = nomeT.match(/NR[\s-]*(\d+)/i);
+    const nrNum    = nrMatch ? nrMatch[1] : '';
 
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
     const W = 297, H = 210;
 
-    // Fundo branco + borda decorativa
-    doc.setFillColor(255,255,255);
-    doc.rect(0, 0, W, H, 'F');
+    const NAVY   = [30,42,74];
+    const AMBER  = [245,158,11];
+    const WHITE  = [255,255,255];
+    const GRAY50 = [244,246,250];
+    const BORDER = [226,232,240];
+    const TEXT1  = [30,42,74];
+    const TEXT2  = [71,85,105];
+    const TEXT3  = [148,163,184];
+    const mg = 12;
 
-    // Barra lateral esquerda verde
-    doc.setFillColor(5, 150, 105);
-    doc.rect(0, 0, 8, H, 'F');
+    // ════════════════════════════════════════
+    // PÁGINA 1 — CAPA
+    // ════════════════════════════════════════
+    doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
 
-    // Barra lateral direita dourada/âmbar
-    doc.setFillColor(217, 119, 6);
-    doc.rect(W-8, 0, 8, H, 'F');
-
-    // Linha decorativa topo
-    doc.setFillColor(15, 23, 42);
-    doc.rect(8, 0, W-16, 3, 'F');
-
-    // Linha decorativa base
-    doc.setFillColor(15, 23, 42);
-    doc.rect(8, H-3, W-16, 3, 'F');
-
-    // Logo
-    doc.addImage(LOGO_AVANTESEG, 'PNG', 18, 12, 64, 20);
-
-    // Texto CERTIFICADO
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica','normal');
-    doc.text('C E R T I F I C A D O   D E   C O N C L U S Ã O', W/2, 22, {align:'center'});
-
-    // Linha separadora
-    doc.setDrawColor(226, 232, 240);
+    // ── Borda dupla ──
+    doc.setDrawColor(...NAVY); doc.setLineWidth(1.5);
+    doc.rect(mg-5,mg-5,W-mg*2+10,H-mg*2+10,'S');
     doc.setLineWidth(0.4);
-    doc.line(18, 36, W-18, 36);
+    doc.rect(mg-2,mg-2,W-mg*2+4,H-mg*2+4,'S');
 
-    // Certificamos que
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    doc.setFont('helvetica','normal');
-    doc.text('Certificamos que', W/2, 50, {align:'center'});
+    // ── Cantos âmbar ──
+    const cs = 10;
+    doc.setDrawColor(...AMBER); doc.setLineWidth(2);
+    doc.line(mg-5,mg-5+cs,mg-5,mg-5); doc.line(mg-5,mg-5,mg-5+cs,mg-5);
+    doc.line(W-mg+5-cs,mg-5,W-mg+5,mg-5); doc.line(W-mg+5,mg-5,W-mg+5,mg-5+cs);
+    doc.line(mg-5,H-mg+5-cs,mg-5,H-mg+5); doc.line(mg-5,H-mg+5,mg-5+cs,H-mg+5);
+    doc.line(W-mg+5-cs,H-mg+5,W-mg+5,H-mg+5); doc.line(W-mg+5,H-mg+5,W-mg+5,H-mg+5-cs);
 
-    // Nome do participante — destaque máximo
-    doc.setFontSize(28);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont('helvetica','bold');
-    doc.text(col.nome||'', W/2, 68, {align:'center'});
+    // ── Marca d'água hexagonal (centro) ──
+    const cx=W/2, cy=H/2, r1=62, r2=48;
+    doc.setDrawColor(30,42,74,0.035); doc.setLineWidth(0.5);
+    const hex = (r)=>{
+      const pts=[];
+      for(let i=0;i<6;i++){pts.push([cx+r*Math.cos(Math.PI/180*(60*i-30)), cy+r*Math.sin(Math.PI/180*(60*i-30))]);}
+      return pts;
+    };
+    const h1=hex(r1); const h2=hex(r2);
+    doc.setDrawColor(30,42,74); doc.setLineWidth(0.2); doc.setGState(doc.GState({opacity:0.04}));
+    doc.lines(h1.map((p,i)=>i===0?p:[p[0]-h1[i-1][0],p[1]-h1[i-1][1]]), h1[0][0],h1[0][1],undefined,'S',true);
+    doc.lines(h2.map((p,i)=>i===0?p:[p[0]-h2[i-1][0],p[1]-h2[i-1][1]]), h2[0][0],h2[0][1],undefined,'S',true);
+    doc.setGState(doc.GState({opacity:1}));
 
-    // Linha sob o nome
-    const nomeW = doc.getTextWidth(col.nome||'');
-    doc.setDrawColor(5, 150, 105);
-    doc.setLineWidth(1);
-    doc.line(W/2 - nomeW/2, 71, W/2 + nomeW/2, 71);
+    // ── Logo (topo esquerdo) ──
+    doc.addImage(LOGO_AVANTESEG,'PNG',mg+4,mg+4,58,18);
 
-    // Cargo/empresa
-    const cargo   = partic?.cargo_vinculo||col.cargo||'';
-    const empresa = partic?.empresa_vinculo||t.clientes?.nome||'';
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica','normal');
-    doc.text(`${cargo}${cargo&&empresa?' — ':''}${empresa}`, W/2, 80, {align:'center'});
-
-    // Participou do treinamento
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    doc.text('concluiu com êxito o treinamento', W/2, 92, {align:'center'});
-
-    // Nome do treinamento
-    doc.setFontSize(16);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont('helvetica','bold');
-    const nomeT = t.catalogo?.nome||'Treinamento';
-    doc.text(nomeT, W/2, 105, {align:'center'});
-
-    // Dados do certificado
-    doc.setFontSize(9);
-    doc.setTextColor(71, 85, 105);
-    doc.setFont('helvetica','normal');
-    const linha1 = `Realizado em ${fmtDataExtenso(dataCert)}  ·  Carga horária: ${t.catalogo?.carga_horaria||'-'} horas  ·  Local: ${t.local||'-'}`;
-    doc.text(linha1, W/2, 124, {align:'center'});
-
-    // Linha separadora
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.3);
-    doc.line(18, 133, W-18, 133);
-
-    // Assinatura AvanteSeg
-    doc.setFontSize(8.5);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont('helvetica','bold');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos', W/2 - 40, 148, {align:'center'});
-    doc.setFont('helvetica','normal');
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7.5);
-    doc.text('Responsável Técnico', W/2 - 40, 154, {align:'center'});
-
-    // QR Code
-    if (qrData) {
-      doc.addImage(qrData, 'PNG', W - 58, 128, 28, 28);
+    // ── Medalha NR (topo direito) ──
+    if (nrNum) {
+      doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
+      doc.circle(W-mg-22, mg+14, 14, 'S');
+      doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+      doc.circle(W-mg-22, mg+14, 12, 'S');
+      doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','bold');
+      doc.text('NR', W-mg-22, mg+11, {align:'center'});
+      doc.setFontSize(14); doc.setTextColor(...NAVY);
+      doc.text(nrNum, W-mg-22, mg+18, {align:'center'});
     }
-    doc.setFontSize(6.5);
-    doc.setTextColor(148, 163, 184);
-    doc.setFont('helvetica','normal');
-    doc.text('Valide este certificado', W - 44, 159, {align:'center'});
-    doc.setFontSize(6);
-    doc.text(`Código: ${codigo.slice(0,8).toUpperCase()}`, W - 44, 163, {align:'center'});
 
-    // Data de emissão
-    doc.setFontSize(7);
-    doc.setTextColor(148, 163, 184);
-    doc.text(`Emitido em ${fmtDataExtenso(new Date().toISOString().split('T')[0])}`, 18, H-8);
-    doc.text('toledolabs.com.br', W/2, H-8, {align:'center'});
+    // ── "DIPLOMA DE CONCLUSÃO" ──
+    doc.setFontSize(8); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+    doc.text('D I P L O M A   D E   C O N C L U S Ã O', W/2, mg+10, {align:'center'});
+
+    // ── Linha decorativa fina ──
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
+    doc.line(mg+4, mg+26, W-mg-4, mg+26);
+
+    // ── "A AVANTESeg certifica que" ──
+    doc.setFontSize(10); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
+    doc.text('A AVANTESeg certifica que', W/2, mg+36, {align:'center'});
+
+    // ── Nome do participante — destaque máximo ──
+    doc.setFontSize(30); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(col.nome||'', W/2, mg+54, {align:'center'});
+
+    // Linha âmbar sob o nome
+    const nomeW = doc.getTextWidth(col.nome||'');
+    doc.setDrawColor(...AMBER); doc.setLineWidth(1.5);
+    doc.line(W/2-nomeW/2, mg+57, W/2+nomeW/2, mg+57);
+
+    // CPF
+    doc.setFontSize(8.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+    doc.text(`CPF ${col.cpf||'—'}`, W/2, mg+63, {align:'center'});
+
+    // ── Separador central âmbar ──
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.2);
+    doc.line(W/2-30, mg+67, W/2+30, mg+67);
+
+    // ── "concluiu com êxito o treinamento" ──
+    doc.setFontSize(9.5); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
+    doc.text('concluiu com êxito o treinamento', W/2, mg+74, {align:'center'});
+
+    // ── Nome do treinamento ──
+    doc.setFontSize(16); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const linhasTrein = doc.splitTextToSize(nomeT, W-mg*2-20);
+    linhasTrein.forEach((l,i)=>doc.text(l, W/2, mg+84+i*8, {align:'center'}));
+    const tY = mg+84+linhasTrein.length*8;
+
+    // ── Chips de informação ──
+    const chips = [
+      {l:'Empresa', v:t.clientes?.nome||'—'},
+      {l:'Carga horária', v:`${ch} horas`},
+      {l:'Realizado em', v:fmtDataExtenso(dataCert)},
+      {l:'Válido até', v:fmtVal},
+    ];
+    const chipW = (W-mg*2-24)/chips.length;
+    chips.forEach((c,i)=>{
+      const cx2 = mg+6+i*(chipW+8);
+      doc.setFillColor(...GRAY50);
+      doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
+      doc.roundedRect(cx2, tY+4, chipW, 14, 2, 2, 'FD');
+      doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+      doc.text(c.l.toUpperCase(), cx2+chipW/2, tY+9.5, {align:'center'});
+      doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text((c.v||'—').slice(0,24), cx2+chipW/2, tY+14, {align:'center'});
+    });
+
+    // ── Rodapé navy ──
+    const fy = H-mg-20;
+    doc.setFillColor(...NAVY);
+    doc.rect(mg, fy, W-mg*2, 18, 'F');
+
+    // Assinatura instrutor (esquerda)
+    doc.setDrawColor(255,255,255,0.3); doc.setLineWidth(0.3);
+    doc.line(mg+8, fy+6, mg+72, fy+6);
+    doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text(instrutor, mg+40, fy+10.5, {align:'center'});
+    doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+    doc.text('Instrutor Responsável', mg+40, fy+14.5, {align:'center'});
+
+    // Assinatura responsável técnico (centro)
+    doc.setDrawColor(255,255,255,0.3);
+    doc.line(W/2-36, fy+6, W/2+36, fy+6);
+    doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('Cid Batista de Campos', W/2, fy+10.5, {align:'center'});
+    doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+    doc.text('Eng.º de Seg. do Trabalho · CREA-SC 109085-1', W/2, fy+14.5, {align:'center'});
+
+    // QR Code (direita)
+    if (qrData) {
+      doc.addImage(qrData,'PNG', W-mg-30, fy+2, 14, 14);
+    }
+    doc.setFontSize(6); doc.setTextColor(...TEXT3);
+    doc.text(`Cód: ${codigoShort}`, W-mg-23, fy+17, {align:'center'});
+
+    // ── Número do certificado rodapé externo ──
+    doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+    doc.text(`Certificado Nº ${codigoShort} · Emitido em ${fmtDataExtenso(new Date().toISOString().split('T')[0])} · toledolabs.com.br/validar`, W/2, H-4, {align:'center'});
+
+    // ════════════════════════════════════════
+    // PÁGINA 2 — CONTRACAPA
+    // ════════════════════════════════════════
+    doc.addPage('a4','portrait');
+    const P2W=210, P2H=297, p2mg=16;
+    let p2y = p2mg;
+
+    doc.setFillColor(...WHITE); doc.rect(0,0,P2W,P2H,'F');
+
+    // ── Header page 2 ──
+    doc.addImage(LOGO_AVANTESEG,'PNG',p2mg,p2y,52,16);
+    doc.setFontSize(8); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
+    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', P2W-p2mg, p2y+5, {align:'right'});
+    doc.text('CNPJ: 17.883.200/0001-32', P2W-p2mg, p2y+10, {align:'right'});
+    doc.text('Av. Arno Carlo Gracher, 69 - Sala 4 · Brusque - SC · 88350-310', P2W-p2mg, p2y+15, {align:'right'});
+    p2y += 22;
+
+    // Divisor
+    doc.setDrawColor(...AMBER); doc.setLineWidth(1.5);
+    doc.line(p2mg, p2y, P2W-p2mg, p2y);
+    p2y += 6;
+
+    // ── Título do treinamento ──
+    doc.setFontSize(14); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const linhasT2 = doc.splitTextToSize(nomeT, P2W-p2mg*2);
+    linhasT2.forEach((l,i)=>doc.text(l, P2W/2, p2y+i*7, {align:'center'}));
+    p2y += linhasT2.length*7+4;
+
+    // ── Dados do participante ──
+    doc.setFillColor(...GRAY50);
+    doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 26, 3,3,'F');
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
+    doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 26, 3,3,'S');
+
+    doc.setFontSize(7.5); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
+    doc.text(`Aluno: ${col.nome||'—'}`, p2mg+6, p2y+7);
+    doc.text(`CPF: ${col.cpf||'—'}`, p2mg+6, p2y+13);
+    doc.text(`Conclusão: ${fmtDataExtenso(dataCert)}`, p2mg+6, p2y+19);
+
+    doc.setFontSize(7.5); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
+    doc.text(`Válido até: ${fmtVal}`, P2W/2+4, p2y+7);
+    doc.text(`Carga horária: ${ch} horas`, P2W/2+4, p2y+13);
+    doc.text(`Código: ${codigoShort}`, P2W/2+4, p2y+19);
+    p2y += 32;
+
+    // ── Conteúdo programático ──
+    const cpText = t.catalogo?.conteudo_programatico||t.catalogo?.descricao||'';
+    if (cpText) {
+      // Header seção
+      doc.setFillColor(...NAVY);
+      doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 8, 2,2,'F');
+      doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+      doc.text('CONTEÚDO PROGRAMÁTICO', p2mg+6, p2y+5.5);
+      p2y += 12;
+
+      // Box conteúdo
+      doc.setFillColor(248,250,252);
+      doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
+      doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 2, 2,2,'FD'); // placeholder fill
+      doc.setFontSize(8); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
+      const linhasCp = doc.splitTextToSize(cpText, P2W-p2mg*2-12);
+      const cpBoxH = Math.min(linhasCp.length*5+8, 90);
+      doc.setFillColor(248,250,252);
+      doc.roundedRect(p2mg, p2y, P2W-p2mg*2, cpBoxH, 2,2,'FD');
+      linhasCp.slice(0, Math.floor((cpBoxH-6)/5)).forEach((l,i)=>{
+        doc.text(l, p2mg+6, p2y+6+i*5);
+      });
+      p2y += cpBoxH + 8;
+    }
+
+    // ── QR Code + validação ──
+    const qrY = Math.max(p2y, P2H-p2mg-60);
+    doc.setDrawColor(...AMBER); doc.setLineWidth(1);
+    doc.line(p2mg, qrY, P2W-p2mg, qrY);
+    const qrBlockY = qrY+6;
+    if (qrData) {
+      doc.addImage(qrData,'PNG',p2mg, qrBlockY, 32,32);
+    }
+    doc.setFontSize(10); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text('Validação Digital', p2mg+40, qrBlockY+8);
+    doc.setFontSize(8); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
+    doc.text('Escaneie o QR Code ou acesse o link abaixo para', p2mg+40, qrBlockY+14);
+    doc.text('verificar a autenticidade deste certificado:', p2mg+40, qrBlockY+19);
+    doc.setFontSize(8); doc.setTextColor(29,78,216); doc.setFont('helvetica','bold');
+    doc.text(urlValid.slice(0,58), p2mg+40, qrBlockY+26);
+    doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
+    doc.text(`Token: ${codigoShort}`, p2mg+40, qrBlockY+33);
+
+    // Rodapé p2
+    doc.setFillColor(...NAVY);
+    doc.rect(0, P2H-14, P2W, 14, 'F');
+    doc.setFontSize(7); doc.setTextColor(245,158,11); doc.setFont('helvetica','bold');
+    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', P2W/2, P2H-8, {align:'center'});
+    doc.setTextColor(148,163,184); doc.setFont('helvetica','normal');
+    doc.text('Av. Arno Carlo Gracher, 69 - Sala 4 · Brusque - SC · 88350-310 · (47) 3351-4266 · www.avanteseg.com.br', P2W/2, P2H-4, {align:'center'});
 
     // Download
-    const nomeSafe = col.nome.replace(/\s+/g,'-').toLowerCase();
+    const nomeSafe = (col.nome||'participante').replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-${nomeSafe}.pdf`);
 
     await salvarDocumentoSupabase(doc, `cert-individual-${colaboradorId}.pdf`, 'certificado_individual', turmaId, colaboradorId, codigo);
