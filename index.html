@@ -534,7 +534,12 @@ async function fazerLogin() {
 async function entrarNoApp() {
   showScreen('screenApp');
   configurarNavegacao();
-  await irPara('home');
+  // Respeitar hash da URL ao entrar (deep link ou reload)
+  const hashPagina = window.location.hash.replace('#','');
+  const paginaInicial = hashPagina && TITULOS[hashPagina] ? hashPagina : 'home';
+  // Registrar estado inicial no history sem gerar nova entrada
+  history.replaceState({ pagina: paginaInicial }, '', '#' + paginaInicial);
+  await irPara(paginaInicial, {}, true);
 }
 
 async function fazerLogout() {
@@ -547,6 +552,7 @@ async function fazerLogout() {
   document.getElementById('loginPass').value = '';
   document.getElementById('loginBtn').disabled = false;
   document.getElementById('loginBtn').textContent = 'Entrar';
+  history.replaceState(null, '', window.location.pathname);
   showScreen('screenLogin');
 }
 
@@ -601,12 +607,21 @@ function marcarNavAtivo(id) {
 
 const TITULOS = {home:'Início',orgs:'Organizações',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
-async function irPara(pagina, params={}) {
+async function irPara(pagina, params={}, _fromPopstate=false) {
   paginaAtual = pagina;
   marcarNavAtivo(pagina);
   fecharSidebar();
   fabOcultar();
   document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
+
+  // Atualiza URL sem recarregar a página
+  if (!_fromPopstate) {
+    const hash = '#' + pagina;
+    if (window.location.hash !== hash) {
+      history.pushState({ pagina }, '', hash);
+    }
+  }
+
   showLoading();
   try {
     switch(pagina) {
@@ -630,6 +645,13 @@ async function irPara(pagina, params={}) {
     hideLoading();
   }
 }
+
+// Botão Voltar/Avançar do navegador
+window.addEventListener('popstate', async (e) => {
+  if (!usuarioAtual) return;
+  const pagina = e.state?.pagina || (window.location.hash.replace('#','')) || 'home';
+  await irPara(pagina, {}, true);
+});
 
 // ============================================================
 // HOME
@@ -2749,7 +2771,6 @@ async function adicionarEvidencia(input, tipo) {
     const {data:ev, error:dbErr} = await sb.from('evidencias').insert({
       org_id:       usuarioAtual.org_id,
       sessao_id:    sessaoId,
-      turma_id:     turmaId,
       tipo,
       arquivo_path: path,
     }).select().single();
