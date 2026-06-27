@@ -3771,13 +3771,11 @@ function fmtDataExtenso(iso) {
   const meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   return `${parseInt(d)} de ${meses[parseInt(m)-1]} de ${y}`;
 }
-// Versao sem acentos para uso nos PDFs (jsPDF helvetica e latin-1 limitado)
+// Versao sem acentos para jsPDF (helvetica e latin-1)
 function fmtDataExtensoPDF(iso) {
-  if (!iso) return '-';
   return fmtDataExtenso(iso)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^\x00-\x7F]/g,'');
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\x20-\x7E]/g,'');
 }
 
 // Salva o PDF no Supabase Storage e registra na tabela documentos
@@ -3849,13 +3847,14 @@ async function gerarListaPresenca(turmaId) {
     const TEXT2 = [100, 116, 139];
     const TEXT3 = [148, 163, 184];
 
-    // Sanitiza strings para jsPDF (remove acentos e caracteres fora do latin-1)
-    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/[^\x00-\x7F]/g,'?').slice(0, max||300);
+    // Sanitizacao: remove acentos e chars fora do latin-1 para o jsPDF
+    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?').slice(0, max||300);
+    const sp = s; // alias
 
     const ag = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
-    const instrutor = s(ag?.usuarios?.nome||'—');
-    const dataAula = ag?.data ? fmtDataExtensoPDF(ag.data) : '—';
-    const local = s(ag?.local||t.local||'—');
+    const instrutor = s(ag?.usuarios?.nome||'-');
+    const dataAula = ag?.data ? fmtDataExtensoPDF(ag.data) : '-';
+    const local = s(ag?.local||t.local||'-');
     const protocolo = t.protocolo||turmaId.slice(0,12).toUpperCase();
 
     // ── Borda dupla externa ──
@@ -3887,8 +3886,8 @@ async function gerarListaPresenca(turmaId) {
     // Logo no header
     doc.addImage(LOGO_AVANTESEG, 'PNG', mg+4, mg+5, 46, 14);
 
-    // Badge "Ficha de Presenca" no header
-    doc.setFillColor(254, 243, 199);
+    // Badge "Ficha de Presença" no header
+    doc.setFillColor(254, 243, 199); // amber claro sem alpha (jsPDF v2 nao suporta 4 args)
     doc.setDrawColor(...AMBER); doc.setLineWidth(0.3);
     doc.roundedRect(W-mg-52, mg+8, 48, 10, 2, 2, 'FD');
     doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
@@ -3918,7 +3917,7 @@ async function gerarListaPresenca(turmaId) {
     const metas = [
       {l:'Data',v:dataAula},
       {l:'Instrutor',v:instrutor},
-      {l:'Carga horaria',v:`${t.catalogo?.carga_horaria||'—'}h`},
+      {l:'Carga horaria',v:`${t.catalogo?.carga_horaria||'-'}h`},
       {l:'Local',v:local},
       {l:'CNPJ Cliente',v:t.clientes?.cnpj||'—'},
       {l:'Protocolo',v:protocolo},
@@ -3931,7 +3930,7 @@ async function gerarListaPresenca(turmaId) {
         doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
         doc.text(m.l.toUpperCase(), mx, my);
         doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
-        doc.text(s(m.v||'-',28), mx, my+4);
+        doc.text(s(m.v||'-', 28), mx, my+4);
       });
     });
     y += 22;
@@ -3981,7 +3980,7 @@ async function gerarListaPresenca(turmaId) {
 
       doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','normal');
       doc.text(String(i+1).padStart(2,'0'), mg+3, y+9);
-      doc.text(s(col.nome||'',36), mg+10, y+9);
+      doc.text((col.nome||'').slice(0,36), mg+10, y+9);
       doc.text(s(col.cpf||'-'), mg+72, y+9);
 
       if (pr?.assinatura_path) {
@@ -4051,7 +4050,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
     // Sanitiza texto — remove caracteres de controle que quebram o jsPDF
-    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/[^\x00-\x7F]/g,'?').slice(0, max||300);
+    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?').slice(0, max||300);
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
@@ -4307,7 +4306,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const nrMatch = nomeT.match(/NR[\s\-]*(\d+)/i);
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
-    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/[^\x00-\x7F]/g,'?').slice(0, max||300);
+    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?').slice(0, max||300);
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
