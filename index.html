@@ -534,12 +534,7 @@ async function fazerLogin() {
 async function entrarNoApp() {
   showScreen('screenApp');
   configurarNavegacao();
-  // Respeitar hash da URL ao entrar (deep link ou reload)
-  const hashPagina = window.location.hash.replace('#','');
-  const paginaInicial = hashPagina && TITULOS[hashPagina] ? hashPagina : 'home';
-  // Registrar estado inicial no history sem gerar nova entrada
-  history.replaceState({ pagina: paginaInicial }, '', '#' + paginaInicial);
-  await irPara(paginaInicial, {}, true);
+  await irPara('home');
 }
 
 async function fazerLogout() {
@@ -552,7 +547,6 @@ async function fazerLogout() {
   document.getElementById('loginPass').value = '';
   document.getElementById('loginBtn').disabled = false;
   document.getElementById('loginBtn').textContent = 'Entrar';
-  history.replaceState(null, '', window.location.pathname);
   showScreen('screenLogin');
 }
 
@@ -607,21 +601,12 @@ function marcarNavAtivo(id) {
 
 const TITULOS = {home:'Início',orgs:'Organizações',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
-async function irPara(pagina, params={}, _fromPopstate=false) {
+async function irPara(pagina, params={}) {
   paginaAtual = pagina;
   marcarNavAtivo(pagina);
   fecharSidebar();
   fabOcultar();
   document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
-
-  // Atualiza URL sem recarregar a página
-  if (!_fromPopstate) {
-    const hash = '#' + pagina;
-    if (window.location.hash !== hash) {
-      history.pushState({ pagina }, '', hash);
-    }
-  }
-
   showLoading();
   try {
     switch(pagina) {
@@ -645,13 +630,6 @@ async function irPara(pagina, params={}, _fromPopstate=false) {
     hideLoading();
   }
 }
-
-// Botão Voltar/Avançar do navegador
-window.addEventListener('popstate', async (e) => {
-  if (!usuarioAtual) return;
-  const pagina = e.state?.pagina || (window.location.hash.replace('#','')) || 'home';
-  await irPara(pagina, {}, true);
-});
 
 // ============================================================
 // HOME
@@ -1078,7 +1056,7 @@ async function renderColaboradores() {
   _colabsCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Colaboradores</div>`);
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  if (podeCriar) fabMostrar(()=>abrirModalColab());
+  if (podeCriar) fabOcultar();
   const total = _colabsCache.length;
   const comCargo = _colabsCache.filter(c=>c.cargo).length;
   setConteudo(`
@@ -1201,7 +1179,7 @@ async function renderCatalogo() {
   if (error) throw error;
   _catalogoCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Treinamentos</div><div class="mh-name">Catálogo</div>`);
-  if (['administrador'].includes(usuarioAtual.perfil)) fabMostrar(()=>abrirModalCatalogo());
+  if (['administrador'].includes(usuarioAtual.perfil)) fabOcultar();
   setConteudo(`
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <input type="search" id="buscaCatalogo" placeholder="Buscar treinamento..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarCatalogo(this.value)">
@@ -2045,21 +2023,23 @@ async function renderAgenda() {
   const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
   const hoje = new Date().toISOString().split('T')[0];
 
-  const grupos = Object.values(turmasAgrupadas);
-  const pendentes  = grupos.filter(g => g.turma.status !== 'concluida');
-  const concluidas = grupos.filter(g => g.turma.status === 'concluida');
+  // Calendário — datas com sessões
+  const datasComSessao = new Set((sessoes||[]).map(s=>s.data).filter(Boolean));
+  const [anoHoje, mesHoje] = hoje.split('-').map(Number);
+  window._agendaMes  = mesHoje;
+  window._agendaAno  = anoHoje;
+  window._agendaTurmasAgrupadas = turmasAgrupadas;
+  window._agendaDatasComSessao  = datasComSessao;
+  window._agendaHoje = hoje;
+  window._agendaSL = SL; window._agendaSB = SB;
 
   const renderGrupo = g => {
     const t  = g.turma;
     const st = t.status||'agendada';
     const totalS    = g.sessoes.length;
     const concluidosS = g.sessoes.filter(s=>s.concluida).length;
-
-    // Sessão de hoje ou próxima não concluída
     const sessaoHoje    = g.sessoes.find(s => s.data === hoje && !s.concluida);
     const proximaSessao = g.sessoes.find(s => s.data >= hoje && !s.concluida);
-    const sessaoAtiva   = sessaoHoje || proximaSessao;
-
     const datasHtml = g.sessoes.map(s => {
       const isConcluida = s.concluida;
       const isHoje = s.data === hoje;
@@ -2073,8 +2053,6 @@ async function renderAgenda() {
         <span style="font-size:11px;color:${isConcluida?'var(--green)':'var(--text-3)'}">${isConcluida?'Concluído':'Pendente'}</span>
       </div>`;
     }).join('');
-
-    // Botão de ação — só mostra para sessão de hoje
     let btnAcao = '';
     if (sessaoHoje && st === 'agendada') {
       btnAcao = `<button class="btn btn-navy" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Iniciar treinamento de hoje</button>`;
@@ -2085,7 +2063,6 @@ async function renderAgenda() {
     } else if (st === 'concluida') {
       btnAcao = `<button class="btn btn-outline" style="width:100%;margin-top:12px" data-action="abrirDocumentos" data-id="${t.id}">📄 Ver documentos</button>`;
     }
-
     return `<div class="card" style="margin-bottom:12px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div style="flex:1;min-width:0">
@@ -2102,19 +2079,92 @@ async function renderAgenda() {
     </div>`;
   };
 
+  window._agendaRenderGrupo = renderGrupo;
+
+  const grupos = Object.values(turmasAgrupadas);
+  const pendentes  = grupos.filter(g => g.turma.status !== 'concluida');
+  const concluidas = grupos.filter(g => g.turma.status === 'concluida');
+
   setConteudo(`
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Pendentes (${pendentes.length})</div></div>
-      ${pendentes.length===0
-        ?'<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento pendente</div></div></div>'
-        :pendentes.map(renderGrupo).join('')}
+    <div class="card" style="margin-bottom:16px;padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <button onclick="_agendaNavMes(-1)" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--navy);padding:4px 10px">‹</button>
+        <div id="agendaCalMes" style="font-size:15px;font-weight:700;color:var(--navy)"></div>
+        <button onclick="_agendaNavMes(1)" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--navy);padding:4px 10px">›</button>
+      </div>
+      <div id="agendaCalGrid"></div>
     </div>
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Concluídos (${concluidas.length})</div></div>
-      ${concluidas.length===0
-        ?'<div class="card"><div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Nenhum concluído ainda</div></div></div>'
-        :concluidas.map(renderGrupo).join('')}
+    <div id="agendaListaFiltrada">
+      <div class="home-section">
+        <div class="section-header"><div class="section-title">Pendentes (${pendentes.length})</div></div>
+        ${pendentes.length===0
+          ?'<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento pendente</div></div></div>'
+          :pendentes.map(renderGrupo).join('')}
+      </div>
+      <div class="home-section">
+        <div class="section-header"><div class="section-title">Concluídos (${concluidas.length})</div></div>
+        ${concluidas.length===0
+          ?'<div class="card"><div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Nenhum concluído ainda</div></div></div>'
+          :concluidas.map(renderGrupo).join('')}
+      </div>
     </div>`);
+
+  _agendaRenderCalendario();
+}
+
+function _agendaRenderCalendario() {
+  const mes  = window._agendaMes;
+  const ano  = window._agendaAno;
+  const datasSet = window._agendaDatasComSessao;
+  const hoje = window._agendaHoje;
+  const nomesMeses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const elMes = document.getElementById('agendaCalMes');
+  const elGrid = document.getElementById('agendaCalGrid');
+  if (!elMes || !elGrid) return;
+  elMes.textContent = `${nomesMeses[mes-1]} ${ano}`;
+  const primeiroDia = new Date(ano, mes-1, 1).getDay();
+  const diasNoMes   = new Date(ano, mes, 0).getDate();
+  const dias = ['D','S','T','Q','Q','S','S'];
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
+  html += dias.map(d=>`<div style="font-size:10px;font-weight:700;color:var(--text-3);padding:4px 0">${d}</div>`).join('');
+  for (let i=0; i<primeiroDia; i++) html += `<div></div>`;
+  for (let d=1; d<=diasNoMes; d++) {
+    const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const temSessao = datasSet.has(dataStr);
+    const ehHoje    = dataStr === hoje;
+    html += `<div onclick="_agendaFiltrarData('${dataStr}')" style="padding:6px 2px;border-radius:6px;font-size:12px;cursor:${temSessao?'pointer':'default'};font-weight:${ehHoje?'700':'400'};background:${ehHoje?'var(--navy)':temSessao?'rgba(30,42,74,.1)':'transparent'};color:${ehHoje?'#fff':temSessao?'var(--navy)':'var(--text-3)'};position:relative">
+      ${d}${temSessao&&!ehHoje?`<span style="display:block;width:4px;height:4px;background:var(--amber);border-radius:50%;margin:2px auto 0"></span>`:''}
+    </div>`;
+  }
+  html += '</div>';
+  elGrid.innerHTML = html;
+}
+
+function _agendaNavMes(delta) {
+  let mes = window._agendaMes + delta;
+  let ano = window._agendaAno;
+  if (mes > 12) { mes = 1; ano++; }
+  if (mes < 1)  { mes = 12; ano--; }
+  window._agendaMes = mes; window._agendaAno = ano;
+  _agendaRenderCalendario();
+}
+
+function _agendaFiltrarData(dataStr) {
+  const turmasAgrupadas = window._agendaTurmasAgrupadas;
+  const renderGrupo = window._agendaRenderGrupo;
+  const SL = window._agendaSL; const SB = window._agendaSB;
+  const el = document.getElementById('agendaListaFiltrada');
+  if (!el) return;
+  const grupos = Object.values(turmasAgrupadas).filter(g=>g.sessoes.some(s=>s.data===dataStr));
+  if (!grupos.length) {
+    el.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento em ${dataStr.split('-').reverse().join('/')}</div></div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%" onclick="renderAgenda()">Ver todos</button>`;
+    return;
+  }
+  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-size:13px;font-weight:600;color:var(--navy)">${dataStr.split('-').reverse().join('/')} — ${grupos.length} turma(s)</div>
+    <button class="btn btn-outline btn-sm" onclick="renderAgenda()">Ver todos</button>
+  </div>` + grupos.map(renderGrupo).join('');
 }
 
 // ============================================================
@@ -2159,7 +2209,7 @@ async function renderHistorico() {
     return db.localeCompare(da);
   });
 
-  // Métricas
+  window._historicoLista = lista;
   const totalTurmas   = lista.length;
   const totalAlunos   = lista.reduce((acc,g)=>(acc+(g.turma.turma_participantes?.length||0)),0);
   const totalHoras    = lista.reduce((acc,g)=>{
@@ -2247,10 +2297,41 @@ async function renderHistorico() {
 }
 
 function filtrarHistorico() {
-  const cli = document.getElementById('filtHistCli')?.value;
-  const cat = document.getElementById('filtHistCat')?.value;
-  // Re-render from stored data isn't available — trigger full reload
-  renderHistorico();
+  const cli = document.getElementById('filtHistCli')?.value||'';
+  const cat = document.getElementById('filtHistCat')?.value||'';
+  const lista = window._historicoLista||[];
+  const filtrada = lista.filter(g=>{
+    const nomeC = g.turma.clientes?.nome||'';
+    const nomeT = g.turma.catalogo?.nome||'';
+    return (!cli || nomeC===cli) && (!cat || nomeT===cat);
+  });
+  const el = document.getElementById('listaHistorico');
+  if (!el) return;
+  if (!filtrada.length) {
+    el.innerHTML = `<div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado</div><div class="empty-sub">Tente outros filtros.</div></div>`;
+    return;
+  }
+  const hoje = window._agendaHoje||new Date().toISOString().split('T')[0];
+  el.innerHTML = filtrada.map(g=>{
+    const t    = g.turma;
+    const nomeT = t.catalogo?.nome||'Treinamento';
+    const nomeC = t.clientes?.nome||'—';
+    const nPart = t.turma_participantes?.length||0;
+    const ch    = t.catalogo?.carga_horaria||0;
+    const primeiraData = g.sessoes[g.sessoes.length-1]?.data||'';
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verHistoricoTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:42px;height:42px;border-radius:10px;background:rgba(5,150,105,.1);color:#059669;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${ch}h</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeC} · ${formatarData(primeiraData)} · ${nPart} aluno${nPart!==1?'s':''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span class="badge badge-green">Concluída</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function limparFiltrosHistorico() {
@@ -2258,6 +2339,7 @@ function limparFiltrosHistorico() {
   const st = document.getElementById('filtHistCat');
   if (sc) sc.value='';
   if (st) st.value='';
+  filtrarHistorico();
 }
 
 async function verHistoricoTurma(turmaId) {
@@ -3293,24 +3375,70 @@ async function renderConta() {
       </div>
       <div class="divider"></div>
       <div class="field"><label>Nome completo</label><input type="text" id="editNome" value="${u.nome}"></div>
-      <div class="field"><label>E-mail</label><input type="email" id="editEmail" value="${u.email||''}"></div>
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="editEmail" value="${u.email||''}" readonly style="background:var(--gray-50);color:var(--text-3);cursor:not-allowed">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">O e-mail não pode ser alterado pois é o identificador do usuário.</div>
+      </div>
       <button class="btn btn-navy" onclick="salvarConta()" style="width:100%">Salvar alterações</button>
     </div>
-    <div class="card">
+    <div class="card" style="margin-bottom:16px">
       <div class="card-title">Segurança</div>
+      <div id="formAlterarSenha" style="display:none;margin-bottom:16px">
+        <div class="field"><label>Senha atual</label><input type="password" id="senhaAtual" placeholder="Digite sua senha atual"></div>
+        <div class="field"><label>Nova senha</label><input type="password" id="senhaNova" placeholder="Mínimo 6 caracteres"></div>
+        <div class="field"><label>Confirmar nova senha</label><input type="password" id="senhaConfirm" placeholder="Repita a nova senha"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-navy" onclick="confirmarAlterarSenha()" style="flex:1">Confirmar alteração</button>
+          <button class="btn btn-outline" onclick="cancelarAlterarSenha()">Cancelar</button>
+        </div>
+      </div>
+      <button class="btn btn-outline" id="btnAlterarSenha" onclick="mostrarFormSenha()" style="width:100%;margin-bottom:12px">🔒 Alterar senha</button>
       <button class="btn btn-danger" style="width:100%" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
     </div>`);
 }
 
+function mostrarFormSenha() {
+  document.getElementById('formAlterarSenha').style.display = 'block';
+  document.getElementById('btnAlterarSenha').style.display  = 'none';
+}
+
+function cancelarAlterarSenha() {
+  document.getElementById('formAlterarSenha').style.display = 'none';
+  document.getElementById('btnAlterarSenha').style.display  = 'block';
+  document.getElementById('senhaAtual').value  = '';
+  document.getElementById('senhaNova').value   = '';
+  document.getElementById('senhaConfirm').value = '';
+}
+
+async function confirmarAlterarSenha() {
+  const atual   = document.getElementById('senhaAtual')?.value;
+  const nova    = document.getElementById('senhaNova')?.value;
+  const confirm = document.getElementById('senhaConfirm')?.value;
+  if (!atual || !nova || !confirm) { showToast('Preencha todos os campos de senha','error'); return; }
+  if (nova.length < 6) { showToast('A nova senha deve ter no mínimo 6 caracteres','error'); return; }
+  if (nova !== confirm) { showToast('A confirmação de senha não confere','error'); return; }
+  try {
+    showLoading('Verificando senha...');
+    // Reautenticar com senha atual
+    const {error:authErr} = await sb.auth.signInWithPassword({email: usuarioAtual.email, password: atual});
+    if (authErr) { hideLoading(); showToast('Senha atual incorreta','error'); return; }
+    // Atualizar para nova senha
+    const {error:upErr} = await sb.auth.updateUser({password: nova});
+    hideLoading();
+    if (upErr) throw upErr;
+    showToast('Senha alterada com sucesso!','success');
+    cancelarAlterarSenha();
+  } catch(e) { hideLoading(); showToast(e.message||'Erro ao alterar senha','error'); }
+}
+
 async function salvarConta() {
-  const nome  = document.getElementById('editNome')?.value.trim();
-  const email = document.getElementById('editEmail')?.value.trim();
+  const nome = document.getElementById('editNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   try {
-    const {error} = await sb.from('usuarios').update({nome,email}).eq('id',usuarioAtual.id);
+    const {error} = await sb.from('usuarios').update({nome}).eq('id',usuarioAtual.id);
     if (error) throw error;
-    usuarioAtual.nome  = nome;
-    usuarioAtual.email = email;
+    usuarioAtual.nome = nome;
     document.getElementById('sidebarAvatar').textContent = iniciais(nome);
     document.getElementById('sidebarNome').textContent   = nome;
     showToast('Dados atualizados!','success');
