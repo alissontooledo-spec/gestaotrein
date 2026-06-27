@@ -240,6 +240,16 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 
 /* ── Home Admin redesign ── */
 .home-navy-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 22px;margin-bottom:14px}
+@media(max-width:767px){.home-navy-header{display:none!important}}
+
+/* KPI grid mobile-only (aparece apenas no mobile, substituindo o navy-header) */
+.home-kpi-mobile-grid{display:none}
+@media(max-width:767px){
+  .home-kpi-mobile-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+  .home-kpi-mob{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:var(--r-lg);padding:12px 14px;cursor:pointer}
+  .home-kpi-mob-val{font-size:22px;font-weight:700;color:var(--navy);line-height:1}
+  .home-kpi-mob-lbl{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+}
 .home-navy-greeting{font-size:17px;font-weight:700;color:#fff;margin-bottom:2px}
 .home-navy-sub{font-size:12px;color:rgba(255,255,255,.45)}
 .home-kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
@@ -298,6 +308,17 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .rel2-rankings{grid-template-columns:1fr}
   .rel2-kpi-val{font-size:20px}
   .rel2-export-btn{font-size:10px;padding:4px 8px}
+  .rel2-header{border-radius:var(--r-lg);padding:14px 14px 16px}
+  .rel2-title{font-size:15px}
+  .rel2-period{gap:4px;margin-top:10px}
+  .rel2-chip{padding:3px 10px;font-size:10px}
+  .rel2-kpi{padding:10px 10px}
+  .rel2-kpi-val{font-size:18px}
+  .rel2-kpi-icon{font-size:14px;margin-bottom:4px}
+}
+@media(max-width:360px){
+  .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rel2-kpi-val{font-size:16px}
 }
 
 /* ── Execution tabs ── */
@@ -596,7 +617,14 @@ async function fazerLogin() {
 async function entrarNoApp() {
   showScreen('screenApp');
   configurarNavegacao();
-  await irPara('home');
+  // Roteamento por hash — suporte ao botão Voltar do browser/mobile
+  window.onpopstate = async (e) => {
+    if (!usuarioAtual) return;
+    const pg = (e.state?.pagina) || location.hash.replace('#','') || 'home';
+    await irPara(pg, {}, true);
+  };
+  const paginaInicial = location.hash.replace('#','') || 'home';
+  await irPara(paginaInicial);
 }
 
 async function fazerLogout() {
@@ -663,8 +691,12 @@ function marcarNavAtivo(id) {
 
 const TITULOS = {home:'Início',orgs:'Organizações',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
-async function irPara(pagina, params={}) {
+async function irPara(pagina, params={}, _fromPopstate=false) {
   paginaAtual = pagina;
+  if (!_fromPopstate) {
+    const hash = '#' + pagina;
+    if (location.hash !== hash) history.pushState({pagina}, '', hash);
+  }
   marcarNavAtivo(pagina);
   fecharSidebar();
   fabOcultar();
@@ -811,6 +843,26 @@ async function renderHomeAdmin() {
           <div class="home-kpi-lbl">Concluídas</div>
           <div class="home-kpi-delta green">Ver histórico →</div>
         </div>
+      </div>
+    </div>
+
+    <!-- KPIs mobile-only (sem o header navy duplicado) -->
+    <div class="home-kpi-mobile-grid">
+      <div class="home-kpi-mob" onclick="irParaTurmasFiltradas('em_andamento')">
+        <div class="home-kpi-mob-val">${ativas}</div>
+        <div class="home-kpi-mob-lbl">Turmas ativas</div>
+      </div>
+      <div class="home-kpi-mob" onclick="irParaTurmasFiltradas('agendada')">
+        <div class="home-kpi-mob-val">${agendadas}</div>
+        <div class="home-kpi-mob-lbl">Agendadas</div>
+      </div>
+      <div class="home-kpi-mob" onclick="irPara('clientes')">
+        <div class="home-kpi-mob-val">${cliAtivos}</div>
+        <div class="home-kpi-mob-lbl">Clientes ativos</div>
+      </div>
+      <div class="home-kpi-mob" onclick="irParaTurmasFiltradas('concluida')">
+        <div class="home-kpi-mob-val">${concluidas}</div>
+        <div class="home-kpi-mob-lbl">Concluídas</div>
       </div>
     </div>
 
