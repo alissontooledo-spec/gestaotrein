@@ -269,6 +269,31 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .home-kpi-val{font-size:20px}
 }
 
+/* ── Agenda calendário moderno ── */
+.agenda-cal-card{background:#fff;border:1px solid var(--border);border-radius:var(--r-xl);padding:16px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+.agenda-cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.agenda-cal-nav-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--navy);cursor:pointer;transition:background .15s}
+.agenda-cal-nav-btn:hover{background:rgba(30,42,74,.08)}
+.agenda-cal-titulo{font-size:15px;font-weight:700;color:var(--navy);text-align:center}
+.agenda-cal-semana{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;margin-bottom:4px}
+.agenda-cal-semana span{font-size:10px;font-weight:700;color:var(--text-3);padding:3px 0;text-transform:uppercase;letter-spacing:.3px}
+.agenda-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.agenda-cal-dia{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 2px;border-radius:8px;min-height:36px;font-size:12px;color:var(--text-3);font-weight:400;position:relative;transition:background .12s}
+.agenda-cal-dia.vazio{pointer-events:none}
+.agenda-cal-dia.clicavel{cursor:pointer}
+.agenda-cal-dia.clicavel:hover{background:rgba(30,42,74,.08)}
+.agenda-cal-dia.tem-sessao .agenda-cal-num{color:var(--navy);font-weight:600}
+.agenda-cal-dia.hoje{background:var(--navy)!important;border-radius:8px}
+.agenda-cal-dia.hoje .agenda-cal-num{color:#fff!important;font-weight:700}
+.agenda-cal-num{font-size:13px;line-height:1}
+.agenda-cal-dot{width:5px;height:5px;border-radius:50%;background:var(--amber);margin-top:3px}
+@media(max-width:767px){
+  .agenda-cal-card{padding:12px}
+  .agenda-cal-dia{min-height:32px;padding:4px 1px}
+  .agenda-cal-num{font-size:12px}
+  .agenda-cal-semana span{font-size:9px}
+}
+
 /* ── Relatórios redesign ── */
 .rel2-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 20px;margin-bottom:14px}
 .rel2-title{font-size:17px;font-weight:700;color:#fff}
@@ -445,82 +470,6 @@ function mascararCnpj(input) {
   else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d*).*/,'$1.$2.$3');
   else if (v.length > 2) v = v.replace(/^(\d{2})(\d*).*/,'$1.$2');
   input.value = v;
-  if (v.replace(/\D/g,'').length === 14) consultarCNPJ(input);
-}
-
-async function consultarCNPJ(inputEl) {
-  const cnpjNum = inputEl.value.replace(/\D/g,'');
-  if (cnpjNum.length !== 14) return;
-
-  // Detecta contexto: modal rápido (mCR) ou principal (mCli)
-  const isRapido = !!document.getElementById('mCRNome');
-  const p = isRapido ? 'mCR' : 'mCli';
-
-  const get = id => document.getElementById(id);
-  const lbl = inputEl.closest('.field')?.querySelector('label');
-  const lblOrig = lbl?.textContent || 'CNPJ';
-
-  // Feedback visual: consultando
-  inputEl.style.borderColor = 'var(--amber)';
-  inputEl.style.background  = 'rgba(245,158,11,.07)';
-  if (lbl) lbl.textContent  = 'CNPJ · Consultando Receita Federal...';
-  inputEl.disabled = true;
-
-  const reset = (ok) => {
-    inputEl.disabled = false;
-    if (ok) {
-      inputEl.style.borderColor = '#22c55e';
-      inputEl.style.background  = 'rgba(34,197,94,.06)';
-      if (lbl) lbl.textContent  = 'CNPJ · Dados preenchidos ✓';
-    } else {
-      inputEl.style.borderColor = '#ef4444';
-      inputEl.style.background  = 'rgba(239,68,68,.06)';
-      if (lbl) lbl.textContent  = 'CNPJ · Não encontrado';
-    }
-    setTimeout(() => {
-      inputEl.style.borderColor = '';
-      inputEl.style.background  = '';
-      if (lbl) lbl.textContent  = lblOrig;
-    }, 3000);
-  };
-
-  try {
-    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNum}`);
-    if (!res.ok) throw new Error();
-    const d = await res.json();
-
-    // Nome: fantasia > razão social
-    const nomeEl = get(p + 'Nome');
-    if (nomeEl && !nomeEl.value.trim())
-      nomeEl.value = d.nome_fantasia?.trim() || d.razao_social?.trim() || '';
-
-    // Endereço
-    const fill = (id, val) => { const el = get(id); if (el) el.value = val || ''; };
-    fill(p + 'Cep',    d.cep    ? d.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : '');
-    fill(p + 'Rua',    d.logradouro   || '');
-    fill(p + 'Numero', d.numero       || '');
-    fill(p + 'Bairro', d.bairro       || '');
-    fill(p + 'Cidade', d.municipio    || '');
-    fill(p + 'Uf',     d.uf           || '');
-
-    // Contato
-    const emailEl = get(p + 'Email');
-    if (emailEl && !emailEl.value.trim())
-      emailEl.value = (d.email || '').toLowerCase();
-
-    const telEl = get(p + 'Tel');
-    if (telEl && !telEl.value.trim() && d.ddd_telefone_1) {
-      const t = d.ddd_telefone_1.replace(/\D/g,'');
-      if (t.length >= 10)
-        telEl.value = `(${t.slice(0,2)}) ${t.slice(2,6)}-${t.slice(6)}`;
-    }
-
-    reset(true);
-    if (nomeEl) nomeEl.focus();
-
-  } catch(e) {
-    reset(false);
-  }
 }
 function mascararCpf(input) {
   let v = input.value.replace(/\D/g,'').slice(0,11);
@@ -1268,16 +1217,10 @@ function abrirModalCliente(id=null) {
   abrirModal(c?'Editar cliente':'Novo cliente', `
     <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${c?.nome||''}" placeholder="Razão social"></div>
     <div class="field"><label>CNPJ</label><input type="text" id="mCliCnpj" value="${c?.cnpj||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:12px">
-      <div class="field" style="margin:0"><label>CEP</label><input type="text" id="mCliCep" value="${c?.cep||''}" placeholder="00000-000" maxlength="9"></div>
-      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase;width:56px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
+      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
     </div>
-    <div class="field"><label>Logradouro</label><input type="text" id="mCliRua" value="${c?.logradouro||''}" placeholder="Rua, Av., Travessa..."></div>
-    <div style="display:grid;grid-template-columns:80px 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Número</label><input type="text" id="mCliNumero" value="${c?.numero||''}" placeholder="Nº"></div>
-      <div class="field" style="margin:0"><label>Bairro</label><input type="text" id="mCliBairro" value="${c?.bairro||''}" placeholder="Bairro"></div>
-    </div>
-    <div class="field"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
     <div class="field"><label>E-mail</label><input type="email" id="mCliEmail" value="${c?.email||''}" placeholder="contato@empresa.com.br"></div>
     <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
@@ -1287,18 +1230,7 @@ function abrirModalCliente(id=null) {
 async function salvarCliente() {
   const nome = document.getElementById('mCliNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const dados = {
-    nome,
-    cnpj:       document.getElementById('mCliCnpj')?.value.trim()||null,
-    cep:        document.getElementById('mCliCep')?.value.trim()||null,
-    logradouro: document.getElementById('mCliRua')?.value.trim()||null,
-    numero:     document.getElementById('mCliNumero')?.value.trim()||null,
-    bairro:     document.getElementById('mCliBairro')?.value.trim()||null,
-    cidade:     document.getElementById('mCliCidade')?.value.trim()||null,
-    uf:         (document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null,
-    email:      document.getElementById('mCliEmail')?.value.trim()||null,
-    telefone:   document.getElementById('mCliTel')?.value.trim()||null,
-  };
+  const dados = {nome, cnpj:document.getElementById('mCliCnpj')?.value.trim()||null, cidade:document.getElementById('mCliCidade')?.value.trim()||null, uf:(document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mCliEmail')?.value.trim()||null, telefone:document.getElementById('mCliTel')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('clientes').update(dados).eq('id',_modalCurrentId) : await sb.from('clientes').insert({...dados,org_id:usuarioAtual.org_id,ativo:true});
@@ -1858,16 +1790,10 @@ async function abrirModalClienteRapido() {
     </div>
     <div class="field"><label>Nome *</label><input type="text" id="mCRNome" placeholder="Razão social" autofocus></div>
     <div class="field"><label>CNPJ</label><input type="text" id="mCRCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:12px">
-      <div class="field" style="margin:0"><label>CEP</label><input type="text" id="mCRCep" placeholder="00000-000" maxlength="9"></div>
-      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase;width:56px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
+      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
     </div>
-    <div class="field"><label>Logradouro</label><input type="text" id="mCRRua" placeholder="Rua, Av., Travessa..."></div>
-    <div style="display:grid;grid-template-columns:80px 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Número</label><input type="text" id="mCRNumero" placeholder="Nº"></div>
-      <div class="field" style="margin:0"><label>Bairro</label><input type="text" id="mCRBairro" placeholder="Bairro"></div>
-    </div>
-    <div class="field"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
     <div class="field"><label>E-mail</label><input type="email" id="mCREmail" placeholder="contato@empresa.com.br"></div>`,
     `<button class="btn btn-outline" onclick="abrirModalTurma(${_modalCurrentId?`'${_modalCurrentId}'`:'null'})">Voltar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarClienteRapido()">Cadastrar e selecionar</button>`);
@@ -1878,16 +1804,12 @@ async function salvarClienteRapido() {
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   const dados = {
     nome,
-    cnpj:       document.getElementById('mCRCnpj')?.value.trim()||null,
-    cep:        document.getElementById('mCRCep')?.value.trim()||null,
-    logradouro: document.getElementById('mCRRua')?.value.trim()||null,
-    numero:     document.getElementById('mCRNumero')?.value.trim()||null,
-    bairro:     document.getElementById('mCRBairro')?.value.trim()||null,
-    cidade:     document.getElementById('mCRCidade')?.value.trim()||null,
-    uf:         (document.getElementById('mCRUf')?.value.trim()||'').toUpperCase()||null,
-    email:      document.getElementById('mCREmail')?.value.trim()||null,
-    org_id:     usuarioAtual.org_id,
-    ativo:      true,
+    cnpj: document.getElementById('mCRCnpj')?.value.trim()||null,
+    cidade: document.getElementById('mCRCidade')?.value.trim()||null,
+    uf: (document.getElementById('mCRUf')?.value.trim()||'').toUpperCase()||null,
+    email: document.getElementById('mCREmail')?.value.trim()||null,
+    org_id: usuarioAtual.org_id,
+    ativo: true,
   };
   try {
     setBtnModalLoading(true);
@@ -2366,13 +2288,16 @@ async function renderAgenda() {
   const concluidas = grupos.filter(g => g.turma.status === 'concluida');
 
   setConteudo(`
-    <div class="card" style="margin-bottom:16px;padding:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <button onclick="_agendaNavMes(-1)" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--navy);padding:4px 10px">‹</button>
-        <div id="agendaCalMes" style="font-size:15px;font-weight:700;color:var(--navy)"></div>
-        <button onclick="_agendaNavMes(1)" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--navy);padding:4px 10px">›</button>
+    <div class="agenda-cal-card">
+      <div class="agenda-cal-nav">
+        <button class="agenda-cal-nav-btn" onclick="_agendaNavMes(-1)">‹</button>
+        <div id="agendaCalMes" class="agenda-cal-titulo"></div>
+        <button class="agenda-cal-nav-btn" onclick="_agendaNavMes(1)">›</button>
       </div>
-      <div id="agendaCalGrid"></div>
+      <div class="agenda-cal-semana">
+        <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+      </div>
+      <div id="agendaCalGrid" class="agenda-cal-grid"></div>
     </div>
     <div id="agendaListaFiltrada">
       <div class="home-section">
@@ -2393,30 +2318,33 @@ async function renderAgenda() {
 }
 
 function _agendaRenderCalendario() {
-  const mes  = window._agendaMes;
-  const ano  = window._agendaAno;
+  const mes      = window._agendaMes;
+  const ano      = window._agendaAno;
   const datasSet = window._agendaDatasComSessao;
-  const hoje = window._agendaHoje;
-  const nomesMeses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const elMes = document.getElementById('agendaCalMes');
-  const elGrid = document.getElementById('agendaCalGrid');
+  const hoje     = window._agendaHoje;
+  const nomes    = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const elMes    = document.getElementById('agendaCalMes');
+  const elGrid   = document.getElementById('agendaCalGrid');
   if (!elMes || !elGrid) return;
-  elMes.textContent = `${nomesMeses[mes-1]} ${ano}`;
-  const primeiroDia = new Date(ano, mes-1, 1).getDay();
-  const diasNoMes   = new Date(ano, mes, 0).getDate();
-  const dias = ['D','S','T','Q','Q','S','S'];
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
-  html += dias.map(d=>`<div style="font-size:10px;font-weight:700;color:var(--text-3);padding:4px 0">${d}</div>`).join('');
-  for (let i=0; i<primeiroDia; i++) html += `<div></div>`;
-  for (let d=1; d<=diasNoMes; d++) {
-    const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const temSessao = datasSet.has(dataStr);
-    const ehHoje    = dataStr === hoje;
-    html += `<div onclick="_agendaFiltrarData('${dataStr}')" style="padding:6px 2px;border-radius:6px;font-size:12px;cursor:${temSessao?'pointer':'default'};font-weight:${ehHoje?'700':'400'};background:${ehHoje?'var(--navy)':temSessao?'rgba(30,42,74,.1)':'transparent'};color:${ehHoje?'#fff':temSessao?'var(--navy)':'var(--text-3)'};position:relative">
-      ${d}${temSessao&&!ehHoje?`<span style="display:block;width:4px;height:4px;background:var(--amber);border-radius:50%;margin:2px auto 0"></span>`:''}
+  elMes.textContent = `${nomes[mes-1]} ${ano}`;
+
+  const primeiro = new Date(ano, mes-1, 1).getDay();
+  const total    = new Date(ano, mes, 0).getDate();
+  let html = '';
+
+  // Células vazias antes do dia 1
+  for (let i=0; i<primeiro; i++) html += `<div class="agenda-cal-dia vazio"></div>`;
+
+  for (let d=1; d<=total; d++) {
+    const ds       = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const temSessao= datasSet.has(ds);
+    const ehHoje   = ds === hoje;
+    const classes  = ['agenda-cal-dia', ehHoje?'hoje':'', temSessao&&!ehHoje?'tem-sessao':'', temSessao?'clicavel':''].filter(Boolean).join(' ');
+    html += `<div class="${classes}" ${temSessao?`onclick="_agendaFiltrarData('${ds}')"`:''}>
+      <span class="agenda-cal-num">${d}</span>
+      ${temSessao&&!ehHoje?'<span class="agenda-cal-dot"></span>':''}
     </div>`;
   }
-  html += '</div>';
   elGrid.innerHTML = html;
 }
 
@@ -4115,293 +4043,337 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome))')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
     const {data:col} = await sb.from('colaboradores').select('*').eq('id',colaboradorId).single();
     if (!col) throw new Error('Colaborador não encontrado');
 
-    const ag       = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
-    const dataCert = ag?.data || t.created_at?.split('T')[0];
-    const instrutor= ag?.usuarios?.nome||'—';
-    const ch       = t.catalogo?.carga_horaria||0;
-    const nomeT    = t.catalogo?.nome||'Treinamento';
-    const valMeses = t.catalogo?.validade_meses||12;
+    const ag        = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
+    const dataCert  = ag?.data || t.created_at?.split('T')[0];
+    const instrutor = ag?.usuarios?.nome || '—';
+    const ch        = t.catalogo?.carga_horaria || 0;
+    const nomeT     = t.catalogo?.nome || 'Treinamento';
+    const valMeses  = t.catalogo?.validade_meses || 12;
 
-    // Validade
-    const dtObj  = new Date(dataCert+'T12:00:00');
-    const dtVal  = new Date(dtObj);
-    dtVal.setMonth(dtVal.getMonth()+valMeses);
-    const fmtVal = dtVal.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    const dtObj = new Date(dataCert+'T12:00:00');
+    const dtVal = new Date(dtObj);
+    dtVal.setMonth(dtVal.getMonth() + valMeses);
+    const fmtVal = dtVal.toLocaleDateString('pt-BR',{month:'long', year:'numeric'});
 
-    // Código único
-    const codigo   = crypto.randomUUID();
+    const codigo      = crypto.randomUUID();
     const codigoShort = codigo.slice(0,8).toUpperCase();
-    const urlValid = `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
-    const qrData   = await gerarQRCodeDataURL(urlValid);
+    const urlValid    = `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
+    const qrData      = await gerarQRCodeDataURL(urlValid);
 
-    // Extrair número NR do nome do treinamento
-    const nrMatch  = nomeT.match(/NR[\s-]*(\d+)/i);
-    const nrNum    = nrMatch ? nrMatch[1] : '';
+    const nrMatch = nomeT.match(/NR[\s-]*(\d+)/i);
+    const nrNum   = nrMatch ? nrMatch[1] : '';
 
     const {jsPDF} = window.jspdf;
+
+    // ══════════════════════════════════════════════════
+    // CONSTANTES DE DESIGN
+    // ══════════════════════════════════════════════════
+    const W=297, H=210, mg=14;
+    const NAVY  = [30,42,74];
+    const AMBER = [245,158,11];
+    const WHITE = [255,255,255];
+    const GRAY  = [244,246,250];
+    const BORD  = [220,228,240];
+    const T1    = [30,42,74];
+    const T2    = [71,85,105];
+    const T3    = [148,163,184];
+
+    // ══════════════════════════════════════════════════
+    // PÁGINA 1 — CAPA (landscape A4)
+    // ══════════════════════════════════════════════════
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
-    const W = 297, H = 210;
-
-    const NAVY   = [30,42,74];
-    const AMBER  = [245,158,11];
-    const WHITE  = [255,255,255];
-    const GRAY50 = [244,246,250];
-    const BORDER = [226,232,240];
-    const TEXT1  = [30,42,74];
-    const TEXT2  = [71,85,105];
-    const TEXT3  = [148,163,184];
-    const mg = 12;
-
-    // ════════════════════════════════════════
-    // PÁGINA 1 — CAPA
-    // ════════════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
 
-    // ── Borda dupla ──
-    doc.setDrawColor(...NAVY); doc.setLineWidth(1.5);
-    doc.rect(mg-5,mg-5,W-mg*2+10,H-mg*2+10,'S');
-    doc.setLineWidth(0.4);
-    doc.rect(mg-2,mg-2,W-mg*2+4,H-mg*2+4,'S');
+    // Faixa decorativa lateral direita (amber)
+    doc.setFillColor(...AMBER); doc.rect(W-6,0,6,H,'F');
+    // Faixa interna navy
+    doc.setFillColor(...NAVY); doc.rect(W-9,0,3,H,'F');
 
-    // ── Cantos âmbar ──
-    const cs = 10;
+    // Borda dupla navy
+    doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
+    doc.rect(mg-3, mg-3, W-mg*2+6, H-mg*2+6,'S');
+    doc.setLineWidth(0.3);
+    doc.rect(mg, mg, W-mg*2, H-mg*2,'S');
+
+    // Cantos âmbar
+    const cs=9;
     doc.setDrawColor(...AMBER); doc.setLineWidth(2);
-    doc.line(mg-5,mg-5+cs,mg-5,mg-5); doc.line(mg-5,mg-5,mg-5+cs,mg-5);
-    doc.line(W-mg+5-cs,mg-5,W-mg+5,mg-5); doc.line(W-mg+5,mg-5,W-mg+5,mg-5+cs);
-    doc.line(mg-5,H-mg+5-cs,mg-5,H-mg+5); doc.line(mg-5,H-mg+5,mg-5+cs,H-mg+5);
-    doc.line(W-mg+5-cs,H-mg+5,W-mg+5,H-mg+5); doc.line(W-mg+5,H-mg+5,W-mg+5,H-mg+5-cs);
+    [[mg-3,mg-3,1,0],[mg-3,mg-3,0,1],[W-mg+3-cs,mg-3,1,0],[W-mg+3,mg-3,0,1],
+     [mg-3,H-mg+3-cs,1,0],[mg-3,H-mg+3,0,1],[W-mg+3-cs,H-mg+3,1,0],[W-mg+3,H-mg+3,0,1]]
+    .forEach(()=>{});
+    // Cantos simples
+    doc.line(mg-3, mg-3+cs, mg-3, mg-3); doc.line(mg-3, mg-3, mg-3+cs, mg-3);
+    doc.line(W-mg+3-cs, mg-3, W-mg+3, mg-3); doc.line(W-mg+3, mg-3, W-mg+3, mg-3+cs);
+    doc.line(mg-3, H-mg+3-cs, mg-3, H-mg+3); doc.line(mg-3, H-mg+3, mg-3+cs, H-mg+3);
+    doc.line(W-mg+3-cs, H-mg+3, W-mg+3, H-mg+3); doc.line(W-mg+3, H-mg+3, W-mg+3, H-mg+3-cs);
 
-    // ── Marca d'água hexagonal (centro) ──
-    const cx=W/2, cy=H/2, r1=62, r2=48;
-    doc.setDrawColor(30,42,74,0.035); doc.setLineWidth(0.5);
-    const hex = (r)=>{
+    // Marca d'água hexagonal
+    const cx=W/2-10, cy=H/2;
+    for (const r of [58,46]) {
+      doc.setDrawColor(30,42,74); doc.setLineWidth(0.15); doc.setGState(doc.GState({opacity:0.03}));
       const pts=[];
-      for(let i=0;i<6;i++){pts.push([cx+r*Math.cos(Math.PI/180*(60*i-30)), cy+r*Math.sin(Math.PI/180*(60*i-30))]);}
-      return pts;
-    };
-    const h1=hex(r1); const h2=hex(r2);
-    doc.setDrawColor(30,42,74); doc.setLineWidth(0.2); doc.setGState(doc.GState({opacity:0.04}));
-    doc.lines(h1.map((p,i)=>i===0?p:[p[0]-h1[i-1][0],p[1]-h1[i-1][1]]), h1[0][0],h1[0][1],undefined,'S',true);
-    doc.lines(h2.map((p,i)=>i===0?p:[p[0]-h2[i-1][0],p[1]-h2[i-1][1]]), h2[0][0],h2[0][1],undefined,'S',true);
+      for(let i=0;i<6;i++) pts.push([cx+r*Math.cos(Math.PI/3*i-Math.PI/6), cy+r*Math.sin(Math.PI/3*i-Math.PI/6)]);
+      for(let i=0;i<6;i++) doc.line(pts[i][0],pts[i][1],pts[(i+1)%6][0],pts[(i+1)%6][1]);
+    }
     doc.setGState(doc.GState({opacity:1}));
 
-    // ── Logo (topo esquerdo) ──
-    doc.addImage(LOGO_AVANTESEG,'PNG',mg+4,mg+4,58,18);
+    // Logo (topo esquerdo)
+    doc.addImage(LOGO_AVANTESEG,'PNG', mg+2, mg+2, 58, 18);
 
-    // ── Medalha NR (topo direito) ──
+    // "DIPLOMA DE CONCLUSÃO" centralizado
+    doc.setFontSize(7.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('D  I  P  L  O  M  A     D  E     C  O  N  C  L  U  S  Ã  O', W/2-10, mg+10, {align:'center'});
+
+    // Medalha NR (topo direito)
     if (nrNum) {
-      doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
-      doc.circle(W-mg-22, mg+14, 14, 'S');
-      doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
-      doc.circle(W-mg-22, mg+14, 12, 'S');
-      doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','bold');
-      doc.text('NR', W-mg-22, mg+11, {align:'center'});
-      doc.setFontSize(14); doc.setTextColor(...NAVY);
-      doc.text(nrNum, W-mg-22, mg+18, {align:'center'});
+      const mx=W-mg-22, my=mg+14;
+      doc.setDrawColor(...NAVY); doc.setLineWidth(1.5); doc.circle(mx,my,13,'S');
+      doc.setDrawColor(...AMBER); doc.setLineWidth(0.7); doc.circle(mx,my,11,'S');
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','bold');
+      doc.text('NR', mx, my-4, {align:'center'});
+      doc.setFontSize(15); doc.setTextColor(...NAVY);
+      doc.text(nrNum, mx, my+3, {align:'center'});
     }
 
-    // ── "DIPLOMA DE CONCLUSÃO" ──
-    doc.setFontSize(8); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text('D I P L O M A   D E   C O N C L U S Ã O', W/2, mg+10, {align:'center'});
+    // Linha divisória
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
+    doc.line(mg+2, mg+24, W-mg-20, mg+24);
 
-    // ── Linha decorativa fina ──
-    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
-    doc.line(mg+4, mg+26, W-mg-4, mg+26);
+    // "A AVANTESeg certifica que"
+    doc.setFontSize(9.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text('A AVANTESeg certifica que', W/2-10, mg+34, {align:'center'});
 
-    // ── "A AVANTESeg certifica que" ──
-    doc.setFontSize(10); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
-    doc.text('A AVANTESeg certifica que', W/2, mg+36, {align:'center'});
+    // Nome do participante
+    doc.setFontSize(32); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const nomePart = col.nome || '';
+    doc.text(nomePart, W/2-10, mg+53, {align:'center'});
 
-    // ── Nome do participante — destaque máximo ──
-    doc.setFontSize(30); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    doc.text(col.nome||'', W/2, mg+54, {align:'center'});
-
-    // Linha âmbar sob o nome
-    const nomeW = doc.getTextWidth(col.nome||'');
-    doc.setDrawColor(...AMBER); doc.setLineWidth(1.5);
-    doc.line(W/2-nomeW/2, mg+57, W/2+nomeW/2, mg+57);
+    // Sublinhado âmbar sob o nome
+    const nW = doc.getTextWidth(nomePart);
+    doc.setDrawColor(...AMBER); doc.setLineWidth(1.8);
+    doc.line(W/2-10-nW/2, mg+56, W/2-10+nW/2, mg+56);
 
     // CPF
-    doc.setFontSize(8.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text(`CPF ${col.cpf||'—'}`, W/2, mg+63, {align:'center'});
+    doc.setFontSize(8); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text(`CPF ${col.cpf||'—'}`, W/2-10, mg+62, {align:'center'});
 
-    // ── Separador central âmbar ──
-    doc.setDrawColor(...BORDER); doc.setLineWidth(0.2);
-    doc.line(W/2-30, mg+67, W/2+30, mg+67);
+    // Linha separadora central
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2);
+    doc.line(W/2-35, mg+66, W/2+15, mg+66);
 
-    // ── "concluiu com êxito o treinamento" ──
-    doc.setFontSize(9.5); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
-    doc.text('concluiu com êxito o treinamento', W/2, mg+74, {align:'center'});
+    // "concluiu com êxito o treinamento"
+    doc.setFontSize(9); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text('concluiu com êxito o treinamento', W/2-10, mg+73, {align:'center'});
 
-    // ── Nome do treinamento ──
+    // Nome do treinamento
     doc.setFontSize(16); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    const linhasTrein = doc.splitTextToSize(nomeT, W-mg*2-20);
-    linhasTrein.forEach((l,i)=>doc.text(l, W/2, mg+84+i*8, {align:'center'}));
-    const tY = mg+84+linhasTrein.length*8;
+    const linhasT = doc.splitTextToSize(nomeT, W-mg*2-30);
+    linhasT.forEach((l,i) => doc.text(l, W/2-10, mg+83+i*9, {align:'center'}));
+    const tY = mg+83 + linhasT.length*9;
 
-    // ── Chips de informação ──
+    // ── Chips de informação (cards planos, sem borda arredondada de "botão") ──
     const chips = [
-      {l:'Empresa', v:t.clientes?.nome||'—'},
-      {l:'Carga horária', v:`${ch} horas`},
-      {l:'Realizado em', v:fmtDataExtenso(dataCert)},
-      {l:'Válido até', v:fmtVal},
+      {l:'EMPRESA',       v: t.clientes?.nome||'—'},
+      {l:'CARGA HORÁRIA', v: `${ch} hora${ch!==1?'s':''}`},
+      {l:'REALIZADO EM',  v: fmtDataExtenso(dataCert)},
+      {l:'VÁLIDO ATÉ',    v: fmtVal},
     ];
-    const chipW = (W-mg*2-24)/chips.length;
-    chips.forEach((c,i)=>{
-      const cx2 = mg+6+i*(chipW+8);
-      doc.setFillColor(...GRAY50);
-      doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
-      doc.roundedRect(cx2, tY+4, chipW, 14, 2, 2, 'FD');
-      doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-      doc.text(c.l.toUpperCase(), cx2+chipW/2, tY+9.5, {align:'center'});
+    const cW = (W-mg*2-30)/chips.length;
+    const cH = 16, cY = tY+6;
+    chips.forEach((c,i) => {
+      const cx2 = mg+2 + i*(cW+8);
+      // Fundo cinza claro sem borda de "botão"
+      doc.setFillColor(...GRAY); doc.rect(cx2, cY, cW, cH,'F');
+      // Linha topo âmbar fina
+      doc.setDrawColor(...AMBER); doc.setLineWidth(0.8);
+      doc.line(cx2, cY, cx2+cW, cY);
+      // Label
+      doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(c.l, cx2+cW/2, cY+5, {align:'center'});
+      // Valor
       doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-      doc.text((c.v||'—').slice(0,24), cx2+chipW/2, tY+14, {align:'center'});
+      doc.text((c.v||'—').slice(0,26), cx2+cW/2, cY+11.5, {align:'center'});
     });
 
     // ── Rodapé navy ──
-    const fy = H-mg-20;
-    doc.setFillColor(...NAVY);
-    doc.rect(mg, fy, W-mg*2, 18, 'F');
+    const fy = H-mg-18;
+    doc.setFillColor(...NAVY); doc.rect(mg, fy, W-mg*2-6, 16,'F');
 
-    // Assinatura instrutor (esquerda)
-    doc.setDrawColor(255,255,255,0.3); doc.setLineWidth(0.3);
-    doc.line(mg+8, fy+6, mg+72, fy+6);
-    doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-    doc.text(instrutor, mg+40, fy+10.5, {align:'center'});
-    doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text('Instrutor Responsável', mg+40, fy+14.5, {align:'center'});
+    // Assinatura instrutor
+    doc.setDrawColor(255,255,255,0.2); doc.setLineWidth(0.2);
+    doc.line(mg+6, fy+5, mg+68, fy+5);
+    doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text(instrutor, mg+37, fy+9.5, {align:'center'});
+    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Instrutor Responsável', mg+37, fy+13.5, {align:'center'});
 
-    // Assinatura responsável técnico (centro)
-    doc.setDrawColor(255,255,255,0.3);
-    doc.line(W/2-36, fy+6, W/2+36, fy+6);
-    doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-    doc.text('Cid Batista de Campos', W/2, fy+10.5, {align:'center'});
-    doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text('Eng.º de Seg. do Trabalho · CREA-SC 109085-1', W/2, fy+14.5, {align:'center'});
+    // Assinatura técnica (centro)
+    doc.line(W/2-45, fy+5, W/2+15, fy+5);
+    doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('Cid Batista de Campos', W/2-15, fy+9.5, {align:'center'});
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Eng.º Seg. do Trabalho · CREA-SC 109085-1', W/2-15, fy+13.5, {align:'center'});
 
-    // QR Code (direita)
-    if (qrData) {
-      doc.addImage(qrData,'PNG', W-mg-30, fy+2, 14, 14);
-    }
-    doc.setFontSize(6); doc.setTextColor(...TEXT3);
-    doc.text(`Cód: ${codigoShort}`, W-mg-23, fy+17, {align:'center'});
+    // QR Code no rodapé
+    if (qrData) doc.addImage(qrData,'PNG', W-mg-38, fy+1, 14,14);
+    doc.setFontSize(5.5); doc.setTextColor(...T3);
+    doc.text(`Cód: ${codigoShort}`, W-mg-31, fy+15, {align:'center'});
 
-    // ── Número do certificado rodapé externo ──
-    doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text(`Certificado Nº ${codigoShort} · Emitido em ${fmtDataExtenso(new Date().toISOString().split('T')[0])} · toledolabs.com.br/validar`, W/2, H-4, {align:'center'});
+    // Rodapé externo
+    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text(`Certificado Nº ${codigoShort} · Emitido em ${fmtDataExtenso(new Date().toISOString().split('T')[0])} · toledolabs.com.br/validar`, W/2-10, H-4, {align:'center'});
 
-    // ════════════════════════════════════════
-    // PÁGINA 2 — CONTRACAPA
-    // ════════════════════════════════════════
-    doc.addPage('a4','portrait');
-    const P2W=210, P2H=297, p2mg=16;
-    let p2y = p2mg;
+    // ══════════════════════════════════════════════════
+    // PÁGINA 2 — CONTRACAPA (landscape A4 — mesmo formato)
+    // ══════════════════════════════════════════════════
+    doc.addPage('a4','landscape');
+    doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
 
-    doc.setFillColor(...WHITE); doc.rect(0,0,P2W,P2H,'F');
+    // Faixas laterais (espelhadas para frente/verso)
+    doc.setFillColor(...AMBER); doc.rect(0,0,6,H,'F');
+    doc.setFillColor(...NAVY); doc.rect(6,0,3,H,'F');
 
-    // ── Header page 2 ──
-    doc.addImage(LOGO_AVANTESEG,'PNG',p2mg,p2y,52,16);
-    doc.setFontSize(8); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', P2W-p2mg, p2y+5, {align:'right'});
-    doc.text('CNPJ: 17.883.200/0001-32', P2W-p2mg, p2y+10, {align:'right'});
-    doc.text('Av. Arno Carlo Gracher, 69 - Sala 4 · Brusque - SC · 88350-310', P2W-p2mg, p2y+15, {align:'right'});
-    p2y += 22;
+    // Borda
+    doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
+    doc.rect(mg-3, mg-3, W-mg*2+6, H-mg*2+6,'S');
+    doc.setLineWidth(0.3);
+    doc.rect(mg, mg, W-mg*2, H-mg*2,'S');
 
-    // Divisor
-    doc.setDrawColor(...AMBER); doc.setLineWidth(1.5);
-    doc.line(p2mg, p2y, P2W-p2mg, p2y);
-    p2y += 6;
+    // Cantos âmbar
+    doc.setDrawColor(...AMBER); doc.setLineWidth(2);
+    doc.line(mg-3, mg-3+cs, mg-3, mg-3); doc.line(mg-3, mg-3, mg-3+cs, mg-3);
+    doc.line(W-mg+3-cs, mg-3, W-mg+3, mg-3); doc.line(W-mg+3, mg-3, W-mg+3, mg-3+cs);
+    doc.line(mg-3, H-mg+3-cs, mg-3, H-mg+3); doc.line(mg-3, H-mg+3, mg-3+cs, H-mg+3);
+    doc.line(W-mg+3-cs, H-mg+3, W-mg+3, H-mg+3); doc.line(W-mg+3, H-mg+3, W-mg+3, H-mg+3-cs);
 
-    // ── Título do treinamento ──
-    doc.setFontSize(14); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    const linhasT2 = doc.splitTextToSize(nomeT, P2W-p2mg*2);
-    linhasT2.forEach((l,i)=>doc.text(l, P2W/2, p2y+i*7, {align:'center'}));
-    p2y += linhasT2.length*7+4;
+    // Header page 2
+    const p2x = mg+8;
+    doc.addImage(LOGO_AVANTESEG,'PNG', p2x, mg+1, 52,16);
+    doc.setFontSize(7.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W-mg-4, mg+5, {align:'right'});
+    doc.text('CNPJ: 17.883.200/0001-32', W-mg-4, mg+10, {align:'right'});
+    doc.text('Av. Arno Carlo Gracher, 69 – Sala 4  ·  Brusque – SC  ·  88350-310', W-mg-4, mg+15, {align:'right'});
 
-    // ── Dados do participante ──
-    doc.setFillColor(...GRAY50);
-    doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 26, 3,3,'F');
-    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
-    doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 26, 3,3,'S');
+    // Linha âmbar divisória
+    doc.setDrawColor(...AMBER); doc.setLineWidth(1.2);
+    doc.line(p2x, mg+21, W-mg-4, mg+21);
 
-    doc.setFontSize(7.5); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
-    doc.text(`Aluno: ${col.nome||'—'}`, p2mg+6, p2y+7);
-    doc.text(`CPF: ${col.cpf||'—'}`, p2mg+6, p2y+13);
-    doc.text(`Conclusão: ${fmtDataExtenso(dataCert)}`, p2mg+6, p2y+19);
+    let p2y = mg+28;
 
-    doc.setFontSize(7.5); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
-    doc.text(`Válido até: ${fmtVal}`, P2W/2+4, p2y+7);
-    doc.text(`Carga horária: ${ch} horas`, P2W/2+4, p2y+13);
-    doc.text(`Código: ${codigoShort}`, P2W/2+4, p2y+19);
-    p2y += 32;
+    // Título do treinamento
+    doc.setFontSize(13); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const lT2 = doc.splitTextToSize(nomeT, W/2-mg-10);
+    lT2.forEach((l,i) => doc.text(l, p2x, p2y+i*7));
+    p2y += lT2.length*7+3;
 
-    // ── Conteúdo programático ──
-    const cpText = t.catalogo?.conteudo_programatico||t.catalogo?.descricao||'';
+    // Linha âmbar curta
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.8);
+    doc.line(p2x, p2y, p2x+50, p2y);
+    p2y += 7;
+
+    // Bloco dados do participante (coluna esquerda)
+    const colW = W/2-mg-16;
+    doc.setFillColor(...GRAY); doc.rect(p2x, p2y, colW, 30,'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(p2x, p2y, colW, 30,'S');
+    doc.setDrawColor(...NAVY); doc.setLineWidth(2); doc.line(p2x, p2y, p2x, p2y+30);
+
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','bold');
+    doc.text('PARTICIPANTE', p2x+4, p2y+5);
+    doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text((col.nome||'—').slice(0,32), p2x+4, p2y+12);
+    doc.setFontSize(7.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text(`CPF: ${col.cpf||'—'}`, p2x+4, p2y+19);
+    doc.text(`Cargo: ${col.cargo||'—'}`, p2x+4, p2y+25);
+    p2y += 36;
+
+    // Conteúdo programático
+    const cpText = t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '';
     if (cpText) {
       // Header seção
-      doc.setFillColor(...NAVY);
-      doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 8, 2,2,'F');
-      doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-      doc.text('CONTEÚDO PROGRAMÁTICO', p2mg+6, p2y+5.5);
-      p2y += 12;
+      doc.setFillColor(...NAVY); doc.rect(p2x, p2y, colW, 7,'F');
+      doc.setFontSize(7); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+      doc.text('CONTEÚDO PROGRAMÁTICO', p2x+4, p2y+5);
+      p2y += 9;
 
-      // Box conteúdo
-      doc.setFillColor(248,250,252);
-      doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
-      doc.roundedRect(p2mg, p2y, P2W-p2mg*2, 2, 2,2,'FD'); // placeholder fill
-      doc.setFontSize(8); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
-      const linhasCp = doc.splitTextToSize(cpText, P2W-p2mg*2-12);
-      const cpBoxH = Math.min(linhasCp.length*5+8, 90);
-      doc.setFillColor(248,250,252);
-      doc.roundedRect(p2mg, p2y, P2W-p2mg*2, cpBoxH, 2,2,'FD');
-      linhasCp.slice(0, Math.floor((cpBoxH-6)/5)).forEach((l,i)=>{
-        doc.text(l, p2mg+6, p2y+6+i*5);
-      });
-      p2y += cpBoxH + 8;
+      const linesCP = doc.splitTextToSize(cpText, colW-8);
+      const cpBoxH  = Math.min(linesCP.length*4.5+6, H-mg*2-p2y+mg-10);
+      doc.setFillColor(248,250,252); doc.rect(p2x, p2y, colW, cpBoxH,'F');
+      doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(p2x, p2y, colW, cpBoxH,'S');
+      doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+      const maxLines = Math.floor((cpBoxH-4)/4.5);
+      linesCP.slice(0,maxLines).forEach((l,i) => doc.text(l, p2x+4, p2y+5+i*4.5));
     }
 
-    // ── QR Code + validação ──
-    const qrY = Math.max(p2y, P2H-p2mg-60);
-    doc.setDrawColor(...AMBER); doc.setLineWidth(1);
-    doc.line(p2mg, qrY, P2W-p2mg, qrY);
-    const qrBlockY = qrY+6;
-    if (qrData) {
-      doc.addImage(qrData,'PNG',p2mg, qrBlockY, 32,32);
-    }
-    doc.setFontSize(10); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    doc.text('Validação Digital', p2mg+40, qrBlockY+8);
-    doc.setFontSize(8); doc.setTextColor(...TEXT2); doc.setFont('helvetica','normal');
-    doc.text('Escaneie o QR Code ou acesse o link abaixo para', p2mg+40, qrBlockY+14);
-    doc.text('verificar a autenticidade deste certificado:', p2mg+40, qrBlockY+19);
-    doc.setFontSize(8); doc.setTextColor(29,78,216); doc.setFont('helvetica','bold');
-    doc.text(urlValid.slice(0,58), p2mg+40, qrBlockY+26);
-    doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
-    doc.text(`Token: ${codigoShort}`, p2mg+40, qrBlockY+33);
+    // ── Coluna direita: validade + QR + assinatura ──
+    const col2x = W/2+4;
+    const col2w = W-mg-col2x-4;
+    let rY = mg+28;
+
+    // Bloco validade
+    const valChips = [
+      {l:'REALIZADO EM', v: fmtDataExtenso(dataCert)},
+      {l:'CARGA HORÁRIA', v: `${ch} hora${ch!==1?'s':''}`},
+      {l:'VÁLIDO ATÉ', v: fmtVal},
+      {l:'CÓDIGO', v: codigoShort},
+    ];
+    valChips.forEach(vc => {
+      doc.setFillColor(...GRAY); doc.rect(col2x, rY, col2w, 13,'F');
+      doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+      doc.line(col2x, rY, col2x+col2w, rY);
+      doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(vc.l, col2x+3, rY+4.5);
+      doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text((vc.v||'—').slice(0,22), col2x+3, rY+10.5);
+      rY += 16;
+    });
+
+    // Linha divisória
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
+    doc.line(col2x, rY+2, col2x+col2w, rY+2);
+    rY += 8;
+
+    // QR Code + validação
+    if (qrData) doc.addImage(qrData,'PNG', col2x, rY, 28,28);
+    doc.setFontSize(7.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text('Validação Digital', col2x+32, rY+6);
+    doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text('Escaneie ou acesse:', col2x+32, rY+12);
+    doc.setFontSize(6); doc.setTextColor([29,78,216]); doc.setFont('helvetica','bold');
+    doc.text(urlValid.slice(0,42), col2x+32, rY+18);
+    doc.setFontSize(6.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text(`Token: ${codigoShort}`, col2x+32, rY+24);
+    rY += 34;
+
+    // Assinatura
+    doc.setDrawColor(...NAVY); doc.setLineWidth(0.4);
+    doc.line(col2x, rY, col2x+col2w, rY);
+    doc.setFontSize(7.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text('Cid Batista de Campos', col2x+col2w/2, rY+6, {align:'center'});
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Eng.º de Seg. do Trabalho · CREA-SC 109085-1', col2x+col2w/2, rY+11, {align:'center'});
 
     // Rodapé p2
-    doc.setFillColor(...NAVY);
-    doc.rect(0, P2H-14, P2W, 14, 'F');
-    doc.setFontSize(7); doc.setTextColor(245,158,11); doc.setFont('helvetica','bold');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', P2W/2, P2H-8, {align:'center'});
-    doc.setTextColor(148,163,184); doc.setFont('helvetica','normal');
-    doc.text('Av. Arno Carlo Gracher, 69 - Sala 4 · Brusque - SC · 88350-310 · (47) 3351-4266 · www.avanteseg.com.br', P2W/2, P2H-4, {align:'center'});
+    doc.setFillColor(...NAVY); doc.rect(mg, H-mg-10, W-mg*2-4, 8,'F');
+    doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-mg-5.5, {align:'center'});
+    doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Av. Arno Carlo Gracher, 69 – Sala 4  ·  Brusque – SC  ·  (47) 3351-4266  ·  www.avanteseg.com.br', W/2, H-mg-1.5, {align:'center'});
 
     // Download
     const nomeSafe = (col.nome||'participante').replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-${nomeSafe}.pdf`);
 
-    await salvarDocumentoSupabase(doc, `cert-individual-${colaboradorId}.pdf`, 'certificado_individual', turmaId, colaboradorId, codigo);
+    await salvarDocumentoSupabase(doc,`cert-individual-${colaboradorId}.pdf`,'certificado_individual',turmaId,colaboradorId,codigo);
     showToast(`Certificado de ${col.nome} gerado!`,'success');
   } catch(e) {
-    console.error(e);
-    showToast(e.message||'Erro ao gerar certificado','error');
+    console.error(e); showToast(e.message||'Erro ao gerar certificado','error');
   } finally { hideLoading(); }
 }
 
@@ -4412,188 +4384,227 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cargo,cpf))')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cargo,cpf))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
-    const ag = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
-    const dataCert = ag?.data || t.created_at?.split('T')[0];
-    const participantes = t.turma_participantes||[];
+    const ag           = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
+    const dataCert     = ag?.data || t.created_at?.split('T')[0];
+    const instrutor    = ag?.usuarios?.nome || '—';
+    const participantes= t.turma_participantes || [];
+    const ch           = t.catalogo?.carga_horaria || 0;
+    const nomeT        = t.catalogo?.nome || 'Treinamento';
+    const valMeses     = t.catalogo?.validade_meses || 12;
 
-    const codigo  = crypto.randomUUID();
-    const urlValid= `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
-    const qrData  = await gerarQRCodeDataURL(urlValid);
+    const dtObj = new Date(dataCert+'T12:00:00');
+    const dtVal = new Date(dtObj);
+    dtVal.setMonth(dtVal.getMonth()+valMeses);
+    const fmtVal = dtVal.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+
+    const codigo      = crypto.randomUUID();
+    const codigoShort = codigo.slice(0,8).toUpperCase();
+    const urlValid    = `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
+    const qrData      = await gerarQRCodeDataURL(urlValid);
+
+    const nrMatch = nomeT.match(/NR[\s-]*(\d+)/i);
+    const nrNum   = nrMatch ? nrMatch[1] : '';
 
     const {jsPDF} = window.jspdf;
-    const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
-    const W = 210, H = 297;
-    const mg = 18;
 
-    // ---- Página 1: Capa do certificado coletivo ----
-    doc.setFillColor(255,255,255);
-    doc.rect(0,0,W,H,'F');
+    // ── Constantes de design (idênticas ao individual) ──
+    const W=297, H=210, mg=14;
+    const NAVY  = [30,42,74];
+    const AMBER = [245,158,11];
+    const WHITE = [255,255,255];
+    const GRAY  = [244,246,250];
+    const BORD  = [220,228,240];
+    const T2    = [71,85,105];
+    const T3    = [148,163,184];
+    const cs    = 9;
 
-    // Barra topo verde escuro
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, W, 48, 'F');
+    const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
 
-    // Logo no topo
-    doc.addImage(LOGO_AVANTESEG, 'PNG', mg, 10, 56, 18);
+    // ── Helper: desenha moldura padrão numa página ──
+    const desenharMoldura = () => {
+      doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
+      doc.setFillColor(...AMBER); doc.rect(W-6,0,6,H,'F');
+      doc.setFillColor(...NAVY);  doc.rect(W-9,0,3,H,'F');
+      doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
+      doc.rect(mg-3,mg-3,W-mg*2+6,H-mg*2+6,'S');
+      doc.setLineWidth(0.3);
+      doc.rect(mg,mg,W-mg*2,H-mg*2,'S');
+      doc.setDrawColor(...AMBER); doc.setLineWidth(2);
+      doc.line(mg-3,mg-3+cs,mg-3,mg-3); doc.line(mg-3,mg-3,mg-3+cs,mg-3);
+      doc.line(W-mg+3-cs,mg-3,W-mg+3,mg-3); doc.line(W-mg+3,mg-3,W-mg+3,mg-3+cs);
+      doc.line(mg-3,H-mg+3-cs,mg-3,H-mg+3); doc.line(mg-3,H-mg+3,mg-3+cs,H-mg+3);
+      doc.line(W-mg+3-cs,H-mg+3,W-mg+3,H-mg+3); doc.line(W-mg+3,H-mg+3,W-mg+3,H-mg+3-cs);
+    };
 
-    // Título no topo direita
-    doc.setFontSize(8.5);
-    doc.setTextColor(148, 163, 184);
-    doc.setFont('helvetica','normal');
-    doc.text('CERTIFICADO COLETIVO DE CONCLUSÃO', W-mg, 18, {align:'right'});
-    doc.setFontSize(7);
-    doc.text(`Protocolo: ${t.protocolo||turmaId.slice(0,8).toUpperCase()}`, W-mg, 24, {align:'right'});
-    doc.text(`Emitido em: ${fmtDataExtenso(new Date().toISOString().split('T')[0])}`, W-mg, 30, {align:'right'});
+    // ══════════════════════════════════════════════════
+    // PÁGINA 1 — CAPA COLETIVA
+    // ══════════════════════════════════════════════════
+    desenharMoldura();
 
-    let y = 62;
+    // Logo
+    doc.addImage(LOGO_AVANTESEG,'PNG', mg+2, mg+2, 58, 18);
 
-    // Bloco empresa contratante
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(mg, y, W-mg*2, 28, 3, 3, 'F');
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica','bold');
-    doc.text('EMPRESA CONTRATANTE', mg+6, y+8);
-    doc.setFontSize(14);
-    doc.setTextColor(15, 23, 42);
-    doc.text(t.clientes?.nome||'-', mg+6, y+18);
+    // Título superior
+    doc.setFontSize(7.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('C  E  R  T  I  F  I  C  A  D  O     C  O  L  E  T  I  V  O     D  E     C  O  N  C  L  U  S  Ã  O', W/2-10, mg+10, {align:'center'});
+
+    // Medalha NR
+    if (nrNum) {
+      const mx=W-mg-22, my=mg+14;
+      doc.setDrawColor(...NAVY); doc.setLineWidth(1.5); doc.circle(mx,my,13,'S');
+      doc.setDrawColor(...AMBER); doc.setLineWidth(0.7); doc.circle(mx,my,11,'S');
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','bold');
+      doc.text('NR', mx, my-4, {align:'center'});
+      doc.setFontSize(15); doc.setTextColor(...NAVY);
+      doc.text(nrNum, mx, my+3, {align:'center'});
+    }
+
+    // Linha
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
+    doc.line(mg+2, mg+24, W-mg-20, mg+24);
+
+    // "A AVANTESeg certifica que a empresa"
+    doc.setFontSize(9.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text('A AVANTESeg certifica que a empresa', W/2-10, mg+33, {align:'center'});
+
+    // Nome da empresa em destaque
+    const nomeEmp = t.clientes?.nome || '—';
+    doc.setFontSize(26); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(nomeEmp.slice(0,40), W/2-10, mg+50, {align:'center'});
+    const nW = doc.getTextWidth(nomeEmp.slice(0,40));
+    doc.setDrawColor(...AMBER); doc.setLineWidth(1.8);
+    doc.line(W/2-10-nW/2, mg+53, W/2-10+nW/2, mg+53);
+
     if (t.clientes?.cnpj) {
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.setFont('helvetica','normal');
-      doc.text(`CNPJ: ${t.clientes.cnpj}`, mg+6, y+24);
+      doc.setFontSize(8); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(`CNPJ: ${t.clientes.cnpj}`, W/2-10, mg+59, {align:'center'});
     }
 
-    y += 36;
+    // Separador
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2);
+    doc.line(W/2-35, mg+63, W/2+15, mg+63);
 
-    // Bloco treinamento
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.setFont('helvetica','bold');
-    doc.text('TREINAMENTO REALIZADO', mg, y);
-    y += 6;
-    doc.setFontSize(16);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont('helvetica','bold');
-    doc.text(t.catalogo?.nome||'', mg, y);
-    y += 5;
-    doc.setDrawColor(5, 150, 105);
-    doc.setLineWidth(1.5);
-    doc.line(mg, y, mg + 60, y);
-    y += 7;
+    // "concluiu com êxito o treinamento"
+    doc.setFontSize(9); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text('concluiu com êxito o treinamento', W/2-10, mg+70, {align:'center'});
 
-    // Info grid
-    doc.setFontSize(8.5);
-    doc.setTextColor(71, 85, 105);
-    doc.setFont('helvetica','normal');
-    doc.text(`Data: ${fmtDataExtenso(dataCert)}`, mg, y);
-    doc.text(`Carga horária: ${t.catalogo?.carga_horaria||'-'}h`, mg+90, y);
-    y += 6;
-    doc.text(`Local: ${t.local||'-'}`, mg, y);
-    doc.text(`Instrutor: ${ag?.usuarios?.nome||'-'}`, mg+90, y);
-    y += 14;
+    // Nome treinamento
+    doc.setFontSize(15); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const lT = doc.splitTextToSize(nomeT, W-mg*2-30);
+    lT.forEach((l,i) => doc.text(l, W/2-10, mg+80+i*8, {align:'center'}));
+    const tY = mg+80 + lT.length*8;
 
-    // Texto certificação
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    doc.setFont('helvetica','italic');
-    const txtCert = `Certificamos que os profissionais listados abaixo, colaboradores da empresa ${t.clientes?.nome||''}, concluíram com êxito o treinamento acima identificado, conforme exigências legais aplicáveis.`;
-    const lines = doc.splitTextToSize(txtCert, W-mg*2);
-    doc.text(lines, mg, y);
-    y += lines.length * 5.5 + 10;
+    // Chips (cards planos)
+    const chips = [
+      {l:'PARTICIPANTES', v:`${participantes.length} colaborador${participantes.length!==1?'es':''}`},
+      {l:'CARGA HORÁRIA',  v:`${ch} hora${ch!==1?'s':''}`},
+      {l:'REALIZADO EM',   v:fmtDataExtenso(dataCert)},
+      {l:'VÁLIDO ATÉ',     v:fmtVal},
+    ];
+    const cW=(W-mg*2-30)/chips.length, cH=16, cYY=tY+6;
+    chips.forEach((c,i) => {
+      const cx2=mg+2+i*(cW+8);
+      doc.setFillColor(...GRAY); doc.rect(cx2,cYY,cW,cH,'F');
+      doc.setDrawColor(...AMBER); doc.setLineWidth(0.8);
+      doc.line(cx2,cYY,cx2+cW,cYY);
+      doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(c.l, cx2+cW/2, cYY+5, {align:'center'});
+      doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text((c.v||'—').slice(0,26), cx2+cW/2, cYY+11.5, {align:'center'});
+    });
 
-    // Tabela participantes — cabeçalho
-    doc.setFillColor(15, 23, 42);
-    doc.rect(mg, y, W-mg*2, 8, 'F');
-    doc.setFontSize(8);
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica','bold');
-    doc.text('Nº', mg+3, y+5.5);
-    doc.text('Nome', mg+14, y+5.5);
-    doc.text('Cargo', mg+100, y+5.5);
-    doc.text('CPF', mg+148, y+5.5);
-    y += 8;
+    // Rodapé navy
+    const fy=H-mg-18;
+    doc.setFillColor(...NAVY); doc.rect(mg,fy,W-mg*2-6,16,'F');
+    doc.setDrawColor(255,255,255,0.2); doc.setLineWidth(0.2);
+    doc.line(mg+6,fy+5,mg+68,fy+5);
+    doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text(instrutor, mg+37, fy+9.5, {align:'center'});
+    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Instrutor Responsável', mg+37, fy+13.5, {align:'center'});
+    doc.line(W/2-45,fy+5,W/2+15,fy+5);
+    doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('Cid Batista de Campos', W/2-15, fy+9.5, {align:'center'});
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Eng.º Seg. do Trabalho · CREA-SC 109085-1', W/2-15, fy+13.5, {align:'center'});
+    if (qrData) doc.addImage(qrData,'PNG',W-mg-38,fy+1,14,14);
+    doc.setFontSize(5.5); doc.setTextColor(...T3);
+    doc.text(`Cód: ${codigoShort}`, W-mg-31, fy+15, {align:'center'});
 
-    for (let i = 0; i < participantes.length; i++) {
-      const p   = participantes[i];
-      const col = p.colaboradores||{};
-      if (y > H - 45) {
-        doc.addPage();
-        y = mg;
-        // Replicar cabeçalho tabela
-        doc.setFillColor(15, 23, 42);
-        doc.rect(mg, y, W-mg*2, 8, 'F');
-        doc.setFontSize(8);
-        doc.setTextColor(255,255,255);
-        doc.setFont('helvetica','bold');
-        doc.text('Nº', mg+3, y+5.5);
-        doc.text('Nome', mg+14, y+5.5);
-        doc.text('Cargo', mg+100, y+5.5);
-        doc.text('CPF', mg+148, y+5.5);
-        y += 8;
-      }
-      const rowH = 9;
-      doc.setFillColor(i%2===0?248:255, i%2===0?250:255, i%2===0?252:255);
-      doc.rect(mg, y, W-mg*2, rowH, 'F');
-      doc.setDrawColor(226,232,240);
-      doc.rect(mg, y, W-mg*2, rowH, 'S');
-      doc.setFontSize(8);
-      doc.setTextColor(15,23,42);
-      doc.setFont('helvetica','normal');
-      doc.text(String(i+1), mg+3, y+6);
-      doc.text((col.nome||'').slice(0,46), mg+14, y+6);
-      doc.text((p.cargo_vinculo||col.cargo||'').slice(0,24), mg+100, y+6);
-      doc.text(col.cpf||'-', mg+148, y+6);
-      y += rowH;
+    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text(`Certificado Nº ${codigoShort} · Emitido em ${fmtDataExtenso(new Date().toISOString().split('T')[0])} · toledolabs.com.br/validar`, W/2-10, H-4, {align:'center'});
+
+    // ══════════════════════════════════════════════════
+    // PÁGINAS DE LISTA — landscape, 15 alunos por página
+    // ══════════════════════════════════════════════════
+    const MAX_POR_PAG = 15;
+    const totalPags   = Math.ceil(participantes.length / MAX_POR_PAG);
+
+    for (let pag=0; pag<totalPags; pag++) {
+      doc.addPage('a4','landscape');
+      desenharMoldura();
+
+      // Mini-header
+      doc.addImage(LOGO_AVANTESEG,'PNG', mg+2, mg+1, 44,14);
+      doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(`${nomeT}  ·  ${t.clientes?.nome||''}  ·  ${fmtDataExtenso(dataCert)}`, W-mg-8, mg+5, {align:'right'});
+      doc.text(`Página ${pag+2} de ${totalPags+1}  ·  Cód: ${codigoShort}`, W-mg-8, mg+11, {align:'right'});
+
+      // Linha âmbar
+      doc.setDrawColor(...AMBER); doc.setLineWidth(0.8);
+      doc.line(mg+2, mg+18, W-mg-8, mg+18);
+
+      let ty = mg+24;
+
+      // Cabeçalho da tabela
+      doc.setFillColor(...NAVY); doc.rect(mg+2, ty, W-mg*2-10, 9,'F');
+      doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+      doc.text('Nº',    mg+6,          ty+6);
+      doc.text('Nome',  mg+18,         ty+6);
+      doc.text('CPF',   mg+130,        ty+6);
+      doc.text('Cargo', mg+168,        ty+6);
+      ty += 9;
+
+      const lote = participantes.slice(pag*MAX_POR_PAG, (pag+1)*MAX_POR_PAG);
+      lote.forEach((p,i) => {
+        const col = p.colaboradores||{};
+        const rowH=9;
+        doc.setFillColor(i%2===0?244:255, i%2===0?246:255, i%2===0?250:255);
+        doc.rect(mg+2, ty, W-mg*2-10, rowH,'F');
+        doc.setDrawColor(...BORD); doc.setLineWidth(0.15);
+        doc.rect(mg+2, ty, W-mg*2-10, rowH,'S');
+        doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
+        doc.text(String(pag*MAX_POR_PAG+i+1), mg+6,  ty+6);
+        doc.text((col.nome||'').slice(0,42),  mg+18,  ty+6);
+        doc.text(col.cpf||'—',                mg+130, ty+6);
+        doc.text((p.cargo_vinculo||col.cargo||'').slice(0,22), mg+168, ty+6);
+        ty += rowH;
+      });
+
+      // Rodapé da página de lista
+      doc.setFillColor(...NAVY); doc.rect(mg,H-mg-10,W-mg*2-6,8,'F');
+      doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+      doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-mg-5.5, {align:'center'});
+      doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text('Av. Arno Carlo Gracher, 69 – Sala 4  ·  Brusque – SC  ·  (47) 3351-4266  ·  www.avanteseg.com.br', W/2, H-mg-1.5, {align:'center'});
     }
-
-    // Rodapé com assinatura e QR
-    y = Math.max(y + 14, H - 55);
-
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.4);
-    doc.line(mg, y, W-mg, y);
-    y += 10;
-
-    // Assinatura
-    doc.setFontSize(8.5);
-    doc.setTextColor(15,23,42);
-    doc.setFont('helvetica','bold');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos', mg+20, y);
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(100,116,139);
-    doc.text('Responsável Técnico', mg+20, y+6);
-    doc.text(`Data de emissão: ${fmtDataExtenso(new Date().toISOString().split('T')[0])}`, mg+20, y+12);
-
-    // QR Code
-    if (qrData) {
-      doc.addImage(qrData, 'PNG', W-mg-30, y-4, 26, 26);
-    }
-    doc.setFontSize(6.5);
-    doc.setTextColor(148,163,184);
-    doc.text('Autenticidade verificável', W-mg-17, y+24, {align:'center'});
-    doc.setFontSize(6);
-    doc.text(`Cód: ${codigo.slice(0,8).toUpperCase()}`, W-mg-17, y+28, {align:'center'});
-
-    doc.setFontSize(7);
-    doc.setTextColor(148,163,184);
-    doc.text('toledolabs.com.br', W/2, H-6, {align:'center'});
 
     const nomeCli = (t.clientes?.nome||'empresa').replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-coletivo-${nomeCli}.pdf`);
 
-    await salvarDocumentoSupabase(doc, `cert-coletivo-${turmaId}.pdf`, 'certificado_coletivo', turmaId, null, codigo);
+    await salvarDocumentoSupabase(doc,`cert-coletivo-${turmaId}.pdf`,'certificado_coletivo',turmaId,null,codigo);
     showToast('Certificado coletivo gerado!','success');
   } catch(e) {
     console.error(e);
     showToast(e.message||'Erro ao gerar certificado coletivo','error');
   } finally { hideLoading(); }
 }
+
+// ============================================================
 
 // ============================================================
 // TELA DOCUMENTOS — turma concluída
