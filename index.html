@@ -235,8 +235,8 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 /* ── Responsive breakpoints ── */
 @media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.fab{bottom:24px;right:24px}}
 @media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column}}
-@media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}.rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rel2-rankings{grid-template-columns:1fr}.home-2col{grid-template-columns:1fr}}
+@media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}.rel2-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 /* ── Home Admin redesign ── */
 .home-navy-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 22px;margin-bottom:14px}
@@ -253,7 +253,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .home-alert-text{font-size:12px;color:var(--amber-h);font-weight:500}
 .home-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
 .home-chart-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.home-2col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.home-2col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;min-width:0}
 .home-list-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
 .home-list-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .home-list-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
@@ -292,26 +292,30 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .rel2-toggle{display:flex;gap:4px}
 .rel2-tbtn{padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-3);transition:.1s}
 .rel2-tbtn.active{background:var(--navy);border-color:var(--navy);color:#fff}
-.rel2-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
-.rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
+.rel2-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;min-width:0}
+.rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px;min-width:0;overflow:hidden}
 .rel2-card:last-child{margin-bottom:0}
 .rel2-card-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-.rel2-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)}
+.rel2-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border);min-width:0}
 .rel2-row:last-child{border:none}
-.rel2-badge{width:22px;height:22px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rel2-badge{width:24px;height:24px;min-width:24px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .rel2-bar-wrap{height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px}
 .rel2-bar{height:3px;border-radius:2px}
-.rel2-cli-btn{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;transition:background .12s;margin-bottom:6px;width:100%;text-align:left}
+.rel2-cli-btn{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;transition:background .12s;margin-bottom:6px;width:100%;text-align:left;min-width:0;overflow:hidden;box-sizing:border-box}
 .rel2-cli-btn:hover{background:var(--gray-50)}
-.rel2-cli-name{font-size:13px;font-weight:600;color:var(--navy)}
+.rel2-cli-name{font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rel2-cli-meta{font-size:11px;color:var(--text-3);margin-top:2px}
 .rel2-back{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;margin-bottom:14px;background:none;border:1px solid var(--border);border-radius:var(--r-md);padding:7px 12px;width:fit-content}
 .rel2-back:hover{background:var(--gray-50)}
 @media(max-width:767px){
   .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .rel2-rankings{grid-template-columns:1fr}
+  .rel2-rankings{grid-template-columns:1fr;gap:10px}
+  .rel2-card{padding:12px 10px}
   .rel2-kpi-val{font-size:20px}
   .rel2-export-btn{font-size:10px;padding:4px 8px}
+  .rel2-cli-btn{padding:9px 10px}
+  .rel2-cli-name{font-size:12px}
+  .rel2-row{gap:8px;padding:8px 0}
 }
 
 /* ── Execution tabs ── */
@@ -833,7 +837,7 @@ async function renderHomeAdmin() {
     <div class="home-chart-card">
       <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
       <div style="overflow-x:auto">
-        <svg viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">${barsHtml}</svg>
+        <svg viewBox="0 0 240 95" width="100%" style="min-width:200px;max-width:560px;max-height:120px;display:block">${barsHtml}</svg>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
         <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
@@ -3419,7 +3423,7 @@ function _renderRelatorioView() {
         </div>
       </div>
       <div style="overflow-x:auto">
-        <svg id="relSvg" viewBox="0 ${meses <= 6 ? '0 240 95' : '0 320 95'}" width="100%" style="min-width:200px;display:block">
+        <svg id="relSvg" viewBox="0 ${meses <= 6 ? '0 240 95' : '0 320 95'}" width="100%" style="min-width:200px;max-width:640px;max-height:130px;display:block">
           ${_buildRelBars(dadosTurmas, '#1E2A4A', mesesLabel)}
         </svg>
       </div>
@@ -3481,7 +3485,12 @@ function relToggle(btn, metric, label, color) {
   btn.classList.add('active');
   const dados = window._relDados?.[metric] || [];
   const svg = document.getElementById('relSvg');
-  if (svg && window._relMeses) svg.innerHTML = _buildRelBars(dados, color, window._relMeses);
+  if (svg && window._relMeses) {
+    svg.innerHTML = _buildRelBars(dados, color, window._relMeses);
+    // Preservar dimensões responsivas após rebuild
+    svg.style.maxWidth = '640px';
+    svg.style.maxHeight = '130px';
+  }
   const leg = document.getElementById('relLegLabel');
   if (leg) leg.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block"></span>${label}`;
 }
