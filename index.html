@@ -677,8 +677,6 @@ function configurarNavegacao() {
     if (i.sec) return `<div class="sidebar-section-label">${i.sec}</div>`;
     return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}"><span class="si-icon">${ICONS[i.icon]||''}</span><span>${i.l}</span></div>`;
   }).join('');
-  body.innerHTML = listaHtml;
-  _setElBoth('agendaCalListaBody', listaHtml);
 
   const navItens = itens.filter(i=>i.id);
   const bnItens = navItens.filter(i=>bottom.includes(i.id));
@@ -2343,7 +2341,7 @@ async function executarImportacao() {
     let totalOk = 0;
     if (comCpf.length) {
       const {data: d1, error: e1} = await sb.from('colaboradores')
-        .upsert(comCpf, {onConflict:'cpf,org_id', ignoreDuplicates:false}).select();
+        .upsert(comCpf, {onConflict:'cpf', ignoreDuplicates:false}).select();
       if (e1) throw e1;
       totalOk += d1?.length || comCpf.length;
     }
@@ -2618,6 +2616,8 @@ function _agendaAtualizarLista(dataFiltro) {
       </div>
     </div>`;
   }).join('');
+  body.innerHTML = listaHtml;
+  _setElBoth('agendaCalListaBody', listaHtml);
 }
 
 function _agendaNavMes(delta) {
