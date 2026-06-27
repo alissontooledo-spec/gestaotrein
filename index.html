@@ -107,7 +107,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .mh-greeting{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:2px;font-weight:400}
 .mh-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.4px}
 .mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(245,158,11,.18);padding:4px 10px;border-radius:999px;font-size:11px;color:var(--amber);font-weight:500;border:1px solid rgba(245,158,11,.25)}
-.mobile-content{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
+.mobile-content{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
 
 /* ── Cards & surfaces ── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
@@ -234,22 +234,12 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 
 /* ── Responsive breakpoints ── */
 @media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.fab{bottom:24px;right:24px}}
-@media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column}}
+@media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column;overflow-x:hidden}#mobileBody{max-width:100%;overflow-x:hidden}}
 @media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}}
 
 /* ── Home Admin redesign ── */
 .home-navy-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 22px;margin-bottom:14px}
-@media(max-width:767px){.home-navy-header{display:none!important}}
-
-/* KPI grid mobile-only (aparece apenas no mobile, substituindo o navy-header) */
-.home-kpi-mobile-grid{display:none}
-@media(max-width:767px){
-  .home-kpi-mobile-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
-  .home-kpi-mob{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--navy);border-radius:var(--r-lg);padding:12px 14px;cursor:pointer}
-  .home-kpi-mob-val{font-size:22px;font-weight:700;color:var(--navy);line-height:1}
-  .home-kpi-mob-lbl{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
-}
 .home-navy-greeting{font-size:17px;font-weight:700;color:#fff;margin-bottom:2px}
 .home-navy-sub{font-size:12px;color:rgba(255,255,255,.45)}
 .home-kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
@@ -273,10 +263,14 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .home-list-name{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-list-sub{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px}
-@media(max-width:520px){
+@media(max-width:767px){
   .home-2col{grid-template-columns:1fr}
   .home-qa{grid-template-columns:repeat(2,minmax(0,1fr))}
   .home-kpi-val{font-size:20px}
+  .home-chart-card{padding:12px}
+  .home-list-card{padding:12px}
+  .home-qa{gap:8px}
+  .qa-btn{padding:12px}
 }
 
 /* ── Relatórios redesign ── */
@@ -303,22 +297,23 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .rel2-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
 .rel2-card-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-@media(max-width:520px){
-  .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .rel2-rankings{grid-template-columns:1fr}
-  .rel2-kpi-val{font-size:20px}
-  .rel2-export-btn{font-size:10px;padding:4px 8px}
+@media(max-width:767px){
   .rel2-header{border-radius:var(--r-lg);padding:14px 14px 16px}
   .rel2-title{font-size:15px}
-  .rel2-period{gap:4px;margin-top:10px}
+  .rel2-sub{font-size:11px}
+  .rel2-period{gap:4px;margin-top:10px;flex-wrap:wrap}
   .rel2-chip{padding:3px 10px;font-size:10px}
-  .rel2-kpi{padding:10px 10px}
+  .rel2-export{gap:4px}
+  .rel2-export-btn{font-size:10px;padding:4px 8px}
+  .rel2-kpis{grid-template-columns:repeat(2,1fr);gap:8px}
+  .rel2-kpi{padding:10px}
   .rel2-kpi-val{font-size:18px}
   .rel2-kpi-icon{font-size:14px;margin-bottom:4px}
-}
-@media(max-width:360px){
-  .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .rel2-kpi-val{font-size:16px}
+  .rel2-kpi-lbl{font-size:9px}
+  .rel2-rankings{grid-template-columns:1fr}
+  .rel2-card{padding:12px}
+  .rel2-chart{padding:12px}
+  .rel2-card-title{font-size:10px}
 }
 
 /* ── Execution tabs ── */
@@ -617,14 +612,7 @@ async function fazerLogin() {
 async function entrarNoApp() {
   showScreen('screenApp');
   configurarNavegacao();
-  // Roteamento por hash — suporte ao botão Voltar do browser/mobile
-  window.onpopstate = async (e) => {
-    if (!usuarioAtual) return;
-    const pg = (e.state?.pagina) || location.hash.replace('#','') || 'home';
-    await irPara(pg, {}, true);
-  };
-  const paginaInicial = location.hash.replace('#','') || 'home';
-  await irPara(paginaInicial);
+  await irPara('home');
 }
 
 async function fazerLogout() {
@@ -691,12 +679,8 @@ function marcarNavAtivo(id) {
 
 const TITULOS = {home:'Início',orgs:'Organizações',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
-async function irPara(pagina, params={}, _fromPopstate=false) {
+async function irPara(pagina, params={}) {
   paginaAtual = pagina;
-  if (!_fromPopstate) {
-    const hash = '#' + pagina;
-    if (location.hash !== hash) history.pushState({pagina}, '', hash);
-  }
   marcarNavAtivo(pagina);
   fecharSidebar();
   fabOcultar();
@@ -846,32 +830,12 @@ async function renderHomeAdmin() {
       </div>
     </div>
 
-    <!-- KPIs mobile-only (sem o header navy duplicado) -->
-    <div class="home-kpi-mobile-grid">
-      <div class="home-kpi-mob" onclick="irParaTurmasFiltradas('em_andamento')">
-        <div class="home-kpi-mob-val">${ativas}</div>
-        <div class="home-kpi-mob-lbl">Turmas ativas</div>
-      </div>
-      <div class="home-kpi-mob" onclick="irParaTurmasFiltradas('agendada')">
-        <div class="home-kpi-mob-val">${agendadas}</div>
-        <div class="home-kpi-mob-lbl">Agendadas</div>
-      </div>
-      <div class="home-kpi-mob" onclick="irPara('clientes')">
-        <div class="home-kpi-mob-val">${cliAtivos}</div>
-        <div class="home-kpi-mob-lbl">Clientes ativos</div>
-      </div>
-      <div class="home-kpi-mob" onclick="irParaTurmasFiltradas('concluida')">
-        <div class="home-kpi-mob-val">${concluidas}</div>
-        <div class="home-kpi-mob-lbl">Concluídas</div>
-      </div>
-    </div>
-
     ${ativas===0&&agendadas>0?`<div class="home-alert"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--amber-h)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div class="home-alert-text">${agendadas} turma${agendadas!==1?'s':''} agendada${agendadas!==1?'s':''} aguardando início</div></div>`:''}
 
     <div class="home-chart-card">
       <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
       <div style="overflow-x:auto">
-        <svg viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">${barsHtml}</svg>
+        <svg viewBox="0 0 240 95" width="100%" style="min-width:0;display:block;width:100%">${barsHtml}</svg>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
         <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
@@ -3301,7 +3265,7 @@ async function renderRelatorios() {
 
   setConteudo(`
     <div class="rel2-header">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
         <div>
           <div class="rel2-title">Relatórios</div>
           <div class="rel2-sub">AvanteSeg · Atualizado agora</div>
@@ -3372,7 +3336,7 @@ async function renderRelatorios() {
         </div>
       </div>
       <div style="overflow-x:auto">
-        <svg id="relSvg" viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">
+        <svg id="relSvg" viewBox="0 0 240 95" width="100%" style="min-width:0;display:block;width:100%">
           ${_buildBars(dadosTurmas,'#1E2A4A')}
         </svg>
       </div>
