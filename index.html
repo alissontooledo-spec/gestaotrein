@@ -1102,7 +1102,22 @@ async function criarUsuarioOrg() {
       await sb.from('usuarios').update({sigla_conselho,conselho_classe,especialidade}).eq('id',resultado.userId);
     }
     fecharModal(); showToast(`${nome} criado com sucesso!`,'success');
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro','error'); }
+  } catch(e) {
+    setBtnModalLoading(false);
+    const msg = e.message || 'Erro ao criar usuário';
+    showToast(msg, 'error');
+    // Mostrar erro também dentro do modal para não perder o contexto
+    const modalBody = document.querySelector('.modal-body');
+    if (modalBody) {
+      const errEl = modalBody.querySelector('#_erroModal');
+      if (errEl) errEl.remove();
+      const div = document.createElement('div');
+      div.id = '_erroModal';
+      div.style.cssText = 'background:var(--red-l);color:var(--red);border:1px solid var(--red);border-radius:8px;padding:10px 12px;font-size:13px;margin-top:12px;display:flex;align-items:center;gap:8px';
+      div.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>' + msg;
+      modalBody.appendChild(div);
+    }
+  }
 }
 
 // ============================================================
@@ -1882,7 +1897,22 @@ async function confirmarCancelarTurma() {
     fecharModal();
     showToast('Turma cancelada','info');
     await renderTurmas();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro','error'); }
+  } catch(e) {
+    setBtnModalLoading(false);
+    const msg = e.message || 'Erro ao criar usuário';
+    showToast(msg, 'error');
+    // Mostrar erro também dentro do modal para não perder o contexto
+    const modalBody = document.querySelector('.modal-body');
+    if (modalBody) {
+      const errEl = modalBody.querySelector('#_erroModal');
+      if (errEl) errEl.remove();
+      const div = document.createElement('div');
+      div.id = '_erroModal';
+      div.style.cssText = 'background:var(--red-l);color:var(--red);border:1px solid var(--red);border-radius:8px;padding:10px 12px;font-size:13px;margin-top:12px;display:flex;align-items:center;gap:8px';
+      div.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>' + msg;
+      modalBody.appendChild(div);
+    }
+  }
 }
 
 async function cancelarTurma(id) {
@@ -2300,13 +2330,15 @@ async function renderAgenda() {
   const concluidas = grupos.filter(g => g.turma.status === 'concluida');
 
   setConteudo(`
-    <div class="card" style="margin-bottom:16px;padding:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <button onclick="_agendaNavMes(-1)" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--navy);padding:4px 10px">‹</button>
-        <div id="agendaCalMes" style="font-size:15px;font-weight:700;color:var(--navy)"></div>
-        <button onclick="_agendaNavMes(1)" style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--navy);padding:4px 10px">›</button>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);margin-bottom:16px;overflow:hidden">
+      <div style="background:var(--navy);padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <button onclick="_agendaNavMes(-1)" style="border:none;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">‹</button>
+        <div id="agendaCalMes" style="font-size:15px;font-weight:700;color:#fff"></div>
+        <button onclick="_agendaNavMes(1)" style="border:none;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">›</button>
       </div>
-      <div id="agendaCalGrid"></div>
+      <div style="padding:12px 14px 14px">
+        <div id="agendaCalGrid"></div>
+      </div>
     </div>
     <div id="agendaListaFiltrada">
       <div class="home-section">
@@ -2327,30 +2359,94 @@ async function renderAgenda() {
 }
 
 function _agendaRenderCalendario() {
-  const mes  = window._agendaMes;
-  const ano  = window._agendaAno;
+  const mes      = window._agendaMes;
+  const ano      = window._agendaAno;
   const datasSet = window._agendaDatasComSessao;
-  const hoje = window._agendaHoje;
-  const nomesMeses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const elMes = document.getElementById('agendaCalMes');
+  const hoje     = window._agendaHoje;
+  const nomesMeses = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const elMes  = document.getElementById('agendaCalMes');
   const elGrid = document.getElementById('agendaCalGrid');
   if (!elMes || !elGrid) return;
+
   elMes.textContent = `${nomesMeses[mes-1]} ${ano}`;
+
   const primeiroDia = new Date(ano, mes-1, 1).getDay();
   const diasNoMes   = new Date(ano, mes, 0).getDate();
-  const dias = ['D','S','T','Q','Q','S','S'];
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
-  html += dias.map(d=>`<div style="font-size:10px;font-weight:700;color:var(--text-3);padding:4px 0">${d}</div>`).join('');
-  for (let i=0; i<primeiroDia; i++) html += `<div></div>`;
-  for (let d=1; d<=diasNoMes; d++) {
-    const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const diasSemana  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
+
+  // Contar sessoes no mes atual para exibir legenda
+  const sessoesNoMes = [...datasSet].filter(d => {
+    const [y,m] = d.split('-').map(Number);
+    return y === ano && m === mes;
+  }).length;
+
+  let html = '';
+
+  // Cabeçalho com dias da semana
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:6px">';
+  html += diasSemana.map(d =>
+    `<div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-3);padding:4px 0;letter-spacing:.02em">${d}</div>`
+  ).join('');
+  html += '</div>';
+
+  // Grid de dias
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
+
+  // Células vazias antes do primeiro dia
+  for (let i = 0; i < primeiroDia; i++) {
+    html += '<div style="aspect-ratio:1"></div>';
+  }
+
+  // Dias do mês
+  for (let d = 1; d <= diasNoMes; d++) {
+    const dataStr  = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const temSessao = datasSet.has(dataStr);
     const ehHoje    = dataStr === hoje;
-    html += `<div onclick="_agendaFiltrarData('${dataStr}')" style="padding:6px 2px;border-radius:6px;font-size:12px;cursor:${temSessao?'pointer':'default'};font-weight:${ehHoje?'700':'400'};background:${ehHoje?'var(--navy)':temSessao?'rgba(30,42,74,.1)':'transparent'};color:${ehHoje?'#fff':temSessao?'var(--navy)':'var(--text-3)'};position:relative">
-      ${d}${temSessao&&!ehHoje?`<span style="display:block;width:4px;height:4px;background:var(--amber);border-radius:50%;margin:2px auto 0"></span>`:''}
-    </div>`;
+    const ehPassado = dataStr < hoje && !temSessao;
+
+    let bg    = 'transparent';
+    let color = ehPassado ? 'var(--text-3)' : 'var(--text-1)';
+    let fw    = '400';
+    let borda = 'none';
+    let cursor = 'default';
+    let opacity = ehPassado ? '0.4' : '1';
+
+    if (ehHoje && temSessao) {
+      bg = 'var(--navy)'; color = '#fff'; fw = '700'; cursor = 'pointer';
+    } else if (ehHoje) {
+      bg = 'var(--navy)'; color = '#fff'; fw = '700';
+    } else if (temSessao) {
+      bg = 'rgba(245,158,11,.15)'; color = 'var(--navy)'; fw = '600';
+      borda = '1.5px solid rgba(245,158,11,.4)'; cursor = 'pointer'; opacity = '1';
+    }
+
+    const dotHtml = temSessao && !ehHoje
+      ? '<div style="width:5px;height:5px;background:var(--amber);border-radius:50%;margin:2px auto 0"></div>'
+      : '';
+
+    html += `<div
+      onclick="${temSessao ? `_agendaFiltrarData('${dataStr}')` : ''}"
+      style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;font-size:13px;font-weight:${fw};background:${bg};color:${color};cursor:${cursor};border:${borda};opacity:${opacity};transition:background .12s;user-select:none"
+      
+    >${d}${dotHtml}</div>`;
   }
   html += '</div>';
+
+  // Legenda compacta
+  if (sessoesNoMes > 0) {
+    html += `<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)">
+        <div style="width:10px;height:10px;border-radius:3px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.4)"></div>
+        Dia com sessao
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)">
+        <div style="width:10px;height:10px;border-radius:3px;background:var(--navy)"></div>
+        Hoje
+      </div>
+      <div style="margin-left:auto;font-size:11px;color:var(--text-3)">${sessoesNoMes} sessao(es) neste mes</div>
+    </div>`;
+  }
+
   elGrid.innerHTML = html;
 }
 
