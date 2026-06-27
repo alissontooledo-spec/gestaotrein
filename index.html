@@ -4191,155 +4191,189 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.setFontSize(6.5); doc.setTextColor(...T3);
     doc.text(`Certificado No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
-    // ════════════════════════════════
-    // PÁGINA 2 - CONTRACAPA (landscape) — Layout B1 aprovado
-    // 3 colunas: Treinamento | Conteúdo Programático | Dados
-    // Validação integrada no strip acima do rodapé
-    // ════════════════════════════════
+    // ════════════════════════════════════════════════════════
+    // PÁGINA 2 - CONTRACAPA INDIVIDUAL — Layout B1 v2
+    // Fontes mínimas 7pt para impressão, CP contido na coluna
+    // ════════════════════════════════════════════════════════
     doc.addPage('a4','landscape');
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
 
-    // Cabeçalho navy
+    // ── Cabeçalho navy (28mm) ──
     doc.setFillColor(...NAVY); doc.rect(0,0,W,28,'F');
     doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
-    doc.addImage(LOGO_AVANTESEG,'PNG',16,7,48,14);
-    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-16, 17, {align:'right'});
+    doc.addImage(LOGO_AVANTESEG,'PNG',14,6,50,16);
+    doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-14, 17, {align:'right'});
 
-    // ── Dimensões das 3 colunas ──
-    const mg2=16, gap2=8, bodyTop=36, bodyBot=H-22;
-    const bodyH = bodyBot - bodyTop;
-    const colW = (W - mg2*2 - gap2*2) / 3;
-    const c1x=mg2, c2x=mg2+colW+gap2, c3x=mg2+colW*2+gap2*2;
+    // ── Geometria: 3 colunas proporcionais ──
+    // W=297, margens=14, gaps=6, total_content=257
+    // Col1 (33%=85mm): Treinamento + Participante
+    // Col2 (37%=95mm): Conteúdo Programático + Assinatura
+    // Col3 (30%=77mm): Dados do Certificado
+    const p_mg=14, p_gap=6, p_top=30, p_bot=H-26;
+    const p_c1w=85, p_c2w=95, p_c3w=77;
+    const p_c1x=p_mg, p_c2x=p_mg+p_c1w+p_gap, p_c3x=p_mg+p_c1w+p_gap+p_c2w+p_gap;
 
     // Separadores verticais
     doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
-    doc.line(c2x-gap2/2, bodyTop+4, c2x-gap2/2, bodyBot-4);
-    doc.line(c3x-gap2/2, bodyTop+4, c3x-gap2/2, bodyBot-4);
+    doc.line(p_c2x-p_gap/2, p_top+4, p_c2x-p_gap/2, p_bot-2);
+    doc.line(p_c3x-p_gap/2, p_top+4, p_c3x-p_gap/2, p_bot-2);
 
-    // ── COLUNA 1: Treinamento + Participante ──
-    let y1 = bodyTop+6;
-    // Título coluna
-    doc.setFontSize(5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('TREINAMENTO', c1x, y1); y1+=4;
-    doc.setDrawColor(...AMBER); doc.setLineWidth(0.5); doc.line(c1x, y1, c1x+18, y1); y1+=5;
-    // Nome do treinamento
-    doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    const lT2 = doc.splitTextToSize(s(nomeT,80), colW-2);
-    lT2.slice(0,3).forEach((l,i) => doc.text(l, c1x, y1+i*6));
-    y1 += Math.min(lT2.length,3)*6 + 3;
-    // Campos empresa, CNPJ, instrutor
-    const camposT = [
-      {l:'Empresa',   v:s(t.clientes?.nome||'nao informada',30)},
+    // ══ COLUNA 1: Treinamento + Participante ══
+    let p_y1 = p_top+6;
+
+    // Rótulo seção
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('TREINAMENTO', p_c1x, p_y1); p_y1+=3.5;
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+    doc.line(p_c1x, p_y1, p_c1x+22, p_y1); p_y1+=5;
+
+    // Nome do treinamento — até 2 linhas
+    doc.setFontSize(10); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const p_lT = doc.splitTextToSize(s(nomeT,80), p_c1w-3);
+    p_lT.slice(0,2).forEach((l,i) => doc.text(l, p_c1x, p_y1+i*7));
+    p_y1 += Math.min(p_lT.length,2)*7 + 4;
+
+    // Campos empresa / CNPJ / instrutor
+    [
+      {l:'Empresa',   v:s(t.clientes?.nome||'nao informada',28)},
       {l:'CNPJ',      v:s(t.clientes?.cnpj||'nao informado')},
-      {l:'Instrutor', v:s(instrutor,30)},
-    ];
-    camposT.forEach(c => {
-      doc.setFontSize(4.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(c.l.toUpperCase(), c1x, y1); y1+=3;
-      doc.setFontSize(6.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-      doc.text(c.v, c1x, y1); y1+=5;
+      {l:'Instrutor', v:s(instrutor,28)},
+    ].forEach(c => {
+      doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(c.l.toUpperCase(), p_c1x, p_y1); p_y1+=3.5;
+      doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text(c.v, p_c1x, p_y1); p_y1+=6;
     });
-    y1+=2;
-    // Divisor
-    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(c1x, y1, c1x+colW-4, y1); y1+=5;
-    // Participante
-    doc.setFontSize(4.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('PARTICIPANTE', c1x, y1); y1+=4;
-    doc.setFillColor(...GRAY); doc.rect(c1x, y1, colW-4, 22, 'F');
-    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(c1x, y1, colW-4, 22, 'S');
-    doc.setDrawColor(...NAVY); doc.setLineWidth(2); doc.line(c1x, y1, c1x, y1+22);
-    doc.setFontSize(8.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    doc.text(s(col.nome,28), c1x+4, y1+8);
-    doc.setFontSize(6); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-    doc.text(`CPF: ${s(col.cpf||'nao informado')}`, c1x+4, y1+15);
-    doc.text(`Cargo: ${s(col.cargo||'nao informado',26)}`, c1x+4, y1+20);
 
-    // ── COLUNA 2: Conteúdo Programático + Assinatura ──
-    let y2 = bodyTop+6;
-    doc.setFontSize(5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('CONTEUDO PROGRAMATICO', c2x, y2); y2+=4;
-    doc.setDrawColor(...AMBER); doc.setLineWidth(0.5); doc.line(c2x, y2, c2x+30, y2); y2+=5;
+    p_y1+=3;
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
+    doc.line(p_c1x, p_y1, p_c1x+p_c1w-4, p_y1); p_y1+=5;
+
+    // Card participante
+    doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('PARTICIPANTE', p_c1x, p_y1); p_y1+=4;
+    const p_cardH = 26;
+    doc.setFillColor(...GRAY); doc.rect(p_c1x, p_y1, p_c1w-4, p_cardH, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(p_c1x, p_y1, p_c1w-4, p_cardH, 'S');
+    doc.setDrawColor(...NAVY); doc.setLineWidth(2.5); doc.line(p_c1x, p_y1, p_c1x, p_y1+p_cardH);
+    doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const p_nomePartLines = doc.splitTextToSize(s(col.nome,32), p_c1w-10);
+    p_nomePartLines.slice(0,2).forEach((l,i) => doc.text(l, p_c1x+5, p_y1+7+i*6));
+    doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text(`CPF: ${s(col.cpf||'nao informado')}`, p_c1x+5, p_y1+20);
+    if (col.cargo) doc.text(`Cargo: ${s(col.cargo,28)}`, p_c1x+5, p_y1+25);
+
+    // ══ COLUNA 2: Conteúdo Programático + Assinatura ══
+    let p_y2 = p_top+6;
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('CONTEUDO PROGRAMATICO', p_c2x, p_y2); p_y2+=3.5;
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+    doc.line(p_c2x, p_y2, p_c2x+36, p_y2); p_y2+=5;
+
+    // Área CP — reserva espaço para assinatura (18mm no final)
+    const p_cpMaxY = p_bot - 18;
+    const p_cpLeading = 4.2;
     if (cpText) {
-      const lCP2 = doc.splitTextToSize(s(cpText,1000), colW-4);
-      const maxLinhas = Math.floor((bodyBot - y2 - 20) / 4.5);
-      doc.setFontSize(6.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-      lCP2.slice(0, maxLinhas).forEach((l,i) => doc.text(l, c2x, y2+i*4.5));
+      // splitTextToSize garante word-wrap dentro de p_c2w-4
+      const p_lCP = doc.splitTextToSize(s(cpText,2000), p_c2w-4);
+      const p_maxLinhas = Math.floor((p_cpMaxY - p_y2) / p_cpLeading);
+      doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+      p_lCP.slice(0, p_maxLinhas).forEach((l,i) => {
+        doc.text(l, p_c2x, p_y2 + i*p_cpLeading);
+      });
+      // Indicador de continuação se houver mais conteúdo
+      if (p_lCP.length > p_maxLinhas) {
+        doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
+        doc.text('(continua no verso...)', p_c2x, p_cpMaxY);
+      }
     } else {
-      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
-      doc.text('Conteudo nao informado.', c2x, y2);
-    }
-    // Assinatura instrutor (estilo B2 — base da coluna)
-    const sigY2 = bodyBot - 10;
-    doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3); doc.line(c2x+colW*0.1, sigY2, c2x+colW*0.9, sigY2);
-    doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    doc.text(s(instrutor,30), c2x+colW/2, sigY2+4, {align:'center'});
-    if (instCredencial) {
-      doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(instCredencial, c2x+colW/2, sigY2+9, {align:'center'});
-      if (instEspec) { doc.setFontSize(5); doc.text(pdfSafe(instEspec,40), c2x+colW/2, sigY2+13, {align:'center'}); }
-    } else {
-      doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text('Instrutor Responsavel', c2x+colW/2, sigY2+9, {align:'center'});
+      doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
+      doc.text('Conteudo nao informado.', p_c2x, p_y2);
     }
 
-    // ── COLUNA 3: Dados do Certificado ──
-    let y3 = bodyTop+6;
-    doc.setFontSize(5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('DADOS DO CERTIFICADO', c3x, y3); y3+=4;
-    doc.setDrawColor(...AMBER); doc.setLineWidth(0.5); doc.line(c3x, y3, c3x+24, y3); y3+=6;
-    const dadosCert = [
+    // Assinatura — sempre na base da col2, nunca sobrepõe o CP
+    const p_sigY = p_bot - 12;
+    doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
+    doc.line(p_c2x + p_c2w*0.08, p_sigY, p_c2x + p_c2w*0.92, p_sigY);
+    doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(s(instrutor,32), p_c2x+p_c2w/2, p_sigY+5, {align:'center'});
+    if (instCredencial) {
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(instCredencial, p_c2x+p_c2w/2, p_sigY+10, {align:'center'});
+      if (instEspec) {
+        doc.setFontSize(6); doc.text(pdfSafe(instEspec,44), p_c2x+p_c2w/2, p_sigY+15, {align:'center'});
+      }
+    } else {
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text('Instrutor Responsavel', p_c2x+p_c2w/2, p_sigY+10, {align:'center'});
+    }
+
+    // ══ COLUNA 3: Dados do Certificado ══
+    let p_y3 = p_top+6;
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('DADOS DO CERTIFICADO', p_c3x, p_y3); p_y3+=3.5;
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+    doc.line(p_c3x, p_y3, p_c3x+30, p_y3); p_y3+=6;
+
+    [
       {l:'Realizado em', v:fmtDataExtensoPDF(dataCert)},
       {l:'Carga horaria', v:`${ch} hora${ch!==1?'s':''}`},
+      {l:'Empresa',       v:s(t.clientes?.nome||'nao informada',24)},
       {l:'Valido ate',    v:s(fmtVal)},
-    ];
-    dadosCert.forEach(d => {
-      doc.setFontSize(4.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(d.l.toUpperCase(), c3x, y3); y3+=3;
-      doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-      doc.text(d.v, c3x, y3); y3+=6;
+    ].forEach(d => {
+      doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(d.l.toUpperCase(), p_c3x, p_y3); p_y3+=3.5;
+      doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text(d.v, p_c3x, p_y3); p_y3+=7;
     });
-    // Código de autenticidade
-    y3+=2;
-    doc.setFontSize(4.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('CODIGO DE AUTENTICIDADE', c3x, y3); y3+=4;
-    doc.setFillColor(...NAVY); doc.rect(c3x, y3, colW-4, 8, 'F');
-    doc.setFontSize(8); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text(codigoShort, c3x+(colW-4)/2, y3+5.5, {align:'center'});
 
-    // ── STRIP DE VALIDAÇÃO ──
-    const stripY = H-22;
-    doc.setFillColor(244,246,250); doc.rect(0, stripY, W, 10, 'F');
-    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(0, stripY, W, stripY);
-    // Ponto amber + label validação
-    doc.setFillColor(...AMBER); doc.circle(mg2+2, stripY+5, 1.5, 'F');
-    doc.setFontSize(4); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('VALIDACAO DO CERTIFICADO', mg2+6, stripY+3.5);
-    doc.setFontSize(5); doc.setTextColor(...BLUE); doc.setFont('helvetica','bold');
-    doc.text('toledolabs.com.br/validar', mg2+6, stripY+8);
-    // Separador
-    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(mg2+68, stripY+2, mg2+68, stripY+8);
-    // Código
-    doc.setFillColor(100,116,139); doc.circle(mg2+72, stripY+5, 1.5, 'F');
-    doc.setFontSize(4); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('CODIGO', mg2+76, stripY+3.5);
-    doc.setFontSize(5.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    doc.text(codigoShort, mg2+76, stripY+8);
-    // Separador
-    doc.setDrawColor(...BORD); doc.line(mg2+110, stripY+2, mg2+110, stripY+8);
-    // QR Code no strip
-    if (qrData) doc.addImage(qrData,'PNG', mg2+114, stripY+0.5, 9, 9);
-    doc.setFontSize(4); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('Escaneie para validar', mg2+125, stripY+5.5);
+    p_y3+=4;
+    doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('CODIGO DE AUTENTICIDADE', p_c3x, p_y3); p_y3+=4;
+    doc.setFillColor(...NAVY); doc.rect(p_c3x, p_y3, p_c3w-2, 10, 'F');
+    doc.setFontSize(9); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text(codigoShort, p_c3x+(p_c3w-2)/2, p_y3+7, {align:'center'});
+
+    // ── STRIP DE VALIDAÇÃO (14mm, legível para impressão) ──
+    const p_stripY = H-26;
+    doc.setFillColor(244,246,250); doc.rect(0, p_stripY, W, 14, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(0, p_stripY, W, p_stripY);
+
+    // Âncora 1: validação
+    doc.setFillColor(...AMBER); doc.circle(p_mg+3, p_stripY+7, 2, 'F');
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('VALIDACAO DO CERTIFICADO', p_mg+8, p_stripY+4.5);
+    doc.setFontSize(6.5); doc.setTextColor(...BLUE); doc.setFont('helvetica','bold');
+    doc.text('toledolabs.com.br/validar', p_mg+8, p_stripY+10);
+
+    // Sep
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(p_mg+76, p_stripY+2, p_mg+76, p_stripY+12);
+
+    // Âncora 2: código
+    doc.setFillColor(100,116,139); doc.circle(p_mg+80, p_stripY+7, 2, 'F');
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('CODIGO', p_mg+85, p_stripY+4.5);
+    doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(codigoShort, p_mg+85, p_stripY+10.5);
+
+    // Sep
+    doc.setDrawColor(...BORD); doc.line(p_mg+118, p_stripY+2, p_mg+118, p_stripY+12);
+
+    // QR Code
+    if (qrData) doc.addImage(qrData,'PNG', p_mg+122, p_stripY+1, 12, 12);
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Escaneie para validar', p_mg+137, p_stripY+8);
+
     // Texto legal à direita
-    doc.setFontSize(3.8); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('Este documento foi emitido eletronicamente e tem validade juridica conforme legislacao vigente.', W-16, stripY+5.5, {align:'right'});
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Emitido eletronicamente. Validade juridica conforme legislacao vigente.', W-14, p_stripY+8, {align:'right'});
 
     // ── RODAPÉ ──
     doc.setFillColor(...NAVY); doc.rect(0, H-12, W, 12, 'F');
-    doc.setFontSize(6); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
     doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-6.5, {align:'center'});
-    doc.setFontSize(4.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text('Av. Arno Carlo Gracher, 69 Sala 4  -  Brusque - SC  -  (47) 3351-4266  -  www.avanteseg.com.br', W/2, H-2.5, {align:'center'});
 
     const nomeSafe = s(col.nome,60).replace(/\s+/g,'-').toLowerCase();
@@ -4477,143 +4511,168 @@ async function gerarCertificadoColetivo(turmaId) {
       doc.text('Instrutor Responsavel', W/2, fy+22, {align:'center'});
     }
     if (qrData) doc.addImage(qrData,'PNG',W-50,fy+4,18,18);
-    doc.setFontSize(5.5); doc.setTextColor(...T3);
+    doc.setFontSize(6); doc.setTextColor(...T3);
     doc.text(`Cod: ${codigoShort}`, W-41, fy+24, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text(`No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
-    // ════════════════════════════════
-    // PÁGINA 2 - CONTRACAPA coletivo — Layout B1 aprovado
-    // Esquerda: Treinamento | Centro: Conteúdo Prog. | Direita: Participantes
-    // Strip de validação + strip instrutor acima do rodapé
-    // ════════════════════════════════
+    // ════════════════════════════════════════════════════════
+    // PÁGINA 2 - CONTRACAPA COLETIVO — Layout B1 v2
+    // Mesma geometria da contracapa individual (padronizado)
+    // ════════════════════════════════════════════════════════
     doc.addPage('a4','landscape');
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
 
-    // Cabeçalho navy
+    // ── Cabeçalho navy (28mm) ──
     doc.setFillColor(...NAVY); doc.rect(0,0,W,28,'F');
     doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
-    doc.addImage(LOGO_AVANTESEG,'PNG',16,7,48,14);
-    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-16, 17, {align:'right'});
+    doc.addImage(LOGO_AVANTESEG,'PNG',14,6,50,16);
+    doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-14, 17, {align:'right'});
 
-    // Dimensões 3 colunas
-    const mg2=16, gap2=8, bodyTop=36, bodyBot=H-22;
-    const colW=(W-mg2*2-gap2*2)/3;
-    const c1x=mg2, c2x=mg2+colW+gap2, c3x=mg2+colW*2+gap2*2;
+    // ── Geometria idêntica ao individual ──
+    const p_mg=14, p_gap=6, p_top=30, p_bot=H-26;
+    const p_c1w=85, p_c2w=95, p_c3w=77;
+    const p_c1x=p_mg, p_c2x=p_mg+p_c1w+p_gap, p_c3x=p_mg+p_c1w+p_gap+p_c2w+p_gap;
 
-    // Separadores
+    // Separadores verticais
     doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
-    doc.line(c2x-gap2/2, bodyTop+4, c2x-gap2/2, bodyBot-4);
-    doc.line(c3x-gap2/2, bodyTop+4, c3x-gap2/2, bodyBot-4);
+    doc.line(p_c2x-p_gap/2, p_top+4, p_c2x-p_gap/2, p_bot-2);
+    doc.line(p_c3x-p_gap/2, p_top+4, p_c3x-p_gap/2, p_bot-2);
 
-    // ── COL 1: Treinamento + dados ──
-    let y1=bodyTop+6;
-    doc.setFontSize(5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('TREINAMENTO', c1x, y1); y1+=4;
-    doc.setDrawColor(...AMBER); doc.setLineWidth(0.5); doc.line(c1x,y1,c1x+18,y1); y1+=5;
-    doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    const lTCol=doc.splitTextToSize(s(nomeT,80),colW-2);
-    lTCol.slice(0,3).forEach((l,i)=>doc.text(l,c1x,y1+i*6)); y1+=Math.min(lTCol.length,3)*6+3;
-    const camposCol=[
-      {l:'Empresa',      v:s(nomeEmp,30)},
+    // ══ COLUNA 1: Treinamento + Dados gerais + Assinatura ══
+    let p_y1 = p_top+6;
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('TREINAMENTO', p_c1x, p_y1); p_y1+=3.5;
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+    doc.line(p_c1x, p_y1, p_c1x+22, p_y1); p_y1+=5;
+
+    doc.setFontSize(10); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    const p_lTCol = doc.splitTextToSize(s(nomeT,80), p_c1w-3);
+    p_lTCol.slice(0,2).forEach((l,i) => doc.text(l, p_c1x, p_y1+i*7));
+    p_y1 += Math.min(p_lTCol.length,2)*7 + 4;
+
+    [
+      {l:'Empresa',      v:s(nomeEmp,28)},
       {l:'CNPJ',         v:s(t.clientes?.cnpj||'nao informado')},
       {l:'Realizado em', v:fmtDataExtensoPDF(dataCert)},
-      {l:'Carga horaria',v:`${ch}h`},
+      {l:'Carga horaria',v:`${ch} hora${ch!==1?'s':''}`},
       {l:'Validade',     v:s(fmtVal)},
-      {l:'Instrutor',    v:s(instrutor,30)},
-    ];
-    camposCol.forEach(c=>{
-      doc.setFontSize(4.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(c.l.toUpperCase(),c1x,y1); y1+=3;
-      doc.setFontSize(6.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-      doc.text(c.v,c1x,y1); y1+=5;
+      {l:'Instrutor',    v:s(instrutor,28)},
+    ].forEach(c => {
+      doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(c.l.toUpperCase(), p_c1x, p_y1); p_y1+=3.5;
+      doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text(c.v, p_c1x, p_y1); p_y1+=6;
     });
-    // Assinatura instrutor (base da coluna 1)
-    const sigYc=bodyBot-10;
-    doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3); doc.line(c1x+colW*0.1,sigYc,c1x+colW*0.9,sigYc);
-    doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    doc.text(s(instrutor,26), c1x+colW/2, sigYc+4, {align:'center'});
+
+    // Assinatura — base da col1
+    const p_sigYc = p_bot - 12;
+    doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
+    doc.line(p_c1x + p_c1w*0.08, p_sigYc, p_c1x + p_c1w*0.92, p_sigYc);
+    doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(s(instrutor,28), p_c1x+p_c1w/2, p_sigYc+5, {align:'center'});
     if (instCredencial) {
-      doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(instCredencial, c1x+colW/2, sigYc+9, {align:'center'});
-      if (instEspec) { doc.setFontSize(5); doc.text(pdfSafe(instEspec,40), c1x+colW/2, sigYc+13, {align:'center'}); }
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(instCredencial, p_c1x+p_c1w/2, p_sigYc+10, {align:'center'});
+      if (instEspec) {
+        doc.setFontSize(6); doc.text(pdfSafe(instEspec,40), p_c1x+p_c1w/2, p_sigYc+15, {align:'center'});
+      }
     } else {
-      doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text('Instrutor Responsavel', c1x+colW/2, sigYc+9, {align:'center'});
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text('Instrutor Responsavel', p_c1x+p_c1w/2, p_sigYc+10, {align:'center'});
     }
 
-    // ── COL 2: Conteúdo programático ──
-    let y2=bodyTop+6;
-    doc.setFontSize(5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('CONTEUDO PROGRAMATICO', c2x, y2); y2+=4;
-    doc.setDrawColor(...AMBER); doc.setLineWidth(0.5); doc.line(c2x,y2,c2x+30,y2); y2+=5;
+    // ══ COLUNA 2: Conteúdo Programático ══
+    let p_y2 = p_top+6;
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('CONTEUDO PROGRAMATICO', p_c2x, p_y2); p_y2+=3.5;
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+    doc.line(p_c2x, p_y2, p_c2x+36, p_y2); p_y2+=5;
+
+    const p_cpMaxY2 = p_bot - 4;
+    const p_cpLeading2 = 4.2;
     if (cpText) {
-      const lCP2=doc.splitTextToSize(s(cpText,1000),colW-4);
-      const maxLinhas=Math.floor((bodyBot-y2-4)/4.5);
-      doc.setFontSize(6.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-      lCP2.slice(0,maxLinhas).forEach((l,i)=>doc.text(l,c2x,y2+i*4.5));
+      const p_lCP2 = doc.splitTextToSize(s(cpText,2000), p_c2w-4);
+      const p_maxLinhas2 = Math.floor((p_cpMaxY2 - p_y2) / p_cpLeading2);
+      doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+      p_lCP2.slice(0, p_maxLinhas2).forEach((l,i) => {
+        doc.text(l, p_c2x, p_y2 + i*p_cpLeading2);
+      });
+      if (p_lCP2.length > p_maxLinhas2) {
+        doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
+        doc.text('(continua no verso...)', p_c2x, p_cpMaxY2);
+      }
     } else {
-      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
-      doc.text('Conteudo nao informado.',c2x,y2);
+      doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
+      doc.text('Conteudo nao informado.', p_c2x, p_y2);
     }
 
-    // ── COL 3: Lista de participantes ──
-    let y3=bodyTop+6;
-    doc.setFontSize(5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text(`PARTICIPANTES (${participantes.length})`, c3x, y3); y3+=4;
-    doc.setDrawColor(...AMBER); doc.setLineWidth(0.5); doc.line(c3x,y3,c3x+20,y3); y3+=3;
-    // Cabeçalho tabela
-    doc.setFillColor(...NAVY); doc.rect(c3x,y3,colW-2,7,'F');
-    doc.setFontSize(6); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-    doc.text('No', c3x+2, y3+4.5);
-    doc.text('Nome', c3x+10, y3+4.5);
-    doc.text('CPF', c3x+colW-34, y3+4.5);
-    y3+=7;
-    const MAX_P2=Math.floor((bodyBot-y3)/7);
-    participantes.slice(0,MAX_P2).forEach((p,i)=>{
-      const co=p.colaboradores||{};
+    // ══ COLUNA 3: Lista de Participantes ══
+    let p_y3 = p_top+6;
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text(`PARTICIPANTES (${participantes.length})`, p_c3x, p_y3); p_y3+=3.5;
+    doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
+    doc.line(p_c3x, p_y3, p_c3x+24, p_y3); p_y3+=4;
+
+    // Cabeçalho da tabela
+    doc.setFillColor(...NAVY); doc.rect(p_c3x, p_y3, p_c3w-2, 8, 'F');
+    doc.setFontSize(7); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('No',   p_c3x+3, p_y3+5.5);
+    doc.text('Nome', p_c3x+12, p_y3+5.5);
+    doc.text('CPF',  p_c3x+p_c3w-38, p_y3+5.5);
+    p_y3+=8;
+
+    const MAX_P2 = Math.floor((p_bot - p_y3) / 8);
+    participantes.slice(0, MAX_P2).forEach((p,i) => {
+      const co = p.colaboradores||{};
       doc.setFillColor(i%2===0?244:255, i%2===0?246:255, i%2===0?250:255);
-      doc.rect(c3x,y3,colW-2,7,'F');
-      doc.setDrawColor(...BORD); doc.setLineWidth(0.15); doc.rect(c3x,y3,colW-2,7,'S');
-      doc.setFontSize(6.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
-      doc.text(String(i+1), c3x+2, y3+4.5);
-      doc.text(s(co.nome||'',22), c3x+10, y3+4.5);
-      doc.text(s(co.cpf||'-'), c3x+colW-34, y3+4.5);
-      y3+=7;
+      doc.rect(p_c3x, p_y3, p_c3w-2, 8, 'F');
+      doc.setDrawColor(...BORD); doc.setLineWidth(0.15);
+      doc.rect(p_c3x, p_y3, p_c3w-2, 8, 'S');
+      doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
+      doc.text(String(i+1), p_c3x+3, p_y3+5.5);
+      doc.text(s(co.nome||'',20), p_c3x+12, p_y3+5.5);
+      doc.text(s(co.cpf||'-'), p_c3x+p_c3w-38, p_y3+5.5);
+      p_y3+=8;
     });
-    if (participantes.length>MAX_P2) {
-      doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
-      doc.text(`+ ${participantes.length-MAX_P2} nas paginas seguintes`, c3x+2, y3+4);
+    if (participantes.length > MAX_P2) {
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
+      doc.text(`+ ${participantes.length-MAX_P2} nas paginas seguintes`, p_c3x+2, p_y3+5);
     }
 
-    // ── STRIP DE VALIDAÇÃO ──
-    const stripY=H-22;
-    doc.setFillColor(244,246,250); doc.rect(0,stripY,W,10,'F');
-    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(0,stripY,W,stripY);
-    doc.setFillColor(...AMBER); doc.circle(mg2+2,stripY+5,1.5,'F');
-    doc.setFontSize(4); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('VALIDACAO DO CERTIFICADO', mg2+6, stripY+3.5);
-    doc.setFontSize(5); doc.setTextColor(...BLUE); doc.setFont('helvetica','bold');
-    doc.text('toledolabs.com.br/validar', mg2+6, stripY+8);
-    doc.setDrawColor(...BORD); doc.line(mg2+68,stripY+2,mg2+68,stripY+8);
-    doc.setFillColor(100,116,139); doc.circle(mg2+72,stripY+5,1.5,'F');
-    doc.setFontSize(4); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('CODIGO', mg2+76, stripY+3.5);
-    doc.setFontSize(5.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    doc.text(codigoShort, mg2+76, stripY+8);
-    doc.setDrawColor(...BORD); doc.line(mg2+110,stripY+2,mg2+110,stripY+8);
-    if (qrData) doc.addImage(qrData,'PNG',mg2+114,stripY+0.5,9,9);
-    doc.setFontSize(4); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('Escaneie para validar', mg2+125, stripY+5.5);
-    doc.setFontSize(3.8); doc.setTextColor(...T3);
-    doc.text('Este documento foi emitido eletronicamente e tem validade juridica conforme legislacao vigente.', W-16, stripY+5.5, {align:'right'});
+    // ── STRIP DE VALIDAÇÃO (mesma spec do individual) ──
+    const p_stripY = H-26;
+    doc.setFillColor(244,246,250); doc.rect(0, p_stripY, W, 14, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(0, p_stripY, W, p_stripY);
+
+    doc.setFillColor(...AMBER); doc.circle(p_mg+3, p_stripY+7, 2, 'F');
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('VALIDACAO DO CERTIFICADO', p_mg+8, p_stripY+4.5);
+    doc.setFontSize(6.5); doc.setTextColor(...BLUE); doc.setFont('helvetica','bold');
+    doc.text('toledolabs.com.br/validar', p_mg+8, p_stripY+10);
+
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3); doc.line(p_mg+76, p_stripY+2, p_mg+76, p_stripY+12);
+
+    doc.setFillColor(100,116,139); doc.circle(p_mg+80, p_stripY+7, 2, 'F');
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('CODIGO', p_mg+85, p_stripY+4.5);
+    doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(codigoShort, p_mg+85, p_stripY+10.5);
+
+    doc.setDrawColor(...BORD); doc.line(p_mg+118, p_stripY+2, p_mg+118, p_stripY+12);
+
+    if (qrData) doc.addImage(qrData,'PNG', p_mg+122, p_stripY+1, 12, 12);
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Escaneie para validar', p_mg+137, p_stripY+8);
+    doc.setFontSize(6); doc.setTextColor(...T3);
+    doc.text('Emitido eletronicamente. Validade juridica conforme legislacao vigente.', W-14, p_stripY+8, {align:'right'});
 
     // ── RODAPÉ ──
-    doc.setFillColor(...NAVY); doc.rect(0,H-12,W,12,'F');
-    doc.setFontSize(6); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.setFillColor(...NAVY); doc.rect(0, H-12, W, 12, 'F');
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
     doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-6.5, {align:'center'});
-    doc.setFontSize(4.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text('Av. Arno Carlo Gracher, 69 Sala 4  -  Brusque - SC  -  (47) 3351-4266  -  www.avanteseg.com.br', W/2, H-2.5, {align:'center'});
 
     // ════════════════════════════════
