@@ -872,63 +872,27 @@
       // Aceita tanto o código curto (8 chars) quanto o UUID completo
       const codigo = rawInput.toLowerCase();
 
-      // Tentar via RPC primeiro (retorna dados completos com joins)
-      let doc = null;
-      const { data: rpcData, error: rpcError } = await sb.rpc('buscar_documento_por_codigo', {
-        p_codigo: codigo,
-      });
+      // ── STEP 1: Buscar o documento pelo código ──────────────────
+      // Aceita código curto (8 chars) OU UUID completo
+      const isShort = codigo.replace(/-/g,'').length <= 8;
 
-      if (!rpcError && rpcData && (Array.isArray(rpcData) ? rpcData.length > 0 : rpcData)) {
-        doc = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      let docBase = null;
+      if (isShort) {
+        const { data } = await sb.from('documentos')
+          .select('id, turma_id, colaborador_id, tipo, codigo_validacao, gerado_em')
+          .ilike('codigo_validacao', codigo + '%')
+          .limit(1)
+          .maybeSingle();
+        docBase = data;
       } else {
-        // Fallback: SELECT direto na tabela documentos com joins
-        // Aceita código curto (8 chars) OU UUID completo
-        const isShort = codigo.replace(/-/g,'').length <= 8;
-        let query = sb.from('documentos')
-          .select(`
-            *,
-            turmas(
-              id,
-              clientes(nome, cnpj),
-              catalogo(nome, carga_horaria, validade_meses),
-              sessoes(data)
-            ),
-            colaboradores(nome, cpf, cargo)
-          `);
-
-        if (isShort) {
-          // Busca pelo início do UUID (código curto = primeiros 8 chars)
-          query = query.ilike('codigo_validacao', codigo + '%');
-        } else {
-          query = query.eq('codigo_validacao', codigo);
-        }
-
-        const { data: fallbackData, error: fallbackError } = await query.maybeSingle();
-
-        if (!fallbackError && fallbackData) {
-          // Normalizar o resultado do SELECT para o mesmo formato esperado pelo renderResultado
-          const t = fallbackData.turmas || {};
-          const col = fallbackData.colaboradores || {};
-          const cat = t.catalogo || {};
-          const sessoes = t.sessoes || [];
-          const primeiraData = sessoes.sort((a,b) => a.data > b.data ? 1 : -1)[0]?.data || '';
-
-          doc = {
-            codigo_validacao: fallbackData.codigo_validacao,
-            tipo:             fallbackData.tipo,
-            gerado_em:        fallbackData.gerado_em,
-            colaborador_nome: col.nome || '',
-            colaborador_cpf:  col.cpf  || '',
-            catalogo_nome:    cat.nome || '',
-            carga_horaria:    cat.carga_horaria || '',
-            validade_meses:   cat.validade_meses || null,
-            cliente_nome:     t.clientes?.nome || '',
-            data_realizacao:  primeiraData,
-          };
-        }
+        const { data } = await sb.from('documentos')
+          .select('id, turma_id, colaborador_id, tipo, codigo_validacao, gerado_em')
+          .eq('codigo_validacao', codigo)
+          .maybeSingle();
+        docBase = data;
       }
 
-      if (!doc) {
+      if (!docBase) {
         mostrarErro(
           'Certificado não localizado',
           'Não foi possível encontrar um certificado com o código informado. Verifique o código e tente novamente. Caso o problema persista, entre em contato com a empresa emissora.'
@@ -936,7 +900,49 @@
         return;
       }
 
-      renderResultado(doc, (doc.codigo_validacao || codigo).toUpperCase());
+      // ── STEP 2: Buscar os dados da turma (com clientes + catalogo + sessoes) ──
+      let turmaData = {};
+      if (docBase.turma_id) {
+        const { data: t } = await sb.from('turmas')
+          .select('id, clientes(nome, cnpj), catalogo(nome, carga_horaria, validade_meses), sessoes(data, concluida)')
+          .eq('id', docBase.turma_id)
+          .single();
+        turmaData = t || {};
+      }
+
+      // ── STEP 3: Buscar dados do colaborador (se for certificado individual) ──
+      let colData = {};
+      if (docBase.colaborador_id) {
+        const { data: c } = await sb.from('colaboradores')
+          .select('nome, cpf, cargo')
+          .eq('id', docBase.colaborador_id)
+          .maybeSingle();
+        colData = c || {};
+      }
+
+      // ── Montar objeto normalizado ──────────────────────────────
+      const cat     = turmaData.catalogo    || {};
+      const cli     = turmaData.clientes    || {};
+      const sessoes = turmaData.sessoes     || [];
+      const primeiraData = sessoes
+        .filter(s => s.data)
+        .sort((a, b) => a.data > b.data ? 1 : -1)[0]?.data || '';
+
+      const doc = {
+        codigo_validacao: docBase.codigo_validacao,
+        tipo:             docBase.tipo,
+        gerado_em:        docBase.gerado_em,
+        colaborador_nome: colData.nome         || '',
+        colaborador_cpf:  colData.cpf          || '',
+        catalogo_nome:    cat.nome             || '',
+        carga_horaria:    cat.carga_horaria    || '',
+        validade_meses:   cat.validade_meses   || null,
+        cliente_nome:     cli.nome             || '',
+        cliente_cnpj:     cli.cnpj             || '',
+        data_realizacao:  primeiraData,
+      };
+
+      renderResultado(doc, docBase.codigo_validacao.toUpperCase());
 
     } catch (e) {
       console.error('Erro na validação:', e);
@@ -957,10 +963,12 @@
 
   function renderResultado(doc, codigoDisplay) {
     // Extrair campos — a RPC retorna com joins
-    const nomePart    = doc.colaborador_nome || doc.nome_participante || '—';
-    const cpfPart     = doc.colaborador_cpf  || doc.cpf || '';
+    const nomePart    = doc.colaborador_nome || doc.nome_participante || (doc.tipo === 'certificado_coletivo' ? 'Certificado Coletivo' : '—');
+    const cpfPart     = doc.colaborador_cpf  || doc.cpf || (doc.tipo === 'certificado_coletivo' ? 'Múltiplos participantes' : '');
     const nomeCurso   = doc.catalogo_nome    || doc.nome_curso || '—';
+    const cnpjEmp     = doc.cliente_cnpj     || '';
     const nomeEmp     = doc.cliente_nome     || doc.empresa || '—';
+    const nomeEmpFull = nomeEmp + (cnpjEmp ? ' — CNPJ ' + cnpjEmp : '');
     const cargaH      = doc.carga_horaria    || doc.ch || '—';
     const dataRealizacao = doc.data_realizacao || doc.sessao_data || doc.gerado_em?.split('T')[0] || '';
     const dataEmissao    = doc.gerado_em ? doc.gerado_em.split('T')[0] : '';
@@ -988,7 +996,7 @@
 
     const infos = [
       { l: 'Curso / Treinamento', v: nomeCurso },
-      { l: 'Empresa contratante', v: nomeEmp },
+      { l: 'Empresa contratante', v: nomeEmpFull },
       { l: 'Carga horária', v: cargaStr },
       { l: 'Data de realização', v: dataRealStr },
       { l: 'Data de emissão', v: dataEmissao ? fmtDataExtenso(dataEmissao) : '—' },
