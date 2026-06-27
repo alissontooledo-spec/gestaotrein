@@ -70,9 +70,23 @@ async function validar() {
   const card   = document.getElementById('card');
   if (!codigo) { card.innerHTML = errHtml('Codigo de validacao nao informado.'); return; }
   try {
-    const {data:doc,error} = await sb.from('documentos')
-      .select('*,turmas(protocolo,local,catalogo(nome,carga_horaria),clientes(nome)),colaboradores(nome,cargo,cpf)')
-      .eq('codigo_validacao', codigo).maybeSingle();
+    // Verificar se é UUID completo ou prefixo de 8 chars
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(codigo);
+
+    let doc = null, error = null;
+
+    if (isUUID) {
+      // Busca exata por UUID completo (certificados novos)
+      ({data:doc, error} = await sb.from('documentos')
+        .select('*,turmas(protocolo,local,catalogo(nome,carga_horaria),clientes(nome)),colaboradores(nome,cargo,cpf)')
+        .eq('codigo_validacao', codigo).maybeSingle());
+    } else {
+      // Busca por prefixo — certificados antigos com codigoShort (8 chars)
+      ({data:doc, error} = await sb.from('documentos')
+        .select('*,turmas(protocolo,local,catalogo(nome,carga_horaria),clientes(nome)),colaboradores(nome,cargo,cpf)')
+        .ilike('codigo_validacao', codigo + '%').maybeSingle());
+    }
+
     if (error) throw error;
     if (!doc) { card.innerHTML = errHtml('Certificado nao encontrado. O codigo informado nao corresponde a nenhum documento emitido.'); return; }
 
