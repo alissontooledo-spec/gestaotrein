@@ -76,15 +76,23 @@ async function validar() {
     let doc = null, error = null;
 
     if (isUUID) {
-      // Busca exata por UUID completo (certificados novos)
+      // UUID completo — busca exata
       ({data:doc, error} = await sb.from('documentos')
         .select('*,turmas(protocolo,local,catalogo(nome,carga_horaria),clientes(nome)),colaboradores(nome,cargo,cpf)')
         .eq('codigo_validacao', codigo).maybeSingle());
     } else {
-      // Busca por prefixo — certificados antigos com codigoShort (8 chars)
-      ({data:doc, error} = await sb.from('documentos')
-        .select('*,turmas(protocolo,local,catalogo(nome,carga_horaria),clientes(nome)),colaboradores(nome,cargo,cpf)')
-        .ilike('codigo_validacao', codigo + '%').maybeSingle());
+      // Prefixo curto — usa função SQL com cast para text
+      const {data:rows, error:rpcErr} = await sb.rpc('buscar_documento_por_codigo', {p_codigo: codigo.toLowerCase()});
+      error = rpcErr;
+      const base = rows?.[0] || null;
+      if (base) {
+        // Buscar com joins completos pelo id encontrado
+        ({data:doc, error} = await sb.from('documentos')
+          .select('*,turmas(protocolo,local,catalogo(nome,carga_horaria),clientes(nome)),colaboradores(nome,cargo,cpf)')
+          .eq('id', base.id).maybeSingle());
+      } else {
+        doc = null;
+      }
     }
 
     if (error) throw error;
