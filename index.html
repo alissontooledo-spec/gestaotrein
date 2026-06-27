@@ -3768,8 +3768,16 @@ function carregarImagemComoDataURL(url) {
 function fmtDataExtenso(iso) {
   if (!iso) return '-';
   const [y,m,d] = iso.split('-');
-  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   return `${parseInt(d)} de ${meses[parseInt(m)-1]} de ${y}`;
+}
+// Versao sem acentos para uso nos PDFs (jsPDF helvetica e latin-1 limitado)
+function fmtDataExtensoPDF(iso) {
+  if (!iso) return '-';
+  return fmtDataExtenso(iso)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\x00-\x7F]/g,'');
 }
 
 // Salva o PDF no Supabase Storage e registra na tabela documentos
@@ -3841,10 +3849,13 @@ async function gerarListaPresenca(turmaId) {
     const TEXT2 = [100, 116, 139];
     const TEXT3 = [148, 163, 184];
 
+    // Sanitiza strings para jsPDF (remove acentos e caracteres fora do latin-1)
+    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/[^\x00-\x7F]/g,'?').slice(0, max||300);
+
     const ag = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
-    const instrutor = ag?.usuarios?.nome||'—';
-    const dataAula = ag?.data ? fmtDataExtenso(ag.data) : '—';
-    const local = ag?.local||t.local||'—';
+    const instrutor = s(ag?.usuarios?.nome||'—');
+    const dataAula = ag?.data ? fmtDataExtensoPDF(ag.data) : '—';
+    const local = s(ag?.local||t.local||'—');
     const protocolo = t.protocolo||turmaId.slice(0,12).toUpperCase();
 
     // ── Borda dupla externa ──
@@ -3876,12 +3887,12 @@ async function gerarListaPresenca(turmaId) {
     // Logo no header
     doc.addImage(LOGO_AVANTESEG, 'PNG', mg+4, mg+5, 46, 14);
 
-    // Badge "Ficha de Presença" no header
-    doc.setFillColor(245, 158, 11, 0.18);
+    // Badge "Ficha de Presenca" no header
+    doc.setFillColor(254, 243, 199);
     doc.setDrawColor(...AMBER); doc.setLineWidth(0.3);
     doc.roundedRect(W-mg-52, mg+8, 48, 10, 2, 2, 'FD');
     doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('FICHA DE PRESENÇA', W-mg-28, mg+14.5, {align:'center'});
+    doc.text('FICHA DE PRESENCA', W-mg-28, mg+14.5, {align:'center'});
 
     // Protocolo header
     doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
@@ -3890,12 +3901,12 @@ async function gerarListaPresenca(turmaId) {
     // ── Título do treinamento ──
     let y = mg + 38;
     doc.setFontSize(13); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
-    const nomeT = t.catalogo?.nome||'Treinamento';
+    const nomeT = s(t.catalogo?.nome||'Treinamento');
     const linhasT = doc.splitTextToSize(nomeT, W-mg*2-4);
     linhasT.forEach((l,i)=>doc.text(l, mg+2, y+i*6));
     y += linhasT.length * 6 + 2;
     doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(...TEXT2);
-    doc.text(`${t.clientes?.nome||'—'}`, mg+2, y); y += 5;
+    doc.text(s(t.clientes?.nome||'-'), mg+2, y); y += 5;
 
     // ── Bloco de metadados (3 colunas) ──
     doc.setFillColor(...GRAY50);
@@ -3907,7 +3918,7 @@ async function gerarListaPresenca(turmaId) {
     const metas = [
       {l:'Data',v:dataAula},
       {l:'Instrutor',v:instrutor},
-      {l:'Carga horária',v:`${t.catalogo?.carga_horaria||'—'}h`},
+      {l:'Carga horaria',v:`${t.catalogo?.carga_horaria||'—'}h`},
       {l:'Local',v:local},
       {l:'CNPJ Cliente',v:t.clientes?.cnpj||'—'},
       {l:'Protocolo',v:protocolo},
@@ -3920,7 +3931,7 @@ async function gerarListaPresenca(turmaId) {
         doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
         doc.text(m.l.toUpperCase(), mx, my);
         doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
-        doc.text((m.v||'—').slice(0,28), mx, my+4);
+        doc.text(s(m.v||'-',28), mx, my+4);
       });
     });
     y += 22;
@@ -3970,8 +3981,8 @@ async function gerarListaPresenca(turmaId) {
 
       doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','normal');
       doc.text(String(i+1).padStart(2,'0'), mg+3, y+9);
-      doc.text((col.nome||'').slice(0,36), mg+10, y+9);
-      doc.text(col.cpf||'—', mg+72, y+9);
+      doc.text(s(col.nome||'',36), mg+10, y+9);
+      doc.text(s(col.cpf||'-'), mg+72, y+9);
 
       if (pr?.assinatura_path) {
         try {
@@ -3992,7 +4003,7 @@ async function gerarListaPresenca(turmaId) {
     doc.setFontSize(7); doc.setTextColor(245,158,11); doc.setFont('helvetica','bold');
     doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', mg+4, fy+5.5);
     doc.setTextColor(148,163,184); doc.setFont('helvetica','normal');
-    doc.text('CNPJ: 17.883.200/0001-32  ·  Av. Arno Carlo Gracher, 69 - Sl 4, Brusque-SC  ·  toledolabs.com.br/validar', mg+4, fy+10.5);
+    doc.text('CNPJ: 17.883.200/0001-32  |  Av. Arno Carlo Gracher, 69 - Sl 4, Brusque-SC  |  toledolabs.com.br/validar', mg+4, fy+10.5);
     doc.text(protocolo, W-mg-4, fy+8, {align:'right'});
 
     doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}.pdf`);
@@ -4040,7 +4051,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
     // Sanitiza texto — remove caracteres de controle que quebram o jsPDF
-    const s = (v, max) => String(v||'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').slice(0, max||300);
+    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/[^\x00-\x7F]/g,'?').slice(0, max||300);
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
@@ -4134,7 +4145,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 
     // Linha de info em texto corrido
     doc.setFontSize(9); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-    const infoLinha = `Realizado em ${fmtDataExtenso(dataCert)}  |  Carga horaria: ${ch}h  |  Empresa: ${s(t.clientes?.nome||'nao informada',30)}`;
+    const infoLinha = `Realizado em ${fmtDataExtensoPDF(dataCert)}  |  Carga horaria: ${ch}h  |  Empresa: ${s(t.clientes?.nome||'nao informada',30)}`;
     doc.text(s(infoLinha,200), W/2, cy, {align:'center'});
 
     // Rodapé com assinaturas + QR
@@ -4144,7 +4155,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.text(`Cod: ${codigoShort}`, W-41, H-7, {align:'center'});
 
     doc.setFontSize(6.5); doc.setTextColor(...T3);
-    doc.text(`Certificado No ${codigoShort}  |  Emitido em ${fmtDataExtenso(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
+    doc.text(`Certificado No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
     // ════════════════════════════════
     // PÁGINA 2 — CONTRACAPA (landscape)
@@ -4159,7 +4170,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','normal');
     doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda  |  CNPJ: 17.883.200/0001-32', W-16, 14, {align:'right'});
     doc.text('Av. Arno Carlo Gracher, 69 Sala 4  -  Brusque - SC  -  88350-310', W-16, 21, {align:'right'});
-    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtenso(new Date().toISOString().split('T')[0])}`, W-16, 28, {align:'right'});
+    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-16, 28, {align:'right'});
 
     // Layout 2 colunas
     const cL=16, cR=W/2+6, cW=(W-cL*2-10)/2;
@@ -4210,7 +4221,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.text('DADOS DO CERTIFICADO', cR, ry); ry+=5;
 
     const vChips = [
-      {l:'REALIZADO EM', v:fmtDataExtenso(dataCert)},
+      {l:'REALIZADO EM', v:fmtDataExtensoPDF(dataCert)},
       {l:'CARGA HORARIA', v:`${ch} hora${ch!==1?'s':''}`},
       {l:'EMPRESA', v:s(t.clientes?.nome||'nao informada',28)},
       {l:'VALIDO ATE', v:s(fmtVal)},
@@ -4296,7 +4307,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const nrMatch = nomeT.match(/NR[\s\-]*(\d+)/i);
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
-    const s = (v, max) => String(v||'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').slice(0, max||300);
+    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/[^\x00-\x7F]/g,'?').slice(0, max||300);
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
@@ -4312,7 +4323,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
 
     // ── Texto corrido da capa ──
-    const txtCorrido = s(`Os colaboradores da empresa ${nomeEmp} concluiram com aproveitamento o ${nomeT}, realizado em ${fmtDataExtenso(dataCert)}, com carga horaria de ${ch} hora${ch!==1?'s':''}, conforme os criterios estabelecidos para a capacitacao.`, 400);
+    const txtCorrido = s(`Os colaboradores da empresa ${nomeEmp} concluiram com aproveitamento o ${nomeT}, realizado em ${fmtDataExtensoPDF(dataCert)}, com carga horaria de ${ch} hora${ch!==1?'s':''}, conforme os criterios estabelecidos para a capacitacao.`, 400);
 
     // ════════════════════════════════
     // PÁGINA 1 — CAPA COLETIVA
@@ -4387,7 +4398,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFontSize(5.5); doc.setTextColor(...T3);
     doc.text(`Cod: ${codigoShort}`, W-41, fy+24, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(`No ${codigoShort}  |  Emitido em ${fmtDataExtenso(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
+    doc.text(`No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
     // ════════════════════════════════
     // PÁGINA 2 — CONTRACAPA (dados técnicos + lista)
@@ -4402,7 +4413,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFontSize(7.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','normal');
     doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda  |  CNPJ: 17.883.200/0001-32', W-16, 14, {align:'right'});
     doc.text('Av. Arno Carlo Gracher, 69 Sala 4  -  Brusque - SC  -  88350-310', W-16, 21, {align:'right'});
-    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtenso(new Date().toISOString().split('T')[0])}`, W-16, 28, {align:'right'});
+    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-16, 28, {align:'right'});
 
     // Layout 2 colunas
     const cL=16, cR=W/2+6, cW=(W-cL*2-10)/2;
@@ -4416,7 +4427,7 @@ async function gerarCertificadoColetivo(turmaId) {
       {l:'Treinamento',   v:s(nomeT,42)},
       {l:'Empresa',       v:s(nomeEmp,36)},
       {l:'CNPJ',          v:s(t.clientes?.cnpj||'nao informado')},
-      {l:'Realizado em',  v:fmtDataExtenso(dataCert)},
+      {l:'Realizado em',  v:fmtDataExtensoPDF(dataCert)},
       {l:'Carga horaria', v:`${ch}h`},
       {l:'Validade',      v:s(fmtVal)},
       {l:'Instrutor',     v:s(instrutor,36)},
@@ -4472,7 +4483,7 @@ async function gerarCertificadoColetivo(turmaId) {
       doc.setFontSize(7.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
       doc.text(String(i+1), cR+2, ry+5.5);
       doc.text(s(co.nome||'',30), cR+10, ry+5.5);
-      doc.text(s(co.cpf||'—'), cR+cW-42, ry+5.5);
+      doc.text(s(co.cpf||'-'), cR+cW-42, ry+5.5);
       ry+=8;
     });
 
@@ -4519,12 +4530,12 @@ async function gerarCertificadoColetivo(turmaId) {
       doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
       doc.addImage(LOGO_AVANTESEG,'PNG',16,5,44,14);
       doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(`${s(nomeT,60)}  |  ${s(nomeEmp,30)}  |  ${fmtDataExtenso(dataCert)}`, W-16, 11, {align:'right'});
+      doc.text(`${s(nomeT,60)}  |  ${s(nomeEmp,30)}  |  ${fmtDataExtensoPDF(dataCert)}`, W-16, 11, {align:'right'});
       doc.text(`Pagina ${pg+3}  |  Cod: ${codigoShort}`, W-16, 18, {align:'right'});
 
       let ty = 38;
       doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-      doc.text(`LISTA DE PARTICIPANTES (continuacao) — pag. ${pg+3}`, 16, ty); ty+=5;
+      doc.text(`LISTA DE PARTICIPANTES (continuacao) - pag. ${pg+3}`, 16, ty); ty+=5;
 
       // Tabela
       doc.setFillColor(...NAVY); doc.rect(16,ty,W-32,9,'F');
@@ -4544,8 +4555,8 @@ async function gerarCertificadoColetivo(turmaId) {
         doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
         doc.text(String(offset+i+1), 20, ty+6);
         doc.text(s(co.nome||'',40), 32, ty+6);
-        doc.text(s(co.cpf||'—'), W/2+10, ty+6);
-        doc.text(s(p.cargo_vinculo||co.cargo||'—',24), W/2+58, ty+6);
+        doc.text(s(co.cpf||'-'), W/2+10, ty+6);
+        doc.text(s(p.cargo_vinculo||co.cargo||'-',24), W/2+58, ty+6);
         ty+=9;
       });
 
