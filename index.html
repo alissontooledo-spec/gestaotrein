@@ -5150,7 +5150,25 @@ async function renderDocumentosTurma(turmaId) {
 // ENVIO DE DOCUMENTOS POR E-MAIL
 // ============================================================
 async function enviarDocumentosPorEmail(turmaId) {
-  if (!confirm('Confirma o envio dos documentos por e-mail para a empresa cliente?')) return;
+  // confirm() nao funciona em WebView/mobile — usar modal customizado
+  const confirmado = await new Promise(resolve => {
+    abrirModal('Confirmar envio', `
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:40px;margin-bottom:12px">✉️</div>
+        <p style="font-size:14px;color:var(--text-2);line-height:1.6">
+          Confirma o envio dos documentos por e-mail para a empresa cliente?
+        </p>
+        <p style="font-size:12px;color:var(--text-3);margin-top:8px">
+          Os PDFs gerados serão enviados como anexo.
+        </p>
+      </div>`,
+      `<button class="btn btn-outline" onclick="fecharModal();window._resolveEnvio(false)">Cancelar</button>
+       <button class="btn btn-navy" onclick="fecharModal();window._resolveEnvio(true)">✉️ Confirmar envio</button>`
+    );
+    window._resolveEnvio = resolve;
+  });
+  delete window._resolveEnvio;
+  if (!confirmado) return;
   showLoading('Preparando documentos para envio...');
   try {
     const {data:t, error} = await sb.from('turmas')
