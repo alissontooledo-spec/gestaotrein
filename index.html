@@ -3867,6 +3867,7 @@ async function gerarListaPresenca(turmaId) {
     const TEXT1 = [30, 42, 74];
     const TEXT2 = [100, 116, 139];
     const TEXT3 = [148, 163, 184];
+    const AMBERLT = [254, 243, 199];
 
     const ag = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
     const instrutor = pdfSafe(ag?.usuarios?.nome||'-');
@@ -3904,7 +3905,7 @@ async function gerarListaPresenca(turmaId) {
     doc.addImage(LOGO_AVANTESEG, 'PNG', mg+4, mg+5, 46, 14);
 
     // Badge "Ficha de Presença" no header
-    doc.setFillColor(254, 243, 199);
+    doc.setFillColor(...AMBERLT);
     doc.setDrawColor(...AMBER); doc.setLineWidth(0.3);
     doc.roundedRect(W-mg-52, mg+8, 48, 10, 2, 2, 'FD');
     doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
@@ -4016,9 +4017,9 @@ async function gerarListaPresenca(turmaId) {
     const fy = H-mg-16;
     doc.setFillColor(...NAVY);
     doc.rect(mg, fy, W-mg*2, 14, 'F');
-    doc.setFontSize(7); doc.setTextColor(245,158,11); doc.setFont('helvetica','bold');
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
     doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', mg+4, fy+5.5);
-    doc.setTextColor(148,163,184); doc.setFont('helvetica','normal');
+    doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
     doc.text('CNPJ: 17.883.200/0001-32  |  Av. Arno Carlo Gracher, 69 - Sl 4, Brusque-SC  |  toledolabs.com.br/validar', mg+4, fy+10.5);
     doc.text(protocolo, W-mg-4, fy+8, {align:'right'});
 
@@ -4081,6 +4082,8 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const T3    = [148,163,184];
     const GRAY  = [244,246,250];
     const BORD  = [220,228,240];
+    const BLUE  = [29,78,216];
+    const GRAYLT = [248,250,252];
 
     // ── Helper: faixa navy topo (Modelo B) ──
     const cabecalhoNavy = (doc, titulo, subtitulo) => {
@@ -4225,7 +4228,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
       const avail = H-12-ly;
       const cpH = Math.min(lCP.length*4.5+6, avail-2);
       if (cpH>6) {
-        doc.setFillColor(248,250,252); doc.rect(cL,ly,cW,cpH,'F');
+        doc.setFillColor(...GRAYLT); doc.rect(cL,ly,cW,cpH,'F');
         doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(cL,ly,cW,cpH,'S');
         doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
         lCP.slice(0,Math.floor((cpH-4)/4.5)).forEach((l,i) => doc.text(l,cL+4,ly+5+i*4.5));
@@ -4262,7 +4265,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.text('Validacao do Certificado', cR+30, ry+7);
     doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
     doc.text('Escaneie ou acesse o link abaixo:', cR+30, ry+13);
-    doc.setFontSize(5.5); doc.setTextColor([29,78,216]); doc.setFont('helvetica','bold');
+    doc.setFontSize(5.5); doc.setTextColor(...BLUE); doc.setFont('helvetica','bold');
     doc.text(s(urlValid,50), cR+30, ry+19);
     ry+=32;
 
@@ -4335,6 +4338,8 @@ async function gerarCertificadoColetivo(turmaId) {
     const T3    = [148,163,184];
     const GRAY  = [244,246,250];
     const BORD  = [220,228,240];
+    const BLUE  = [29,78,216];
+    const GRAYLT = [248,250,252];
 
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
 
@@ -4469,7 +4474,7 @@ async function gerarCertificadoColetivo(turmaId) {
       const avail = H-12-ly;
       const cpH = Math.min(lCP.length*4.5+6, avail-2);
       if (cpH>6) {
-        doc.setFillColor(248,250,252); doc.rect(cL,ly,cW,cpH,'F');
+        doc.setFillColor(...GRAYLT); doc.rect(cL,ly,cW,cpH,'F');
         doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(cL,ly,cW,cpH,'S');
         doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
         lCP.slice(0,Math.floor((cpH-4)/4.5)).forEach((l,i) => doc.text(l,cL+4,ly+5+i*4.5));
@@ -4516,7 +4521,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.text('Validacao do Certificado', cR+2, qrCY+8);
     doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
     doc.text(`Codigo: ${codigoShort}`, cR+2, qrCY+14);
-    doc.setFontSize(5.5); doc.setTextColor([29,78,216]); doc.setFont('helvetica','bold');
+    doc.setFontSize(5.5); doc.setTextColor(...BLUE); doc.setFont('helvetica','bold');
     doc.text(s(urlValid,44), cR+2, qrCY+20);
     // Assinatura contracapa
     doc.setDrawColor(...NAVY); doc.setLineWidth(0.4); doc.line(cR,qrCY+30,cR+cW,qrCY+30);
