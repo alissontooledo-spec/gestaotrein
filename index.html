@@ -546,6 +546,24 @@ function setConteudo(html) {
   document.getElementById('mainBody').innerHTML = html;
   document.getElementById('mobileBody').innerHTML = html;
 }
+// Helper para atualizar elemento em AMBOS os bodies (mainBody + mobileBody)
+// Necessário pois getElementById pega só o primeiro elemento no DOM
+function _setElBoth(id, html) {
+  [document.getElementById('mainBody'), document.getElementById('mobileBody')]
+    .forEach(body => {
+      if (!body) return;
+      const el = body.querySelector('#' + id);
+      if (el) el.innerHTML = html;
+    });
+}
+function _getElVisible(id) {
+  // Retorna o elemento do body visível (desktop ou mobile)
+  const main   = document.getElementById('mainBody');
+  const mobile = document.getElementById('mobileBody');
+  const isDesktop = main && getComputedStyle(main).display !== 'none';
+  const body = isDesktop ? main : mobile;
+  return body ? body.querySelector('#' + id) : document.getElementById(id);
+}
 function setMobileHeader(html) {
   document.getElementById('mobileHeader').innerHTML = html;
 }
@@ -659,6 +677,8 @@ function configurarNavegacao() {
     if (i.sec) return `<div class="sidebar-section-label">${i.sec}</div>`;
     return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}"><span class="si-icon">${ICONS[i.icon]||''}</span><span>${i.l}</span></div>`;
   }).join('');
+  body.innerHTML = listaHtml;
+  _setElBoth('agendaCalListaBody', listaHtml);
 
   const navItens = itens.filter(i=>i.id);
   const bnItens = navItens.filter(i=>bottom.includes(i.id));
@@ -752,7 +772,7 @@ async function renderHomeAdmin() {
     sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,clientes(nome),catalogo(nome)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
     sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida,local').order('data',{ascending:true}),
-    sb.from('colaboradores').select('id').eq('org_id',oi),
+    sb.from('colaboradores').select('id'), // sem filtro org_id (coluna não existe na tabela)
   ]);
 
   const tAll   = turmas||[];
@@ -1349,7 +1369,7 @@ async function toggleCliente(id) {
 // COLABORADORES
 // ============================================================
 async function renderColaboradores() {
-  const {data,error} = await sb.from('colaboradores').select('*').eq('org_id',usuarioAtual.org_id).order('nome').limit(500);
+  const {data,error} = await sb.from('colaboradores').select('*').order('nome').limit(500);
   if (error) throw error;
   _colabsCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Colaboradores</div>`);
@@ -1459,7 +1479,7 @@ function abrirModalColab(id=null) {
 async function salvarColab() {
   const nome = document.getElementById('mColNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const dados = {nome, org_id: usuarioAtual.org_id, cpf:document.getElementById('mColCpf')?.value.trim()||null, cargo:document.getElementById('mColCargo')?.value.trim()||null, email:document.getElementById('mColEmail')?.value.trim()||null, telefone:document.getElementById('mColTel')?.value.trim()||null};
+  const dados = {nome, cpf:document.getElementById('mColCpf')?.value.trim()||null, cargo:document.getElementById('mColCargo')?.value.trim()||null, email:document.getElementById('mColEmail')?.value.trim()||null, telefone:document.getElementById('mColTel')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('colaboradores').update(dados).eq('id',_modalCurrentId) : await sb.from('colaboradores').insert(dados);
@@ -2050,36 +2070,17 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
     ag = data;
   }
 
-  // Calcular hora_fim existente para exibição (se vier do banco, só exibe como info)
-  const horaFimAtual = ag?.hora_fim?.slice(0,5) || '';
-
-  const instOpts = instrutores.map(i =>
+    const instOpts = instrutores.map(i =>
     `<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${i.nome}</option>`
   ).join('');
-
-  const cargaLabel = cargaHoraria
-    ? `<span style="font-size:11px;color:var(--text-3);margin-left:6px">(calculado: início + ${cargaHoraria}h)</span>`
-    : '';
 
   abrirModal(ag?'Editar agendamento':'Novo agendamento', `
     <div class="field"><label>Data *</label>
       <input type="date" id="mAgData" value="${ag?.data||''}"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0">
-        <label>Hora início</label>
-        <input type="time" id="mAgIni" value="${ag?.hora_inicio?.slice(0,5)||''}"
-          oninput="calcularHoraFimAuto()"
-          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-      </div>
-      <div class="field" style="margin:0">
-        <label style="display:flex;align-items:center;gap:4px">
-          Hora término ${cargaLabel}
-        </label>
-        <div id="mAgFimDisplay" style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;background:var(--gray-50,#F8FAFC);color:var(--text-2);min-height:44px;display:flex;align-items:center">
-          ${horaFimAtual || '<span style="color:var(--text-3);font-size:13px">Automático após hora início</span>'}
-        </div>
-        <input type="hidden" id="mAgFim" value="${horaFimAtual}">
-      </div>
+    <div class="field">
+      <label>Hora início</label>
+      <input type="time" id="mAgIni" value="${ag?.hora_inicio?.slice(0,5)||''}"
+        style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
     </div>
     <div class="field"><label>Instrutor responsável</label>
       <select id="mAgInstrutor" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
@@ -2099,25 +2100,7 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
      </button>`);
 }
 
-function calcularHoraFimAuto() {
-  const ini = document.getElementById('mAgIni')?.value;
-  const carga = window._agCargaHoraria || 0;
-  const display = document.getElementById('mAgFimDisplay');
-  const hidden  = document.getElementById('mAgFim');
-  if (!ini || !carga) {
-    if (display) display.innerHTML = '<span style="color:var(--text-3);font-size:13px">Automático após hora início</span>';
-    if (hidden)  hidden.value = '';
-    return;
-  }
-  // Calcular: hora início + carga horária em horas
-  const [h, m] = ini.split(':').map(Number);
-  const totalMin = h * 60 + m + Math.round(carga * 60);
-  const fimH = String(Math.floor(totalMin / 60) % 24).padStart(2, '0');
-  const fimM = String(totalMin % 60).padStart(2, '0');
-  const resultado = `${fimH}:${fimM}`;
-  if (display) display.innerHTML = `<strong style="color:var(--navy,#1E2A4A)">${resultado}</strong>`;
-  if (hidden)  hidden.value = resultado;
-}
+// calcularHoraFimAuto removida — campo hora_fim retirado do modal
 
 async function salvarAgendamento() {
   const turmaId = _modalCurrentId;
@@ -2129,7 +2112,7 @@ async function salvarAgendamento() {
     org_id:      usuarioAtual.org_id,
     data,
     hora_inicio: document.getElementById('mAgIni')?.value||null,
-    hora_fim:    document.getElementById('mAgFim')?.value||null,
+    hora_fim:    null, // campo removido do modal — não coletado
     instrutor_id:document.getElementById('mAgInstrutor')?.value||null,
     modalidade:  document.getElementById('mAgMod')?.value||'presencial',
     local:       document.getElementById('mAgLocal')?.value.trim()||null,
@@ -2325,7 +2308,7 @@ function previewImportacao(e) {
     _dadosImportacao = linhas.slice(1).map(l => {
       const cols = parseLinha(l);
       return {
-        org_id:   usuarioAtual.org_id,
+        // org_id: campo não existe em colaboradores
         nome:     cols[nomeIdx] || '',
         cpf:      cpfIdx   >= 0 ? cols[cpfIdx]   || null : null,
         cargo:    cargoIdx >= 0 ? cols[cargoIdx]  || null : null,
@@ -2530,8 +2513,8 @@ function _agendaRenderCalendario() {
   const hoje     = window._agendaHoje;
   const nomesMeses = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-  const elMes  = document.getElementById('agendaCalMes');
-  const elGrid = document.getElementById('agendaCalGrid');
+  const elMes  = _getElVisible('agendaCalMes');
+  const elGrid = _getElVisible('agendaCalGrid');
   if (!elMes || !elGrid) return;
 
   elMes.textContent = `${nomesMeses[mes-1]} ${ano}`;
@@ -2570,13 +2553,15 @@ function _agendaRenderCalendario() {
   }
   html += '</div>';
   elGrid.innerHTML = html;
+  // Sincronizar o body não-visível (mobile/desktop) com o mesmo HTML
+  _setElBoth('agendaCalGrid', html);
 
   _agendaAtualizarLista(window._agendaDataSel || null);
 }
 
 function _agendaAtualizarLista(dataFiltro) {
-  const header = document.getElementById('agendaCalListaHeader');
-  const body   = document.getElementById('agendaCalListaBody');
+  const header = _getElVisible('agendaCalListaHeader');
+  const body   = _getElVisible('agendaCalListaBody');
   if (!header || !body) return;
 
   const turmasAgrupadas = window._agendaTurmasAgrupadas || {};
@@ -2601,13 +2586,17 @@ function _agendaAtualizarLista(dataFiltro) {
   if (dataFiltro) {
     const partes = dataFiltro.split('-').reverse().join('/');
     header.textContent = `${partes} — ${sessoesFiltradas.length} sessao(oes)`;
+  _setElBoth('agendaCalListaHeader', header.textContent);
   } else {
     const nm = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     header.textContent = `${nm[mes-1]} ${ano} — ${sessoesFiltradas.length} sessao(oes)`;
+    _setElBoth('agendaCalListaHeader', header.textContent);
   }
 
   if (!sessoesFiltradas.length) {
-    body.innerHTML = `<div style="font-size:12px;color:var(--text-3);padding:16px 0;text-align:center">${dataFiltro?'Nenhuma sessao neste dia':'Nenhuma sessao neste mes'}</div>`;
+    const emptyHtml = `<div style="font-size:12px;color:var(--text-3);padding:16px 0;text-align:center">${dataFiltro?'Nenhuma sessao neste dia':'Nenhuma sessao neste mes'}</div>`;
+    body.innerHTML = emptyHtml;
+    _setElBoth('agendaCalListaBody', emptyHtml);
     return;
   }
 
@@ -2615,7 +2604,7 @@ function _agendaAtualizarLista(dataFiltro) {
   const stColor = {agendada:'var(--text-2)',em_andamento:'var(--navy,#1E2A4A)',concluida:'#059669',cancelada:'var(--text-3)'};
   const stLabel = {agendada:'Agendado',em_andamento:'Em andamento',concluida:'Concluido',cancelada:'Cancelado'};
 
-  body.innerHTML = sessoesFiltradas.map(({s, turma}) => {
+  const listaHtml = sessoesFiltradas.map(({s, turma}) => {
     const ehHoje  = s.data === hoje;
     const hora    = s.hora_inicio ? s.hora_inicio.slice(0,5) : '';
     const st      = turma.status || 'agendada';
@@ -2648,7 +2637,7 @@ function _agendaFiltrarData(dataStr) {
   // Também filtrar a lista principal de turmas abaixo do calendário
   const turmasAgrupadas = window._agendaTurmasAgrupadas;
   const renderGrupo     = window._agendaRenderGrupo;
-  const el = document.getElementById('agendaListaFiltrada');
+  const el = _getElVisible('agendaListaFiltrada');
   if (!el) return;
 
   if (!window._agendaDataSel) {
