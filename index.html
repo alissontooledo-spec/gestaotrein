@@ -561,8 +561,8 @@ const NAV = {
 };
 const NAV_BOTTOM = {
   provedor:['home','orgs','conta'],
-  administrador:['home','turmas','clientes','relatorios'],
-  comercial:['home','turmas','clientes','conta'],
+  administrador:['home','turmas','clientes','colaboradores','relatorios','equipe','conta'],
+  comercial:['home','turmas','relatorios','clientes','conta'],
   instrutor:['home','agenda','historico','conta'],
 };
 
@@ -661,29 +661,172 @@ async function renderHomeProvedor() {
 
 async function renderHomeAdmin() {
   const oi = usuarioAtual.org_id;
-  const [{data:turmas},{data:clientes},{data:colabs}] = await Promise.all([
-    sb.from('turmas').select('id,status').eq('org_id',oi),
-    sb.from('clientes').select('id').eq('org_id',oi).eq('ativo',true),
-    sb.from('colaboradores').select('id').limit(1),
+  const hoje = new Date();
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+
+  const [{data:turmas},{data:clientes},{data:sessoes},{data:colabs}] = await Promise.all([
+    sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,clientes(nome),catalogo(nome)').eq('org_id',oi),
+    sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
+    sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida').order('data',{ascending:true}),
+    sb.from('colaboradores').select('id').eq('org_id',oi),
   ]);
-  const ativas    = (turmas||[]).filter(t=>t.status==='em_andamento').length;
-  const concluidas= (turmas||[]).filter(t=>t.status==='concluida').length;
-  const agendadas = (turmas||[]).filter(t=>t.status==='agendada').length;
+
+  const tAll   = turmas||[];
+  const cliAll = clientes||[];
+  const sesAll = sessoes||[];
+
+  const ativas     = tAll.filter(t=>t.status==='em_andamento').length;
+  const agendadas  = tAll.filter(t=>t.status==='agendada').length;
+  const concluidas = tAll.filter(t=>t.status==='concluida').length;
+  const cliAtivos  = cliAll.filter(c=>c.ativo).length;
+
+  // Turmas do mês atual
+  const turmasMes = tAll.filter(t=>t.created_at?.startsWith(mesAtual)).length;
+
+  // Barras SVG — últimos 6 meses
+  const meses6 = [];
+  for (let i=5;i>=0;i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    meses6.push({
+      label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),
+      ano: d.getFullYear(), mes: d.getMonth()+1,
+    });
+  }
+  const vals6 = meses6.map(m=>tAll.filter(t=>{
+    const d=new Date(t.created_at); return d.getFullYear()===m.ano&&d.getMonth()+1===m.mes;
+  }).length);
+  const maxV = Math.max(...vals6,1);
+  const barsHtml = vals6.map((v,i)=>{
+    const barH = Math.max(v>0?Math.round(70*(v/maxV)):0, v>0?6:0);
+    const x = i*40;
+    const isLast = i===vals6.length-1;
+    return `<g>
+      <rect x="${x+2}" y="${70-barH}" width="28" height="${barH}" fill="${isLast?'#1E2A4A':'rgba(30,42,74,.25)'}" rx="3"/>
+      ${v>0?`<text x="${x+16}" y="${70-barH-4}" text-anchor="middle" font-size="9" font-weight="600" fill="#1E2A4A">${v}</text>`:''}
+      <text x="${x+16}" y="88" text-anchor="middle" font-size="9" fill="#8896A4">${meses6[i].label}</text>
+    </g>`;
+  }).join('');
+
+  // Próximas sessões (hoje em diante, sem instrutor ou pendentes)
+  const hojeStr = hoje.toISOString().split('T')[0];
+  const proxSessoes = sesAll
+    .filter(s=>s.data>=hojeStr && !s.concluida)
+    .slice(0,3);
+  const tMapHome = {};
+  tAll.forEach(t=>{ tMapHome[t.id]=t; });
+
+  // Atividade recente — turmas criadas recentemente
+  const recentes = [...tAll].sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,3);
+
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Administrador</div>`);
   setConteudo(`
-    <div class="stats-grid">
-      <div class="stat-card navy" style="cursor:pointer" onclick="irParaTurmasFiltradas('em_andamento')"><div class="stat-label">Turmas ativas</div><div class="stat-value">${ativas}</div><div class="stat-sub">Em andamento →</div></div>
-      <div class="stat-card accent" style="cursor:pointer" onclick="irParaTurmasFiltradas('concluida')"><div class="stat-label">Concluídas</div><div class="stat-value">${concluidas}</div><div class="stat-sub">Ver histórico →</div></div>
-      <div class="stat-card accent" style="cursor:pointer" onclick="irParaTurmasFiltradas('agendada')"><div class="stat-label">Agendadas</div><div class="stat-value">${agendadas}</div><div class="stat-sub">Próximas →</div></div>
-      <div class="stat-card accent" style="cursor:pointer" onclick="irPara('clientes')"><div class="stat-label">Clientes ativos</div><div class="stat-value">${(clientes||[]).length}</div><div class="stat-sub">Ver clientes →</div></div>
+    <style>
+      .home-navy-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 22px;margin-bottom:14px}
+      .home-navy-greeting{font-size:17px;font-weight:700;color:#fff;margin-bottom:2px}
+      .home-navy-sub{font-size:12px;color:rgba(255,255,255,.45)}
+      .home-kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:16px}
+      .home-kpi{background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:11px 12px}
+      .home-kpi-val{font-size:22px;font-weight:700;color:#fff;line-height:1}
+      .home-kpi-lbl{font-size:10px;color:rgba(255,255,255,.45);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+      .home-kpi-delta{font-size:10px;margin-top:5px;font-weight:600}
+      .home-kpi-delta.amber{color:var(--amber)}
+      .home-kpi-delta.green{color:#34D399}
+      .home-alert{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.22);border-left:3px solid var(--amber);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px}
+      .home-alert-text{font-size:12px;color:var(--amber-h);font-weight:500}
+      .home-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
+      .home-chart-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+      .home-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+      .home-list-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
+      .home-list-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+      .home-list-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+      .home-list-item:last-child{border:none}
+      .home-list-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+      .home-list-info{flex:1;min-width:0}
+      .home-list-name{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .home-list-sub{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .home-qa{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+      @media(max-width:480px){.home-2col{grid-template-columns:1fr}.home-qa{grid-template-columns:repeat(2,1fr)}}
+    </style>
+
+    <div class="home-navy-header">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome.split(' ')[0]}</div>
+          <div class="home-navy-sub">${hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</div>
+        </div>
+        <div style="width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy);flex-shrink:0">${iniciais(usuarioAtual.nome)}</div>
+      </div>
+      <div class="home-kpi-grid">
+        <div class="home-kpi" onclick="irParaTurmasFiltradas('em_andamento')" style="cursor:pointer">
+          <div class="home-kpi-val">${ativas}</div>
+          <div class="home-kpi-lbl">Turmas ativas</div>
+          <div class="home-kpi-delta amber">Em andamento →</div>
+        </div>
+        <div class="home-kpi" onclick="irParaTurmasFiltradas('agendada')" style="cursor:pointer">
+          <div class="home-kpi-val">${agendadas}</div>
+          <div class="home-kpi-lbl">Agendadas</div>
+          <div class="home-kpi-delta amber">Próximas →</div>
+        </div>
+        <div class="home-kpi" onclick="irPara('clientes')" style="cursor:pointer">
+          <div class="home-kpi-val">${cliAtivos}</div>
+          <div class="home-kpi-lbl">Clientes ativos</div>
+          <div class="home-kpi-delta green">↑ ${turmasMes} turmas/mês</div>
+        </div>
+        <div class="home-kpi" onclick="irParaTurmasFiltradas('concluida')" style="cursor:pointer">
+          <div class="home-kpi-val">${concluidas}</div>
+          <div class="home-kpi-lbl">Concluídas</div>
+          <div class="home-kpi-delta green">Ver histórico →</div>
+        </div>
+      </div>
     </div>
-    <div class="quick-actions">
-      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:rgba(245,158,11,.12)">${ICONS.clip}</div><div class="qa-label">Nova turma</div><div class="qa-sub">Agendar treinamento</div></button>
-      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">${ICONS.building}</div><div class="qa-label">Novo cliente</div><div class="qa-sub">Cadastrar empresa</div></button>
-      <button class="qa-btn" data-nav="colaboradores"><div class="qa-icon" style="background:var(--blue-l)">${ICONS.users}</div><div class="qa-label">Colaboradores</div><div class="qa-sub">Gerenciar pessoas</div></button>
-      <button class="qa-btn" data-nav="relatorios"><div class="qa-icon" style="background:#F3E8FF">${ICONS.chart}</div><div class="qa-label">Relatórios</div><div class="qa-sub">Vencimentos e mais</div></button>
+
+    ${ativas===0&&agendadas>0?`<div class="home-alert"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--amber-h)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div class="home-alert-text">${agendadas} turma${agendadas!==1?'s':''} agendada${agendadas!==1?'s':''} aguardando início</div></div>`:''}
+
+    <div class="home-chart-card">
+      <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
+      <div style="overflow-x:auto">
+        <svg viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">${barsHtml}</svg>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
+        <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
+      </div>
     </div>
-    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>`);
+
+    <div class="home-2col">
+      <div class="home-list-card">
+        <div class="home-list-title">Próximas sessões</div>
+        ${proxSessoes.length===0
+          ?`<div style="font-size:12px;color:var(--text-3);padding:6px 0">Nenhuma sessão próxima</div>`
+          :proxSessoes.map(s=>{
+            const t=tMapHome[s.turma_id];
+            return `<div class="home-list-item">
+              <div class="home-list-dot" style="background:var(--amber)"></div>
+              <div class="home-list-info">
+                <div class="home-list-name">${t?.catalogo?.nome||'Treinamento'}</div>
+                <div class="home-list-sub">${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
+              </div>
+            </div>`;
+          }).join('')}
+      </div>
+      <div class="home-list-card">
+        <div class="home-list-title">Atividade recente</div>
+        ${recentes.map(t=>`<div class="home-list-item">
+          <div class="home-list-dot" style="background:${t.status==='concluida'?'var(--green)':t.status==='em_andamento'?'var(--navy)':'var(--amber)'}"></div>
+          <div class="home-list-info">
+            <div class="home-list-name">${t.catalogo?.nome||'Turma'}</div>
+            <div class="home-list-sub">${t.clientes?.nome||'—'}</div>
+          </div>
+          <span class="badge ${t.status==='concluida'?'badge-green':t.status==='em_andamento'?'badge-blue':'badge-gray'}" style="flex-shrink:0;font-size:9px">${t.status==='concluida'?'Concluída':t.status==='em_andamento'?'Ativa':'Agendada'}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="home-qa">
+      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:rgba(245,158,11,.12)">${ICONS.clip}</div><div class="qa-label">Nova turma</div></button>
+      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">${ICONS.building}</div><div class="qa-label">Clientes</div></button>
+      <button class="qa-btn" data-nav="colaboradores"><div class="qa-icon" style="background:var(--blue-l)">${ICONS.users}</div><div class="qa-label">Colaboradores</div></button>
+      <button class="qa-btn" data-nav="relatorios"><div class="qa-icon" style="background:rgba(245,158,11,.08)">${ICONS.chart}</div><div class="qa-label">Relatórios</div></button>
+    </div>`);
 }
 
 async function renderHomeComercial() {
@@ -2973,7 +3116,7 @@ async function renderRelatorios() {
   setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
 
   const [{data:turmas},{data:clientes},{data:sessoes},{data:usuarios}] = await Promise.all([
-    sb.from('turmas').select('id,status,cliente_id,catalogo_id,created_at,clientes(nome),catalogo(nome)').eq('org_id',oi),
+    sb.from('turmas').select('id,status,cliente_id,catalogo_id,created_at,clientes(nome),catalogo(nome,carga_horaria)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
     sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(nome)').eq('concluida',true),
     sb.from('usuarios').select('id,nome,perfil').eq('org_id',oi).eq('ativo',true),
@@ -2995,191 +3138,222 @@ async function renderRelatorios() {
   const meses = [];
   for (let i=5;i>=0;i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    meses.push({
-      label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),
-      ano: d.getFullYear(), mes: d.getMonth()+1,
-    });
+    meses.push({ label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''), ano: d.getFullYear(), mes: d.getMonth()+1 });
   }
-  const turmasPorMes = meses.map(m=>{
-    const n = tAll.filter(t=>{
-      const d = new Date(t.created_at);
-      return d.getFullYear()===m.ano && d.getMonth()+1===m.mes;
-    }).length;
-    return {...m, n};
-  });
-  const maxN = Math.max(...turmasPorMes.map(m=>m.n), 1);
+
+  const dadosTurmas = meses.map(m=>tAll.filter(t=>{ const d=new Date(t.created_at); return d.getFullYear()===m.ano&&d.getMonth()+1===m.mes; }).length);
+  const dadosSessoes = meses.map(m=>sesAll.filter(s=>{ const d=new Date(s.data||''); return d.getFullYear()===m.ano&&d.getMonth()+1===m.mes; }).length);
 
   // Rankings
   const cliCount = {};
   tAll.forEach(t=>{ if(t.cliente_id) cliCount[t.cliente_id]=(cliCount[t.cliente_id]||0)+1; });
-  const rankCli = Object.entries(cliCount)
-    .map(([id,n])=>({id, nome:cliAll.find(c=>c.id===id)?.nome||'—', n}))
-    .sort((a,b)=>b.n-a.n).slice(0,5);
+  const rankCli = Object.entries(cliCount).map(([id,n])=>({id,nome:cliAll.find(c=>c.id===id)?.nome||'—',n})).sort((a,b)=>b.n-a.n).slice(0,4);
 
   const catCount = {};
   tAll.forEach(t=>{ if(t.catalogo_id) catCount[t.catalogo_id]=(catCount[t.catalogo_id]||0)+1; });
-  const rankCat = Object.entries(catCount)
-    .map(([id,n])=>({nome:tAll.find(t=>t.catalogo_id===id)?.catalogo?.nome||'—', n}))
-    .sort((a,b)=>b.n-a.n).slice(0,5);
+  const rankCat = Object.entries(catCount).map(([id,n])=>({nome:tAll.find(t=>t.catalogo_id===id)?.catalogo?.nome||'—',n})).sort((a,b)=>b.n-a.n).slice(0,4);
 
   const instrutores = usrAll.filter(u=>u.perfil==='instrutor');
-
-  // Gráfico de barras — responsivo com SVG inline
-  const barW = 36; const barGap = 8; const chartH = 80; const labelH = 20; const valH = 18;
-  const totalW = (barW + barGap) * 6 - barGap;
-  const barsHtml = turmasPorMes.map((m,i)=>{
-    const pct = Math.round((m.n/maxN)*100);
-    const barH = Math.max(m.n>0?Math.round(chartH*(pct/100)):0, m.n>0?6:0);
-    const x = i*(barW+barGap);
-    const filled = m.n>0;
-    return `
-      <g>
-        <rect x="${x}" y="${chartH-barH}" width="${barW}" height="${barH}" fill="${filled?'#1E2A4A':'#E2E8F0'}" rx="3"/>
-        ${m.n>0?`<text x="${x+barW/2}" y="${chartH-barH-4}" text-anchor="middle" font-size="10" font-weight="600" fill="#1E2A4A">${m.n}</text>`:''}
-        <text x="${x+barW/2}" y="${chartH+labelH}" text-anchor="middle" font-size="9" fill="#94A3B8">${m.label}</text>
-      </g>`;
-  }).join('');
-
-  const medalCores = ['#F59E0B','#B0B7C3','rgba(180,120,0,.4)','#F1F5F9','#F1F5F9'];
-  const medalTexto = ['#1E2A4A','#475569','#92400E','#64748B','#64748B'];
+  const maxCli = rankCli[0]?.n||1;
+  const maxCat = rankCat[0]?.n||1;
 
   const rankCliHtml = rankCli.length ? rankCli.map((r,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="irPara('clientes')" title="Ver clientes">
-      <div style="width:22px;height:22px;border-radius:50%;background:${medalCores[i]};color:${medalTexto[i]};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-      <div style="flex:1;font-size:12px;font-weight:500;color:var(--text-1);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)${i===rankCli.length-1?';border:none':''}">
+      <div style="width:20px;height:20px;border-radius:50%;background:${i===0?'var(--amber)':'var(--navy-3)'};color:${i===0?'var(--navy)':'var(--navy)'};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+        <div style="height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px"><div style="height:3px;background:var(--navy);width:${Math.round((r.n/maxCli)*100)}%;border-radius:2px"></div></div>
+      </div>
       <span class="badge badge-navy" style="flex-shrink:0">${r.n}</span>
-    </div>`).join('') : `<div style="font-size:12px;color:var(--text-3);padding:10px 0">Nenhum dado</div>`;
+    </div>`).join('')
+    : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum dado</div>`;
 
-  const rankCatHtml = rankCat.length ? rankCat.map((r,i)=>{
-    const barPct = Math.round((r.n/rankCat[0].n)*100);
-    return `
-    <div style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="irPara('catalogo')" title="Ver catálogo">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <div style="width:20px;height:20px;border-radius:50%;background:${medalCores[i]};color:${medalTexto[i]};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-        <div style="flex:1;font-size:12px;font-weight:500;color:var(--text-1);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
-        <span class="badge badge-amber" style="flex-shrink:0">${r.n}</span>
+  const rankCatHtml = rankCat.length ? rankCat.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)${i===rankCat.length-1?';border:none':''}">
+      <div style="width:20px;height:20px;border-radius:50%;background:${i===0?'rgba(245,158,11,.2)':'var(--navy-3)'};color:var(--navy);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
+        <div style="height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px"><div style="height:3px;background:var(--amber);width:${Math.round((r.n/maxCat)*100)}%;border-radius:2px"></div></div>
       </div>
-      <div style="height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden;margin-left:28px">
-        <div style="height:4px;background:var(--amber);width:${barPct}%;border-radius:2px"></div>
-      </div>
-    </div>`;
-  }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:10px 0">Nenhum dado</div>`;
+      <span class="badge badge-amber" style="flex-shrink:0">${r.n}</span>
+    </div>`).join('')
+    : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum dado</div>`;
 
   const instHtml = instrutores.length ? instrutores.map(u=>{
     const ns = sesAll.filter(s=>s.instrutor_id===u.id).length;
     const maxS = Math.max(...instrutores.map(x=>sesAll.filter(s=>s.instrutor_id===x.id).length),1);
-    const pct = Math.round((ns/maxS)*100);
-    return `
-      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
-          <div style="width:30px;height:30px;border-radius:50%;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
-          </div>
-          <span class="badge badge-green" style="flex-shrink:0">${ns} sessão${ns!==1?'ões':''}</span>
-        </div>
-        <div style="height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden;margin-left:40px">
-          <div style="height:4px;background:var(--green);width:${pct}%;border-radius:2px"></div>
-        </div>
-      </div>`;
-  }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:10px 0">Nenhum instrutor</div>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+      <div style="width:32px;height:32px;border-radius:50%;background:var(--navy-3);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+        <div style="height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px"><div style="height:3px;background:var(--green);width:${Math.round((ns/maxS)*100)}%;border-radius:2px"></div></div>
+      </div>
+      <span class="badge badge-green" style="flex-shrink:0">${ns}</span>
+    </div>`;
+  }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum instrutor</div>`;
+
+  // Gráfico SVG inline com dados reais
+  const _buildBars = (vals, color) => {
+    const maxVal = Math.max(...vals,1);
+    return vals.map((v,i)=>{
+      const barH = Math.max(v>0?Math.round(70*(v/maxVal)):0, v>0?5:0);
+      const x = i*40;
+      const isLast = i===vals.length-1;
+      return `<g>
+        <rect x="${x+2}" y="${70-barH}" width="28" height="${barH}" fill="${isLast?color:'rgba(30,42,74,.22)'}" rx="3"/>
+        ${v>0?`<text x="${x+16}" y="${70-barH-4}" text-anchor="middle" font-size="9" font-weight="600" fill="${color}">${v}</text>`:''}
+        <text x="${x+16}" y="88" text-anchor="middle" font-size="9" fill="#8896A4">${meses[i].label}</text>
+      </g>`;
+    }).join('');
+  };
+
+  window._relDadosTurmas  = dadosTurmas;
+  window._relDadosSessoes = dadosSessoes;
+  window._relMeses        = meses;
+  window._relBuildBars    = _buildBars;
 
   setConteudo(`
     <style>
-      .relat-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
-      .relat-kpi{border-radius:var(--r-lg);padding:14px 12px;cursor:pointer;transition:opacity .12s;border:1px solid var(--border);min-width:0}
-      .relat-kpi:hover{opacity:.85}
-      .relat-kpi.navy-k{background:var(--navy);border-color:var(--navy)}
-      .relat-kpi.accent-k{background:var(--surface);border-top:3px solid var(--amber)}
-      .relat-kpi .rl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .relat-kpi.navy-k .rl{color:rgba(255,255,255,.55)}
-      .relat-kpi.accent-k .rl{color:var(--text-3)}
-      .relat-kpi .rv{font-size:22px;font-weight:700;line-height:1}
-      .relat-kpi.navy-k .rv{color:#fff}
-      .relat-kpi.accent-k .rv{color:var(--navy)}
-      .relat-kpi .rs{font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .relat-kpi.navy-k .rs{color:rgba(255,255,255,.45)}
-      .relat-kpi.accent-k .rs{color:var(--text-3)}
-      .relat-rankings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-      .relat-chart-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
-      .relat-chart-svg{display:block;min-width:260px}
-      @media(max-width:600px){
-        .relat-kpis{grid-template-columns:repeat(2,1fr)}
-        .relat-rankings{grid-template-columns:1fr}
-        .relat-kpi .rv{font-size:20px}
-      }
-      @media(max-width:360px){
-        .relat-kpis{grid-template-columns:1fr 1fr}
-        .relat-kpi{padding:10px 8px}
-        .relat-kpi .rv{font-size:18px}
-        .relat-kpi .rl,.relat-kpi .rs{font-size:9px}
-      }
+      .rel2-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 20px;margin-bottom:14px}
+      .rel2-title{font-size:17px;font-weight:700;color:#fff}
+      .rel2-sub{font-size:12px;color:rgba(255,255,255,.4);margin-top:2px}
+      .rel2-period{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+      .rel2-chip{padding:4px 14px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.5);transition:.1s}
+      .rel2-chip.active{background:var(--amber);border-color:var(--amber);color:var(--navy)}
+      .rel2-export{display:flex;gap:6px}
+      .rel2-export-btn{padding:5px 12px;border-radius:var(--r-md);border:0.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);font-size:11px;font-weight:500;cursor:pointer}
+      .rel2-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+      .rel2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 12px}
+      .rel2-kpi-icon{font-size:16px;margin-bottom:6px;display:block}
+      .rel2-kpi-val{font-size:24px;font-weight:700;color:var(--navy);line-height:1}
+      .rel2-kpi-lbl{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+      .rel2-kpi-delta{font-size:10px;color:var(--green);margin-top:5px;font-weight:600}
+      .rel2-chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
+      .rel2-chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+      .rel2-chart-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
+      .rel2-toggle{display:flex;gap:4px}
+      .rel2-tbtn{padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-3);transition:.1s}
+      .rel2-tbtn.active{background:var(--navy);border-color:var(--navy);color:#fff}
+      .rel2-rankings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+      .rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
+      .rel2-card-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+      @media(max-width:480px){.rel2-kpis{grid-template-columns:repeat(2,1fr)}.rel2-rankings{grid-template-columns:1fr}.rel2-kpi-val{font-size:20px}}
     </style>
 
-    <div class="relat-kpis">
-      <div class="relat-kpi navy-k" onclick="irParaTurmasFiltradas('em_andamento')">
-        <div class="rl">Ativas</div><div class="rv">${tAtivas}</div><div class="rs">Em andamento →</div>
+    <div class="rel2-header">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="rel2-title">Relatórios</div>
+          <div class="rel2-sub">AvanteSeg · Atualizado agora</div>
+        </div>
+        <div class="rel2-export">
+          <button class="rel2-export-btn" onclick="exportarRelatorioCSV()">⬇ CSV</button>
+          <button class="rel2-export-btn" onclick="exportarRelatorioJSON()">⬇ JSON</button>
+        </div>
       </div>
-      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('agendada')">
-        <div class="rl">Agendadas</div><div class="rv">${tAgendadas}</div><div class="rs">Próximas →</div>
-      </div>
-      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('concluida')">
-        <div class="rl">Concluídas</div><div class="rv">${tConcluidas}</div><div class="rs">Histórico →</div>
-      </div>
-      <div class="relat-kpi accent-k" onclick="irParaTurmasFiltradas('cancelada')">
-        <div class="rl">Canceladas</div><div class="rv">${tCanceladas}</div><div class="rs">Ver listagem →</div>
-      </div>
-      <div class="relat-kpi accent-k" onclick="irPara('clientes')">
-        <div class="rl">Clientes</div><div class="rv">${cliAtivos}</div><div class="rs">Ativos →</div>
-      </div>
-      <div class="relat-kpi accent-k" onclick="irPara('turmas')">
-        <div class="rl">Total</div><div class="rv">${tAll.length}</div><div class="rs">Todas turmas →</div>
+      <div class="rel2-period">
+        <button class="rel2-chip active">Este mês</button>
+        <button class="rel2-chip">3 meses</button>
+        <button class="rel2-chip">6 meses</button>
+        <button class="rel2-chip">Este ano</button>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:5px">
-        ${ICONS.chart} Evolução mensal — últimos 6 meses
+    <div class="rel2-kpis">
+      <div class="rel2-kpi" style="border-left:3px solid var(--navy)" onclick="irParaTurmasFiltradas('em_andamento')" title="Ver turmas ativas" style="cursor:pointer">
+        <span class="rel2-kpi-icon">🎓</span>
+        <div class="rel2-kpi-val">${tAtivas}</div>
+        <div class="rel2-kpi-lbl">Turmas ativas</div>
+        <div class="rel2-kpi-delta">Em andamento</div>
       </div>
-      <div class="relat-chart-wrap">
-        <svg class="relat-chart-svg" viewBox="0 0 ${totalW} ${chartH+labelH+valH}" height="${chartH+labelH+valH}" style="width:100%">
-          ${barsHtml}
+      <div class="rel2-kpi" style="border-left:3px solid var(--amber)" onclick="irParaTurmasFiltradas('agendada')" title="Ver agendadas" style="cursor:pointer">
+        <span class="rel2-kpi-icon">📋</span>
+        <div class="rel2-kpi-val">${tAgendadas}</div>
+        <div class="rel2-kpi-lbl">Agendadas</div>
+        <div class="rel2-kpi-delta">Próximas turmas</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--green)" onclick="irParaTurmasFiltradas('concluida')" title="Ver concluídas" style="cursor:pointer">
+        <span class="rel2-kpi-icon">✅</span>
+        <div class="rel2-kpi-val">${tConcluidas}</div>
+        <div class="rel2-kpi-lbl">Concluídas</div>
+        <div class="rel2-kpi-delta">Total histórico</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--navy)">
+        <span class="rel2-kpi-icon">🏢</span>
+        <div class="rel2-kpi-val">${cliAtivos}</div>
+        <div class="rel2-kpi-lbl">Clientes ativos</div>
+        <div class="rel2-kpi-delta">Empresas atendidas</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--amber)" onclick="irParaTurmasFiltradas('cancelada')" title="Ver canceladas" style="cursor:pointer">
+        <span class="rel2-kpi-icon">⚪</span>
+        <div class="rel2-kpi-val">${tCanceladas}</div>
+        <div class="rel2-kpi-lbl">Canceladas</div>
+        <div class="rel2-kpi-delta" style="color:var(--text-3)">Total</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--green)">
+        <span class="rel2-kpi-icon">📊</span>
+        <div class="rel2-kpi-val">${tAll.length}</div>
+        <div class="rel2-kpi-lbl">Total turmas</div>
+        <div class="rel2-kpi-delta">Todas</div>
+      </div>
+    </div>
+
+    <div class="rel2-chart">
+      <div class="rel2-chart-header">
+        <div>
+          <div class="rel2-chart-title">Evolução mensal</div>
+          <div id="relLegLabel" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
+            <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
+          </div>
+        </div>
+        <div class="rel2-toggle">
+          <button class="rel2-tbtn active" id="rt-turmas" onclick="relToggle(this,'turmas','Turmas criadas','#1E2A4A')">Turmas</button>
+          <button class="rel2-tbtn" id="rt-sessoes" onclick="relToggle(this,'sessoes','Sessões concluídas','#F59E0B')">Sessões</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <svg id="relSvg" viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">
+          ${_buildBars(dadosTurmas,'#1E2A4A')}
         </svg>
       </div>
     </div>
 
-    <div class="relat-rankings">
-      <div class="card" style="min-width:0">
-        <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-          <span>Ranking clientes</span>
-          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500;flex-shrink:0" onclick="irPara('clientes')">Ver todos →</span>
-        </div>
+    <div class="rel2-rankings">
+      <div class="rel2-card">
+        <div class="rel2-card-title">Top clientes</div>
         ${rankCliHtml}
       </div>
-      <div class="card" style="min-width:0">
-        <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
-          <span>Treinamentos</span>
-          <span style="font-size:10px;color:var(--amber-h);cursor:pointer;font-weight:500;flex-shrink:0" onclick="irPara('catalogo')">Ver todos →</span>
-        </div>
+      <div class="rel2-card">
+        <div class="rel2-card-title">Top treinamentos</div>
         ${rankCatHtml}
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:10px">Instrutores</div>
+    <div class="rel2-card" style="margin-bottom:14px">
+      <div class="rel2-card-title">Performance instrutores</div>
       ${instHtml}
     </div>
-
-    <div class="card">
-      <div style="font-size:12px;font-weight:600;color:var(--navy);margin-bottom:3px">Exportar dados</div>
-      <div style="font-size:11px;color:var(--text-2);margin-bottom:12px">Exportar turmas com filtros atuais</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioCSV()">⬇ CSV</button>
-        <button class="btn btn-outline btn-sm" onclick="exportarRelatorioJSON()">⬇ JSON</button>
-      </div>
-    </div>
   `);
+
+  // Bind chips de período (visual only)
+  document.querySelectorAll('.rel2-chip').forEach(btn=>{
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.rel2-chip').forEach(b=>{b.classList.remove('active')});
+      this.classList.add('active');
+    });
+  });
 }
+
+function relToggle(btn, metric, label, color) {
+  document.querySelectorAll('.rel2-tbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const dados = metric==='turmas' ? window._relDadosTurmas : window._relDadosSessoes;
+  const svg = document.getElementById('relSvg');
+  if (svg && window._relBuildBars) svg.innerHTML = window._relBuildBars(dados, color);
+  const leg = document.getElementById('relLegLabel');
+  if (leg) leg.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block"></span>${label}`;
+}
+
 
 function irParaTurmasFiltradas(status) {
   irPara('turmas').then(()=>{
@@ -3236,7 +3410,7 @@ async function renderEquipe() {
   if (error) throw error;
   const usuarios = data||[];
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Equipe</div>`);
-  fabMostrar(()=>abrirModalUsuarioOrg(usuarioAtual.org_id));
+  fabOcultar();
 
   const total   = usuarios.length;
   const ativos  = usuarios.filter(u=>u.ativo).length;
