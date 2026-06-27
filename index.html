@@ -3771,11 +3771,32 @@ function fmtDataExtenso(iso) {
   const meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   return `${parseInt(d)} de ${meses[parseInt(m)-1]} de ${y}`;
 }
-// Versao sem acentos para jsPDF (helvetica e latin-1)
+
+// Sanitiza qualquer string para uso no jsPDF (helvetica e latin-1 puro)
+// Remove diacriticos via NFD, substitui caracteres fora do ASCII imprimivel por '?'
+function pdfSafe(v, maxLen) {
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '?')
+    .trim()
+    .slice(0, maxLen || 400);
+}
+
+// Formata data por extenso sem acentos (para uso nos PDFs)
 function fmtDataExtensoPDF(iso) {
-  return fmtDataExtenso(iso)
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^\x20-\x7E]/g,'');
+  return pdfSafe(fmtDataExtenso(iso));
+}
+
+// Formata validade sem acentos: usa logica propria em vez de toLocaleDateString
+function fmtValidadePDF(dtVal) {
+  if (!dtVal) return '';
+  const meses = ['janeiro','fevereiro','marco','abril','maio','junho',
+                 'julho','agosto','setembro','outubro','novembro','dezembro'];
+  const m = dtVal.getMonth(); // 0-based
+  const y = dtVal.getFullYear();
+  return meses[m] + ' de ' + y;
 }
 
 // Salva o PDF no Supabase Storage e registra na tabela documentos
@@ -3847,14 +3868,10 @@ async function gerarListaPresenca(turmaId) {
     const TEXT2 = [100, 116, 139];
     const TEXT3 = [148, 163, 184];
 
-    // Sanitizacao: remove acentos e chars fora do latin-1 para o jsPDF
-    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?').slice(0, max||300);
-    const sp = s; // alias
-
     const ag = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
-    const instrutor = s(ag?.usuarios?.nome||'-');
+    const instrutor = pdfSafe(ag?.usuarios?.nome||'-');
     const dataAula = ag?.data ? fmtDataExtensoPDF(ag.data) : '-';
-    const local = s(ag?.local||t.local||'-');
+    const local = pdfSafe(ag?.local||t.local||'-');
     const protocolo = t.protocolo||turmaId.slice(0,12).toUpperCase();
 
     // ── Borda dupla externa ──
@@ -3887,7 +3904,7 @@ async function gerarListaPresenca(turmaId) {
     doc.addImage(LOGO_AVANTESEG, 'PNG', mg+4, mg+5, 46, 14);
 
     // Badge "Ficha de Presença" no header
-    doc.setFillColor(254, 243, 199); // amber claro sem alpha (jsPDF v2 nao suporta 4 args)
+    doc.setFillColor(254, 243, 199);
     doc.setDrawColor(...AMBER); doc.setLineWidth(0.3);
     doc.roundedRect(W-mg-52, mg+8, 48, 10, 2, 2, 'FD');
     doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
@@ -3900,12 +3917,12 @@ async function gerarListaPresenca(turmaId) {
     // ── Título do treinamento ──
     let y = mg + 38;
     doc.setFontSize(13); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
-    const nomeT = s(t.catalogo?.nome||'Treinamento');
+    const nomeT = pdfSafe(t.catalogo?.nome||'Treinamento');
     const linhasT = doc.splitTextToSize(nomeT, W-mg*2-4);
     linhasT.forEach((l,i)=>doc.text(l, mg+2, y+i*6));
     y += linhasT.length * 6 + 2;
     doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(...TEXT2);
-    doc.text(s(t.clientes?.nome||'-'), mg+2, y); y += 5;
+    doc.text(pdfSafe(t.clientes?.nome||'-'), mg+2, y); y += 5;
 
     // ── Bloco de metadados (3 colunas) ──
     doc.setFillColor(...GRAY50);
@@ -3919,7 +3936,7 @@ async function gerarListaPresenca(turmaId) {
       {l:'Instrutor',v:instrutor},
       {l:'Carga horaria',v:`${t.catalogo?.carga_horaria||'-'}h`},
       {l:'Local',v:local},
-      {l:'CNPJ Cliente',v:t.clientes?.cnpj||'—'},
+      {l:'CNPJ Cliente',v:t.clientes?.cnpj||'-'},
       {l:'Protocolo',v:protocolo},
     ];
     const metaRows = [[metas[0],metas[1],metas[2]],[metas[3],metas[4],metas[5]]];
@@ -3930,7 +3947,7 @@ async function gerarListaPresenca(turmaId) {
         doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
         doc.text(m.l.toUpperCase(), mx, my);
         doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
-        doc.text(s(m.v||'-', 28), mx, my+4);
+        doc.text(pdfSafe(m.v||'-', 28), mx, my+4);
       });
     });
     y += 22;
@@ -3981,7 +3998,7 @@ async function gerarListaPresenca(turmaId) {
       doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','normal');
       doc.text(String(i+1).padStart(2,'0'), mg+3, y+9);
       doc.text((col.nome||'').slice(0,36), mg+10, y+9);
-      doc.text(s(col.cpf||'-'), mg+72, y+9);
+      doc.text(pdfSafe(col.cpf||'-'), mg+72, y+9);
 
       if (pr?.assinatura_path) {
         try {
@@ -4016,7 +4033,7 @@ async function gerarListaPresenca(turmaId) {
 }
 
 // ============================================================
-// PDF — CERTIFICADO INDIVIDUAL
+// PDF - CERTIFICADO INDIVIDUAL
 // ============================================================
 async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
@@ -4039,7 +4056,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
-    const fmtVal = dtVal.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    const fmtVal = fmtValidadePDF(dtVal);
 
     const codigo      = crypto.randomUUID();
     const codigoShort = codigo.slice(0,8).toUpperCase();
@@ -4049,13 +4066,13 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nrMatch = nomeT.match(/NR[\s\-]*(\d+)/i);
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
-    // Sanitiza texto — remove caracteres de controle que quebram o jsPDF
-    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?').slice(0, max||300);
+    // Sanitiza texto - remove caracteres de controle que quebram o jsPDF
+    const s = (v, max) => pdfSafe(v, max);
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
 
-    // Paleta — apenas arrays RGB [r,g,b], sem 4º argumento
+    // Paleta - apenas arrays RGB [r,g,b], sem 4º argumento
     const NAVY  = [30,42,74];
     const AMBER = [245,158,11];
     const WHITE = [255,255,255];
@@ -4106,7 +4123,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
 
     // ════════════════════════════════
-    // PÁGINA 1 — CAPA (Modelo B)
+    // PÁGINA 1 - CAPA (Modelo B)
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
     cabecalhoNavy(doc, 'CERTIFICADO DE CONCLUSAO', 'AvanteSeg Cursos e Treinamentos Corporativos Ltda');
@@ -4157,7 +4174,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.text(`Certificado No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
     // ════════════════════════════════
-    // PÁGINA 2 — CONTRACAPA (landscape)
+    // PÁGINA 2 - CONTRACAPA (landscape)
     // ════════════════════════════════
     doc.addPage('a4','landscape');
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
@@ -4274,7 +4291,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 
 
 // ============================================================
-// PDF — CERTIFICADO COLETIVO
+// PDF - CERTIFICADO COLETIVO
 // ============================================================
 async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
@@ -4296,7 +4313,7 @@ async function gerarCertificadoColetivo(turmaId) {
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
-    const fmtVal = dtVal.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    const fmtVal = fmtValidadePDF(dtVal);
 
     const codigo      = crypto.randomUUID();
     const codigoShort = codigo.slice(0,8).toUpperCase();
@@ -4306,7 +4323,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const nrMatch = nomeT.match(/NR[\s\-]*(\d+)/i);
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
-    const s = (v, max) => String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?').slice(0, max||300);
+    const s = (v, max) => pdfSafe(v, max);
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
@@ -4325,7 +4342,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const txtCorrido = s(`Os colaboradores da empresa ${nomeEmp} concluiram com aproveitamento o ${nomeT}, realizado em ${fmtDataExtensoPDF(dataCert)}, com carga horaria de ${ch} hora${ch!==1?'s':''}, conforme os criterios estabelecidos para a capacitacao.`, 400);
 
     // ════════════════════════════════
-    // PÁGINA 1 — CAPA COLETIVA
+    // PÁGINA 1 - CAPA COLETIVA
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
 
@@ -4400,7 +4417,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.text(`No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
     // ════════════════════════════════
-    // PÁGINA 2 — CONTRACAPA (dados técnicos + lista)
+    // PÁGINA 2 - CONTRACAPA (dados técnicos + lista)
     // ════════════════════════════════
     doc.addPage('a4','landscape');
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
@@ -4516,7 +4533,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.text('Av. Arno Carlo Gracher, 69 Sala 4  -  Brusque - SC  -  (47) 3351-4266  -  www.avanteseg.com.br', W/2, H-2.5, {align:'center'});
 
     // ════════════════════════════════
-    // PÁGINAS ADICIONAIS — participantes excedentes (20 por página)
+    // PÁGINAS ADICIONAIS - participantes excedentes (20 por página)
     // ════════════════════════════════
     const restantes = participantes.slice(MAX_P2);
     const MAX_PAG   = 20;
@@ -4576,7 +4593,7 @@ async function gerarCertificadoColetivo(turmaId) {
 
 
 // ============================================================
-// TELA DOCUMENTOS — turma concluída
+// TELA DOCUMENTOS - turma concluída
 // ============================================================
 async function renderDocumentosTurma(turmaId) {
   showLoading('Carregando documentos...');
@@ -4623,7 +4640,7 @@ async function renderDocumentosTurma(turmaId) {
             : `<div class="li-sub">Aguardando geração</div>`;
           return `<div class="list-item" style="padding:12px 0">
               <div class="li-icon" style="background:var(--blue-l);color:var(--blue);font-size:11px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">${iniciais(col.nome||'?')}</div>
-              <div class="li-info"><div class="li-title">${col.nome||'—'}</div>${subInfo}</div>
+              <div class="li-info"><div class="li-title">${col.nome||'-'}</div>${subInfo}</div>
               <button class="btn btn-navy btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">⬇ PDF</button>
             </div>`;
         }).join('') + (participantes.length > 0
@@ -4695,7 +4712,7 @@ async function renderDocumentosTurma(turmaId) {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div>
             <div style="font-size:15px;font-weight:600;color:var(--text-1)">🏢 Certificado Coletivo</div>
-            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Para a empresa — ${participantes.length} participante(s)</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Para a empresa - ${participantes.length} participante(s)</div>
           </div>
           <button class="btn btn-navy btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ Gerar PDF</button>
         </div>
