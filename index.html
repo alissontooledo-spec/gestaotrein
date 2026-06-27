@@ -751,7 +751,7 @@ async function renderHomeAdmin() {
   const [{data:turmas},{data:clientes},{data:sessoes},{data:colabs}] = await Promise.all([
     sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,clientes(nome),catalogo(nome)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
-    sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida').order('data',{ascending:true}),
+    sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida,local').order('data',{ascending:true}),
     sb.from('colaboradores').select('id').eq('org_id',oi),
   ]);
 
@@ -802,6 +802,75 @@ async function renderHomeAdmin() {
   // Atividade recente — turmas criadas recentemente
   const recentes = [...tAll].sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,3);
 
+  // ── Alertas inteligentes ──────────────────────────────────────
+  // hojeStr já declarada acima em proxSessoes
+  const alertas = [];
+
+  // 1. Sessões próximas (7 dias) sem instrutor atribuído
+  const proximas7d = new Date(hoje); proximas7d.setDate(proximas7d.getDate()+7);
+  const semInstrutor = sesAll.filter(s =>
+    !s.concluida &&
+    s.data >= hojeStr &&
+    s.data <= proximas7d.toISOString().split('T')[0] &&
+    !s.instrutor_id
+  );
+  if (semInstrutor.length > 0) {
+    alertas.push({
+      tipo: 'warning',
+      icone: '👤',
+      texto: `${semInstrutor.length} sessão${semInstrutor.length!==1?'ões':''} nos próximos 7 dias sem instrutor atribuído`,
+      acao: "irParaTurmasFiltradas('em_andamento')",
+      label: 'Ver turmas',
+    });
+  }
+
+  // 2. Turmas "em andamento" sem nenhuma sessão futura (travadas)
+  const travadas = tAll.filter(t => {
+    if (t.status !== 'em_andamento') return false;
+    const sessTurma = sesAll.filter(s => s.turma_id === t.id && !s.concluida && s.data >= hojeStr);
+    return sessTurma.length === 0;
+  });
+  if (travadas.length > 0) {
+    alertas.push({
+      tipo: 'warning',
+      icone: '⏸',
+      texto: `${travadas.length} turma${travadas.length!==1?'s':''} em andamento sem próximas sessões agendadas`,
+      acao: "irParaTurmasFiltradas('em_andamento')",
+      label: 'Verificar',
+    });
+  }
+
+  // 3. Turmas agendadas aguardando início há mais de 7 dias do passado
+  const atrasadas = tAll.filter(t => {
+    if (t.status !== 'agendada') return false;
+    const primeiraData = sesAll
+      .filter(s => s.turma_id === t.id)
+      .map(s => s.data)
+      .filter(Boolean)
+      .sort()[0];
+    return primeiraData && primeiraData < hojeStr;
+  });
+  if (atrasadas.length > 0) {
+    alertas.push({
+      tipo: 'danger',
+      icone: '⚠️',
+      texto: `${atrasadas.length} turma${atrasadas.length!==1?'s':''} com data de início no passado ainda aguardando início`,
+      acao: "irParaTurmasFiltradas('agendada')",
+      label: 'Revisar',
+    });
+  }
+
+  const alertasHtml = alertas.map(a => {
+    const bg    = a.tipo==='danger' ? 'rgba(220,38,38,.08)' : 'rgba(245,158,11,.08)';
+    const borda = a.tipo==='danger' ? 'rgba(220,38,38,.3)' : 'rgba(245,158,11,.3)';
+    const cor   = a.tipo==='danger' ? '#B91C1C' : '#92400E';
+    return `<div style="background:${bg};border:1px solid ${borda};border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <span style="font-size:16px;flex-shrink:0">${a.icone}</span>
+      <div style="flex:1;font-size:12px;color:${cor};font-weight:500;line-height:1.4">${a.texto}</div>
+      <button onclick="${a.acao}" style="border:1px solid ${borda};background:transparent;color:${cor};font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;font-family:inherit">${a.label} →</button>
+    </div>`;
+  }).join('');
+
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Administrador</div>`);
   setConteudo(`
     <div class="home-navy-header">
@@ -836,7 +905,7 @@ async function renderHomeAdmin() {
       </div>
     </div>
 
-    ${ativas===0&&agendadas>0?`<div class="home-alert"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--amber-h)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div class="home-alert-text">${agendadas} turma${agendadas!==1?'s':''} agendada${agendadas!==1?'s':''} aguardando início</div></div>`:''}
+    ${alertasHtml}
 
     <div class="home-chart-card">
       <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
@@ -1280,7 +1349,7 @@ async function toggleCliente(id) {
 // COLABORADORES
 // ============================================================
 async function renderColaboradores() {
-  const {data,error} = await sb.from('colaboradores').select('*').order('nome').limit(200);
+  const {data,error} = await sb.from('colaboradores').select('*').eq('org_id',usuarioAtual.org_id).order('nome').limit(500);
   if (error) throw error;
   _colabsCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Colaboradores</div>`);
@@ -1390,7 +1459,7 @@ function abrirModalColab(id=null) {
 async function salvarColab() {
   const nome = document.getElementById('mColNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const dados = {nome, cpf:document.getElementById('mColCpf')?.value.trim()||null, cargo:document.getElementById('mColCargo')?.value.trim()||null, email:document.getElementById('mColEmail')?.value.trim()||null, telefone:document.getElementById('mColTel')?.value.trim()||null};
+  const dados = {nome, org_id: usuarioAtual.org_id, cpf:document.getElementById('mColCpf')?.value.trim()||null, cargo:document.getElementById('mColCargo')?.value.trim()||null, email:document.getElementById('mColEmail')?.value.trim()||null, telefone:document.getElementById('mColTel')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('colaboradores').update(dados).eq('id',_modalCurrentId) : await sb.from('colaboradores').insert(dados);
@@ -2243,25 +2312,39 @@ function previewImportacao(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    const lines = ev.target.result.split('\n').filter(l=>l.trim());
-    const header = lines[0].toLowerCase().split(',').map(h=>h.trim());
-    const nomeIdx  = header.indexOf('nome');
-    const cpfIdx   = header.indexOf('cpf');
-    const cargoIdx = header.indexOf('cargo');
-    const emailIdx = header.indexOf('email');
-    const telIdx   = header.indexOf('telefone');
-    if (nomeIdx < 0) { document.getElementById('mImpPreview').innerHTML='<span style="color:var(--red)">Coluna "nome" não encontrada no arquivo.</span>'; return; }
-    _dadosImportacao = lines.slice(1).map(line=>{
-      const cols = line.split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+    const texto  = ev.target.result;
+    const linhas = texto.split(/\r?\n/).filter(l => l.trim());
+    if (!linhas.length) { document.getElementById('mImpPreview').innerHTML = '<span style="color:var(--red)">Arquivo vazio.</span>'; return; }
+    const sep = linhas[0].includes(';') ? ';' : ',';
+    const parseLinha = l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+    const header = parseLinha(linhas[0]).map(h => h.toLowerCase().trim());
+    const idx = k => header.findIndex(h => h === k || h.startsWith(k));
+    const nomeIdx = idx('nome');
+    if (nomeIdx < 0) { document.getElementById('mImpPreview').innerHTML = '<span style="color:var(--red)">Coluna "nome" não encontrada. Verifique o arquivo.</span>'; return; }
+    const cpfIdx = idx('cpf'), cargoIdx = idx('cargo'), emailIdx = idx('email'), telIdx = idx('telefone');
+    _dadosImportacao = linhas.slice(1).map(l => {
+      const cols = parseLinha(l);
       return {
-        nome:  cols[nomeIdx]||'',
-        cpf:   cpfIdx>=0?cols[cpfIdx]||null:null,
-        cargo: cargoIdx>=0?cols[cargoIdx]||null:null,
-        email: emailIdx>=0?cols[emailIdx]||null:null,
-        telefone:telIdx>=0?cols[telIdx]||null:null,
+        org_id:   usuarioAtual.org_id,
+        nome:     cols[nomeIdx] || '',
+        cpf:      cpfIdx   >= 0 ? cols[cpfIdx]   || null : null,
+        cargo:    cargoIdx >= 0 ? cols[cargoIdx]  || null : null,
+        email:    emailIdx >= 0 ? cols[emailIdx]  || null : null,
+        telefone: telIdx   >= 0 ? cols[telIdx]    || null : null,
       };
-    }).filter(r=>r.nome);
-    document.getElementById('mImpPreview').innerHTML=`<span style="color:var(--green);font-weight:500">✓ ${_dadosImportacao.length} colaboradores encontrados no arquivo.</span>`;
+    }).filter(r => r.nome.length > 1);
+    const el = document.getElementById('mImpPreview');
+    el.innerHTML = _dadosImportacao.length > 0
+      ? `<div style="color:var(--green);font-weight:500;margin-bottom:8px">✓ ${_dadosImportacao.length} colaboradores prontos para importar</div>
+         <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto">
+           ${_dadosImportacao.slice(0,5).map((r,i) =>
+             `<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px">
+               <span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nome}</span>
+               <span style="color:var(--text-3)">${r.cpf||''}</span>
+             </div>`).join('')}
+           ${_dadosImportacao.length > 5 ? `<div style="padding:7px 12px;font-size:12px;color:var(--text-3)">+ ${_dadosImportacao.length-5} mais...</div>` : ''}
+         </div>`
+      : '<span style="color:var(--red)">Nenhuma linha válida. Verifique se a coluna "nome" está preenchida.</span>';
   };
   reader.readAsText(file, 'UTF-8');
 }
@@ -2270,7 +2353,24 @@ async function executarImportacao() {
   if (!_dadosImportacao.length) { showToast('Selecione um arquivo CSV válido','error'); return; }
   try {
     setBtnModalLoading(true);
-    const {data,error} = await sb.from('colaboradores').upsert(_dadosImportacao, {onConflict:'cpf',ignoreDuplicates:false}).select();
+    // upsert por cpf dentro da mesma org (CPF pode repetir entre orgs diferentes)
+    // Para orgs sem CPF, inserir sem conflito
+    const comCpf = _dadosImportacao.filter(r => r.cpf);
+    const semCpf = _dadosImportacao.filter(r => !r.cpf);
+    let totalOk = 0;
+    if (comCpf.length) {
+      const {data: d1, error: e1} = await sb.from('colaboradores')
+        .upsert(comCpf, {onConflict:'cpf,org_id', ignoreDuplicates:false}).select();
+      if (e1) throw e1;
+      totalOk += d1?.length || comCpf.length;
+    }
+    if (semCpf.length) {
+      const {data: d2, error: e2} = await sb.from('colaboradores').insert(semCpf).select();
+      if (e2) throw e2;
+      totalOk += d2?.length || semCpf.length;
+    }
+    const data = {length: totalOk};
+    const error = null;
     if (error) throw error;
     fecharModal();
     showToast(`${data?.length||_dadosImportacao.length} colaboradores importados com sucesso!`,'success');
@@ -2617,8 +2717,8 @@ async function renderHistorico() {
   const totalTurmas   = lista.length;
   const totalAlunos   = lista.reduce((acc,g)=>(acc+(g.turma.turma_participantes?.length||0)),0);
   const totalHoras    = lista.reduce((acc,g)=>{
-    const ch  = g.turma.catalogo?.carga_horaria||0;
-    return acc + (ch * g.sessoes.length);
+    const ch = g.turma.catalogo?.carga_horaria||0;
+    return acc + ch; // carga_horaria ja e o total do treinamento
   },0);
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
