@@ -869,27 +869,44 @@
     setBtnLoading(true);
 
     try {
-      // Aceita tanto o código curto (8 chars) quanto o UUID completo
-      const codigo = rawInput.toLowerCase();
-
-      // ── STEP 1: Buscar o documento pelo código ──────────────────
-      // Aceita código curto (8 chars) OU UUID completo
-      const isShort = codigo.replace(/-/g,'').length <= 8;
-
+      // ── STEP 1: Normalizar o código ──────────────────────────────
+      // Remove espaços, converte pra lowercase (UUID no banco é lowercase)
+      const codigoNorm = rawInput.trim().replace(/\s/g, '').toLowerCase();
+      const SEL = 'id, turma_id, colaborador_id, tipo, codigo_validacao, gerado_em';
       let docBase = null;
-      if (isShort) {
-        const { data } = await sb.from('documentos')
-          .select('id, turma_id, colaborador_id, tipo, codigo_validacao, gerado_em')
-          .ilike('codigo_validacao', codigo + '%')
-          .limit(1)
-          .maybeSingle();
+
+      // ── Tentativa 1: RPC oficial (SECURITY INVOKER, bypassa RLS) ──
+      // Funciona para UUID completo. Pode aceitar código curto dependendo da implementação.
+      const { data: rpcRows, error: rpcErr } = await sb.rpc(
+        'buscar_documento_por_codigo', { p_codigo: codigoNorm }
+      );
+      if (!rpcErr && rpcRows) {
+        const hit = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+        if (hit && hit.codigo_validacao) docBase = hit;
+      }
+
+      // ── Tentativa 2: SELECT direto com match exato (UUID completo) ──
+      if (!docBase && codigoNorm.length > 8) {
+        const { data } = await sb.from('documentos').select(SEL)
+          .eq('codigo_validacao', codigoNorm).maybeSingle();
         docBase = data;
-      } else {
-        const { data } = await sb.from('documentos')
-          .select('id, turma_id, colaborador_id, tipo, codigo_validacao, gerado_em')
-          .eq('codigo_validacao', codigo)
-          .maybeSingle();
-        docBase = data;
+      }
+
+      // ── Tentativa 3: código curto (8 chars) → ILIKE no prefixo do UUID ──
+      // O UUID no banco: "d1cf993e-xxxx-..." → código curto = "D1CF993E"
+      if (!docBase && codigoNorm.length <= 8) {
+        const { data: rows } = await sb.from('documentos').select(SEL)
+          .ilike('codigo_validacao', codigoNorm + '%')
+          .order('gerado_em', { ascending: false })
+          .limit(1);
+
+        if (rows && rows.length > 0) {
+          // Confirmar que começa com o prefixo (segurança extra)
+          const hit = rows.find(r =>
+            r.codigo_validacao.toLowerCase().replace(/-/g, '').startsWith(codigoNorm)
+          );
+          docBase = hit || null;
+        }
       }
 
       if (!docBase) {
