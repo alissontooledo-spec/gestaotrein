@@ -1966,21 +1966,51 @@ async function _carregarInstrutores() {
 async function abrirModalAgendamento(turmaId, agendamentoId=null) {
   _modalCurrentId = turmaId;
   window._agendamentoEditId = agendamentoId||null;
-  const instrutores = await _carregarInstrutores();
+
+  // Buscar instrutores e carga horária da turma em paralelo
+  const [instrutores, turmaResp] = await Promise.all([
+    _carregarInstrutores(),
+    sb.from('turmas').select('catalogo(carga_horaria)').eq('id', turmaId).single(),
+  ]);
+  const cargaHoraria = turmaResp.data?.catalogo?.carga_horaria || 0;
+  window._agCargaHoraria = cargaHoraria; // guarda para calcular término
+
   let ag = null;
   if (agendamentoId) {
-    const {data} = await sb.from('sessoes').select('*').eq('id',agendamentoId).single();
+    const {data} = await sb.from('sessoes').select('*').eq('id', agendamentoId).single();
     ag = data;
   }
-  const instOpts = instrutores.map(i=>`<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${i.nome}</option>`).join('');
+
+  // Calcular hora_fim existente para exibição (se vier do banco, só exibe como info)
+  const horaFimAtual = ag?.hora_fim?.slice(0,5) || '';
+
+  const instOpts = instrutores.map(i =>
+    `<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${i.nome}</option>`
+  ).join('');
+
+  const cargaLabel = cargaHoraria
+    ? `<span style="font-size:11px;color:var(--text-3);margin-left:6px">(calculado: início + ${cargaHoraria}h)</span>`
+    : '';
+
   abrirModal(ag?'Editar agendamento':'Novo agendamento', `
     <div class="field"><label>Data *</label>
       <input type="date" id="mAgData" value="${ag?.data||''}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Hora início</label>
-        <input type="time" id="mAgIni" value="${ag?.hora_inicio?.slice(0,5)||''}"></div>
-      <div class="field" style="margin:0"><label>Hora término</label>
-        <input type="time" id="mAgFim" value="${ag?.hora_fim?.slice(0,5)||''}"></div>
+      <div class="field" style="margin:0">
+        <label>Hora início</label>
+        <input type="time" id="mAgIni" value="${ag?.hora_inicio?.slice(0,5)||''}"
+          oninput="calcularHoraFimAuto()"
+          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+      </div>
+      <div class="field" style="margin:0">
+        <label style="display:flex;align-items:center;gap:4px">
+          Hora término ${cargaLabel}
+        </label>
+        <div id="mAgFimDisplay" style="padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;background:var(--gray-50,#F8FAFC);color:var(--text-2);min-height:44px;display:flex;align-items:center">
+          ${horaFimAtual || '<span style="color:var(--text-3);font-size:13px">Automático após hora início</span>'}
+        </div>
+        <input type="hidden" id="mAgFim" value="${horaFimAtual}">
+      </div>
     </div>
     <div class="field"><label>Instrutor responsável</label>
       <select id="mAgInstrutor" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
@@ -1998,6 +2028,26 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarAgendamento()">
        ${ag?'Salvar':'Adicionar agendamento'}
      </button>`);
+}
+
+function calcularHoraFimAuto() {
+  const ini = document.getElementById('mAgIni')?.value;
+  const carga = window._agCargaHoraria || 0;
+  const display = document.getElementById('mAgFimDisplay');
+  const hidden  = document.getElementById('mAgFim');
+  if (!ini || !carga) {
+    if (display) display.innerHTML = '<span style="color:var(--text-3);font-size:13px">Automático após hora início</span>';
+    if (hidden)  hidden.value = '';
+    return;
+  }
+  // Calcular: hora início + carga horária em horas
+  const [h, m] = ini.split(':').map(Number);
+  const totalMin = h * 60 + m + Math.round(carga * 60);
+  const fimH = String(Math.floor(totalMin / 60) % 24).padStart(2, '0');
+  const fimM = String(totalMin % 60).padStart(2, '0');
+  const resultado = `${fimH}:${fimM}`;
+  if (display) display.innerHTML = `<strong style="color:var(--navy,#1E2A4A)">${resultado}</strong>`;
+  if (hidden)  hidden.value = resultado;
 }
 
 async function salvarAgendamento() {
@@ -2270,8 +2320,9 @@ async function renderAgenda() {
   // Calendário — datas com sessões
   const datasComSessao = new Set((sessoes||[]).map(s=>s.data).filter(Boolean));
   const [anoHoje, mesHoje] = hoje.split('-').map(Number);
-  window._agendaMes  = mesHoje;
-  window._agendaAno  = anoHoje;
+  window._agendaMes     = mesHoje;
+  window._agendaAno     = anoHoje;
+  window._agendaDataSel = null;
   window._agendaTurmasAgrupadas = turmasAgrupadas;
   window._agendaDatasComSessao  = datasComSessao;
   window._agendaHoje = hoje;
@@ -2331,13 +2382,27 @@ async function renderAgenda() {
 
   setConteudo(`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);margin-bottom:16px;overflow:hidden">
-      <div style="background:var(--navy);padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-        <button onclick="_agendaNavMes(-1)" style="border:none;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">‹</button>
-        <div id="agendaCalMes" style="font-size:15px;font-weight:700;color:#fff"></div>
-        <button onclick="_agendaNavMes(1)" style="border:none;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">›</button>
+      <div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+        <button onclick="_agendaNavMes(-1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">‹</button>
+        <div id="agendaCalMes" style="font-size:14px;font-weight:600;color:#fff"></div>
+        <button onclick="_agendaNavMes(1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">›</button>
       </div>
-      <div style="padding:12px 14px 14px">
-        <div id="agendaCalGrid"></div>
+      <div style="display:grid;grid-template-columns:auto 1fr;min-height:200px">
+        <div style="padding:12px 12px 12px 14px;border-right:1px solid var(--border)">
+          <div id="agendaCalGrid"></div>
+          <div id="agendaCalLegenda" style="display:flex;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
+              <div style="width:9px;height:9px;border-radius:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35)"></div>Com sessão
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
+              <div style="width:9px;height:9px;border-radius:3px;background:var(--navy)"></div>Hoje
+            </div>
+          </div>
+        </div>
+        <div id="agendaCalLista" style="padding:12px 14px;overflow-y:auto;max-height:260px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px" id="agendaCalListaHeader">Sessões do mês</div>
+          <div id="agendaCalListaBody"></div>
+        </div>
       </div>
     </div>
     <div id="agendaListaFiltrada">
@@ -2364,6 +2429,7 @@ function _agendaRenderCalendario() {
   const datasSet = window._agendaDatasComSessao;
   const hoje     = window._agendaHoje;
   const nomesMeses = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
   const elMes  = document.getElementById('agendaCalMes');
   const elGrid = document.getElementById('agendaCalGrid');
   if (!elMes || !elGrid) return;
@@ -2372,82 +2438,97 @@ function _agendaRenderCalendario() {
 
   const primeiroDia = new Date(ano, mes-1, 1).getDay();
   const diasNoMes   = new Date(ano, mes, 0).getDate();
-  const diasSemana  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
+  const dow = ['D','S','T','Q','Q','S','S'];
 
-  // Contar sessoes no mes atual para exibir legenda
-  const sessoesNoMes = [...datasSet].filter(d => {
-    const [y,m] = d.split('-').map(Number);
-    return y === ano && m === mes;
-  }).length;
-
-  let html = '';
-
-  // Cabeçalho com dias da semana
-  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:6px">';
-  html += diasSemana.map(d =>
-    `<div style="text-align:center;font-size:11px;font-weight:600;color:var(--text-3);padding:4px 0;letter-spacing:.02em">${d}</div>`
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,28px);gap:2px;margin-bottom:4px">`;
+  html += dow.map(d =>
+    `<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:3px 0">${d}</div>`
   ).join('');
   html += '</div>';
 
-  // Grid de dias
-  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
+  html += `<div style="display:grid;grid-template-columns:repeat(7,28px);gap:2px">`;
+  for (let i = 0; i < primeiroDia; i++) html += `<div style="width:28px;height:28px"></div>`;
 
-  // Células vazias antes do primeiro dia
-  for (let i = 0; i < primeiroDia; i++) {
-    html += '<div style="aspect-ratio:1"></div>';
-  }
-
-  // Dias do mês
   for (let d = 1; d <= diasNoMes; d++) {
-    const dataStr  = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dataStr   = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const temSessao = datasSet.has(dataStr);
     const ehHoje    = dataStr === hoje;
-    const ehPassado = dataStr < hoje && !temSessao;
+    const ehSel     = window._agendaDataSel === dataStr;
 
-    let bg    = 'transparent';
-    let color = ehPassado ? 'var(--text-3)' : 'var(--text-1)';
-    let fw    = '400';
-    let borda = 'none';
-    let cursor = 'default';
-    let opacity = ehPassado ? '0.4' : '1';
+    let bg = 'transparent', color = 'var(--text-2)', fw = '400', borda = 'none', cursor = 'default';
+    if (ehHoje)    { bg = 'var(--navy)'; color = '#fff'; fw = '600'; }
+    if (temSessao && !ehHoje) { bg = 'rgba(245,158,11,.15)'; color = 'var(--navy)'; fw = '600'; borda = '1px solid rgba(245,158,11,.4)'; cursor = 'pointer'; }
+    if (ehSel && !ehHoje)     { borda = '2px solid var(--navy)'; }
+    if (dataStr < hoje && !temSessao) color = 'var(--text-3)';
 
-    if (ehHoje && temSessao) {
-      bg = 'var(--navy)'; color = '#fff'; fw = '700'; cursor = 'pointer';
-    } else if (ehHoje) {
-      bg = 'var(--navy)'; color = '#fff'; fw = '700';
-    } else if (temSessao) {
-      bg = 'rgba(245,158,11,.15)'; color = 'var(--navy)'; fw = '600';
-      borda = '1.5px solid rgba(245,158,11,.4)'; cursor = 'pointer'; opacity = '1';
-    }
+    const dot = temSessao && !ehHoje
+      ? `<div style="width:4px;height:4px;background:var(--amber,#F59E0B);border-radius:50%;margin:1px auto 0"></div>` : '';
 
-    const dotHtml = temSessao && !ehHoje
-      ? '<div style="width:5px;height:5px;background:var(--amber);border-radius:50%;margin:2px auto 0"></div>'
-      : '';
-
-    html += `<div
-      onclick="${temSessao ? `_agendaFiltrarData('${dataStr}')` : ''}"
-      style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;font-size:13px;font-weight:${fw};background:${bg};color:${color};cursor:${cursor};border:${borda};opacity:${opacity};transition:background .12s;user-select:none"
-      
-    >${d}${dotHtml}</div>`;
+    html += `<div onclick="${temSessao?`_agendaFiltrarData('${dataStr}')`:''}"
+      style="width:28px;height:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;font-size:12px;font-weight:${fw};background:${bg};color:${color};cursor:${cursor};border:${borda}"
+    >${d}${dot}</div>`;
   }
   html += '</div>';
+  elGrid.innerHTML = html;
 
-  // Legenda compacta
-  if (sessoesNoMes > 0) {
-    html += `<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)">
-        <div style="width:10px;height:10px;border-radius:3px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.4)"></div>
-        Dia com sessao
-      </div>
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)">
-        <div style="width:10px;height:10px;border-radius:3px;background:var(--navy)"></div>
-        Hoje
-      </div>
-      <div style="margin-left:auto;font-size:11px;color:var(--text-3)">${sessoesNoMes} sessao(es) neste mes</div>
-    </div>`;
+  _agendaAtualizarLista(window._agendaDataSel || null);
+}
+
+function _agendaAtualizarLista(dataFiltro) {
+  const header = document.getElementById('agendaCalListaHeader');
+  const body   = document.getElementById('agendaCalListaBody');
+  if (!header || !body) return;
+
+  const turmasAgrupadas = window._agendaTurmasAgrupadas || {};
+  const mes = window._agendaMes;
+  const ano = window._agendaAno;
+  const hoje = window._agendaHoje;
+
+  let sessoesFiltradas = [];
+  Object.values(turmasAgrupadas).forEach(g => {
+    g.sessoes.forEach(s => {
+      if (!s.data) return;
+      const [sy, sm] = s.data.split('-').map(Number);
+      if (dataFiltro) {
+        if (s.data === dataFiltro) sessoesFiltradas.push({s, turma: g.turma});
+      } else {
+        if (sy === ano && sm === mes) sessoesFiltradas.push({s, turma: g.turma});
+      }
+    });
+  });
+  sessoesFiltradas.sort((a, b) => a.s.data > b.s.data ? 1 : -1);
+
+  if (dataFiltro) {
+    const partes = dataFiltro.split('-').reverse().join('/');
+    header.textContent = `${partes} — ${sessoesFiltradas.length} sessao(oes)`;
+  } else {
+    const nm = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    header.textContent = `${nm[mes-1]} ${ano} — ${sessoesFiltradas.length} sessao(oes)`;
   }
 
-  elGrid.innerHTML = html;
+  if (!sessoesFiltradas.length) {
+    body.innerHTML = `<div style="font-size:12px;color:var(--text-3);padding:16px 0;text-align:center">${dataFiltro?'Nenhuma sessao neste dia':'Nenhuma sessao neste mes'}</div>`;
+    return;
+  }
+
+  const stBg    = {agendada:'rgba(100,116,139,.1)',em_andamento:'rgba(30,42,74,.08)',concluida:'rgba(5,150,105,.1)',cancelada:'rgba(148,163,184,.1)'};
+  const stColor = {agendada:'var(--text-2)',em_andamento:'var(--navy,#1E2A4A)',concluida:'#059669',cancelada:'var(--text-3)'};
+  const stLabel = {agendada:'Agendado',em_andamento:'Em andamento',concluida:'Concluido',cancelada:'Cancelado'};
+
+  body.innerHTML = sessoesFiltradas.map(({s, turma}) => {
+    const ehHoje  = s.data === hoje;
+    const hora    = s.hora_inicio ? s.hora_inicio.slice(0,5) : '';
+    const st      = turma.status || 'agendada';
+    const dataFmt = s.data ? s.data.split('-').reverse().join('/') : '';
+    return `<div style="padding:8px 10px;background:${ehHoje?'rgba(245,158,11,.08)':'var(--gray-50,#F8FAFC)'};border:1px solid ${ehHoje?'rgba(245,158,11,.3)':'var(--border)'};border-radius:8px;margin-bottom:6px">
+      ${ehHoje?`<div style="font-size:9px;font-weight:700;color:#F59E0B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Hoje</div>`:''}
+      <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${turma.catalogo?.nome||'Treinamento'}</div>
+      <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span>${dataFmt}${hora?' - '+hora:''}</span>
+        <span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:500;background:${stBg[st]};color:${stColor[st]}">${stLabel[st]||st}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function _agendaNavMes(delta) {
@@ -2460,19 +2541,32 @@ function _agendaNavMes(delta) {
 }
 
 function _agendaFiltrarData(dataStr) {
+  // Atualizar seleção no calendário
+  window._agendaDataSel = window._agendaDataSel === dataStr ? null : dataStr;
+  _agendaRenderCalendario();
+
+  // Também filtrar a lista principal de turmas abaixo do calendário
   const turmasAgrupadas = window._agendaTurmasAgrupadas;
-  const renderGrupo = window._agendaRenderGrupo;
-  const SL = window._agendaSL; const SB = window._agendaSB;
+  const renderGrupo     = window._agendaRenderGrupo;
   const el = document.getElementById('agendaListaFiltrada');
   if (!el) return;
-  const grupos = Object.values(turmasAgrupadas).filter(g=>g.sessoes.some(s=>s.data===dataStr));
+
+  if (!window._agendaDataSel) {
+    // Deselecionar — mostrar todos
+    renderAgenda(); return;
+  }
+
+  const grupos = Object.values(turmasAgrupadas).filter(g =>
+    g.sessoes.some(s => s.data === window._agendaDataSel)
+  );
   if (!grupos.length) {
-    el.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento em ${dataStr.split('-').reverse().join('/')}</div></div></div>
-      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%" onclick="renderAgenda()">Ver todos</button>`;
+    el.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">📅</div>
+      <div class="empty-title">Nenhum agendamento em ${window._agendaDataSel.split('-').reverse().join('/')}</div></div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%" onclick="_agendaFiltrarData('${window._agendaDataSel}')">Ver todos</button>`;
     return;
   }
   el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-size:13px;font-weight:600;color:var(--navy)">${dataStr.split('-').reverse().join('/')} — ${grupos.length} turma(s)</div>
+    <div style="font-size:13px;font-weight:600;color:var(--navy,#1E2A4A)">${window._agendaDataSel.split('-').reverse().join('/')} — ${grupos.length} turma(s)</div>
     <button class="btn btn-outline btn-sm" onclick="renderAgenda()">Ver todos</button>
   </div>` + grupos.map(renderGrupo).join('');
 }
