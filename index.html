@@ -107,7 +107,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .mh-greeting{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:2px;font-weight:400}
 .mh-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.4px}
 .mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(245,158,11,.18);padding:4px 10px;border-radius:999px;font-size:11px;color:var(--amber);font-weight:500;border:1px solid rgba(245,158,11,.25)}
-.mobile-content{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
+.mobile-content{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
 
 /* ── Cards & surfaces ── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
@@ -234,7 +234,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 
 /* ── Responsive breakpoints ── */
 @media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.fab{bottom:24px;right:24px}}
-@media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column;overflow-x:hidden}#mobileBody{max-width:100%;overflow-x:hidden}}
+@media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column}}
 @media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}}
 
@@ -263,14 +263,10 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .home-list-name{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-list-sub{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px}
-@media(max-width:767px){
+@media(max-width:520px){
   .home-2col{grid-template-columns:1fr}
   .home-qa{grid-template-columns:repeat(2,minmax(0,1fr))}
   .home-kpi-val{font-size:20px}
-  .home-chart-card{padding:12px}
-  .home-list-card{padding:12px}
-  .home-qa{gap:8px}
-  .qa-btn{padding:12px}
 }
 
 /* ── Relatórios redesign ── */
@@ -297,23 +293,11 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .rel2-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
 .rel2-card-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-@media(max-width:767px){
-  .rel2-header{border-radius:var(--r-lg);padding:14px 14px 16px}
-  .rel2-title{font-size:15px}
-  .rel2-sub{font-size:11px}
-  .rel2-period{gap:4px;margin-top:10px;flex-wrap:wrap}
-  .rel2-chip{padding:3px 10px;font-size:10px}
-  .rel2-export{gap:4px}
-  .rel2-export-btn{font-size:10px;padding:4px 8px}
-  .rel2-kpis{grid-template-columns:repeat(2,1fr);gap:8px}
-  .rel2-kpi{padding:10px}
-  .rel2-kpi-val{font-size:18px}
-  .rel2-kpi-icon{font-size:14px;margin-bottom:4px}
-  .rel2-kpi-lbl{font-size:9px}
+@media(max-width:520px){
+  .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .rel2-rankings{grid-template-columns:1fr}
-  .rel2-card{padding:12px}
-  .rel2-chart{padding:12px}
-  .rel2-card-title{font-size:10px}
+  .rel2-kpi-val{font-size:20px}
+  .rel2-export-btn{font-size:10px;padding:4px 8px}
 }
 
 /* ── Execution tabs ── */
@@ -461,6 +445,82 @@ function mascararCnpj(input) {
   else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d*).*/,'$1.$2.$3');
   else if (v.length > 2) v = v.replace(/^(\d{2})(\d*).*/,'$1.$2');
   input.value = v;
+  if (v.replace(/\D/g,'').length === 14) consultarCNPJ(input);
+}
+
+async function consultarCNPJ(inputEl) {
+  const cnpjNum = inputEl.value.replace(/\D/g,'');
+  if (cnpjNum.length !== 14) return;
+
+  // Detecta contexto: modal rápido (mCR) ou principal (mCli)
+  const isRapido = !!document.getElementById('mCRNome');
+  const p = isRapido ? 'mCR' : 'mCli';
+
+  const get = id => document.getElementById(id);
+  const lbl = inputEl.closest('.field')?.querySelector('label');
+  const lblOrig = lbl?.textContent || 'CNPJ';
+
+  // Feedback visual: consultando
+  inputEl.style.borderColor = 'var(--amber)';
+  inputEl.style.background  = 'rgba(245,158,11,.07)';
+  if (lbl) lbl.textContent  = 'CNPJ · Consultando Receita Federal...';
+  inputEl.disabled = true;
+
+  const reset = (ok) => {
+    inputEl.disabled = false;
+    if (ok) {
+      inputEl.style.borderColor = '#22c55e';
+      inputEl.style.background  = 'rgba(34,197,94,.06)';
+      if (lbl) lbl.textContent  = 'CNPJ · Dados preenchidos ✓';
+    } else {
+      inputEl.style.borderColor = '#ef4444';
+      inputEl.style.background  = 'rgba(239,68,68,.06)';
+      if (lbl) lbl.textContent  = 'CNPJ · Não encontrado';
+    }
+    setTimeout(() => {
+      inputEl.style.borderColor = '';
+      inputEl.style.background  = '';
+      if (lbl) lbl.textContent  = lblOrig;
+    }, 3000);
+  };
+
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNum}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+
+    // Nome: fantasia > razão social
+    const nomeEl = get(p + 'Nome');
+    if (nomeEl && !nomeEl.value.trim())
+      nomeEl.value = d.nome_fantasia?.trim() || d.razao_social?.trim() || '';
+
+    // Endereço
+    const fill = (id, val) => { const el = get(id); if (el) el.value = val || ''; };
+    fill(p + 'Cep',    d.cep    ? d.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : '');
+    fill(p + 'Rua',    d.logradouro   || '');
+    fill(p + 'Numero', d.numero       || '');
+    fill(p + 'Bairro', d.bairro       || '');
+    fill(p + 'Cidade', d.municipio    || '');
+    fill(p + 'Uf',     d.uf           || '');
+
+    // Contato
+    const emailEl = get(p + 'Email');
+    if (emailEl && !emailEl.value.trim())
+      emailEl.value = (d.email || '').toLowerCase();
+
+    const telEl = get(p + 'Tel');
+    if (telEl && !telEl.value.trim() && d.ddd_telefone_1) {
+      const t = d.ddd_telefone_1.replace(/\D/g,'');
+      if (t.length >= 10)
+        telEl.value = `(${t.slice(0,2)}) ${t.slice(2,6)}-${t.slice(6)}`;
+    }
+
+    reset(true);
+    if (nomeEl) nomeEl.focus();
+
+  } catch(e) {
+    reset(false);
+  }
 }
 function mascararCpf(input) {
   let v = input.value.replace(/\D/g,'').slice(0,11);
@@ -835,7 +895,7 @@ async function renderHomeAdmin() {
     <div class="home-chart-card">
       <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
       <div style="overflow-x:auto">
-        <svg viewBox="0 0 240 95" width="100%" style="min-width:0;display:block;width:100%">${barsHtml}</svg>
+        <svg viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">${barsHtml}</svg>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
         <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
@@ -1208,10 +1268,16 @@ function abrirModalCliente(id=null) {
   abrirModal(c?'Editar cliente':'Novo cliente', `
     <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${c?.nome||''}" placeholder="Razão social"></div>
     <div class="field"><label>CNPJ</label><input type="text" id="mCliCnpj" value="${c?.cnpj||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
-      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px">
+      <div class="field" style="margin:0"><label>CEP</label><input type="text" id="mCliCep" value="${c?.cep||''}" placeholder="00000-000" maxlength="9"></div>
+      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase;width:56px"></div>
     </div>
+    <div class="field"><label>Logradouro</label><input type="text" id="mCliRua" value="${c?.logradouro||''}" placeholder="Rua, Av., Travessa..."></div>
+    <div style="display:grid;grid-template-columns:80px 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Número</label><input type="text" id="mCliNumero" value="${c?.numero||''}" placeholder="Nº"></div>
+      <div class="field" style="margin:0"><label>Bairro</label><input type="text" id="mCliBairro" value="${c?.bairro||''}" placeholder="Bairro"></div>
+    </div>
+    <div class="field"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
     <div class="field"><label>E-mail</label><input type="email" id="mCliEmail" value="${c?.email||''}" placeholder="contato@empresa.com.br"></div>
     <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
@@ -1221,7 +1287,18 @@ function abrirModalCliente(id=null) {
 async function salvarCliente() {
   const nome = document.getElementById('mCliNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const dados = {nome, cnpj:document.getElementById('mCliCnpj')?.value.trim()||null, cidade:document.getElementById('mCliCidade')?.value.trim()||null, uf:(document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mCliEmail')?.value.trim()||null, telefone:document.getElementById('mCliTel')?.value.trim()||null};
+  const dados = {
+    nome,
+    cnpj:       document.getElementById('mCliCnpj')?.value.trim()||null,
+    cep:        document.getElementById('mCliCep')?.value.trim()||null,
+    logradouro: document.getElementById('mCliRua')?.value.trim()||null,
+    numero:     document.getElementById('mCliNumero')?.value.trim()||null,
+    bairro:     document.getElementById('mCliBairro')?.value.trim()||null,
+    cidade:     document.getElementById('mCliCidade')?.value.trim()||null,
+    uf:         (document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null,
+    email:      document.getElementById('mCliEmail')?.value.trim()||null,
+    telefone:   document.getElementById('mCliTel')?.value.trim()||null,
+  };
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('clientes').update(dados).eq('id',_modalCurrentId) : await sb.from('clientes').insert({...dados,org_id:usuarioAtual.org_id,ativo:true});
@@ -1781,10 +1858,16 @@ async function abrirModalClienteRapido() {
     </div>
     <div class="field"><label>Nome *</label><input type="text" id="mCRNome" placeholder="Razão social" autofocus></div>
     <div class="field"><label>CNPJ</label><input type="text" id="mCRCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
-      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px">
+      <div class="field" style="margin:0"><label>CEP</label><input type="text" id="mCRCep" placeholder="00000-000" maxlength="9"></div>
+      <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase;width:56px"></div>
     </div>
+    <div class="field"><label>Logradouro</label><input type="text" id="mCRRua" placeholder="Rua, Av., Travessa..."></div>
+    <div style="display:grid;grid-template-columns:80px 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Número</label><input type="text" id="mCRNumero" placeholder="Nº"></div>
+      <div class="field" style="margin:0"><label>Bairro</label><input type="text" id="mCRBairro" placeholder="Bairro"></div>
+    </div>
+    <div class="field"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
     <div class="field"><label>E-mail</label><input type="email" id="mCREmail" placeholder="contato@empresa.com.br"></div>`,
     `<button class="btn btn-outline" onclick="abrirModalTurma(${_modalCurrentId?`'${_modalCurrentId}'`:'null'})">Voltar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarClienteRapido()">Cadastrar e selecionar</button>`);
@@ -1795,12 +1878,16 @@ async function salvarClienteRapido() {
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   const dados = {
     nome,
-    cnpj: document.getElementById('mCRCnpj')?.value.trim()||null,
-    cidade: document.getElementById('mCRCidade')?.value.trim()||null,
-    uf: (document.getElementById('mCRUf')?.value.trim()||'').toUpperCase()||null,
-    email: document.getElementById('mCREmail')?.value.trim()||null,
-    org_id: usuarioAtual.org_id,
-    ativo: true,
+    cnpj:       document.getElementById('mCRCnpj')?.value.trim()||null,
+    cep:        document.getElementById('mCRCep')?.value.trim()||null,
+    logradouro: document.getElementById('mCRRua')?.value.trim()||null,
+    numero:     document.getElementById('mCRNumero')?.value.trim()||null,
+    bairro:     document.getElementById('mCRBairro')?.value.trim()||null,
+    cidade:     document.getElementById('mCRCidade')?.value.trim()||null,
+    uf:         (document.getElementById('mCRUf')?.value.trim()||'').toUpperCase()||null,
+    email:      document.getElementById('mCREmail')?.value.trim()||null,
+    org_id:     usuarioAtual.org_id,
+    ativo:      true,
   };
   try {
     setBtnModalLoading(true);
@@ -3265,7 +3352,7 @@ async function renderRelatorios() {
 
   setConteudo(`
     <div class="rel2-header">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div class="rel2-title">Relatórios</div>
           <div class="rel2-sub">AvanteSeg · Atualizado agora</div>
@@ -3336,7 +3423,7 @@ async function renderRelatorios() {
         </div>
       </div>
       <div style="overflow-x:auto">
-        <svg id="relSvg" viewBox="0 0 240 95" width="100%" style="min-width:0;display:block;width:100%">
+        <svg id="relSvg" viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">
           ${_buildBars(dadosTurmas,'#1E2A4A')}
         </svg>
       </div>
