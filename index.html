@@ -269,7 +269,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .home-kpi-val{font-size:20px}
 }
 
-/* ── Relatórios redesign ── */
+/* ── Relatórios redesign v2 ── */
 .rel2-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 20px;margin-bottom:14px}
 .rel2-title{font-size:17px;font-weight:700;color:#fff}
 .rel2-sub{font-size:12px;color:rgba(255,255,255,.4);margin-top:2px}
@@ -277,9 +277,11 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .rel2-chip{padding:4px 14px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.5);transition:.1s}
 .rel2-chip.active{background:var(--amber);border-color:var(--amber);color:var(--navy)}
 .rel2-export{display:flex;gap:6px}
-.rel2-export-btn{padding:5px 12px;border-radius:var(--r-md);border:0.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);font-size:11px;font-weight:500;cursor:pointer}
-.rel2-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.rel2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 12px;cursor:pointer}
+.rel2-export-btn{padding:5px 12px;border-radius:var(--r-md);border:0.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);font-size:11px;font-weight:500;cursor:pointer;transition:.12s}
+.rel2-export-btn:hover{background:rgba(255,255,255,.14)}
+.rel2-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.rel2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 12px;cursor:pointer;transition:box-shadow .15s}
+.rel2-kpi:hover{box-shadow:0 2px 8px rgba(30,42,74,.1)}
 .rel2-kpi-icon{font-size:16px;margin-bottom:6px;display:block}
 .rel2-kpi-val{font-size:24px;font-weight:700;color:var(--navy);line-height:1}
 .rel2-kpi-lbl{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
@@ -291,9 +293,21 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .rel2-tbtn{padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-3);transition:.1s}
 .rel2-tbtn.active{background:var(--navy);border-color:var(--navy);color:#fff}
 .rel2-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
-.rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
+.rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
+.rel2-card:last-child{margin-bottom:0}
 .rel2-card-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-@media(max-width:520px){
+.rel2-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)}
+.rel2-row:last-child{border:none}
+.rel2-badge{width:22px;height:22px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rel2-bar-wrap{height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px}
+.rel2-bar{height:3px;border-radius:2px}
+.rel2-cli-btn{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;transition:background .12s;margin-bottom:6px;width:100%;text-align:left}
+.rel2-cli-btn:hover{background:var(--gray-50)}
+.rel2-cli-name{font-size:13px;font-weight:600;color:var(--navy)}
+.rel2-cli-meta{font-size:11px;color:var(--text-3);margin-top:2px}
+.rel2-back{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;margin-bottom:14px;background:none;border:1px solid var(--border);border-radius:var(--r-md);padding:7px 12px;width:fit-content}
+.rel2-back:hover{background:var(--gray-50)}
+@media(max-width:767px){
   .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .rel2-rankings{grid-template-columns:1fr}
   .rel2-kpi-val{font-size:20px}
@@ -3164,160 +3178,229 @@ async function renderRelatorios() {
   const oi = usuarioAtual.org_id;
   setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
 
-  const [{data:turmas},{data:clientes},{data:sessoes},{data:usuarios}] = await Promise.all([
-    sb.from('turmas').select('id,status,cliente_id,catalogo_id,created_at,clientes(nome),catalogo(nome,carga_horaria)').eq('org_id',oi),
-    sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
-    sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(nome)').eq('concluida',true),
-    sb.from('usuarios').select('id,nome,perfil').eq('org_id',oi).eq('ativo',true),
+  // ── Buscar todos os dados necessários de uma vez ──
+  const [
+    {data:turmasRaw},
+    {data:clientesRaw},
+    {data:sessoesRaw},
+    {data:usuariosRaw},
+    {data:participantesRaw},
+  ] = await Promise.all([
+    sb.from('turmas')
+      .select('id,status,cliente_id,catalogo_id,created_at,clientes(id,nome),catalogo(nome,carga_horaria)')
+      .eq('org_id', oi),
+    sb.from('clientes').select('id,nome,ativo').eq('org_id', oi),
+    sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(id,nome)').eq('concluida', true),
+    sb.from('usuarios').select('id,nome,perfil').eq('org_id', oi).eq('ativo', true),
+    sb.from('turma_participantes').select('turma_id,colaborador_id'),
   ]);
 
-  const tAll   = turmas||[];
-  const cliAll = clientes||[];
-  const sesAll = sessoes||[];
-  const usrAll = usuarios||[];
-
-  const tAtivas    = tAll.filter(t=>t.status==='em_andamento').length;
-  const tAgendadas = tAll.filter(t=>t.status==='agendada').length;
-  const tConcluidas= tAll.filter(t=>t.status==='concluida').length;
-  const tCanceladas= tAll.filter(t=>t.status==='cancelada').length;
-  const cliAtivos  = cliAll.filter(c=>c.ativo).length;
-
-  // Evolução mensal — últimos 6 meses
-  const hoje = new Date();
-  const meses = [];
-  for (let i=5;i>=0;i--) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    meses.push({ label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''), ano: d.getFullYear(), mes: d.getMonth()+1 });
-  }
-
-  const dadosTurmas = meses.map(m=>tAll.filter(t=>{ const d=new Date(t.created_at); return d.getFullYear()===m.ano&&d.getMonth()+1===m.mes; }).length);
-  const dadosSessoes = meses.map(m=>sesAll.filter(s=>{ const d=new Date(s.data||''); return d.getFullYear()===m.ano&&d.getMonth()+1===m.mes; }).length);
-
-  // Rankings
-  const cliCount = {};
-  tAll.forEach(t=>{ if(t.cliente_id) cliCount[t.cliente_id]=(cliCount[t.cliente_id]||0)+1; });
-  const rankCli = Object.entries(cliCount).map(([id,n])=>({id,nome:cliAll.find(c=>c.id===id)?.nome||'—',n})).sort((a,b)=>b.n-a.n).slice(0,4);
-
-  const catCount = {};
-  tAll.forEach(t=>{ if(t.catalogo_id) catCount[t.catalogo_id]=(catCount[t.catalogo_id]||0)+1; });
-  const rankCat = Object.entries(catCount).map(([id,n])=>({nome:tAll.find(t=>t.catalogo_id===id)?.catalogo?.nome||'—',n})).sort((a,b)=>b.n-a.n).slice(0,4);
-
-  const instrutores = usrAll.filter(u=>u.perfil==='instrutor');
-  const maxCli = rankCli[0]?.n||1;
-  const maxCat = rankCat[0]?.n||1;
-
-  const rankCliHtml = rankCli.length ? rankCli.map((r,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)${i===rankCli.length-1?';border:none':''}">
-      <div style="width:20px;height:20px;border-radius:50%;background:${i===0?'var(--amber)':'var(--navy-3)'};color:${i===0?'var(--navy)':'var(--navy)'};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
-        <div style="height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px"><div style="height:3px;background:var(--navy);width:${Math.round((r.n/maxCli)*100)}%;border-radius:2px"></div></div>
-      </div>
-      <span class="badge badge-navy" style="flex-shrink:0">${r.n}</span>
-    </div>`).join('')
-    : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum dado</div>`;
-
-  const rankCatHtml = rankCat.length ? rankCat.map((r,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)${i===rankCat.length-1?';border:none':''}">
-      <div style="width:20px;height:20px;border-radius:50%;background:${i===0?'rgba(245,158,11,.2)':'var(--navy-3)'};color:var(--navy);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</div>
-        <div style="height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px"><div style="height:3px;background:var(--amber);width:${Math.round((r.n/maxCat)*100)}%;border-radius:2px"></div></div>
-      </div>
-      <span class="badge badge-amber" style="flex-shrink:0">${r.n}</span>
-    </div>`).join('')
-    : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum dado</div>`;
-
-  const instHtml = instrutores.length ? instrutores.map(u=>{
-    const ns = sesAll.filter(s=>s.instrutor_id===u.id).length;
-    const maxS = Math.max(...instrutores.map(x=>sesAll.filter(s=>s.instrutor_id===x.id).length),1);
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
-      <div style="width:32px;height:32px;border-radius:50%;background:var(--navy-3);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
-        <div style="height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px"><div style="height:3px;background:var(--green);width:${Math.round((ns/maxS)*100)}%;border-radius:2px"></div></div>
-      </div>
-      <span class="badge badge-green" style="flex-shrink:0">${ns}</span>
-    </div>`;
-  }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum instrutor</div>`;
-
-  // Gráfico SVG inline com dados reais
-  const _buildBars = (vals, color) => {
-    const maxVal = Math.max(...vals,1);
-    return vals.map((v,i)=>{
-      const barH = Math.max(v>0?Math.round(70*(v/maxVal)):0, v>0?5:0);
-      const x = i*40;
-      const isLast = i===vals.length-1;
-      return `<g>
-        <rect x="${x+2}" y="${70-barH}" width="28" height="${barH}" fill="${isLast?color:'rgba(30,42,74,.22)'}" rx="3"/>
-        ${v>0?`<text x="${x+16}" y="${70-barH-4}" text-anchor="middle" font-size="9" font-weight="600" fill="${color}">${v}</text>`:''}
-        <text x="${x+16}" y="88" text-anchor="middle" font-size="9" fill="#8896A4">${meses[i].label}</text>
-      </g>`;
-    }).join('');
+  // Guardar globalmente para filtros e exportação
+  window._relRaw = {
+    turmas: turmasRaw||[],
+    clientes: clientesRaw||[],
+    sessoes: sessoesRaw||[],
+    usuarios: usuariosRaw||[],
+    participantes: participantesRaw||[],
   };
+  window._relPeriodo = 6; // padrão: 6 meses
 
-  window._relDadosTurmas  = dadosTurmas;
-  window._relDadosSessoes = dadosSessoes;
-  window._relMeses        = meses;
-  window._relBuildBars    = _buildBars;
+  _renderRelatorioView();
+}
 
+function _relFiltrarPorPeriodo(turmas, sessoes, meses) {
+  // Calcular a data de corte com base no número de meses
+  const hoje = new Date();
+  const corte = new Date(hoje.getFullYear(), hoje.getMonth() - meses + 1, 1);
+  const tFilt = turmas.filter(t => new Date(t.created_at) >= corte);
+  const sFilt = sessoes.filter(s => s.data && new Date(s.data) >= corte);
+  return { tFilt, sFilt };
+}
+
+function _renderRelatorioView() {
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
+  const { turmas: tAll, clientes: cliAll, sessoes: sesAll, usuarios: usrAll, participantes: partAll } = window._relRaw;
+  const meses = window._relPeriodo || 6;
+
+  const { tFilt, sFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
+
+  // ── KPIs ──
+  const tAtivas     = tFilt.filter(t => t.status === 'em_andamento').length;
+  const tAgendadas  = tFilt.filter(t => t.status === 'agendada').length;
+  const tConcluidas = tFilt.filter(t => t.status === 'concluida').length;
+  const tCanceladas = tFilt.filter(t => t.status === 'cancelada').length;
+  const cliAtivos   = cliAll.filter(c => c.ativo).length;
+  const totalTurmas = tFilt.length;
+
+  // Participantes únicos no período
+  const turmaIdsFilt = new Set(tFilt.map(t => t.id));
+  const partFilt     = partAll.filter(p => turmaIdsFilt.has(p.turma_id));
+  const partUnicos   = new Set(partFilt.map(p => p.colaborador_id)).size;
+
+  // Horas totais (turmas concluídas no período)
+  const horasTotal = tFilt
+    .filter(t => t.status === 'concluida')
+    .reduce((sum, t) => sum + (t.catalogo?.carga_horaria || 0), 0);
+
+  // ── Gráfico: evolução nos últimos N meses ──
+  const hoje = new Date();
+  const mesesLabel = [];
+  for (let i = meses - 1; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    mesesLabel.push({
+      label: d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+      ano: d.getFullYear(),
+      mes: d.getMonth() + 1,
+    });
+  }
+  const dadosTurmas   = mesesLabel.map(m => tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear() === m.ano && d.getMonth() + 1 === m.mes; }).length);
+  const dadosSessoes  = mesesLabel.map(m => sesAll.filter(s => { const d = new Date(s.data || ''); return d.getFullYear() === m.ano && d.getMonth() + 1 === m.mes; }).length);
+  const dadosPart     = mesesLabel.map(m => {
+    const tIds = new Set(tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear() === m.ano && d.getMonth() + 1 === m.mes; }).map(t => t.id));
+    return new Set(partAll.filter(p => tIds.has(p.turma_id)).map(p => p.colaborador_id)).size;
+  });
+
+  window._relDados = { turmas: dadosTurmas, sessoes: dadosSessoes, participantes: dadosPart };
+  window._relMeses = mesesLabel;
+
+  // ── Rankings top 5 ──
+  const cliMap = {};
+  tFilt.forEach(t => {
+    if (!t.cliente_id) return;
+    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome || '—', turmas: 0, horas: 0, pessoas: 0 };
+    cliMap[t.cliente_id].turmas++;
+    cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria || 0);
+    cliMap[t.cliente_id].pessoas += partAll.filter(p => p.turma_id === t.id).length;
+  });
+  const rankCli = Object.entries(cliMap).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.turmas - a.turmas).slice(0, 5);
+
+  const catMap = {};
+  tFilt.forEach(t => {
+    if (!t.catalogo_id) return;
+    if (!catMap[t.catalogo_id]) catMap[t.catalogo_id] = { nome: t.catalogo?.nome || '—', n: 0, horas: 0 };
+    catMap[t.catalogo_id].n++;
+    catMap[t.catalogo_id].horas += (t.catalogo?.carga_horaria || 0);
+  });
+  const rankCat = Object.entries(catMap).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.n - a.n).slice(0, 5);
+
+  const instrutores = usrAll.filter(u => u.perfil === 'instrutor');
+  const instMap = {};
+  instrutores.forEach(u => { instMap[u.id] = { nome: u.nome, sessoes: 0, turmas: new Set() }; });
+  sFilt.forEach(s => {
+    if (s.instrutor_id && instMap[s.instrutor_id]) {
+      instMap[s.instrutor_id].sessoes++;
+      instMap[s.instrutor_id].turmas.add(s.turma_id);
+    }
+  });
+  const rankInst = Object.values(instMap).map(v => ({ ...v, turmas: v.turmas.size })).sort((a, b) => b.sessoes - a.sessoes);
+
+  // ── Helpers de HTML ──
+  const maxCli  = rankCli[0]?.turmas || 1;
+  const maxCat  = rankCat[0]?.n || 1;
+  const maxInst = rankInst[0]?.sessoes || 1;
+
+  const _rankRow = (nome, val, maxVal, color, sub) => `
+    <div class="rel2-row">
+      <div class="rel2-badge" style="background:${color}22;color:${color};font-size:11px">
+        ${val}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nome}</div>
+        ${sub ? `<div style="font-size:10px;color:var(--text-3);margin-top:1px">${sub}</div>` : ''}
+        <div class="rel2-bar-wrap"><div class="rel2-bar" style="width:${Math.round((val/maxVal)*100)}%;background:${color}"></div></div>
+      </div>
+    </div>`;
+
+  const rankCliHtml = rankCli.length
+    ? rankCli.map(r => _rankRow(r.nome, r.turmas, maxCli, '#1E2A4A', `${r.pessoas} pessoa${r.pessoas!==1?'s':''} · ${r.horas}h`)).join('')
+    : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum dado no período</div>`;
+
+  const rankCatHtml = rankCat.length
+    ? rankCat.map(r => _rankRow(r.nome, r.n, maxCat, '#F59E0B', `${r.horas}h totais`)).join('')
+    : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum dado no período</div>`;
+
+  const instHtml = rankInst.length
+    ? rankInst.map(r => _rankRow(r.nome, r.sessoes, maxInst, '#059669', `${r.turmas} turma${r.turmas!==1?'s':''}`)).join('')
+    : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum instrutor ativo</div>`;
+
+  // ── Clientes — lista para drill-down ──
+  const cliListHtml = Object.entries(cliMap).sort((a,b)=>b[1].turmas-a[1].turmas).slice(0,8).map(([id,v])=>`
+    <button class="rel2-cli-btn" onclick="relVerCliente('${id}')">
+      <div>
+        <div class="rel2-cli-name">${v.nome}</div>
+        <div class="rel2-cli-meta">${v.turmas} turma${v.turmas!==1?'s':''} · ${v.pessoas} participante${v.pessoas!==1?'s':''} · ${v.horas}h</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>`).join('');
 
   setConteudo(`
     <div class="rel2-header">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div class="rel2-title">Relatórios</div>
-          <div class="rel2-sub">AvanteSeg · Atualizado agora</div>
+          <div class="rel2-sub" id="relSubtitle">Últimos ${meses} meses · Atualizado agora</div>
         </div>
         <div class="rel2-export">
           <button class="rel2-export-btn" onclick="exportarRelatorioCSV()">⬇ CSV</button>
-          <button class="rel2-export-btn" onclick="exportarRelatorioJSON()">⬇ JSON</button>
+          <button class="rel2-export-btn" onclick="exportarRelatorioPDF()">⬇ PDF</button>
         </div>
       </div>
       <div class="rel2-period">
-        <button class="rel2-chip active">Este mês</button>
-        <button class="rel2-chip">3 meses</button>
-        <button class="rel2-chip">6 meses</button>
-        <button class="rel2-chip">Este ano</button>
+        <button class="rel2-chip${meses===1?' active':''}" onclick="relSetPeriodo(1,this)">Este mês</button>
+        <button class="rel2-chip${meses===3?' active':''}" onclick="relSetPeriodo(3,this)">3 meses</button>
+        <button class="rel2-chip${meses===6?' active':''}" onclick="relSetPeriodo(6,this)">6 meses</button>
+        <button class="rel2-chip${meses===12?' active':''}" onclick="relSetPeriodo(12,this)">Este ano</button>
       </div>
     </div>
 
     <div class="rel2-kpis">
-      <div class="rel2-kpi" style="border-left:3px solid var(--navy)" onclick="irParaTurmasFiltradas('em_andamento')" title="Ver turmas ativas" style="cursor:pointer">
+      <div class="rel2-kpi" style="border-left:3px solid var(--navy)" onclick="irParaTurmasFiltradas('em_andamento')">
         <span class="rel2-kpi-icon">🎓</span>
         <div class="rel2-kpi-val">${tAtivas}</div>
         <div class="rel2-kpi-lbl">Turmas ativas</div>
         <div class="rel2-kpi-delta">Em andamento</div>
       </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--amber)" onclick="irParaTurmasFiltradas('agendada')" title="Ver agendadas" style="cursor:pointer">
+      <div class="rel2-kpi" style="border-left:3px solid var(--green)" onclick="irParaTurmasFiltradas('concluida')">
+        <span class="rel2-kpi-icon">✅</span>
+        <div class="rel2-kpi-val">${tConcluidas}</div>
+        <div class="rel2-kpi-lbl">Concluídas</div>
+        <div class="rel2-kpi-delta">${meses === 1 ? 'Este mês' : `Últimos ${meses} meses`}</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--amber)">
+        <span class="rel2-kpi-icon">👥</span>
+        <div class="rel2-kpi-val">${partUnicos}</div>
+        <div class="rel2-kpi-lbl">Pessoas treinadas</div>
+        <div class="rel2-kpi-delta">Participantes únicos</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid #7C3AED">
+        <span class="rel2-kpi-icon">⏱</span>
+        <div class="rel2-kpi-val">${horasTotal}</div>
+        <div class="rel2-kpi-lbl">Horas de treinamento</div>
+        <div class="rel2-kpi-delta">Turmas concluídas</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--amber)" onclick="irParaTurmasFiltradas('agendada')">
         <span class="rel2-kpi-icon">📋</span>
         <div class="rel2-kpi-val">${tAgendadas}</div>
         <div class="rel2-kpi-lbl">Agendadas</div>
         <div class="rel2-kpi-delta">Próximas turmas</div>
       </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--green)" onclick="irParaTurmasFiltradas('concluida')" title="Ver concluídas" style="cursor:pointer">
-        <span class="rel2-kpi-icon">✅</span>
-        <div class="rel2-kpi-val">${tConcluidas}</div>
-        <div class="rel2-kpi-lbl">Concluídas</div>
-        <div class="rel2-kpi-delta">Total histórico</div>
-      </div>
       <div class="rel2-kpi" style="border-left:3px solid var(--navy)">
         <span class="rel2-kpi-icon">🏢</span>
         <div class="rel2-kpi-val">${cliAtivos}</div>
         <div class="rel2-kpi-lbl">Clientes ativos</div>
-        <div class="rel2-kpi-delta">Empresas atendidas</div>
+        <div class="rel2-kpi-delta">Empresas cadastradas</div>
       </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--amber)" onclick="irParaTurmasFiltradas('cancelada')" title="Ver canceladas" style="cursor:pointer">
+      <div class="rel2-kpi" style="border-left:3px solid var(--text-3)" onclick="irParaTurmasFiltradas('cancelada')">
         <span class="rel2-kpi-icon">⚪</span>
         <div class="rel2-kpi-val">${tCanceladas}</div>
         <div class="rel2-kpi-lbl">Canceladas</div>
-        <div class="rel2-kpi-delta" style="color:var(--text-3)">Total</div>
+        <div class="rel2-kpi-delta" style="color:var(--text-3)">No período</div>
       </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--green)">
+      <div class="rel2-kpi" style="border-left:3px solid var(--navy)">
         <span class="rel2-kpi-icon">📊</span>
-        <div class="rel2-kpi-val">${tAll.length}</div>
-        <div class="rel2-kpi-lbl">Total turmas</div>
-        <div class="rel2-kpi-delta">Todas</div>
+        <div class="rel2-kpi-val">${totalTurmas}</div>
+        <div class="rel2-kpi-lbl">Total de turmas</div>
+        <div class="rel2-kpi-delta">No período</div>
       </div>
     </div>
 
@@ -3326,61 +3409,141 @@ async function renderRelatorios() {
         <div>
           <div class="rel2-chart-title">Evolução mensal</div>
           <div id="relLegLabel" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
-            <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
+            <span style="width:10px;height:10px;border-radius:2px;background:#1E2A4A;display:inline-block"></span>Turmas criadas
           </div>
         </div>
         <div class="rel2-toggle">
           <button class="rel2-tbtn active" id="rt-turmas" onclick="relToggle(this,'turmas','Turmas criadas','#1E2A4A')">Turmas</button>
           <button class="rel2-tbtn" id="rt-sessoes" onclick="relToggle(this,'sessoes','Sessões concluídas','#F59E0B')">Sessões</button>
+          <button class="rel2-tbtn" id="rt-participantes" onclick="relToggle(this,'participantes','Pessoas treinadas','#059669')">Pessoas</button>
         </div>
       </div>
       <div style="overflow-x:auto">
-        <svg id="relSvg" viewBox="0 0 240 95" width="100%" style="min-width:200px;display:block">
-          ${_buildBars(dadosTurmas,'#1E2A4A')}
+        <svg id="relSvg" viewBox="0 ${meses <= 6 ? '0 240 95' : '0 320 95'}" width="100%" style="min-width:200px;display:block">
+          ${_buildRelBars(dadosTurmas, '#1E2A4A', mesesLabel)}
         </svg>
       </div>
     </div>
 
     <div class="rel2-rankings">
-      <div class="rel2-card">
-        <div class="rel2-card-title">Top clientes</div>
+      <div class="rel2-card" style="margin-bottom:0">
+        <div class="rel2-card-title">Top clientes por turmas</div>
         ${rankCliHtml}
       </div>
-      <div class="rel2-card">
+      <div class="rel2-card" style="margin-bottom:0">
         <div class="rel2-card-title">Top treinamentos</div>
         ${rankCatHtml}
       </div>
     </div>
 
-    <div class="rel2-card" style="margin-bottom:14px">
-      <div class="rel2-card-title">Performance instrutores</div>
+    <div class="rel2-card" style="margin-top:12px">
+      <div class="rel2-card-title">Performance instrutores — sessões concluídas</div>
       ${instHtml}
     </div>
-  `);
 
-  // Bind chips de período (visual only)
-  document.querySelectorAll('.rel2-chip').forEach(btn=>{
-    btn.addEventListener('click',function(){
-      document.querySelectorAll('.rel2-chip').forEach(b=>{b.classList.remove('active')});
-      this.classList.add('active');
-    });
-  });
+    <div class="rel2-card" style="margin-top:12px">
+      <div class="rel2-card-title">Relatório por cliente — clique para detalhes</div>
+      ${cliListHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
+    </div>
+  `);
+}
+
+function _buildRelBars(vals, color, mesesLabel) {
+  const maxVal = Math.max(...vals, 1);
+  const n = vals.length;
+  const slotW = n <= 6 ? 40 : Math.floor(320 / n);
+  const svgW = slotW * n;
+  return vals.map((v, i) => {
+    const barH = Math.max(v > 0 ? Math.round(70 * (v / maxVal)) : 0, v > 0 ? 5 : 0);
+    const x = i * slotW;
+    const bw = Math.max(slotW - 8, 10);
+    const bx = x + (slotW - bw) / 2;
+    const isLast = i === vals.length - 1;
+    return `<g>
+      <rect x="${bx.toFixed(1)}" y="${70 - barH}" width="${bw}" height="${barH}" fill="${isLast ? color : color + '44'}" rx="3"/>
+      ${v > 0 ? `<text x="${(x + slotW / 2).toFixed(1)}" y="${70 - barH - 4}" text-anchor="middle" font-size="9" font-weight="600" fill="${color}">${v}</text>` : ''}
+      <text x="${(x + slotW / 2).toFixed(1)}" y="88" text-anchor="middle" font-size="9" fill="#8896A4">${mesesLabel[i].label}</text>
+    </g>`;
+  }).join('');
+}
+
+function relSetPeriodo(n, btn) {
+  window._relPeriodo = n;
+  document.querySelectorAll('.rel2-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const sub = document.getElementById('relSubtitle');
+  if (sub) sub.textContent = (n === 1 ? 'Este mês' : `Últimos ${n} meses`) + ' · Atualizado agora';
+  _renderRelatorioView();
 }
 
 function relToggle(btn, metric, label, color) {
-  document.querySelectorAll('.rel2-tbtn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.rel2-tbtn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const dados = metric==='turmas' ? window._relDadosTurmas : window._relDadosSessoes;
+  const dados = window._relDados?.[metric] || [];
   const svg = document.getElementById('relSvg');
-  if (svg && window._relBuildBars) svg.innerHTML = window._relBuildBars(dados, color);
+  if (svg && window._relMeses) svg.innerHTML = _buildRelBars(dados, color, window._relMeses);
   const leg = document.getElementById('relLegLabel');
   if (leg) leg.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block"></span>${label}`;
 }
 
+function relVerCliente(clienteId) {
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatório Cliente</div>`);
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw;
+  const meses = window._relPeriodo || 6;
+  const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
+
+  const turmasCliente = tFilt.filter(t => t.cliente_id === clienteId);
+  if (!turmasCliente.length) { showToast('Nenhuma turma no período selecionado', 'info'); return; }
+
+  const nomeCliente = turmasCliente[0]?.clientes?.nome || 'Cliente';
+  const totalPessoas = new Set(partAll.filter(p => turmasCliente.some(t => t.id === p.turma_id)).map(p => p.colaborador_id)).size;
+  const totalHoras   = turmasCliente.reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+  const concluidas   = turmasCliente.filter(t => t.status === 'concluida').length;
+  const emAndamento  = turmasCliente.filter(t => t.status === 'em_andamento').length;
+
+  const statusLabel = { agendada: 'Agendada', em_andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' };
+  const statusColor = { agendada: '#F59E0B', em_andamento: '#1E2A4A', concluida: '#059669', cancelada: '#94A3B8' };
+
+  const linhasTabela = turmasCliente.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(t => {
+    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    const data  = t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '-';
+    const sc = statusColor[t.status] || '#94A3B8';
+    const nomeTrein = t.catalogo?.nome || '-';
+    const partStr   = nPart + ' pessoa' + (nPart !== 1 ? 's' : '');
+    const chStr     = (t.catalogo?.carga_horaria || 0) + 'h';
+    const stLbl     = statusLabel[t.status] || t.status;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border)">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + nomeTrein + '</div>'
+      + '<div style="font-size:11px;color:var(--text-3);margin-top:2px">' + data + ' · ' + chStr + ' · ' + partStr + '</div>'
+      + '</div>'
+      + '<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;background:' + sc + '18;color:' + sc + ';border:1px solid ' + sc + '40;white-space:nowrap">' + stLbl + '</span>'
+      + '</div>';
+  }).join('');
+
+  // Pré-computar strings para evitar ternários dentro de template literals
+  const nTurmasStr  = turmasCliente.length + ' turma' + (turmasCliente.length !== 1 ? 's' : '');
+  const htmlCliente = '<button class="rel2-back" onclick="_renderRelatorioView()">'
+    + '← Voltar para Relatórios</button>'
+    + '<div class="rel2-header" style="margin-bottom:14px">'
+    + '<div class="rel2-title" style="font-size:15px">' + nomeCliente + '</div>'
+    + '<div class="rel2-sub">' + nTurmasStr + ' no período selecionado</div>'
+    + '</div>'
+    + '<div class="rel2-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px">'
+    + '<div class="rel2-kpi" style="border-left:3px solid var(--navy)"><div class="rel2-kpi-val">' + turmasCliente.length + '</div><div class="rel2-kpi-lbl">Total turmas</div></div>'
+    + '<div class="rel2-kpi" style="border-left:3px solid var(--green)"><div class="rel2-kpi-val">' + concluidas + '</div><div class="rel2-kpi-lbl">Concluídas</div></div>'
+    + '<div class="rel2-kpi" style="border-left:3px solid var(--amber)"><div class="rel2-kpi-val">' + totalPessoas + '</div><div class="rel2-kpi-lbl">Pessoas treinadas</div></div>'
+    + '<div class="rel2-kpi" style="border-left:3px solid #7C3AED"><div class="rel2-kpi-val">' + totalHoras + '</div><div class="rel2-kpi-lbl">Horas totais</div></div>'
+    + '</div>'
+    + '<div class="rel2-card"><div class="rel2-card-title">Turmas de ' + nomeCliente + '</div>'
+    + linhasTabela
+    + '</div>';
+  setConteudo(htmlCliente);
+}
 
 function irParaTurmasFiltradas(status) {
-  irPara('turmas').then(()=>{
-    setTimeout(()=>{
+  irPara('turmas').then(() => {
+    setTimeout(() => {
       const sel = document.getElementById('filtrStatusTurma');
       if (sel) { sel.value = status; filtrarTurmas(); }
     }, 200);
@@ -3388,42 +3551,139 @@ function irParaTurmasFiltradas(status) {
 }
 
 function exportarRelatorioCSV() {
-  const tAll = _turmasCache;
-  if (!tAll.length) { showToast('Nenhuma turma para exportar','info'); return; }
-  const header = ['Protocolo','Treinamento','Cliente','Status','Criado em'];
-  const rows = tAll.map(t=>[
-    t.protocolo||'',
-    (t.catalogo?.nome||'').replace(/,/g,';'),
-    (t.clientes?.nome||'').replace(/,/g,';'),
-    t.status||'',
-    t.created_at?new Date(t.created_at).toLocaleDateString('pt-BR'):'',
-  ]);
-  const csv = [header,...rows].map(r=>r.join(',')).join('\n');
-  const blob = new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
+  if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
+  const meses = window._relPeriodo || 6;
+  const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
+
+  const header = ['Protocolo','Treinamento','Cliente','Status','Data criação','Carga horária','Participantes'];
+  const rows = tFilt.map(t => {
+    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    return [
+      '',
+      (t.catalogo?.nome || '').replace(/,/g, ';'),
+      (t.clientes?.nome || '').replace(/,/g, ';'),
+      t.status || '',
+      t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '',
+      t.catalogo?.carga_horaria || 0,
+      nPart,
+    ];
+  });
+  const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `relatorio-turmas-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `relatorio-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
-  showToast('CSV exportado!','success');
+  showToast('CSV exportado com sucesso!', 'success');
 }
 
-function exportarRelatorioJSON() {
-  const tAll = _turmasCache;
-  if (!tAll.length) { showToast('Nenhuma turma para exportar','info'); return; }
-  const dados = tAll.map(t=>({
-    protocolo: t.protocolo,
-    treinamento: t.catalogo?.nome,
-    cliente: t.clientes?.nome,
-    status: t.status,
-    criado_em: t.created_at,
-  }));
-  const blob = new Blob([JSON.stringify(dados,null,2)],{type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `relatorio-turmas-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  showToast('JSON exportado!','success');
+function exportarRelatorioPDF() {
+  showToast('Gerando PDF do relatório...', 'info');
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
+  if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
+  const meses = window._relPeriodo || 6;
+  const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
+
+  const { jsPDF } = window.jspdf;
+  const W = 297, H = 210;
+  const NAVY = [30, 42, 74], AMBER = [245, 158, 11], WHITE = [255, 255, 255];
+  const T2 = [71, 85, 105], T3 = [148, 163, 184], BORD = [220, 228, 240], GRAY = [244, 246, 250];
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const s = (v, max) => pdfSafe(v, max);
+
+  const tAtivas     = tFilt.filter(t => t.status === 'em_andamento').length;
+  const tConcluidas = tFilt.filter(t => t.status === 'concluida').length;
+  const tAgendadas  = tFilt.filter(t => t.status === 'agendada').length;
+  const tCanceladas = tFilt.filter(t => t.status === 'cancelada').length;
+  const turmaIds    = new Set(tFilt.map(t => t.id));
+  const partFilt    = partAll.filter(p => turmaIds.has(p.turma_id));
+  const partUnicos  = new Set(partFilt.map(p => p.colaborador_id)).size;
+  const horasTotal  = tFilt.filter(t => t.status === 'concluida').reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+  const periodLabel = meses === 1 ? 'Este mes' : `Ultimos ${meses} meses`;
+
+  // ── Cabeçalho ──
+  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 36, 'F');
+  doc.setFillColor(...AMBER); doc.rect(0, 36, W, 2, 'F');
+  doc.addImage(LOGO_AVANTESEG, 'PNG', 14, 8, 50, 16);
+  doc.setFontSize(12); doc.setTextColor(...WHITE); doc.setFont('helvetica', 'bold');
+  doc.text('RELATORIO DE TREINAMENTOS', W - 14, 18, { align: 'right' });
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...T3);
+  doc.text(`${periodLabel}  |  Gerado em ${hoje}`, W - 14, 26, { align: 'right' });
+
+  // ── KPIs ──
+  let kx = 14;
+  const kpis = [
+    { l: 'Turmas ativas', v: tAtivas, c: NAVY },
+    { l: 'Concluidas', v: tConcluidas, c: [5, 150, 105] },
+    { l: 'Pessoas treinadas', v: partUnicos, c: [245, 158, 11] },
+    { l: 'Horas de treinamento', v: horasTotal, c: [124, 58, 237] },
+    { l: 'Agendadas', v: tAgendadas, c: [245, 158, 11] },
+    { l: 'Canceladas', v: tCanceladas, c: [148, 163, 184] },
+  ];
+  const kw = (W - 28 - 10) / 6;
+  kpis.forEach((k, i) => {
+    doc.setFillColor(...GRAY); doc.rect(kx + i * (kw + 2), 42, kw, 22, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(kx + i * (kw + 2), 42, kw, 22, 'S');
+    doc.setDrawColor(...k.c); doc.setLineWidth(1.5); doc.line(kx + i * (kw + 2), 42, kx + i * (kw + 2), 64);
+    doc.setFontSize(14); doc.setTextColor(...k.c); doc.setFont('helvetica', 'bold');
+    doc.text(String(k.v), kx + i * (kw + 2) + kw / 2, 54, { align: 'center' });
+    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica', 'normal');
+    doc.text(s(k.l, 22), kx + i * (kw + 2) + kw / 2, 61, { align: 'center' });
+  });
+
+  // ── Tabela de turmas ──
+  let ty = 72;
+  doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica', 'bold');
+  doc.text(`TURMAS NO PERIODO (${tFilt.length})`, 14, ty); ty += 4;
+
+  // Cabeçalho tabela
+  const cols = [
+    { x: 14, w: 95, t: 'Treinamento' },
+    { x: 112, w: 60, t: 'Cliente' },
+    { x: 175, w: 28, t: 'Data' },
+    { x: 206, w: 18, t: 'Status' },
+    { x: 227, w: 14, t: 'Horas' },
+    { x: 244, w: 14, t: 'Pessoas' },
+  ];
+  doc.setFillColor(...NAVY); doc.rect(14, ty, W - 28, 8, 'F');
+  doc.setFontSize(7); doc.setTextColor(...WHITE); doc.setFont('helvetica', 'bold');
+  cols.forEach(c => doc.text(s(c.t), c.x + 1.5, ty + 5.5));
+  ty += 8;
+
+  const statusAbrev = { agendada: 'Agend.', em_andamento: 'Ativo', concluida: 'Concl.', cancelada: 'Cancel.' };
+  const maxLinhas = Math.floor((H - ty - 14) / 7);
+  tFilt.slice(0, maxLinhas).forEach((t, i) => {
+    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    const data  = t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '—';
+    doc.setFillColor(i % 2 === 0 ? 244 : 255, i % 2 === 0 ? 246 : 255, i % 2 === 0 ? 250 : 255);
+    doc.rect(14, ty, W - 28, 7, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.15); doc.rect(14, ty, W - 28, 7, 'S');
+    doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica', 'normal');
+    doc.text(s(t.catalogo?.nome || '—', 50), cols[0].x + 1.5, ty + 4.5);
+    doc.text(s(t.clientes?.nome || '—', 32), cols[1].x + 1.5, ty + 4.5);
+    doc.text(data, cols[2].x + 1.5, ty + 4.5);
+    doc.text(statusAbrev[t.status] || t.status, cols[3].x + 1.5, ty + 4.5);
+    doc.text(String(t.catalogo?.carga_horaria || 0), cols[4].x + 1.5, ty + 4.5);
+    doc.text(String(nPart), cols[5].x + 1.5, ty + 4.5);
+    ty += 7;
+  });
+  if (tFilt.length > maxLinhas) {
+    doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica', 'italic');
+    doc.text(`+ ${tFilt.length - maxLinhas} registros adicionais no CSV`, 14, ty + 5);
+  }
+
+  // ── Rodapé ──
+  doc.setFillColor(...NAVY); doc.rect(0, H - 10, W, 10, 'F');
+  doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica', 'bold');
+  doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W / 2, H - 4, { align: 'center' });
+
+  doc.save(`relatorio-${new Date().toISOString().slice(0, 10)}.pdf`);
+  showToast('PDF do relatório gerado!', 'success');
 }
+
 
 // ============================================================
 // EQUIPE
