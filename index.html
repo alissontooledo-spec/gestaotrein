@@ -315,11 +315,18 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .rel2-rankings{grid-template-columns:1fr;gap:10px}
   .rel2-card{padding:12px 10px}
+  .rel2-kpi{padding:12px 10px}
   .rel2-kpi-val{font-size:20px}
+  .rel2-kpi-icon{font-size:14px;margin-bottom:4px}
+  .rel2-export{flex-wrap:wrap;gap:4px}
   .rel2-export-btn{font-size:10px;padding:4px 8px}
+  .rel2-period{gap:4px}
+  .rel2-chip{padding:4px 10px;font-size:10px}
   .rel2-cli-btn{padding:9px 10px}
   .rel2-cli-name{font-size:12px}
   .rel2-row{gap:8px;padding:8px 0}
+  .rel2-chart-header{flex-direction:column;align-items:flex-start;gap:6px}
+  .rel2-toggle{flex-wrap:wrap}
 }
 
 /* ── Execution tabs ── */
@@ -3685,6 +3692,7 @@ async function adicionarEvidencia(input, tipo) {
       sessao_id:    sessaoId,
       tipo,
       arquivo_path: path,
+      instrutor_id: usuarioAtual.id,   // necessário para a policy RLS evidencias_instrutor_exec
     }).select().single();
     if (dbErr) throw dbErr;
 
@@ -3974,12 +3982,12 @@ function _renderRelatorioView() {
 
   setConteudo(`
     <div class="rel2-header">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
           <div class="rel2-title">Relatórios</div>
           <div class="rel2-sub" id="relSubtitle">Últimos ${meses} meses · Atualizado agora</div>
         </div>
-        <div class="rel2-export">
+        <div class="rel2-export" style="flex-shrink:0">
           <button class="rel2-export-btn" onclick="exportarRelatorioCSV()">⬇ CSV</button>
           <button class="rel2-export-btn" onclick="exportarRelatorioPDF()">⬇ PDF</button>
         </div>
@@ -3991,11 +3999,11 @@ function _renderRelatorioView() {
         <button class="rel2-chip${meses===12?' active':''}" onclick="relSetPeriodo(12,this)">Este ano</button>
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <select id="relFiltroCat" style="padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
+        <select id="relFiltroCat" style="flex:1;min-width:140px;max-width:220px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:rgba(0,0,0,.2);color:rgba(255,255,255,.85);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
           <option value="">Todos os treinamentos</option>
           ${[...new Set((window._relRaw?.turmas||[]).map(t=>t.catalogo?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}" style="color:var(--navy);background:#fff">${n}</option>`).join('')}
         </select>
-        <select id="relFiltroCliente" style="padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
+        <select id="relFiltroCliente" style="flex:1;min-width:120px;max-width:200px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:rgba(0,0,0,.2);color:rgba(255,255,255,.85);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
           <option value="">Todos os clientes</option>
           ${[...new Set((window._relRaw?.turmas||[]).map(t=>t.clientes?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}" style="color:var(--navy);background:#fff">${n}</option>`).join('')}
         </select>
@@ -4189,7 +4197,7 @@ function relVerCliente(clienteId) {
     + '<div class="rel2-title" style="font-size:15px">' + nomeCliente + '</div>'
     + '<div class="rel2-sub">' + nTurmasStr + ' no período selecionado</div>'
     + '</div>'
-    + '<div class="rel2-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px">'
+    + '<div class="rel2-kpis" style="margin-bottom:14px">'
     + '<div class="rel2-kpi" style="border-left:3px solid var(--navy)"><div class="rel2-kpi-val">' + turmasCliente.length + '</div><div class="rel2-kpi-lbl">Total turmas</div></div>'
     + '<div class="rel2-kpi" style="border-left:3px solid var(--green)"><div class="rel2-kpi-val">' + concluidas + '</div><div class="rel2-kpi-lbl">Concluídas</div></div>'
     + '<div class="rel2-kpi" style="border-left:3px solid var(--amber)"><div class="rel2-kpi-val">' + totalPessoas + '</div><div class="rel2-kpi-lbl">Pessoas treinadas</div></div>'
