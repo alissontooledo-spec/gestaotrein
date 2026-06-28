@@ -365,7 +365,15 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .turmas-section-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .turmas-section-line{flex:1;height:1px;background:var(--border)}
 .turmas-empty-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-3);gap:8px}
-@media(max-width:767px){.turmas-grid{grid-template-columns:1fr}.turmas-tab{font-size:12px;padding:6px 12px}.turma-card-nova{min-height:80px}}
+@media(max-width:767px){
+  .turmas-grid{grid-template-columns:1fr}
+  .turmas-tab{font-size:12px;padding:6px 11px}
+  .turmas-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .turmas-tabs::-webkit-scrollbar{display:none}
+  .turma-card-nova{min-height:72px}
+  .turmas-toolbar-mobile{flex-direction:column;align-items:stretch!important}
+  .turmas-toolbar-mobile .btn-amber{width:100%;justify-content:center}
+}
 </style>
 </head>
 <body>
@@ -506,6 +514,41 @@ function mascararCnpj(input) {
   else if (v.length > 2) v = v.replace(/^(\d{2})(\d*).*/,'$1.$2');
   input.value = v;
 }
+async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId) {
+  const raw = document.getElementById(cnpjId)?.value.replace(/\D/g,'');
+  if (!raw || raw.length !== 14) { showToast('Digite um CNPJ completo (14 dígitos)','error'); return; }
+  const btn = document.getElementById('btnBuscarCnpj_'+cnpjId);
+  if (btn) { btn.disabled=true; btn.textContent='Consultando...'; }
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${raw}`);
+    if (!res.ok) throw new Error('CNPJ não encontrado na Receita Federal');
+    const d = await res.json();
+    const nome = d.razao_social || d.nome_fantasia || '';
+    const cidade = d.municipio || '';
+    const uf = d.uf || '';
+    const email = d.email || '';
+    if (nomeId) { const el=document.getElementById(nomeId); if(el&&nome) el.value=nome; }
+    if (cidadeId) { const el=document.getElementById(cidadeId); if(el&&cidade) el.value=cidade; }
+    if (ufId) { const el=document.getElementById(ufId); if(el&&uf) el.value=uf.toUpperCase(); }
+    if (emailId) { const el=document.getElementById(emailId); if(el&&email&&!el.value) el.value=email; }
+    showToast('Dados preenchidos pela Receita Federal','success');
+  } catch(e) {
+    showToast(e.message||'Erro ao consultar CNPJ','error');
+  } finally {
+    if (btn) { btn.disabled=false; btn.textContent='Consultar'; }
+  }
+}
+
+function _cnpjRow(inputId, valorAtual, nomeId, cidadeId, ufId, emailId) {
+  return `<div class="field">
+    <label>CNPJ</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" id="${inputId}" value="${valorAtual||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)" style="flex:1">
+      <button type="button" id="btnBuscarCnpj_${inputId}" class="btn btn-outline btn-sm" style="white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px" onclick="buscarCnpjModal('${inputId}','${nomeId}','${cidadeId}','${ufId}','${emailId||''}')">Consultar</button>
+    </div>
+  </div>`;
+}
+
 function mascararCpf(input) {
   let v = input.value.replace(/\D/g,'').slice(0,11);
   if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2}).*/,'$1.$2.$3-$4');
@@ -674,7 +717,10 @@ async function fazerLogin() {
 async function entrarNoApp() {
   showScreen('screenApp');
   configurarNavegacao();
-  await irPara('home');
+  // Lê hash da URL para restaurar a página ao fazer login ou recarregar
+  const paginaHash = location.hash.replace('#','').trim();
+  const paginaInicial = (paginaHash && TITULOS[paginaHash]) ? paginaHash : 'home';
+  await irPara(paginaInicial);
 }
 
 async function fazerLogout() {
@@ -747,6 +793,9 @@ async function irPara(pagina, params={}) {
   fecharSidebar();
   fabOcultar();
   document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
+  // Atualiza URL com hash sem recarregar a página
+  const novoHash = '#' + pagina;
+  if (location.hash !== novoHash) history.pushState({pagina}, '', novoHash);
   showLoading();
   try {
     switch(pagina) {
@@ -863,7 +912,7 @@ function abrirModalNovaOrg() {
     </div>
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Dados da organização</div>
     <div class="field"><label>Nome da empresa *</label><input type="text" id="mOrgNome" placeholder="Ex.: Construtora Silva Ltda"></div>
-    <div class="field"><label>CNPJ</label><input type="text" id="mOrgCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
+    ${_cnpjRow('mOrgCnpj','','mOrgNome','','','')}
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Administrador inicial</div>
     <div class="field"><label>Nome do administrador *</label><input type="text" id="mOrgAdmNome" placeholder="Nome completo"></div>
     <div class="field"><label>E-mail *</label><input type="email" id="mOrgAdmEmail" placeholder="admin@empresa.com.br"></div>
@@ -1353,7 +1402,7 @@ function abrirModalOrg(id=null) {
   const org = id ? _orgsCache.find(o=>o.id===id) : null;
   abrirModal(org?'Editar organização':'Nova organização', `
     <div class="field"><label>Nome *</label><input type="text" id="mOrgNome" value="${org?.nome||''}" placeholder="Ex.: Consultoria SST Brasil"></div>
-    <div class="field"><label>CNPJ</label><input type="text" id="mOrgCnpj" value="${org?.cnpj||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
+    ${_cnpjRow('mOrgCnpj', org?.cnpj||'', 'mOrgNome', 'mOrgCidade', 'mOrgUf', 'mOrgEmail')}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mOrgCidade" value="${org?.cidade||''}" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mOrgUf" value="${org?.uf||''}" placeholder="SP" maxlength="2" style="text-transform:uppercase"></div>
@@ -1577,7 +1626,7 @@ function abrirModalCliente(id=null) {
   const c = id ? _clientesCache.find(x=>x.id===id) : null;
   abrirModal(c?'Editar cliente':'Novo cliente', `
     <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${c?.nome||''}" placeholder="Razão social"></div>
-    <div class="field"><label>CNPJ</label><input type="text" id="mCliCnpj" value="${c?.cnpj||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
+    ${_cnpjRow('mCliCnpj', c?.cnpj||'', 'mCliNome', 'mCliCidade', 'mCliUf', 'mCliEmail')}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
@@ -2037,7 +2086,7 @@ async function renderTurmas(abaInicial) {
   const nCa = _turmasCache.filter(t=>t.status==='cancelada').length;
   const abaAtiva = abaInicial || (nAn>0?'em_andamento':nAg>0?'agendada':'concluida');
   setConteudo(`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+    <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="turmas-tabs" id="turmasTabsEl">
         ${_turmaTabHtml('em_andamento','Em andamento',nAn,abaAtiva)}
         ${_turmaTabHtml('agendada','Agendadas',nAg,abaAtiva)}
@@ -2352,7 +2401,7 @@ async function abrirModalClienteRapido() {
       O cliente será selecionado automaticamente após o cadastro.
     </div>
     <div class="field"><label>Nome *</label><input type="text" id="mCRNome" placeholder="Razão social" autofocus></div>
-    <div class="field"><label>CNPJ</label><input type="text" id="mCRCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
+    ${_cnpjRow('mCRCnpj', '', 'mCRNome', 'mCRCidade', 'mCRUf', 'mCREmail')}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
@@ -4746,6 +4795,35 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch(e) { console.warn('Sessão inválida'); }
   }
   showScreen('screenLogin');
+});
+
+// Navegação por botão Voltar/Avançar do browser e troca de hash
+window.addEventListener('popstate', async (e) => {
+  if (!usuarioAtual) return;
+  const pagina = (e.state?.pagina) || location.hash.replace('#','').trim() || 'home';
+  if (TITULOS[pagina] && pagina !== paginaAtual) {
+    paginaAtual = pagina;
+    marcarNavAtivo(pagina);
+    document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
+    showLoading();
+    try {
+      switch(pagina) {
+        case 'home':          await renderHome(); break;
+        case 'orgs':          await renderOrgs(); break;
+        case 'clientes':      await renderClientes(); break;
+        case 'colaboradores': await renderColaboradores(); break;
+        case 'catalogo':      await renderCatalogo(); break;
+        case 'turmas':        await renderTurmas(); break;
+        case 'equipe':        await renderEquipe(); break;
+        case 'agenda':        await renderAgenda(); break;
+        case 'historico':     await renderHistorico(); break;
+        case 'relatorios':    await renderRelatorios(); break;
+        case 'conta':         await renderConta(); break;
+        default: renderEmBreve(TITULOS[pagina]||pagina);
+      }
+    } catch(err) { console.error(err); renderErro(err.message); }
+    finally { hideLoading(); }
+  }
 });
 
 
