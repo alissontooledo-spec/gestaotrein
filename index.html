@@ -5705,11 +5705,11 @@ async function renderDocumentosTurma(turmaId) {
     const temLista     = !!docsMap['lista_presenca'];
     const temColetivo  = !!docsMap['certificado_coletivo'];
     const temTodosInd  = participantes.length > 0 && participantes.every(p => !!docsMap['certificado_individual'+p.colaborador_id]);
-    const podosEnviar  = temLista && temColetivo && temTodosInd && emailCliente;
 
     // Status de envio anterior
     const {data:envio} = await sb.from('envios_email').select('*').eq('turma_id', turmaId).maybeSingle();
 
+    // ── Bloco 1: participantes (certificados individuais)
     const htmlParticipantes = participantes.length===0
       ? `<div class="empty" style="padding:16px"><div class="empty-title">Nenhum participante</div></div>`
       : participantes.map(p => {
@@ -5727,7 +5727,7 @@ async function renderDocumentosTurma(turmaId) {
           ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"><button class="btn btn-outline" style="width:100%" onclick="gerarTodosCertificados('${turmaId}')">⬇ Gerar todos os certificados individuais</button></div>`
           : '');
 
-    // Bloco de status dos agendamentos
+    // ── Bloco de status dos agendamentos
     const htmlAgendamentos = totalAg === 0 ? '' : `
       <div class="card" style="margin-bottom:16px;border-color:${todosConcluidos?'var(--green)':'#fde68a'}">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:${todosConcluidos?'0':'10px'}">
@@ -5738,29 +5738,44 @@ async function renderDocumentosTurma(turmaId) {
           </div>
         </div>
         ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">
-          O envio automático só ocorrerá após todos os agendamentos serem marcados como concluídos.
+          Conclua todos os agendamentos para liberar o envio em lote.
         </div>` : ''}
       </div>`;
 
-    // Bloco de envio
-    const htmlEnvio = `
-      <div class="card" style="margin-bottom:16px;${todosConcluidos&&emailCliente?'border-color:var(--blue)':''}" id="cardEnvio">
-        <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:8px">✉️ Envio automático</div>
-        ${!emailCliente ? `
-          <div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">
-            ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail do cliente para habilitar o envio.
-          </div>` : `
-          <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">
-            Destinatário: <strong>${emailCliente}</strong>
-          </div>
-          ${envio ? `<div style="font-size:12px;color:var(--green);margin-bottom:12px">✓ Enviado em ${formatarDataHora(envio.enviado_em)}</div>` : ''}
-          ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber)">Aguardando conclusão de todos os agendamentos.</div>` :
-            !podosEnviar ? `<div style="font-size:12px;color:var(--text-3)">Gere todos os documentos acima para habilitar o envio.</div>` :
-            `<button class="btn btn-navy" style="width:100%" onclick="enviarDocumentosPorEmail('${turmaId}')">
-              ✉️ ${envio ? 'Reenviar documentos' : 'Enviar documentos por e-mail'}
-            </button>`
-          }`}
+    // ── Checklist do bloco em lote
+    const _chk = (ok, label, detalhe='') => `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-light,#f0f0f0)">
+        <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+          ${ok ? 'background:var(--green-l,#dcfce7);color:var(--green,#16a34a)' : 'background:var(--surface-2,#f4f6fa);border:1px solid var(--border)'}">
+          ${ok ? '✓' : ''}
+        </div>
+        <div style="flex:1;font-size:13px;color:var(--text-1)">${label}</div>
+        ${detalhe ? `<div style="font-size:11px;color:var(--text-3)">${detalhe}</div>` : ''}
       </div>`;
+
+    const indPendentes = participantes.filter(p => !docsMap['certificado_individual'+p.colaborador_id]).length;
+    const indLabel = participantes.length === 0
+      ? 'Certificados individuais'
+      : temTodosInd
+        ? 'Certificados individuais'
+        : `Certificados individuais (${indPendentes} pendente${indPendentes!==1?'s':''})`;
+
+    // ── Rodapé do bloco em lote (botão ou aviso)
+    let htmlBotaoLote = '';
+    if (!emailCliente) {
+      htmlBotaoLote = `<div style="font-size:13px;color:var(--red,#dc2626);background:var(--red-l,#fef2f2);padding:10px 12px;border-radius:var(--r-md,8px)">
+        ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail para habilitar o envio em lote.
+      </div>`;
+    } else if (!todosConcluidos) {
+      htmlBotaoLote = `<div style="font-size:12px;color:var(--amber,#d97706)">⏳ Aguardando conclusão de todos os agendamentos.</div>`;
+    } else {
+      const labelBtn = envio ? '📦 Regerar tudo e reenviar por e-mail' : '📦 Gerar tudo e enviar por e-mail';
+      htmlBotaoLote = `
+        ${envio ? `<div style="font-size:12px;color:var(--green,#16a34a);margin-bottom:10px">✓ Enviado em ${formatarDataHora(envio.enviado_em)}</div>` : ''}
+        <button class="btn btn-navy" style="width:100%;background:var(--navy,#1E2A4A)" onclick="gerarTudoEEnviar('${turmaId}')">
+          ${labelBtn}
+        </button>`;
+    }
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
@@ -5773,36 +5788,76 @@ async function renderDocumentosTurma(turmaId) {
       </div>
 
       ${htmlAgendamentos}
-      ${htmlEnvio}
 
-      <!-- Lista de Presença -->
+      <!-- ── BLOCO 1: Documentos individuais ── -->
       <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:34px;height:34px;border-radius:8px;background:var(--blue-l,#eff6ff);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📄</div>
           <div>
-            <div style="font-size:15px;font-weight:600;color:var(--text-1)">📋 Lista de Presença</div>
-            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Consolidada por todos os agendamentos</div>
+            <div style="font-size:15px;font-weight:600;color:var(--text-1)">Documentos individuais</div>
+            <div style="font-size:12px;color:var(--text-3)">Gere ou baixe cada documento separadamente</div>
           </div>
-          <button class="btn btn-navy btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ Gerar PDF</button>
         </div>
-        ${temLista ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
+
+        <!-- Lista de Presença -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text-1)">📋 Lista de Presença</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">Consolidada por todos os agendamentos</div>
+            ${temLista ? `<div style="font-size:11px;color:var(--green);margin-top:3px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
+          </div>
+          <button class="btn btn-navy btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ ${temLista?'Regenerar':'Gerar PDF'}</button>
+        </div>
+
+        <!-- Certificado Coletivo -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text-1)">🏢 Certificado Coletivo</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">Para a empresa · ${participantes.length} participante(s)</div>
+            ${temColetivo ? `<div style="font-size:11px;color:var(--green);margin-top:3px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
+          </div>
+          <button class="btn btn-navy btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ ${temColetivo?'Regenerar':'Gerar PDF'}</button>
+        </div>
+
+        <!-- Certificados Individuais -->
+        <div style="padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:14px;font-weight:600;color:var(--text-1);margin-bottom:8px">🎓 Certificados Individuais</div>
+          ${htmlParticipantes}
+        </div>
       </div>
 
-      <!-- Certificado Coletivo -->
-      <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:var(--text-1)">🏢 Certificado Coletivo</div>
-            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Para a empresa - ${participantes.length} participante(s)</div>
-          </div>
-          <button class="btn btn-navy btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ Gerar PDF</button>
-        </div>
-        ${temColetivo ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
+      <!-- ── DIVISOR ── -->
+      <div style="display:flex;align-items:center;gap:10px;margin:4px 0 16px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <div style="font-size:12px;color:var(--text-3);padding:0 4px">ou</div>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
       </div>
 
-      <!-- Certificados Individuais -->
-      <div class="card">
-        <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:12px">🎓 Certificados Individuais</div>
-        ${htmlParticipantes}
+      <!-- ── BLOCO 2: Gerar tudo e enviar em lote ── -->
+      <div class="card" style="margin-bottom:16px;${todosConcluidos&&emailCliente?'border-color:#1E2A4A33':''}" id="cardEnvioLote">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:34px;height:34px;border-radius:8px;background:var(--green-l,#f0fdf4);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📦</div>
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text-1)">Gerar tudo e enviar por e-mail</div>
+            <div style="font-size:12px;color:var(--text-3)">Gera todos os documentos e envia para o cliente</div>
+          </div>
+        </div>
+
+        <!-- Checklist -->
+        <div style="margin-bottom:12px">
+          ${_chk(temLista,     'Lista de Presença')}
+          ${_chk(temColetivo,  'Certificado Coletivo')}
+          ${_chk(temTodosInd,  indLabel, participantes.length > 0 ? `${participantes.length} participante(s)` : '')}
+        </div>
+
+        <!-- Destinatário -->
+        ${emailCliente ? `
+        <div style="display:flex;align-items:center;gap:6px;padding:10px 0;border-top:1px solid var(--border);margin-bottom:12px">
+          <span style="font-size:12px;color:var(--text-3)">Destinatário:</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text-1)">${emailCliente}</span>
+        </div>` : ''}
+
+        ${htmlBotaoLote}
       </div>`;
 
     setConteudo(html);
@@ -5916,6 +5971,132 @@ async function gerarTodosCertificados(turmaId) {
     await new Promise(r => setTimeout(r, 500));
   }
 }
+
+// ============================================================
+// GERAR TUDO E ENVIAR EM LOTE
+// ============================================================
+async function gerarTudoEEnviar(turmaId) {
+  const confirmado = await new Promise(resolve => {
+    abrirModal('Confirmar geração e envio', `
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:40px;margin-bottom:12px">📦</div>
+        <p style="font-size:14px;color:var(--text-2);line-height:1.6">
+          O sistema irá gerar todos os documentos pendentes e enviar por e-mail para a empresa cliente.
+        </p>
+        <p style="font-size:12px;color:var(--text-3);margin-top:8px">
+          Documentos já gerados não serão substituídos.
+        </p>
+      </div>`,
+      `<button class="btn btn-outline" onclick="fecharModal();window._resolveEnvioLote(false)">Cancelar</button>
+       <button class="btn btn-navy" onclick="fecharModal();window._resolveEnvioLote(true)">📦 Confirmar</button>`
+    );
+    window._resolveEnvioLote = resolve;
+  });
+  delete window._resolveEnvioLote;
+  if (!confirmado) return;
+
+  try {
+    // 1. Carregar turma completa
+    showLoading('Verificando documentos...');
+    const {data:t, error} = await sb.from('turmas')
+      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome))')
+      .eq('id', turmaId).single();
+    if (error) throw error;
+
+    const participantes = t.turma_participantes||[];
+    const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
+    const docsMap = {};
+    (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')] = d; });
+
+    // 2. Gerar Lista de Presença se pendente
+    if (!docsMap['lista_presenca']) {
+      showLoading('Gerando lista de presença...');
+      await gerarListaPresenca(turmaId);
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    // 3. Gerar Certificado Coletivo se pendente
+    if (!docsMap['certificado_coletivo']) {
+      showLoading('Gerando certificado coletivo...');
+      await gerarCertificadoColetivo(turmaId);
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    // 4. Gerar certificados individuais pendentes
+    const pendentes = participantes.filter(p => !docsMap['certificado_individual'+p.colaborador_id]);
+    for (let i = 0; i < pendentes.length; i++) {
+      showLoading(`Gerando certificado ${i+1} de ${pendentes.length}...`);
+      await gerarCertificadoIndividual(turmaId, pendentes[i].colaborador_id);
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    // 5. Recarregar documentos para montar os anexos
+    showLoading('Preparando envio por e-mail...');
+    const {data:docsAtualizados} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
+    if (!docsAtualizados || docsAtualizados.length === 0) throw new Error('Nenhum documento encontrado após geração.');
+
+    const arquivos = [];
+    for (const doc of docsAtualizados) {
+      const {data:blob, error:dlErr} = await sb.storage.from('documentos').download(doc.arquivo_path);
+      if (dlErr || !blob) { console.warn('Não foi possível baixar:', doc.arquivo_path); continue; }
+      const base64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(blob);
+      });
+      arquivos.push({
+        tipo:           doc.tipo,
+        nome:           doc.arquivo_path.split('/').pop(),
+        conteudo_b64:   base64,
+        colaborador_id: doc.colaborador_id || null,
+      });
+    }
+    if (arquivos.length === 0) throw new Error('Não foi possível baixar nenhum documento do Storage.');
+
+    const ag = (t.sessoes||[]).sort((a,b) => a.data > b.data ? 1 : -1);
+    const payload = {
+      turma_id:      turmaId,
+      treinamento:   t.catalogo?.nome||'Treinamento',
+      empresa:       t.clientes?.nome||'',
+      email_destino: t.clientes?.email||'',
+      carga_horaria: t.catalogo?.carga_horaria||'',
+      datas:         ag.map(a => formatarData(a.data)).join(', '),
+      local:         t.local||'',
+      instrutor:     ag[0]?.usuarios?.nome||'',
+      participantes: (t.turma_participantes||[]).map(p => p.colaboradores?.nome||'').filter(Boolean),
+      arquivos,
+      org_id:        usuarioAtual.org_id,
+    };
+
+    const resp = await sb.functions.invoke('enviar-documentos', {body: payload});
+    if (resp.error) throw new Error(resp.error.message || 'Erro na Edge Function');
+
+    // 6. Registrar envio
+    const {data:envioExistente} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
+    if (envioExistente) {
+      await sb.from('envios_email').update({
+        email_destino: t.clientes?.email||'',
+        enviado_em:    new Date().toISOString(),
+        status:        'enviado',
+      }).eq('id', envioExistente.id);
+    } else {
+      await sb.from('envios_email').insert({
+        turma_id:      turmaId,
+        org_id:        usuarioAtual.org_id,
+        email_destino: t.clientes?.email||'',
+        enviado_em:    new Date().toISOString(),
+        status:        'enviado',
+      });
+    }
+
+    showToast('Documentos gerados e enviados com sucesso!', 'success');
+    await renderDocumentosTurma(turmaId);
+  } catch(e) {
+    console.error(e);
+    showToast(e.message||'Erro ao gerar e enviar documentos', 'error');
+  } finally { hideLoading(); }
+}
+
 
 </script>
 </body>
