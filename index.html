@@ -752,13 +752,17 @@ async function renderHome() {
 }
 
 async function renderHomeProvedor() {
-  const [{ data: orgs }, { data: usuarios }] = await Promise.all([
+  const [{ data: orgs }, { data: usuarios }, { data: turmas }, { data: clientes }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,created_at').order('created_at', { ascending: false }),
     sb.from('usuarios').select('id,org_id,perfil,ativo'),
+    sb.from('turmas').select('id,org_id'),
+    sb.from('clientes').select('id,org_id'),
   ]);
 
   const orgsAll  = orgs  || [];
   const usrsAll  = usuarios || [];
+  const turmsAll = turmas || [];
+  const clisAll  = clientes || [];
   const total    = orgsAll.length;
   const ativas   = orgsAll.filter(o => o.ativo).length;
   const hoje     = new Date();
@@ -768,16 +772,23 @@ async function renderHomeProvedor() {
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Provedor · Toledo Labs</div>`);
 
   const listaOrgs = orgsAll.map(o => {
-    const admins = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
-    const total_u = usrsAll.filter(u => u.org_id === o.id).length;
+    const temAdmin   = usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo);
+    const temTurma   = turmsAll.some(t => t.org_id === o.id);
+    const temCliente = clisAll.some(c => c.org_id === o.id);
+    const total_u    = usrsAll.filter(u => u.org_id === o.id).length;
+    const completa   = temAdmin && temTurma && temCliente;
+    const _chk = (ok, label) => `<span style="font-size:10px;padding:2px 6px;border-radius:20px;display:inline-flex;align-items:center;gap:3px;${ok?'background:#dcfce7;color:#166534':'background:#fef3c7;color:#92400e'}">${ok?'✓':('⚠ ')}${label}</span>`;
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onclick="verOrgProvedor('${o.id}')" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-      <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onclick="verOrgProvedor('${o.id}')" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">${iniciais(o.nome)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
-        <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;margin-bottom:5px">${total_u} usuário${total_u!==1?'s':''}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${_chk(temAdmin,'Admin')}${_chk(temTurma,'Treinamentos')}${_chk(temCliente,'Clientes')}
+        </div>
       </div>
-      <span class="badge ${o.ativo?'badge-green':'badge-gray'}" style="flex-shrink:0">${o.ativo?'Ativa':'Inativa'}</span>
+      <span class="badge ${completa&&o.ativo?'badge-green':o.ativo?'badge-amber':'badge-gray'}" style="flex-shrink:0;margin-top:2px">${completa&&o.ativo?'Ativa':o.ativo?'Configurando':'Inativa'}</span>
     </div>`;
   }).join('');
 
@@ -826,69 +837,219 @@ async function renderHomeProvedor() {
 }
 
 function abrirModalNovaOrg() {
-  abrirModal('Nova organização', `
-    <div style="background:rgba(30,42,74,.05);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--text-2);line-height:1.6">
-      Crie a organização e configure o administrador. O acesso estará disponível após a ativação.
-    </div>
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Dados da organização</div>
-    <div class="field"><label>Nome da empresa *</label><input type="text" id="mOrgNome" placeholder="Ex.: Construtora Silva Ltda"></div>
-    <div class="field"><label>CNPJ</label><input type="text" id="mOrgCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Administrador inicial</div>
-    <div class="field"><label>Nome do administrador *</label><input type="text" id="mOrgAdmNome" placeholder="Nome completo"></div>
-    <div class="field"><label>E-mail *</label><input type="email" id="mOrgAdmEmail" placeholder="admin@empresa.com.br"></div>
-    <div class="field"><label>Senha provisória *</label><input type="password" id="mOrgAdmSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O administrador poderá alterar no primeiro acesso.</div></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarNovaOrg()">Criar organização</button>`
-  );
+  // Estado do wizard em memória
+  window._wizardOrg = { step: 1, nome: '', cnpj: '', cidade: '', uf: '', admNome: '', admEmail: '', admSenha: '', enviarEmail: true };
+  _renderWizardOrg();
+}
+
+function _renderWizardOrg() {
+  const w = window._wizardOrg;
+  const steps = `
+    <div style="display:flex;align-items:center;padding:12px 20px 12px;border-bottom:1px solid var(--border);gap:0">
+      ${[1,2,3].map(n => {
+        const done   = n < w.step;
+        const active = n === w.step;
+        const labels = ['Organização','Administrador','Confirmação'];
+        const dot = done
+          ? `<div style="width:22px;height:22px;border-radius:50%;background:var(--navy,#1E2A4A);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</div>`
+          : `<div style="width:22px;height:22px;border-radius:50%;${active?'background:#F59E0B;color:#1E2A4A':'background:var(--surface-1,#f4f6fa);color:var(--text-3);border:0.5px solid var(--border)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${n}</div>`;
+        const label = `<span style="font-size:12px;${active?'font-weight:600;color:var(--text-1)':'color:var(--text-3)'}">${labels[n-1]}</span>`;
+        const connector = n < 3 ? `<div style="flex:1;height:1px;background:${done?'var(--navy,#1E2A4A)':'var(--border)'};margin:0 6px"></div>` : '';
+        return `<div style="display:flex;align-items:center;gap:6px;${n<3?'flex:1':''}">${dot}${label}</div>${connector}`;
+      }).join('')}
+    </div>`;
+
+  let body = '';
+  let footer = '';
+
+  if (w.step === 1) {
+    body = `
+      ${steps}
+      <div style="padding:16px 20px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Dados da empresa</div>
+        <div class="field"><label>Nome da empresa *</label><input type="text" id="wOrgNome" placeholder="Ex.: Construtora Silva Ltda" value="${w.nome}"></div>
+        <div class="field">
+          <label>CNPJ</label>
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <input type="text" id="wOrgCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)" value="${w.cnpj}" style="flex:1">
+            <button class="btn btn-navy btn-sm" onclick="buscarCnpjOrg()" style="white-space:nowrap">🔍 Buscar</button>
+          </div>
+          <div id="wCnpjFeedback" style="margin-top:5px;font-size:11px;color:var(--green,#16a34a);display:${w._cnpjOk?'block':'none'}">✓ Dados preenchidos automaticamente</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field" style="margin-bottom:0"><label>Cidade</label><input type="text" id="wOrgCidade" placeholder="—" value="${w.cidade}"></div>
+          <div class="field" style="margin-bottom:0"><label>UF</label><input type="text" id="wOrgUf" placeholder="—" maxlength="2" value="${w.uf}"></div>
+        </div>
+      </div>`;
+    footer = `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface-1,#f4f6fa)">
+        <span style="font-size:12px;color:var(--text-3)">Etapa 1 de 3</span>
+        <button class="btn btn-navy" onclick="_wizardNext(1)">Próximo →</button>
+      </div>`;
+  } else if (w.step === 2) {
+    body = `
+      ${steps}
+      <div style="padding:16px 20px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Acesso inicial</div>
+        <div class="field"><label>Nome completo *</label><input type="text" id="wAdmNome" placeholder="Nome completo" value="${w.admNome}"></div>
+        <div class="field"><label>E-mail *</label><input type="email" id="wAdmEmail" placeholder="admin@empresa.com.br" value="${w.admEmail}"></div>
+        <div class="field">
+          <label>Senha provisória *</label>
+          <input type="password" id="wAdmSenha" placeholder="Mínimo 6 caracteres" value="${w.admSenha}">
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">O administrador poderá alterar no primeiro acesso.</div>
+        </div>
+      </div>`;
+    footer = `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface-1,#f4f6fa)">
+        <button class="btn btn-outline" onclick="_wizardBack(2)">← Voltar</button>
+        <button class="btn btn-navy" onclick="_wizardNext(2)">Próximo →</button>
+      </div>`;
+  } else {
+    const toggleBg = w.enviarEmail ? 'background:#16a34a' : 'background:var(--text-3,#9ca3af)';
+    const thumbPos = w.enviarEmail ? 'right:2px' : 'left:2px';
+    body = `
+      ${steps}
+      <div style="padding:16px 20px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Resumo</div>
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(30,42,74,.08);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏢</div>
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Organização</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text-1)">${w.nome}</div>
+            ${w.cnpj ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px">CNPJ ${w.cnpj}${w.cidade?' · '+w.cidade+', '+w.uf:''}</div>` : (w.cidade?`<div style="font-size:11px;color:var(--text-3);margin-top:1px">${w.cidade}, ${w.uf}</div>`:'')}
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(30,42,74,.08);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👤</div>
+          <div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Administrador</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text-1)">${w.admNome}</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:1px">${w.admEmail}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;background:${w.enviarEmail?'#f0fdf4':'var(--surface-1,#f4f6fa)'};border:0.5px solid ${w.enviarEmail?'#bbf7d0':'var(--border)'};border-radius:8px;padding:10px 12px;margin-top:14px;cursor:pointer" onclick="_wizardToggleEmail()">
+          <div style="width:36px;height:20px;border-radius:20px;${toggleBg};position:relative;flex-shrink:0;transition:background .2s">
+            <div style="width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;top:2px;${thumbPos};transition:all .2s"></div>
+          </div>
+          <span style="font-size:12px;font-weight:500;color:${w.enviarEmail?'#166534':'var(--text-2)'}">Enviar e-mail de boas-vindas com as credenciais de acesso</span>
+        </div>
+      </div>`;
+    footer = `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface-1,#f4f6fa)">
+        <button class="btn btn-outline" onclick="_wizardBack(3)">← Voltar</button>
+        <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarNovaOrg()" style="background:#F59E0B;color:#1E2A4A;border:none">✓ Criar organização</button>
+      </div>`;
+  }
+
+  abrirModal('Nova organização', body, footer);
+}
+
+function _wizardNext(step) {
+  const w = window._wizardOrg;
+  if (step === 1) {
+    const nome = document.getElementById('wOrgNome')?.value.trim();
+    if (!nome) { showToast('Nome da organização é obrigatório', 'error'); return; }
+    w.nome   = nome;
+    w.cnpj   = document.getElementById('wOrgCnpj')?.value.trim() || '';
+    w.cidade = document.getElementById('wOrgCidade')?.value.trim() || '';
+    w.uf     = document.getElementById('wOrgUf')?.value.trim() || '';
+    w.step   = 2;
+  } else if (step === 2) {
+    const admNome  = document.getElementById('wAdmNome')?.value.trim();
+    const admEmail = document.getElementById('wAdmEmail')?.value.trim();
+    const admSenha = document.getElementById('wAdmSenha')?.value;
+    if (!admNome)  { showToast('Nome do administrador é obrigatório', 'error'); return; }
+    if (!admEmail) { showToast('E-mail do administrador é obrigatório', 'error'); return; }
+    if (!admSenha || admSenha.length < 6) { showToast('Senha mínima de 6 caracteres', 'error'); return; }
+    w.admNome  = admNome;
+    w.admEmail = admEmail;
+    w.admSenha = admSenha;
+    w.step     = 3;
+  }
+  _renderWizardOrg();
+}
+
+function _wizardBack(step) {
+  window._wizardOrg.step = step - 1;
+  _renderWizardOrg();
+}
+
+function _wizardToggleEmail() {
+  window._wizardOrg.enviarEmail = !window._wizardOrg.enviarEmail;
+  _renderWizardOrg();
+}
+
+async function buscarCnpjOrg() {
+  const cnpjRaw = document.getElementById('wOrgCnpj')?.value || '';
+  const cnpjNum = cnpjRaw.replace(/\D/g,'');
+  if (cnpjNum.length !== 14) { showToast('Digite um CNPJ completo para buscar', 'error'); return; }
+  try {
+    showLoading('Buscando CNPJ...');
+    const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNum}`);
+    if (!resp.ok) throw new Error('CNPJ não encontrado');
+    const d = await resp.json();
+    const nomeEl   = document.getElementById('wOrgNome');
+    const cidadeEl = document.getElementById('wOrgCidade');
+    const ufEl     = document.getElementById('wOrgUf');
+    if (nomeEl   && !nomeEl.value)   nomeEl.value   = d.razao_social || '';
+    if (cidadeEl) cidadeEl.value = d.municipio || '';
+    if (ufEl)     ufEl.value     = d.uf || '';
+    window._wizardOrg._cnpjOk = true;
+    const fb = document.getElementById('wCnpjFeedback');
+    if (fb) fb.style.display = 'block';
+    showToast('Dados preenchidos via BrasilAPI', 'success');
+  } catch(e) {
+    showToast(e.message || 'Erro ao buscar CNPJ', 'error');
+  } finally { hideLoading(); }
 }
 
 async function salvarNovaOrg() {
-  const nome      = document.getElementById('mOrgNome')?.value.trim();
-  const cnpj      = document.getElementById('mOrgCnpj')?.value.trim() || null;
-  const admNome   = document.getElementById('mOrgAdmNome')?.value.trim();
-  const admEmail  = document.getElementById('mOrgAdmEmail')?.value.trim();
-  const admSenha  = document.getElementById('mOrgAdmSenha')?.value;
-
-  if (!nome)     { showToast('Nome da organização é obrigatório', 'error'); return; }
-  if (!admNome)  { showToast('Nome do administrador é obrigatório', 'error'); return; }
-  if (!admEmail) { showToast('E-mail do administrador é obrigatório', 'error'); return; }
-  if (!admSenha || admSenha.length < 6) { showToast('Senha mínima de 6 caracteres', 'error'); return; }
-
+  const w = window._wizardOrg || {};
+  if (!w.nome || !w.admNome || !w.admEmail || !w.admSenha) {
+    showToast('Preencha todos os campos obrigatórios', 'error'); return;
+  }
   try {
     setBtnModalLoading(true);
 
-    // 1. Criar a organização
+    // 1. Criar organização
     const { data: org, error: orgErr } = await sb.from('organizacoes')
-      .insert({ nome, cnpj, ativo: true })
+      .insert({ nome: w.nome, cnpj: w.cnpj || null, ativo: true })
       .select().single();
     if (orgErr) throw orgErr;
 
-    // 2. Criar o usuário administrador via Edge Function
+    // 2. Criar administrador via Edge Function
     const { data: { session } } = await sb.auth.getSession();
     const res = await fetch(`${SUPABASE_URL}/functions/v1/criar-usuario`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': SUPABASE_KEY,
-      },
-      body: JSON.stringify({
-        nome: admNome,
-        email: admEmail,
-        senha: admSenha,
-        perfil: 'administrador',
-        org_id: org.id,
-      }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ nome: w.admNome, email: w.admEmail, senha: w.admSenha, perfil: 'administrador', org_id: org.id }),
     });
     const resultado = await res.json();
     if (!res.ok) {
-      // Rollback: remover a org se o usuário falhou
       await sb.from('organizacoes').delete().eq('id', org.id);
       throw new Error(resultado.error || 'Erro ao criar administrador');
     }
 
+    // 3. Enviar e-mail de boas-vindas (opcional)
+    if (w.enviarEmail) {
+      try {
+        await sb.functions.invoke('enviar-documentos', { body: {
+          _tipo:        'boas_vindas',
+          empresa:       w.nome,
+          email_destino: w.admEmail,
+          admin_nome:    w.admNome,
+          admin_email:   w.admEmail,
+          admin_senha:   w.admSenha,
+          org_id:        org.id,
+        }});
+      } catch(eEmail) {
+        console.warn('E-mail de boas-vindas não enviado:', eEmail.message);
+      }
+    }
+
     fecharModal();
-    showToast(`Organização "${nome}" criada com sucesso!`, 'success');
+    showToast(`Organização "${w.nome}" criada com sucesso!`, 'success');
+    delete window._wizardOrg;
     await renderHomeProvedor();
   } catch(e) {
     setBtnModalLoading(false);
@@ -970,7 +1131,21 @@ async function ativarOrg(orgId) {
 }
 
 async function desativarOrg(orgId) {
-  if (!confirm('Deseja desativar esta organização? Os usuários não conseguirão acessar o sistema.')) return;
+  const confirmado = await new Promise(resolve => {
+    abrirModal('Desativar organização', `
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+        <p style="font-size:14px;color:var(--text-2);line-height:1.6">
+          Os usuários desta organização não conseguirão acessar o sistema enquanto estiver inativa.
+        </p>
+      </div>`,
+      `<button class="btn btn-outline" onclick="fecharModal();window._resolveDesativar(false)">Cancelar</button>
+       <button class="btn btn-navy" onclick="fecharModal();window._resolveDesativar(true)">Desativar</button>`
+    );
+    window._resolveDesativar = resolve;
+  });
+  delete window._resolveDesativar;
+  if (!confirmado) return;
   const { error } = await sb.from('organizacoes').update({ ativo: false }).eq('id', orgId);
   if (error) { showToast(error.message, 'error'); return; }
   showToast('Organização desativada.', 'success');
@@ -5705,11 +5880,11 @@ async function renderDocumentosTurma(turmaId) {
     const temLista     = !!docsMap['lista_presenca'];
     const temColetivo  = !!docsMap['certificado_coletivo'];
     const temTodosInd  = participantes.length > 0 && participantes.every(p => !!docsMap['certificado_individual'+p.colaborador_id]);
+    const podosEnviar  = temLista && temColetivo && temTodosInd && emailCliente;
 
     // Status de envio anterior
     const {data:envio} = await sb.from('envios_email').select('*').eq('turma_id', turmaId).maybeSingle();
 
-    // ── Bloco 1: participantes (certificados individuais)
     const htmlParticipantes = participantes.length===0
       ? `<div class="empty" style="padding:16px"><div class="empty-title">Nenhum participante</div></div>`
       : participantes.map(p => {
@@ -5727,7 +5902,7 @@ async function renderDocumentosTurma(turmaId) {
           ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"><button class="btn btn-outline" style="width:100%" onclick="gerarTodosCertificados('${turmaId}')">⬇ Gerar todos os certificados individuais</button></div>`
           : '');
 
-    // ── Bloco de status dos agendamentos
+    // Bloco de status dos agendamentos
     const htmlAgendamentos = totalAg === 0 ? '' : `
       <div class="card" style="margin-bottom:16px;border-color:${todosConcluidos?'var(--green)':'#fde68a'}">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:${todosConcluidos?'0':'10px'}">
@@ -5738,44 +5913,29 @@ async function renderDocumentosTurma(turmaId) {
           </div>
         </div>
         ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">
-          Conclua todos os agendamentos para liberar o envio em lote.
+          O envio automático só ocorrerá após todos os agendamentos serem marcados como concluídos.
         </div>` : ''}
       </div>`;
 
-    // ── Checklist do bloco em lote
-    const _chk = (ok, label, detalhe='') => `
-      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-light,#f0f0f0)">
-        <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
-          ${ok ? 'background:var(--green-l,#dcfce7);color:var(--green,#16a34a)' : 'background:var(--surface-2,#f4f6fa);border:1px solid var(--border)'}">
-          ${ok ? '✓' : ''}
-        </div>
-        <div style="flex:1;font-size:13px;color:var(--text-1)">${label}</div>
-        ${detalhe ? `<div style="font-size:11px;color:var(--text-3)">${detalhe}</div>` : ''}
+    // Bloco de envio
+    const htmlEnvio = `
+      <div class="card" style="margin-bottom:16px;${todosConcluidos&&emailCliente?'border-color:var(--blue)':''}" id="cardEnvio">
+        <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:8px">✉️ Envio automático</div>
+        ${!emailCliente ? `
+          <div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">
+            ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail do cliente para habilitar o envio.
+          </div>` : `
+          <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">
+            Destinatário: <strong>${emailCliente}</strong>
+          </div>
+          ${envio ? `<div style="font-size:12px;color:var(--green);margin-bottom:12px">✓ Enviado em ${formatarDataHora(envio.enviado_em)}</div>` : ''}
+          ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber)">Aguardando conclusão de todos os agendamentos.</div>` :
+            !podosEnviar ? `<div style="font-size:12px;color:var(--text-3)">Gere todos os documentos acima para habilitar o envio.</div>` :
+            `<button class="btn btn-navy" style="width:100%" onclick="enviarDocumentosPorEmail('${turmaId}')">
+              ✉️ ${envio ? 'Reenviar documentos' : 'Enviar documentos por e-mail'}
+            </button>`
+          }`}
       </div>`;
-
-    const indPendentes = participantes.filter(p => !docsMap['certificado_individual'+p.colaborador_id]).length;
-    const indLabel = participantes.length === 0
-      ? 'Certificados individuais'
-      : temTodosInd
-        ? 'Certificados individuais'
-        : `Certificados individuais (${indPendentes} pendente${indPendentes!==1?'s':''})`;
-
-    // ── Rodapé do bloco em lote (botão ou aviso)
-    let htmlBotaoLote = '';
-    if (!emailCliente) {
-      htmlBotaoLote = `<div style="font-size:13px;color:var(--red,#dc2626);background:var(--red-l,#fef2f2);padding:10px 12px;border-radius:var(--r-md,8px)">
-        ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail para habilitar o envio em lote.
-      </div>`;
-    } else if (!todosConcluidos) {
-      htmlBotaoLote = `<div style="font-size:12px;color:var(--amber,#d97706)">⏳ Aguardando conclusão de todos os agendamentos.</div>`;
-    } else {
-      const labelBtn = envio ? '📦 Regerar tudo e reenviar por e-mail' : '📦 Gerar tudo e enviar por e-mail';
-      htmlBotaoLote = `
-        ${envio ? `<div style="font-size:12px;color:var(--green,#16a34a);margin-bottom:10px">✓ Enviado em ${formatarDataHora(envio.enviado_em)}</div>` : ''}
-        <button class="btn btn-navy" style="width:100%;background:var(--navy,#1E2A4A)" onclick="gerarTudoEEnviar('${turmaId}')">
-          ${labelBtn}
-        </button>`;
-    }
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
@@ -5788,76 +5948,36 @@ async function renderDocumentosTurma(turmaId) {
       </div>
 
       ${htmlAgendamentos}
+      ${htmlEnvio}
 
-      <!-- ── BLOCO 1: Documentos individuais ── -->
+      <!-- Lista de Presença -->
       <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <div style="width:34px;height:34px;border-radius:8px;background:var(--blue-l,#eff6ff);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📄</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div>
-            <div style="font-size:15px;font-weight:600;color:var(--text-1)">Documentos individuais</div>
-            <div style="font-size:12px;color:var(--text-3)">Gere ou baixe cada documento separadamente</div>
+            <div style="font-size:15px;font-weight:600;color:var(--text-1)">📋 Lista de Presença</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Consolidada por todos os agendamentos</div>
           </div>
+          <button class="btn btn-navy btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ Gerar PDF</button>
         </div>
-
-        <!-- Lista de Presença -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--text-1)">📋 Lista de Presença</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:2px">Consolidada por todos os agendamentos</div>
-            ${temLista ? `<div style="font-size:11px;color:var(--green);margin-top:3px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
-          </div>
-          <button class="btn btn-navy btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ ${temLista?'Regenerar':'Gerar PDF'}</button>
-        </div>
-
-        <!-- Certificado Coletivo -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--text-1)">🏢 Certificado Coletivo</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:2px">Para a empresa · ${participantes.length} participante(s)</div>
-            ${temColetivo ? `<div style="font-size:11px;color:var(--green);margin-top:3px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
-          </div>
-          <button class="btn btn-navy btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ ${temColetivo?'Regenerar':'Gerar PDF'}</button>
-        </div>
-
-        <!-- Certificados Individuais -->
-        <div style="padding-top:10px;border-top:1px solid var(--border)">
-          <div style="font-size:14px;font-weight:600;color:var(--text-1);margin-bottom:8px">🎓 Certificados Individuais</div>
-          ${htmlParticipantes}
-        </div>
+        ${temLista ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
       </div>
 
-      <!-- ── DIVISOR ── -->
-      <div style="display:flex;align-items:center;gap:10px;margin:4px 0 16px">
-        <div style="flex:1;height:1px;background:var(--border)"></div>
-        <div style="font-size:12px;color:var(--text-3);padding:0 4px">ou</div>
-        <div style="flex:1;height:1px;background:var(--border)"></div>
+      <!-- Certificado Coletivo -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text-1)">🏢 Certificado Coletivo</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Para a empresa - ${participantes.length} participante(s)</div>
+          </div>
+          <button class="btn btn-navy btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ Gerar PDF</button>
+        </div>
+        ${temColetivo ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
       </div>
 
-      <!-- ── BLOCO 2: Gerar tudo e enviar em lote ── -->
-      <div class="card" style="margin-bottom:16px;${todosConcluidos&&emailCliente?'border-color:#1E2A4A33':''}" id="cardEnvioLote">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <div style="width:34px;height:34px;border-radius:8px;background:var(--green-l,#f0fdf4);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📦</div>
-          <div>
-            <div style="font-size:15px;font-weight:600;color:var(--text-1)">Gerar tudo e enviar por e-mail</div>
-            <div style="font-size:12px;color:var(--text-3)">Gera todos os documentos e envia para o cliente</div>
-          </div>
-        </div>
-
-        <!-- Checklist -->
-        <div style="margin-bottom:12px">
-          ${_chk(temLista,     'Lista de Presença')}
-          ${_chk(temColetivo,  'Certificado Coletivo')}
-          ${_chk(temTodosInd,  indLabel, participantes.length > 0 ? `${participantes.length} participante(s)` : '')}
-        </div>
-
-        <!-- Destinatário -->
-        ${emailCliente ? `
-        <div style="display:flex;align-items:center;gap:6px;padding:10px 0;border-top:1px solid var(--border);margin-bottom:12px">
-          <span style="font-size:12px;color:var(--text-3)">Destinatário:</span>
-          <span style="font-size:13px;font-weight:600;color:var(--text-1)">${emailCliente}</span>
-        </div>` : ''}
-
-        ${htmlBotaoLote}
+      <!-- Certificados Individuais -->
+      <div class="card">
+        <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:12px">🎓 Certificados Individuais</div>
+        ${htmlParticipantes}
       </div>`;
 
     setConteudo(html);
@@ -5971,132 +6091,6 @@ async function gerarTodosCertificados(turmaId) {
     await new Promise(r => setTimeout(r, 500));
   }
 }
-
-// ============================================================
-// GERAR TUDO E ENVIAR EM LOTE
-// ============================================================
-async function gerarTudoEEnviar(turmaId) {
-  const confirmado = await new Promise(resolve => {
-    abrirModal('Confirmar geração e envio', `
-      <div style="text-align:center;padding:8px 0">
-        <div style="font-size:40px;margin-bottom:12px">📦</div>
-        <p style="font-size:14px;color:var(--text-2);line-height:1.6">
-          O sistema irá gerar todos os documentos pendentes e enviar por e-mail para a empresa cliente.
-        </p>
-        <p style="font-size:12px;color:var(--text-3);margin-top:8px">
-          Documentos já gerados não serão substituídos.
-        </p>
-      </div>`,
-      `<button class="btn btn-outline" onclick="fecharModal();window._resolveEnvioLote(false)">Cancelar</button>
-       <button class="btn btn-navy" onclick="fecharModal();window._resolveEnvioLote(true)">📦 Confirmar</button>`
-    );
-    window._resolveEnvioLote = resolve;
-  });
-  delete window._resolveEnvioLote;
-  if (!confirmado) return;
-
-  try {
-    // 1. Carregar turma completa
-    showLoading('Verificando documentos...');
-    const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome))')
-      .eq('id', turmaId).single();
-    if (error) throw error;
-
-    const participantes = t.turma_participantes||[];
-    const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
-    const docsMap = {};
-    (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')] = d; });
-
-    // 2. Gerar Lista de Presença se pendente
-    if (!docsMap['lista_presenca']) {
-      showLoading('Gerando lista de presença...');
-      await gerarListaPresenca(turmaId);
-      await new Promise(r => setTimeout(r, 600));
-    }
-
-    // 3. Gerar Certificado Coletivo se pendente
-    if (!docsMap['certificado_coletivo']) {
-      showLoading('Gerando certificado coletivo...');
-      await gerarCertificadoColetivo(turmaId);
-      await new Promise(r => setTimeout(r, 600));
-    }
-
-    // 4. Gerar certificados individuais pendentes
-    const pendentes = participantes.filter(p => !docsMap['certificado_individual'+p.colaborador_id]);
-    for (let i = 0; i < pendentes.length; i++) {
-      showLoading(`Gerando certificado ${i+1} de ${pendentes.length}...`);
-      await gerarCertificadoIndividual(turmaId, pendentes[i].colaborador_id);
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    // 5. Recarregar documentos para montar os anexos
-    showLoading('Preparando envio por e-mail...');
-    const {data:docsAtualizados} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
-    if (!docsAtualizados || docsAtualizados.length === 0) throw new Error('Nenhum documento encontrado após geração.');
-
-    const arquivos = [];
-    for (const doc of docsAtualizados) {
-      const {data:blob, error:dlErr} = await sb.storage.from('documentos').download(doc.arquivo_path);
-      if (dlErr || !blob) { console.warn('Não foi possível baixar:', doc.arquivo_path); continue; }
-      const base64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.readAsDataURL(blob);
-      });
-      arquivos.push({
-        tipo:           doc.tipo,
-        nome:           doc.arquivo_path.split('/').pop(),
-        conteudo_b64:   base64,
-        colaborador_id: doc.colaborador_id || null,
-      });
-    }
-    if (arquivos.length === 0) throw new Error('Não foi possível baixar nenhum documento do Storage.');
-
-    const ag = (t.sessoes||[]).sort((a,b) => a.data > b.data ? 1 : -1);
-    const payload = {
-      turma_id:      turmaId,
-      treinamento:   t.catalogo?.nome||'Treinamento',
-      empresa:       t.clientes?.nome||'',
-      email_destino: t.clientes?.email||'',
-      carga_horaria: t.catalogo?.carga_horaria||'',
-      datas:         ag.map(a => formatarData(a.data)).join(', '),
-      local:         t.local||'',
-      instrutor:     ag[0]?.usuarios?.nome||'',
-      participantes: (t.turma_participantes||[]).map(p => p.colaboradores?.nome||'').filter(Boolean),
-      arquivos,
-      org_id:        usuarioAtual.org_id,
-    };
-
-    const resp = await sb.functions.invoke('enviar-documentos', {body: payload});
-    if (resp.error) throw new Error(resp.error.message || 'Erro na Edge Function');
-
-    // 6. Registrar envio
-    const {data:envioExistente} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
-    if (envioExistente) {
-      await sb.from('envios_email').update({
-        email_destino: t.clientes?.email||'',
-        enviado_em:    new Date().toISOString(),
-        status:        'enviado',
-      }).eq('id', envioExistente.id);
-    } else {
-      await sb.from('envios_email').insert({
-        turma_id:      turmaId,
-        org_id:        usuarioAtual.org_id,
-        email_destino: t.clientes?.email||'',
-        enviado_em:    new Date().toISOString(),
-        status:        'enviado',
-      });
-    }
-
-    showToast('Documentos gerados e enviados com sucesso!', 'success');
-    await renderDocumentosTurma(turmaId);
-  } catch(e) {
-    console.error(e);
-    showToast(e.message||'Erro ao gerar e enviar documentos', 'error');
-  } finally { hideLoading(); }
-}
-
 
 </script>
 </body>
