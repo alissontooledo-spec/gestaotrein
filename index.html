@@ -6132,9 +6132,25 @@ async function renderDocumentosTurma(turmaId) {
       </div>
 
       <!-- Certificados Individuais -->
-      <div class="card">
+      <div class="card" style="margin-bottom:16px">
         <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:12px">🎓 Certificados Individuais</div>
         ${htmlParticipantes}
+      </div>
+
+      <!-- Bloco 2: Gerar tudo e enviar -->
+      <div class="card" style="border:2px solid var(--navy);background:rgba(30,42,74,.03)">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px">📦 Gerar tudo e enviar por e-mail</div>
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
+          Gera automaticamente todos os documentos pendentes e envia por e-mail para a empresa cliente em uma única ação.
+        </div>
+        ${(()=>{
+          if (!emailCliente) return '<div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">&#9888; A empresa cliente não possui e-mail cadastrado.</div>';
+          const destHtml = '<div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Destinatário: <strong>' + emailCliente + '</strong></div>';
+          if (!todosConcluidos) return destHtml + '<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">&#9203; Aguardando conclusão de todos os agendamentos.</div>';
+          const btnLabel = envio ? 'Regenerar e reenviar documentos' : 'Gerar todos e enviar por e-mail';
+          const ultimoEnvio = envio ? '<div style="font-size:11px;color:var(--green);margin-top:8px;text-align:center">&#10003; Último envio: ' + formatarDataHora(envio.enviado_em) + '</div>' : '';
+          return destHtml + '<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail(\'' + turmaId + '\')">&#128230; ' + btnLabel + '</button>' + ultimoEnvio;
+        })()}
       </div>`;
 
     setConteudo(html);
@@ -6145,6 +6161,55 @@ async function renderDocumentosTurma(turmaId) {
 // ============================================================
 // ENVIO DE DOCUMENTOS POR E-MAIL
 // ============================================================
+
+// Gera todos os documentos pendentes e envia em lote
+async function gerarTudoEnviarEmail(turmaId) {
+  showLoading('Gerando documentos pendentes...');
+  try {
+    // Carrega turma completa
+    const {data:t, error} = await sb.from('turmas')
+      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome))')
+      .eq('id', turmaId).single();
+    if (error) throw error;
+
+    const participantes = t.turma_participantes || [];
+    const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
+    const docsMap = {};
+    (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')] = d; });
+
+    // Gerar lista de presença se pendente
+    if (!docsMap['lista_presenca']) {
+      showLoading('Gerando lista de presença...');
+      await gerarListaPresenca(turmaId);
+    }
+
+    // Gerar certificado coletivo se pendente
+    if (!docsMap['certificado_coletivo']) {
+      showLoading('Gerando certificado coletivo...');
+      await gerarCertificadoColetivo(turmaId);
+    }
+
+    // Gerar certificados individuais pendentes
+    for (const p of participantes) {
+      if (!docsMap['certificado_individual'+p.colaborador_id]) {
+        showLoading(`Gerando certificado de ${p.colaboradores?.nome||'participante'}...`);
+        await gerarCertificadoIndividual(turmaId, p.colaborador_id);
+      }
+    }
+
+    // Agora envia por e-mail
+    await enviarDocumentosPorEmail(turmaId);
+
+    // Recarrega a tela de documentos para refletir estado atualizado
+    await renderDocumentosTurma(turmaId);
+  } catch(e) {
+    console.error(e);
+    showToast(e.message || 'Erro ao gerar/enviar documentos', 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
 async function enviarDocumentosPorEmail(turmaId) {
   // confirm() nao funciona em WebView/mobile — usar modal customizado
   const confirmado = await new Promise(resolve => {
