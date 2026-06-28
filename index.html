@@ -643,19 +643,8 @@ async function fazerLogin() {
 async function entrarNoApp() {
   showScreen('screenApp');
   configurarNavegacao();
-  // Suporte a roteamento por hash: lê hash da URL ao entrar ou usa 'home'
-  const hashPagina = window.location.hash.replace('#','');
-  const paginaInicial = (hashPagina && TITULOS[hashPagina]) ? hashPagina : 'home';
-  await irPara(paginaInicial);
+  await irPara('home');
 }
-
-// Navegação pelo botão Voltar/Avançar do browser
-window.addEventListener('popstate', (e) => {
-  const pagina = (e.state?.pagina) || window.location.hash.replace('#','') || 'home';
-  if (usuarioAtual && TITULOS[pagina]) {
-    irPara(pagina);
-  }
-});
 
 async function fazerLogout() {
   if (!confirm('Deseja sair do sistema?')) return;
@@ -727,11 +716,6 @@ async function irPara(pagina, params={}) {
   fecharSidebar();
   fabOcultar();
   document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
-  // Atualiza a URL com hash sem disparar o evento hashchange
-  const novoHash = '#' + pagina;
-  if (window.location.hash !== novoHash) {
-    history.pushState({pagina}, '', novoHash);
-  }
   showLoading();
   try {
     switch(pagina) {
@@ -1561,14 +1545,8 @@ function abrirModalCliente(id=null) {
   _modalCurrentId = id;
   const c = id ? _clientesCache.find(x=>x.id===id) : null;
   abrirModal(c?'Editar cliente':'Novo cliente', `
-    <div class="field"><label>CNPJ</label>
-      <div style="display:flex;gap:8px;align-items:flex-end">
-        <input type="text" id="mCliCnpj" value="${c?.cnpj||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)" style="flex:1">
-        <button class="btn btn-navy btn-sm" onclick="buscarCnpjCliente()" style="white-space:nowrap;flex-shrink:0">🔍 Buscar</button>
-      </div>
-      <div id="mCliFeedback" style="font-size:11px;color:var(--green,#059669);margin-top:4px;display:none">✓ Dados preenchidos automaticamente</div>
-    </div>
     <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${c?.nome||''}" placeholder="Razão social"></div>
+    <div class="field"><label>CNPJ</label><input type="text" id="mCliCnpj" value="${c?.cnpj||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
@@ -1590,56 +1568,6 @@ async function salvarCliente() {
     fecharModal(); showToast(_modalCurrentId?'Cliente atualizado!':'Cliente cadastrado!','success');
     await renderClientes();
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
-}
-
-async function buscarCnpjCliente() {
-  const cnpjNum = (document.getElementById('mCliCnpj')?.value||'').replace(/\D/g,'');
-  if (cnpjNum.length !== 14) { showToast('Digite um CNPJ completo (14 dígitos)', 'error'); return; }
-  try {
-    showLoading('Buscando CNPJ...');
-    const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNum}`);
-    if (!resp.ok) throw new Error('CNPJ não encontrado na base');
-    const d = await resp.json();
-    const nomeEl   = document.getElementById('mCliNome');
-    const cidadeEl = document.getElementById('mCliCidade');
-    const ufEl     = document.getElementById('mCliUf');
-    const emailEl  = document.getElementById('mCliEmail');
-    const telEl    = document.getElementById('mCliTel');
-    if (nomeEl   && !nomeEl.value)   nomeEl.value   = d.razao_social || '';
-    if (cidadeEl) cidadeEl.value = d.municipio || '';
-    if (ufEl)     ufEl.value     = d.uf || '';
-    if (emailEl  && !emailEl.value)  emailEl.value  = d.email || '';
-    if (telEl    && !telEl.value)    telEl.value    = d.ddd_telefone_1 ? d.ddd_telefone_1.replace(/(\d{2})(\d{4,5})(\d{4})/,'($1) $2-$3') : '';
-    const fb = document.getElementById('mCliFeedback');
-    if (fb) fb.style.display = 'block';
-    showToast('Dados preenchidos via BrasilAPI', 'success');
-  } catch(e) {
-    showToast(e.message || 'Erro ao buscar CNPJ', 'error');
-  } finally { hideLoading(); }
-}
-
-async function buscarCnpjClienteRapido() {
-  const cnpjNum = (document.getElementById('mCRCnpj')?.value||'').replace(/\D/g,'');
-  if (cnpjNum.length !== 14) { showToast('Digite um CNPJ completo (14 dígitos)', 'error'); return; }
-  try {
-    showLoading('Buscando CNPJ...');
-    const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNum}`);
-    if (!resp.ok) throw new Error('CNPJ não encontrado na base');
-    const d = await resp.json();
-    const nomeEl   = document.getElementById('mCRNome');
-    const cidadeEl = document.getElementById('mCRCidade');
-    const ufEl     = document.getElementById('mCRUf');
-    const emailEl  = document.getElementById('mCREmail');
-    if (nomeEl   && !nomeEl.value)   nomeEl.value   = d.razao_social || '';
-    if (cidadeEl) cidadeEl.value = d.municipio || '';
-    if (ufEl)     ufEl.value     = d.uf || '';
-    if (emailEl  && !emailEl.value)  emailEl.value  = d.email || '';
-    const fb = document.getElementById('mCRFeedback');
-    if (fb) fb.style.display = 'block';
-    showToast('Dados preenchidos via BrasilAPI', 'success');
-  } catch(e) {
-    showToast(e.message || 'Erro ao buscar CNPJ', 'error');
-  } finally { hideLoading(); }
 }
 
 async function toggleCliente(id) {
@@ -1780,10 +1708,10 @@ async function salvarColab() {
 // ============================================================
 async function renderCatalogo() {
   const oi = usuarioAtual.org_id;
-  // Buscar catálogo + contagem de turmas por treinamento em paralelo
-  const [{data, error}, {data: turmasAll}] = await Promise.all([
+  const [{data, error}, {data: turmasAll}, {data: partAll}] = await Promise.all([
     sb.from('catalogo').select('*').eq('org_id', oi).order('nome'),
-    sb.from('turmas').select('catalogo_id, status').eq('org_id', oi),
+    sb.from('turmas').select('catalogo_id, status, id').eq('org_id', oi),
+    sb.from('turma_participantes').select('turma_id, colaborador_id'),
   ]);
   if (error) throw error;
 
@@ -1793,15 +1721,25 @@ async function renderCatalogo() {
   const usoMap = {};
   (turmasAll || []).forEach(t => {
     if (!t.catalogo_id) return;
-    if (!usoMap[t.catalogo_id]) usoMap[t.catalogo_id] = { total: 0, ativas: 0 };
+    if (!usoMap[t.catalogo_id]) usoMap[t.catalogo_id] = { total: 0, ativas: 0, pessoas: 0 };
     usoMap[t.catalogo_id].total++;
     if (t.status === 'em_andamento') usoMap[t.catalogo_id].ativas++;
   });
+  // Contar pessoas únicas por catálogo
+  (partAll || []).forEach(p => {
+    const turma = (turmasAll || []).find(t => t.id === p.turma_id);
+    if (turma?.catalogo_id && usoMap[turma.catalogo_id]) {
+      usoMap[turma.catalogo_id].pessoas++;
+    }
+  });
   window._catalogoUsoMap = usoMap;
 
-  const total   = _catalogoCache.length;
-  const ativos  = _catalogoCache.filter(t => t.ativo).length;
-  const emUso   = _catalogoCache.filter(t => (usoMap[t.id]?.total || 0) > 0).length;
+  const total     = _catalogoCache.length;
+  const ativos    = _catalogoCache.filter(t => t.ativo && !t.arquivado).length;
+  const emUso     = _catalogoCache.filter(t => !t.arquivado && (usoMap[t.id]?.total || 0) > 0).length;
+  const semUso    = _catalogoCache.filter(t => t.ativo && !t.arquivado && (usoMap[t.id]?.total || 0) === 0).length;
+  const arquivados = _catalogoCache.filter(t => t.arquivado).length;
+  const maxUso    = Math.max(..._catalogoCache.map(t => usoMap[t.id]?.total || 0), 1);
 
   setMobileHeader(`<div class="mh-greeting">Treinamentos</div><div class="mh-name">Catálogo</div>`);
   fabOcultar();
@@ -1818,53 +1756,67 @@ async function renderCatalogo() {
       <div class="stat-card accent">
         <div class="stat-label">Em uso</div>
         <div class="stat-value">${emUso}</div>
-        <div class="stat-sub">Com turmas abertas</div>
+        <div class="stat-sub">Com turmas</div>
       </div>
       <div class="stat-card accent">
         <div class="stat-label">Sem uso</div>
-        <div class="stat-value">${total - emUso}</div>
+        <div class="stat-value">${semUso}</div>
         <div class="stat-sub">Nunca utilizados</div>
+      </div>
+      <div class="stat-card" style="border-left:3px solid var(--text-3)">
+        <div class="stat-label">Arquivados</div>
+        <div class="stat-value" style="color:var(--text-3)">${arquivados}</div>
+        <div class="stat-sub">Fora do fluxo</div>
       </div>
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
       <input type="search" id="buscaCatalogo" placeholder="Buscar por nome ou NR..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarCatalogo(this.value)">
       <select id="filtroCatStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(document.getElementById('buscaCatalogo').value)">
-        <option value="">Todos</option>
-        <option value="ativo">Ativos</option>
-        <option value="inativo">Inativos</option>
+        <option value="">Todos os ativos</option>
         <option value="em_uso">Em uso</option>
         <option value="sem_uso">Sem uso</option>
+        <option value="arquivado">Arquivados</option>
       </select>
       ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache)}</div>`);
+    <div class="card" style="padding:0" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache, maxUso)}</div>`);
 }
 
-function _htmlListaCatalogo(lista) {
-  if (!lista.length) return `<div class="empty" style="padding:32px"><div class="empty-icon">📚</div><div class="empty-title">Nenhum treinamento cadastrado</div><div class="empty-sub">Cadastre os tipos de treinamento oferecidos.</div></div>`;
-  const usoMap = window._catalogoUsoMap || {};
+function _htmlListaCatalogo(lista, maxUso) {
+  if (!lista.length) return `<div class="empty" style="padding:32px"><div class="empty-icon">📚</div><div class="empty-title">Nenhum treinamento encontrado</div><div class="empty-sub">Tente ajustar o filtro ou cadastre um novo treinamento.</div></div>`;
+  const usoMap  = window._catalogoUsoMap || {};
+  const _maxUso = maxUso || Math.max(...lista.map(t => usoMap[t.id]?.total || 0), 1);
   return lista.map(t => {
-    const uso   = usoMap[t.id] || { total: 0, ativas: 0 };
+    const uso    = usoMap[t.id] || { total: 0, ativas: 0, pessoas: 0 };
     const nrMatch = t.nome.match(/NR[\s\-]*(\d+)/i);
-    const nrTag = nrMatch ? `<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(30,42,74,.1);color:var(--navy);margin-right:4px">NR-${nrMatch[1]}</span>` : '';
+    const nrTag  = nrMatch ? `<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(30,42,74,.1);color:var(--navy);margin-right:4px">NR-${nrMatch[1]}</span>` : '';
     const usoTag = uso.total > 0
       ? `<span style="font-size:11px;color:var(--green);font-weight:500">${uso.total} turma${uso.total!==1?'s':''} · ${uso.ativas} ativa${uso.ativas!==1?'s':''}</span>`
       : `<span style="font-size:11px;color:var(--text-3)">Nunca utilizado</span>`;
+    const barPct = _maxUso > 0 ? Math.round((uso.total / _maxUso) * 100) : 0;
+    const isArq  = !!t.arquivado;
+    const badgeEl = isArq
+      ? `<span class="badge badge-gray">Arquivado</span>`
+      : `<span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>`;
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-      <div style="width:44px;height:44px;border-radius:var(--r-md);background:${t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'};color:${t.ativo?'var(--navy)':'var(--text-3)'};font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${t.carga_horaria}h</div>
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${isArq?.6:1}" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:44px;height:44px;border-radius:var(--r-md);background:${!isArq&&t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'};color:${!isArq&&t.ativo?'var(--navy)':'var(--text-3)'};font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${t.carga_horaria}h</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${t.nome}</div>
-        <div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="font-size:14px;font-weight:600;color:${isArq?'var(--text-3)':'var(--navy)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${t.nome}</div>
+        <div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
           <span>Val. ${t.validade_meses}m</span>
           ${t.categoria ? `<span>· ${t.categoria}</span>` : ''}
           <span>· ${usoTag}</span>
+          ${uso.pessoas > 0 ? `<span style="color:var(--text-3)">· ${uso.pessoas} pessoas treinadas</span>` : ''}
+        </div>
+        <div style="width:100%;max-width:160px;height:3px;background:var(--gray-100);border-radius:2px">
+          <div style="width:${barPct}%;height:3px;border-radius:2px;background:${barPct>60?'var(--navy)':barPct>20?'var(--amber)':'var(--text-3)'}"></div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-top:2px">
+        ${badgeEl}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>`;
@@ -1876,8 +1828,9 @@ function verCatalogo(id) {
   if (!t) return;
   const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
   const usoMap  = window._catalogoUsoMap || {};
-  const uso     = usoMap[t.id] || { total: 0, ativas: 0 };
+  const uso     = usoMap[t.id] || { total: 0, ativas: 0, pessoas: 0 };
   const nrMatch = t.nome.match(/NR[\s\-]*(\d+)/i);
+  const isArq   = !!t.arquivado;
 
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
@@ -1888,12 +1841,12 @@ function verCatalogo(id) {
       <div style="display:flex;align-items:flex-start;gap:14px">
         <div style="width:52px;height:52px;border-radius:var(--r-lg);background:rgba(245,158,11,.2);color:var(--amber);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.carga_horaria}h</div>
         <div style="flex:1;min-width:0">
-          ${nrMatch ? `<div style="font-size:11px;font-weight:700;color:var(--amber);letter-spacing:.06em;margin-bottom:4px">NR-${nrMatch[1]}</div>` : ''}
+          ${nrMatch ? `<div style="font-size:11px;font-weight:700;color:var(--amber);letter-spacing:.06em;margin-bottom:4px">NR-${nrMatch[1]}</div>` : ""}
           <div style="font-size:17px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:6px">${t.nome}</div>
-          <span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>
+          <span class="badge ${isArq?"badge-gray":t.ativo?"badge-green":"badge-gray"}">${isArq?"Arquivado":t.ativo?"Ativo":"Inativo"}</span>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px">
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
           <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Carga horária</div>
           <div style="font-size:16px;font-weight:700;color:#fff">${t.carga_horaria}h</div>
@@ -1904,25 +1857,34 @@ function verCatalogo(id) {
         </div>
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
           <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Turmas</div>
-          <div style="font-size:16px;font-weight:700;color:${uso.total>0?'var(--amber)':'rgba(255,255,255,.4)'}">${uso.total}</div>
+          <div style="font-size:16px;font-weight:700;color:${uso.total>0?"var(--amber)":"rgba(255,255,255,.4)"}">${uso.total}</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Pessoas</div>
+          <div style="font-size:16px;font-weight:700;color:${uso.pessoas>0?"var(--amber)":"rgba(255,255,255,.4)"}">${uso.pessoas}</div>
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:14px">
-      ${t.categoria ? `<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Categoria</span><span style="font-weight:500;color:var(--navy)">${t.categoria}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Turmas ativas agora</span><span style="font-weight:500;color:${uso.ativas>0?'var(--green)':'var(--text-3)'}">${uso.ativas}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0"><span style="color:var(--text-2)">Total de turmas históricas</span><span style="font-weight:500;color:var(--navy)">${uso.total}</span></div>
-      ${t.descricao ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Descrição</div><div style="color:var(--text-1);line-height:1.6">${t.descricao}</div></div>` : ''}
-      ${t.conteudo_programatico ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Conteúdo programático</div><div style="color:var(--text-1);line-height:1.6">${t.conteudo_programatico}</div></div>` : ''}
+      ${t.categoria ? `<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Categoria</span><span style="font-weight:500;color:var(--navy)">${t.categoria}</span></div>` : ""}
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Turmas ativas agora</span><span style="font-weight:500;color:${uso.ativas>0?"var(--green)":"var(--text-3)"}">${uso.ativas}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Total de turmas históricas</span><span style="font-weight:500;color:var(--navy)">${uso.total}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0"><span style="color:var(--text-2)">Total de pessoas treinadas</span><span style="font-weight:500;color:var(--navy)">${uso.pessoas}</span></div>
+      ${t.descricao ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Descrição</div><div style="color:var(--text-1);line-height:1.6">${t.descricao}</div></div>` : ""}
+      ${t.conteudo_programatico ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Conteúdo programático</div><div style="color:var(--text-1);line-height:1.6">${t.conteudo_programatico}</div></div>` : ""}
     </div>
 
     ${podeMgr ? `
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="editarCatalogo" data-id="${t.id}">${ICONS.plus} Editar</button>
       <button class="btn btn-outline" onclick="duplicarCatalogo('${t.id}')" title="Criar uma cópia deste treinamento">⧉ Duplicar</button>
-      <button class="btn btn-outline" data-action="toggleCatalogo" data-id="${t.id}">${t.ativo?'Desativar':'Ativar'}</button>
-    </div>` : ''}
+      ${isArq
+        ? `<button class="btn btn-outline" data-action="desarquivarCatalogo" data-id="${t.id}">↩ Restaurar</button>`
+        : `<button class="btn btn-outline" data-action="arquivarCatalogo" data-id="${t.id}">📦 Arquivar</button>`
+      }
+      <button class="btn btn-outline" data-action="toggleCatalogo" data-id="${t.id}">${t.ativo?"Desativar":"Ativar"}</button>
+    </div>` : ""}
   `);
 }
 
@@ -1931,94 +1893,94 @@ function filtrarCatalogo(q) {
   const st  = document.getElementById('filtroCatStatus')?.value || '';
   const usoMap = window._catalogoUsoMap || {};
   let r = _catalogoCache;
+  if (st === 'arquivado') {
+    r = r.filter(t => t.arquivado);
+  } else {
+    r = r.filter(t => !t.arquivado);
+    if (st === 'em_uso')  r = r.filter(t => (usoMap[t.id]?.total || 0) > 0);
+    if (st === 'sem_uso') r = r.filter(t => t.ativo && (usoMap[t.id]?.total || 0) === 0);
+  }
   if (f) {
     r = r.filter(t =>
       t.nome.toLowerCase().includes(f) ||
       (t.categoria || '').toLowerCase().includes(f) ||
-      // Busca por NR: "nr35", "nr-35", "35" case-insensitive
       (t.nome.match(/NR[\s\-]*(\d+)/i)||[])[1]?.includes(f.replace(/^nr[\s\-]*/i,''))
     );
   }
-  if (st === 'ativo')   r = r.filter(t => t.ativo);
-  if (st === 'inativo') r = r.filter(t => !t.ativo);
-  if (st === 'em_uso')  r = r.filter(t => (usoMap[t.id]?.total || 0) > 0);
-  if (st === 'sem_uso') r = r.filter(t => (usoMap[t.id]?.total || 0) === 0);
+  const maxUso = Math.max(..._catalogoCache.map(t => usoMap[t.id]?.total || 0), 1);
   const el = document.getElementById('listaCatalogo');
-  if (el) el.innerHTML = _htmlListaCatalogo(r);
+  if (el) el.innerHTML = _htmlListaCatalogo(r, maxUso);
 }
 
 function menuCatalogo(btn, id) {
   const t = _catalogoCache.find(x=>x.id===id);
   if (!t) return;
+  const isArq = !!t.arquivado;
   _menuDropdown(btn, [
     {action:'editarCatalogo',id,label:'Editar'},
     '---',
+    isArq
+      ? {action:'desarquivarCatalogo',id,label:'Restaurar'}
+      : {action:'arquivarCatalogo',id,label:'Arquivar'},
     {action:'toggleCatalogo',id,label:t.ativo?'Desativar':'Ativar',danger:t.ativo},
   ]);
 }
 
-function abrirModalCatalogo(id=null) {
-  _modalCurrentId = id;
-  const t = id ? _catalogoCache.find(x=>x.id===id) : null;
-  abrirModal(t?'Editar treinamento':'Novo treinamento', `
-    <div class="field"><label>Nome *</label><input type="text" id="mCatNome" value="${t?.nome||''}" placeholder="Ex.: NR-35 Trabalho em Altura"></div>
-    <div class="field"><label>Descrição <span style="font-size:11px;color:var(--text-3);font-weight:400">(opcional)</span></label><textarea id="mCatDesc" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Breve descrição do treinamento...">${t?.descricao||''}</textarea></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Carga horária (h) *</label><input type="number" id="mCatCH" value="${t?.carga_horaria||''}" placeholder="8" min="1" step="0.5"></div>
-      <div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatVal" value="${t?.validade_meses||''}" placeholder="24" min="1"></div>
-    </div>
-    <div class="field"><label>Categoria</label><input type="text" id="mCatCat" value="${t?.categoria||''}" placeholder="Ex.: NR, CIPA..."></div>
-    <div class="field"><label>Conteúdo programático</label><textarea id="mCatCP" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Tópicos abordados...">${t?.conteudo_programatico||''}</textarea></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCatalogo()">${t?'Salvar':'Cadastrar'}</button>`);
-}
-
-async function salvarCatalogo() {
-  const nome = document.getElementById('mCatNome')?.value.trim();
-  const desc = document.getElementById('mCatDesc')?.value.trim();
-  const ch   = parseFloat(document.getElementById('mCatCH')?.value);
-  const val  = parseInt(document.getElementById('mCatVal')?.value);
-  if (!nome) { showToast('Nome obrigatório','error'); return; }
-  if (!ch||ch<=0) { showToast('Carga horária inválida','error'); return; }
-  if (!val||val<=0) { showToast('Validade inválida','error'); return; }
-  const dados = {nome, descricao:desc, carga_horaria:ch, validade_meses:val, categoria:document.getElementById('mCatCat')?.value.trim()||null, conteudo_programatico:document.getElementById('mCatCP')?.value.trim()||null};
-  try {
-    setBtnModalLoading(true);
-    const {error} = _modalCurrentId ? await sb.from('catalogo').update(dados).eq('id',_modalCurrentId) : await sb.from('catalogo').insert({...dados,org_id:usuarioAtual.org_id,ativo:true});
-    if (error) throw error;
-    fecharModal(); showToast(_modalCurrentId?'Treinamento atualizado!':'Treinamento cadastrado!','success');
-    await renderCatalogo();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
-}
-
-async function duplicarCatalogo(id) {
-  const t = _catalogoCache.find(x => x.id === id);
+async function arquivarCatalogo(id) {
+  const t = _catalogoCache.find(x=>x.id===id);
   if (!t) return;
-  try {
-    showLoading('Duplicando treinamento...');
-    const { error } = await sb.from('catalogo').insert({
-      org_id:               usuarioAtual.org_id,
-      nome:                 t.nome + ' (cópia)',
-      descricao:            t.descricao,
-      carga_horaria:        t.carga_horaria,
-      validade_meses:       t.validade_meses,
-      categoria:            t.categoria,
-      conteudo_programatico: t.conteudo_programatico,
-      ativo:                true,
-    });
-    if (error) throw error;
-    hideLoading();
-    showToast('Treinamento duplicado com sucesso!', 'success');
-    await renderCatalogo();
-  } catch(e) {
-    hideLoading();
-    showToast(e.message || 'Erro ao duplicar', 'error');
+  const usoMap = window._catalogoUsoMap || {};
+  const ativas = usoMap[id]?.ativas || 0;
+  if (ativas > 0) {
+    showToast(`Não é possível arquivar: há ${ativas} turma${ativas!==1?'s':''} ativa${ativas!==1?'s':''}`, 'error');
+    return;
   }
+  const confirmado = await new Promise(resolve => {
+    abrirModal('Arquivar treinamento', `
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:36px;margin-bottom:12px">📦</div>
+        <p style="font-size:14px;color:var(--text-2);line-height:1.6">
+          <strong>${t.nome}</strong> será removido do fluxo de novas turmas.<br>
+          O histórico de turmas e certificados é preservado.
+        </p>
+      </div>`,
+      `<button class="btn btn-outline" onclick="fecharModal();window._resolveArq(false)">Cancelar</button>
+       <button class="btn btn-navy" onclick="fecharModal();window._resolveArq(true)">📦 Arquivar</button>`
+    );
+    window._resolveArq = resolve;
+  });
+  delete window._resolveArq;
+  if (!confirmado) return;
+  const {error} = await sb.from('catalogo').update({arquivado:true, ativo:false}).eq('id',id);
+  if (error) { showToast(error.message,'error'); return; }
+  showToast(`"${t.nome}" arquivado.`, 'success');
+  await renderCatalogo();
+}
+
+async function desarquivarCatalogo(id) {
+  const t = _catalogoCache.find(x=>x.id===id);
+  if (!t) return;
+  const {error} = await sb.from('catalogo').update({arquivado:false, ativo:true}).eq('id',id);
+  if (error) { showToast(error.message,'error'); return; }
+  showToast(`"${t.nome}" restaurado.`, 'success');
+  await renderCatalogo();
 }
 
 async function toggleCatalogo(id) {
   const t = _catalogoCache.find(x=>x.id===id);
-  if (!t) return; if (!confirm('Deseja ' + (t.ativo?'desativar':'ativar') + ' "' + t.nome + '"?')) return;
+  if (!t) return;
+  const confirmado = await new Promise(resolve => {
+    abrirModal(t.ativo?'Desativar treinamento':'Ativar treinamento', `
+      <p style="font-size:14px;color:var(--text-2);line-height:1.6;padding:8px 0">
+        Deseja ${t.ativo?'desativar':'ativar'} <strong>${t.nome}</strong>?
+      </p>`,
+      `<button class="btn btn-outline" onclick="fecharModal();window._resolveToggleCat(false)">Cancelar</button>
+       <button class="btn btn-navy" onclick="fecharModal();window._resolveToggleCat(true)">${t.ativo?'Desativar':'Ativar'}</button>`
+    );
+    window._resolveToggleCat = resolve;
+  });
+  delete window._resolveToggleCat;
+  if (!confirmado) return;
   const {error} = await sb.from('catalogo').update({ativo:!t.ativo}).eq('id',id);
   if (error) { showToast(error.message,'error'); return; }
   showToast(`Treinamento ${t.ativo?'desativado':'ativado'}!`,'success');
@@ -2319,13 +2281,7 @@ async function abrirModalClienteRapido() {
       O cliente será selecionado automaticamente após o cadastro.
     </div>
     <div class="field"><label>Nome *</label><input type="text" id="mCRNome" placeholder="Razão social" autofocus></div>
-    <div class="field"><label>CNPJ</label>
-      <div style="display:flex;gap:8px;align-items:flex-end">
-        <input type="text" id="mCRCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)" style="flex:1">
-        <button class="btn btn-navy btn-sm" onclick="buscarCnpjClienteRapido()" style="white-space:nowrap;flex-shrink:0">🔍 Buscar</button>
-      </div>
-      <div id="mCRFeedback" style="font-size:11px;color:var(--green,#059669);margin-top:4px;display:none">✓ Dados preenchidos automaticamente</div>
-    </div>
+    <div class="field"><label>CNPJ</label><input type="text" id="mCRCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
@@ -3914,6 +3870,7 @@ async function renderRelatorios() {
     participantes: participantesRaw||[],
   };
   window._relPeriodo = 6; // padrão: 6 meses
+  window._relComparativo = false; // comparativo desligado por padrão
 
   _renderRelatorioView();
 }
@@ -3966,6 +3923,13 @@ function _renderRelatorioView() {
   const horasTotal = tFilt
     .filter(t => t.status === 'concluida')
     .reduce((sum, t) => sum + (t.catalogo?.carga_horaria || 0), 0);
+
+  // Período anterior (para comparativo)
+  const tAnt = tAll.filter(t => new Date(t.created_at) >= corteAnt && new Date(t.created_at) < corteAtual);
+  const turmaIdsAnt = new Set(tAnt.map(t => t.id));
+  const partFiltAnt = partAll.filter(p => turmaIdsAnt.has(p.turma_id));
+  const partUnicosAnt = new Set(partFiltAnt.map(p => p.colaborador_id)).size;
+  const horasTotalAnt = tAnt.filter(t => t.status === 'concluida').reduce((sum, t) => sum + (t.catalogo?.carga_horaria || 0), 0);
 
   // ── Gráfico: evolução nos últimos N meses ──
   const hoje = new Date();
@@ -4048,15 +4012,32 @@ function _renderRelatorioView() {
     ? rankInst.map(r => _rankRow(r.nome, r.sessoes, maxInst, '#059669', `${r.turmas} turma${r.turmas!==1?'s':''}`)).join('')
     : `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum instrutor ativo</div>`;
 
+  // ── Clientes anteriores (para delta) ──
+  const cliMapAnt = {};
+  tAnt.forEach(t => {
+    if (!t.cliente_id) return;
+    if (!cliMapAnt[t.cliente_id]) cliMapAnt[t.cliente_id] = { turmas: 0 };
+    cliMapAnt[t.cliente_id].turmas++;
+  });
+
   // ── Clientes — lista para drill-down ──
-  const cliListHtml = Object.entries(cliMap).sort((a,b)=>b[1].turmas-a[1].turmas).slice(0,8).map(([id,v])=>`
+  const cliListHtml = Object.entries(cliMap).sort((a,b)=>b[1].turmas-a[1].turmas).slice(0,8).map(([id,v])=>{
+    const antVal = cliMapAnt[id]?.turmas || 0;
+    const delta  = v.turmas - antVal;
+    const showDelta = window._relComparativo && antVal > 0;
+    const deltaEl = showDelta
+      ? `<span style="font-size:11px;font-weight:600;color:${delta>=0?'var(--green)':'var(--red)'};">${delta>=0?'▲+':'▼'}${delta}</span>`
+      : '';
+    return `
     <button class="rel2-cli-btn" onclick="relVerCliente('${id}')">
-      <div>
+      <div style="flex:1;min-width:0">
         <div class="rel2-cli-name">${v.nome}</div>
         <div class="rel2-cli-meta">${v.turmas} turma${v.turmas!==1?'s':''} · ${v.pessoas} participante${v.pessoas!==1?'s':''} · ${v.horas}h</div>
       </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>`).join('');
+      ${deltaEl}
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0;margin-left:6px"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>`;
+  }).join('');
 
   setConteudo(`
     <div class="rel2-header">
@@ -4068,6 +4049,7 @@ function _renderRelatorioView() {
         <div class="rel2-export" style="flex-shrink:0">
           <button class="rel2-export-btn" onclick="exportarRelatorioCSV()">⬇ CSV</button>
           <button class="rel2-export-btn" onclick="exportarRelatorioPDF()">⬇ PDF</button>
+          <button class="rel2-export-btn" onclick="exportarRelatorioComparativoPDF()" id="btnExportComp" style="display:${meses>1?'inline-block':'none'}">⬇ PDF Comparativo</button>
         </div>
       </div>
       <div class="rel2-period">
@@ -4076,7 +4058,13 @@ function _renderRelatorioView() {
         <button class="rel2-chip${meses===6?' active':''}" onclick="relSetPeriodo(6,this)">6 meses</button>
         <button class="rel2-chip${meses===12?' active':''}" onclick="relSetPeriodo(12,this)">Este ano</button>
       </div>
-      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;cursor:pointer" onclick="relToggleComparativo()">
+          <div style="width:32px;height:18px;border-radius:20px;${window._relComparativo?'background:#059669':'background:rgba(255,255,255,.2)'};position:relative;transition:background .2s;flex-shrink:0">
+            <div style="width:14px;height:14px;background:#fff;border-radius:50%;position:absolute;top:2px;${window._relComparativo?'right:2px':'left:2px'};transition:all .2s"></div>
+          </div>
+          <span style="font-size:12px;font-weight:500;color:rgba(255,255,255,.85)">Comparar com período anterior</span>
+        </div>
         <select id="relFiltroCat" style="flex:1;min-width:140px;max-width:220px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:rgba(0,0,0,.2);color:rgba(255,255,255,.85);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
           <option value="">Todos os treinamentos</option>
           ${[...new Set((window._relRaw?.turmas||[]).map(t=>t.catalogo?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}" style="color:var(--navy);background:#fff">${n}</option>`).join('')}
@@ -4088,62 +4076,11 @@ function _renderRelatorioView() {
       </div>
     </div>
 
-    <div class="rel2-kpis">
-      <div class="rel2-kpi" style="border-left:3px solid var(--navy)" onclick="irParaTurmasFiltradas('em_andamento')">
-        <span class="rel2-kpi-icon">🎓</span>
-        <div class="rel2-kpi-val">${tAtivas}</div>
-        <div class="rel2-kpi-lbl">Turmas ativas</div>
-        <div class="rel2-kpi-delta">Em andamento</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--green)" onclick="irParaTurmasFiltradas('concluida')">
-        <span class="rel2-kpi-icon">✅</span>
-        <div class="rel2-kpi-val">${tConcluidas}</div>
-        <div class="rel2-kpi-lbl">Concluídas</div>
-        <div class="rel2-kpi-delta">${meses === 1 ? 'Este mês' : `Últimos ${meses} meses`}</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid #7C3AED">
-        <span class="rel2-kpi-icon">📈</span>
-        <div class="rel2-kpi-val">${tConcluidas > 0 && tConcluidasAnt > 0 ? (tConcluidas >= tConcluidasAnt ? '+' : '') + Math.round((tConcluidas - tConcluidasAnt) / tConcluidasAnt * 100) + '%' : '—'}</div>
-        <div class="rel2-kpi-lbl">Variação</div>
-        <div class="rel2-kpi-delta" style="color:${tConcluidas >= tConcluidasAnt ? 'var(--green)' : 'var(--red)'}">vs período anterior</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--amber)">
-        <span class="rel2-kpi-icon">👥</span>
-        <div class="rel2-kpi-val">${partUnicos}</div>
-        <div class="rel2-kpi-lbl">Pessoas treinadas</div>
-        <div class="rel2-kpi-delta">Participantes únicos</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid #7C3AED">
-        <span class="rel2-kpi-icon">⏱</span>
-        <div class="rel2-kpi-val">${horasTotal}</div>
-        <div class="rel2-kpi-lbl">Horas de treinamento</div>
-        <div class="rel2-kpi-delta">Turmas concluídas</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--amber)" onclick="irParaTurmasFiltradas('agendada')">
-        <span class="rel2-kpi-icon">📋</span>
-        <div class="rel2-kpi-val">${tAgendadas}</div>
-        <div class="rel2-kpi-lbl">Agendadas</div>
-        <div class="rel2-kpi-delta">Próximas turmas</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--navy)">
-        <span class="rel2-kpi-icon">🏢</span>
-        <div class="rel2-kpi-val">${cliAtivos}</div>
-        <div class="rel2-kpi-lbl">Clientes ativos</div>
-        <div class="rel2-kpi-delta">Empresas cadastradas</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--text-3)" onclick="irParaTurmasFiltradas('cancelada')">
-        <span class="rel2-kpi-icon">⚪</span>
-        <div class="rel2-kpi-val">${tCanceladas}</div>
-        <div class="rel2-kpi-lbl">Canceladas</div>
-        <div class="rel2-kpi-delta" style="color:var(--text-3)">No período</div>
-      </div>
-      <div class="rel2-kpi" style="border-left:3px solid var(--navy)">
-        <span class="rel2-kpi-icon">📊</span>
-        <div class="rel2-kpi-val">${totalTurmas}</div>
-        <div class="rel2-kpi-lbl">Total de turmas</div>
-        <div class="rel2-kpi-delta">No período</div>
-      </div>
-    </div>
+    ${_buildKpiGrid({
+      tAtivas, tConcluidas, tConcluidasAnt, partUnicos, partUnicosAnt,
+      horasTotal, horasTotalAnt, tAgendadas, tCanceladas, cliAtivos, totalTurmas, meses,
+      dadosTurmas, dadosSessoes, dadosPart
+    })}
 
     <div class="rel2-chart">
       <div class="rel2-chart-header">
@@ -4696,10 +4633,12 @@ document.addEventListener('click', function(e) {
     case 'verColab':        verColab(id); break;
     case 'editarColab':     abrirModalColab(id); break;
     // Catálogo
-    case 'verCatalogo':     verCatalogo(id); break;
-    case 'menuCatalogo':    menuCatalogo(el, id); break;
-    case 'editarCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCatalogo(id); break;
-    case 'toggleCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCatalogo(id); break;
+    case 'verCatalogo':          verCatalogo(id); break;
+    case 'menuCatalogo':         menuCatalogo(el, id); break;
+    case 'editarCatalogo':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCatalogo(id); break;
+    case 'toggleCatalogo':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCatalogo(id); break;
+    case 'arquivarCatalogo':     document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); arquivarCatalogo(id); break;
+    case 'desarquivarCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); desarquivarCatalogo(id); break;
     // Equipe
     case 'verUsuarioEquipe': verUsuarioEquipe(id); break;
     // Turmas
@@ -5994,6 +5933,162 @@ async function gerarTodosCertificados(turmaId) {
     await new Promise(r => setTimeout(r, 500));
   }
 }
+
+// ============================================================
+// RELATÓRIOS — helpers comparativo e KPI grid
+// ============================================================
+function relToggleComparativo() {
+  window._relComparativo = !window._relComparativo;
+  _renderRelatorioView();
+}
+
+function _sparkline(vals, color) {
+  if (!vals || vals.length === 0) return '';
+  const max = Math.max(...vals, 1);
+  const bars = vals.map(v => {
+    const pct = Math.round((v / max) * 100);
+    return `<div style="flex:1;height:${Math.max(pct,4)}%;border-radius:2px 2px 0 0;background:${color};opacity:${v===Math.max(...vals)?'1':'0.35'}"></div>`;
+  }).join('');
+  return `<div style="display:flex;align-items:flex-end;gap:2px;height:24px;margin:5px 0 3px">${bars}</div>`;
+}
+
+function _deltaTag(cur, ant) {
+  if (!window._relComparativo || ant === 0) return '';
+  const pct  = Math.round((cur - ant) / ant * 100);
+  const up   = cur >= ant;
+  const sign = up ? '▲' : '▼';
+  const col  = up ? 'var(--green,#059669)' : 'var(--red,#dc2626)';
+  return `<div style="font-size:11px;font-weight:600;color:${col}">${sign} ${up?'+':''}${pct}% <span style="font-size:10px;color:var(--text-3);font-weight:400">vs ${ant}</span></div>`;
+}
+
+function _buildKpiGrid({tAtivas,tConcluidas,tConcluidasAnt,partUnicos,partUnicosAnt,horasTotal,horasTotalAnt,tAgendadas,tCanceladas,cliAtivos,totalTurmas,meses,dadosTurmas,dadosSessoes,dadosPart}) {
+  const comp = window._relComparativo;
+  const _kpi = (icon, val, lbl, delta, color, spark, onclick='') => `
+    <div class="rel2-kpi" style="border-left:3px solid ${color};cursor:${onclick?'pointer':'default'}" ${onclick?`onclick="${onclick}"`:''}> 
+      <span class="rel2-kpi-icon">${icon}</span>
+      <div class="rel2-kpi-val">${val}</div>
+      <div class="rel2-kpi-lbl">${lbl}</div>
+      ${comp && spark ? _sparkline(spark, color) : ''}
+      ${comp && delta ? delta : `<div class="rel2-kpi-delta">${meses===1?'Este mês':`Últimos ${meses}m`}</div>`}
+    </div>`;
+  return `<div class="rel2-kpis">
+    ${_kpi('🎓', tAtivas, 'Turmas ativas', '', 'var(--navy)', null, "irParaTurmasFiltradas('em_andamento')")}
+    ${_kpi('✅', tConcluidas, 'Concluídas', _deltaTag(tConcluidas,tConcluidasAnt), 'var(--green)', dadosTurmas, "irParaTurmasFiltradas('concluida')")}
+    ${_kpi('👥', partUnicos, 'Pessoas treinadas', _deltaTag(partUnicos,partUnicosAnt), 'var(--amber)', dadosPart)}
+    ${_kpi('⏱', horasTotal+'h', 'Horas de treinamento', _deltaTag(horasTotal,horasTotalAnt), '#7C3AED', dadosSessoes)}
+    ${_kpi('📋', tAgendadas, 'Agendadas', '', 'var(--amber)', null, "irParaTurmasFiltradas('agendada')")}
+    ${_kpi('🏢', cliAtivos, 'Clientes ativos', '', 'var(--navy)', null)}
+    ${_kpi('⚪', tCanceladas, 'Canceladas', '', 'var(--text-3)', null, "irParaTurmasFiltradas('cancelada')")}
+    ${_kpi('📊', totalTurmas, 'Total de turmas', '', 'var(--navy)', null)}
+  </div>`;
+}
+
+function exportarRelatorioComparativoPDF() {
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
+  if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
+  const meses = window._relPeriodo || 6;
+  const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
+  const hoje = new Date();
+  const corteAnt    = new Date(hoje.getFullYear(), hoje.getMonth() - meses * 2 + 1, 1);
+  const corteAtual  = new Date(hoje.getFullYear(), hoje.getMonth() - meses + 1, 1);
+  const tAnt = tAll.filter(t => new Date(t.created_at) >= corteAnt && new Date(t.created_at) < corteAtual);
+
+  const { jsPDF } = window.jspdf;
+  const W = 297, H = 210;
+  const NAVY = [30,42,74], AMBER = [245,158,11], WHITE = [255,255,255];
+  const T2 = [71,85,105], T3 = [148,163,184], BORD = [220,228,240], GRAY = [244,246,250];
+  const GREEN = [5,150,105], RED = [220,38,38];
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const s = v => pdfSafe(v);
+  const periodoAtual  = `${new Date(corteAtual).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})} – Agora`;
+  const periodoAnt    = `${new Date(corteAnt).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})} – ${new Date(corteAtual).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})}`;
+
+  // Header
+  doc.setFillColor(...NAVY); doc.rect(0,0,W,36,'F');
+  doc.setFillColor(...AMBER); doc.rect(0,36,W,2,'F');
+  doc.addImage(LOGO_AVANTESEG,'PNG',14,8,50,16);
+  doc.setFontSize(12); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+  doc.text('RELATORIO COMPARATIVO', W-14, 18, {align:'right'});
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
+  doc.text(`Gerado em ${hoje.toLocaleDateString('pt-BR')}`, W-14, 26, {align:'right'});
+
+  // Período labels
+  doc.setFontSize(8); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+  doc.text('PERIODO ATUAL', W/4, 44, {align:'center'});
+  doc.text('PERIODO ANTERIOR', 3*W/4, 44, {align:'center'});
+  doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+  doc.text(s(periodoAtual), W/4, 49, {align:'center'});
+  doc.text(s(periodoAnt),   3*W/4, 49, {align:'center'});
+  doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
+  doc.line(W/2, 40, W/2, H-10);
+
+  // KPIs side-by-side
+  const _turmasC = tFilt.filter(t=>t.status==='concluida').length;
+  const _turmasA = tAnt.filter(t=>t.status==='concluida').length;
+  const _partC   = new Set(partAll.filter(p=>new Set(tFilt.map(t=>t.id)).has(p.turma_id)).map(p=>p.colaborador_id)).size;
+  const _partA   = new Set(partAll.filter(p=>new Set(tAnt.map(t=>t.id)).has(p.turma_id)).map(p=>p.colaborador_id)).size;
+  const _hC      = tFilt.filter(t=>t.status==='concluida').reduce((s,t)=>s+(t.catalogo?.carga_horaria||0),0);
+  const _hA      = tAnt.filter(t=>t.status==='concluida').reduce((s,t)=>s+(t.catalogo?.carga_horaria||0),0);
+
+  const kpis = [
+    {l:'Turmas concluidas', cur:_turmasC, ant:_turmasA},
+    {l:'Pessoas treinadas',  cur:_partC,   ant:_partA},
+    {l:'Horas de treinamento', cur:_hC,   ant:_hA},
+    {l:'Total de turmas',   cur:tFilt.length, ant:tAnt.length},
+  ];
+  let ky = 56;
+  const kw = W/2-20;
+  kpis.forEach((k,i) => {
+    const delta = k.cur - k.ant;
+    const up    = delta >= 0;
+    [[14, k.cur],[W/2+6, k.ant]].forEach(([x,v],si) => {
+      doc.setFillColor(...GRAY); doc.rect(x, ky, kw, 16, 'F');
+      doc.setDrawColor(...BORD); doc.setLineWidth(0.15); doc.rect(x, ky, kw, 16, 'S');
+      doc.setFontSize(13); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text(String(v), x+kw/2, ky+9, {align:'center'});
+      doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(s(k.l), x+kw/2, ky+14, {align:'center'});
+    });
+    if (delta !== 0) {
+      doc.setFontSize(7); doc.setTextColor(...(up?GREEN:RED)); doc.setFont('helvetica','bold');
+      doc.text(`${up?'+':''}${delta}`, W/2, ky+7, {align:'center'});
+    }
+    ky += 20;
+  });
+
+  // Top 5 clientes — ambos períodos
+  ky += 4;
+  doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+  doc.text('TOP CLIENTES — PERIODO ATUAL', 14, ky); doc.text('TOP CLIENTES — PERIODO ANTERIOR', W/2+6, ky);
+  ky += 5;
+
+  const _rankCli = (turmas) => {
+    const m = {};
+    turmas.forEach(t => { if (!t.cliente_id) return; m[t.cliente_id] = m[t.cliente_id] || {nome:t.clientes?.nome||'—',n:0}; m[t.cliente_id].n++; });
+    return Object.values(m).sort((a,b)=>b.n-a.n).slice(0,5);
+  };
+  [_rankCli(tFilt), _rankCli(tAnt)].forEach((rank, si) => {
+    const ox = si === 0 ? 14 : W/2+6;
+    rank.forEach((r,i) => {
+      doc.setFillColor(i%2===0?244:255,i%2===0?246:255,i%2===0?250:255);
+      doc.rect(ox, ky+i*7, kw, 7,'F');
+      doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','normal');
+      doc.text(s(r.nome,35), ox+2, ky+i*7+4.5);
+      doc.setFont('helvetica','bold');
+      doc.text(String(r.n), ox+kw-4, ky+i*7+4.5, {align:'right'});
+    });
+  });
+
+  // Footer
+  doc.setFillColor(...NAVY); doc.rect(0,H-10,W,10,'F');
+  doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+  doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-4, {align:'center'});
+
+  doc.save(`relatorio-comparativo-${hoje.toISOString().slice(0,10)}.pdf`);
+  showToast('PDF comparativo gerado!', 'success');
+}
+
 
 </script>
 </body>
