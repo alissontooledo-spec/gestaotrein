@@ -335,6 +335,37 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .exec-tab.active{color:var(--navy);border-bottom-color:var(--amber)}
 .exec-aba{animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Turmas grid v2 ── */
+.turmas-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+.turmas-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.turmas-tab:hover{border-color:var(--border-2);color:var(--text-1)}
+.turmas-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.turmas-tab .tab-count{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
+.turmas-tab:not(.active) .tab-count{background:var(--gray-100);color:var(--text-3)}
+.turmas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:8px}
+.turma-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.turma-card:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+.turma-card-nr{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;background:rgba(30,42,74,.09);color:var(--navy);padding:2px 7px;border-radius:10px;letter-spacing:.02em}
+.turma-card-title{font-size:14px;font-weight:600;color:var(--text-1);line-height:1.35;padding-right:44px}
+.turma-card-meta{font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-card-date{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:4px}
+.turma-card-progress{display:flex;flex-direction:column;gap:5px}
+.turma-card-progress-row{display:flex;justify-content:space-between;align-items:center}
+.turma-card-progress-bar{height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden}
+.turma-card-progress-fill{height:100%;border-radius:2px;transition:width .3s}
+.fill-agendada{background:var(--gray-300)}
+.fill-em_andamento{background:var(--amber)}
+.fill-concluida{background:var(--green)}
+.fill-cancelada{background:var(--red)}
+.turma-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:2px}
+.turma-card-nova{background:var(--surface);border:1.5px dashed var(--border-2);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:border-color .15s,background .15s;min-height:160px;color:var(--text-3)}
+.turma-card-nova:hover{border-color:var(--amber);background:rgba(245,158,11,.04);color:var(--amber-h)}
+.turmas-section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.turmas-section-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.turmas-section-line{flex:1;height:1px;background:var(--border)}
+.turmas-empty-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-3);gap:8px}
+@media(max-width:767px){.turmas-grid{grid-template-columns:1fr}.turmas-tab{font-size:12px;padding:6px 12px}.turma-card-nova{min-height:80px}}
 </style>
 </head>
 <body>
@@ -1993,8 +2024,8 @@ async function toggleCatalogo(id) {
 // ============================================================
 // TURMAS
 // ============================================================
-async function renderTurmas() {
-  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
+async function renderTurmas(abaInicial) {
+  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(id,concluida)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
   if (error) throw error;
   _turmasCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Operação</div><div class="mh-name">Turmas</div>`);
@@ -2004,63 +2035,103 @@ async function renderTurmas() {
   const nAn = _turmasCache.filter(t=>t.status==='em_andamento').length;
   const nCo = _turmasCache.filter(t=>t.status==='concluida').length;
   const nCa = _turmasCache.filter(t=>t.status==='cancelada').length;
+  const abaAtiva = abaInicial || (nAn>0?'em_andamento':nAg>0?'agendada':'concluida');
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:20px">
-      <div class="stat-card accent" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='agendada';filtrarTurmas()">
-        <div class="stat-label">Agendadas</div><div class="stat-value">${nAg}</div>
-        <div class="stat-sub">Aguardando execução</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div class="turmas-tabs" id="turmasTabsEl">
+        ${_turmaTabHtml('em_andamento','Em andamento',nAn,abaAtiva)}
+        ${_turmaTabHtml('agendada','Agendadas',nAg,abaAtiva)}
+        ${_turmaTabHtml('concluida','Concluídas',nCo,abaAtiva)}
+        ${_turmaTabHtml('cancelada','Canceladas',nCa,abaAtiva)}
       </div>
-      <div class="stat-card navy" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='em_andamento';filtrarTurmas()">
-        <div class="stat-label">Em andamento</div><div class="stat-value">${nAn}</div>
-        <div class="stat-sub">Em execução</div>
-      </div>
-      <div class="stat-card accent" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='concluida';filtrarTurmas()">
-        <div class="stat-label">Concluídas</div><div class="stat-value">${nCo}</div>
-        <div class="stat-sub">Finalizadas</div>
-      </div>
-      <div class="stat-card accent" style="cursor:pointer" onclick="document.getElementById('filtrStatusTurma').value='cancelada';filtrarTurmas()">
-        <div class="stat-label">Canceladas</div><div class="stat-value">${nCa}</div>
-        <div class="stat-sub">Total</div>
-      </div>
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.plus} Nova turma</button>`:''}
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
-      <select id="filtrStatusTurma" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);outline:none;color:var(--text-1)" onchange="filtrarTurmas()">
-        <option value="">Todos os status</option>
-        <option value="agendada">Agendadas</option>
-        <option value="em_andamento">Em andamento</option>
-        <option value="concluida">Concluídas</option>
-        <option value="cancelada">Canceladas</option>
-      </select>
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()">${ICONS.plus} Nova turma</button>`:''}
-    </div>
-    <div class="card" style="padding:0" id="listaTurmas">${_htmlListaTurmas(_turmasCache)}</div>`);
+    <div id="turmasGridEl">${_htmlTurmasGrid(_turmasCache, abaAtiva, podeCriar)}</div>`);
 }
 
-function _htmlListaTurmas(lista) {
-  if (!lista.length) return `<div class="empty" style="padding:32px 20px"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma turma</div><div class="empty-sub">Agende o primeiro treinamento.</div></div>`;
+function _turmaTabHtml(status, label, count, abaAtiva) {
+  return `<div class="turmas-tab${status===abaAtiva?' active':''}" onclick="trocarAbaTurmas('${status}')" role="tab" aria-selected="${status===abaAtiva}">
+    ${label} <span class="tab-count">${count}</span>
+  </div>`;
+}
+
+function trocarAbaTurmas(status) {
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  document.querySelectorAll('.turmas-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll(`.turmas-tab`).forEach(t=>{ if(t.textContent.trim().startsWith(status==='em_andamento'?'Em and':status==='agendada'?'Agend':status==='concluida'?'Conc':'Cancel')) t.classList.add('active'); });
+  // Re-select by onclick attribute
+  const tabs = document.querySelectorAll('.turmas-tab');
+  tabs.forEach(t=>{ t.classList.toggle('active', t.getAttribute('onclick')===`trocarAbaTurmas('${status}')`); });
+  _setElBoth('turmasGridEl', _htmlTurmasGrid(_turmasCache, status, podeCriar));
+}
+
+function _htmlTurmasGrid(lista, status, podeCriar) {
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
+  const DOT_COLOR = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626'};
+  const filtrada = lista.filter(t=>t.status===status);
+  const dotColor = DOT_COLOR[status]||'#94A3B8';
+  const sectionLabel = filtrada.length===0
+    ? `Nenhuma turma ${SL[status]?.toLowerCase()||''}`
+    : `${filtrada.length} turma${filtrada.length!==1?'s':''} ${SL[status]?.toLowerCase()||''}`;
+
+  const cardsHtml = filtrada.length===0
+    ? `<div class="turmas-empty-tab">
+        <div style="font-size:32px;margin-bottom:4px">📋</div>
+        <div style="font-size:14px;font-weight:500;color:var(--text-2)">Nenhuma turma ${SL[status]?.toLowerCase()||''}</div>
+      </div>`
+    : `<div class="turmas-grid">${filtrada.map(t=>_htmlTurmaCard(t)).join('')}${podeCriar&&(status==='agendada'||status==='em_andamento')?`
+      <div class="turma-card-nova" onclick="abrirModalTurma()" title="Nova turma">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <span style="font-size:13px;font-weight:500">Nova turma</span>
+      </div>`:''}
+    </div>`;
+
+  return `<div class="turmas-section-header">
+    <div class="turmas-section-dot" style="background:${dotColor}"></div>
+    <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
+    <div class="turmas-section-line"></div>
+  </div>${cardsHtml}`;
+}
+
+function _htmlTurmaCard(t) {
   const SB = {agendada:'badge-gray',em_andamento:'badge-amber',concluida:'badge-green',cancelada:'badge-red'};
-  const DOT = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626'};
-  return lista.map((t,i)=>`
-    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:${i<lista.length-1?'1px solid var(--border)':'none'};cursor:pointer;transition:background .1s" data-action="verTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-      <div style="width:8px;height:8px;border-radius:50%;background:${DOT[t.status||'agendada']};flex-shrink:0"></div>
-      <div style="width:38px;height:38px;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center">${t.catalogo?.carga_horaria||'?'}h</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.catalogo?.nome||'Treinamento'}</div>
-        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}${t.protocolo?' · <span style="color:var(--text-3);font-size:11px">'+t.protocolo+'</span>':''}</div>
+  const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
+  const st = t.status||'agendada';
+  const nrMatch = (t.catalogo?.nome||'').match(/NR[\s\-]*(\d+)/i);
+  const nrTag = nrMatch?`<div class="turma-card-nr">NR-${nrMatch[1]}</div>`:'';
+  const sessoes = t.sessoes||[];
+  const totalSes = sessoes.length;
+  const concSes = sessoes.filter(s=>s.concluida).length;
+  const pct = totalSes>0?Math.round((concSes/totalSes)*100):0;
+  const progressHtml = totalSes>0?`
+    <div class="turma-card-progress">
+      <div class="turma-card-progress-row">
+        <span style="font-size:11px;color:var(--text-3)">Sessões: ${concSes} de ${totalSes}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span class="badge ${SB[t.status||'agendada']}">${SL[t.status||'agendada']}</span>
-        ${['agendada','em_andamento'].includes(t.status||'agendada')&&['administrador','comercial'].includes(usuarioAtual.perfil)?`
-        <button class="btn btn-ghost btn-sm" style="padding:4px" data-action="menuTurmaCard" data-id="${t.id}">${ICONS.dots}</button>`:``}
-      </div>
-    </div>`).join('');
+      <div class="turma-card-progress-bar"><div class="turma-card-progress-fill fill-${st}" style="width:${pct}%"></div></div>
+    </div>`:'';
+  const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  const menuBtn = podeMgr&&(st==='agendada'||st==='em_andamento')?
+    `<button class="btn btn-ghost btn-sm" style="padding:4px;margin-left:4px;flex-shrink:0" data-action="menuTurmaCard" data-id="${t.id}" onclick="event.stopPropagation()">${ICONS.dots}</button>`:'';
+  return `<div class="turma-card" data-action="verTurma" data-id="${t.id}">
+    ${nrTag}
+    <div class="turma-card-title">${t.catalogo?.nome||'Treinamento'}</div>
+    <div class="turma-card-meta">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M3 21l1.9-5.7a8.5 8.5 0 113.8 3.8z"/></svg>
+      <span style="overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}</span>
+    </div>
+    ${progressHtml}
+    <div class="turma-card-footer">
+      <span class="badge ${SB[st]}">${SL[st]}</span>
+      ${menuBtn}
+    </div>
+  </div>`;
 }
 
 function filtrarTurmas() {
+  // Legacy compat — redireciona para trocarAbaTurmas se chamado
   const s = document.getElementById('filtrStatusTurma')?.value;
-  const r = s ? _turmasCache.filter(t=>t.status===s) : _turmasCache;
-  document.getElementById('listaTurmas').innerHTML = _htmlListaTurmas(r);
+  if (s) trocarAbaTurmas(s);
 }
 
 async function verTurma(id) {
@@ -4226,10 +4297,7 @@ function relVerCliente(clienteId) {
 
 function irParaTurmasFiltradas(status) {
   irPara('turmas').then(() => {
-    setTimeout(() => {
-      const sel = document.getElementById('filtrStatusTurma');
-      if (sel) { sel.value = status; filtrarTurmas(); }
-    }, 200);
+    setTimeout(() => { trocarAbaTurmas(status); }, 200);
   });
 }
 
