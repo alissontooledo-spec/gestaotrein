@@ -745,20 +745,229 @@ async function renderHome() {
 }
 
 async function renderHomeProvedor() {
-  const {data:orgs} = await sb.from('organizacoes').select('id,nome,ativo').order('nome');
-  const total = (orgs||[]).length;
-  const ativas = (orgs||[]).filter(o=>o.ativo).length;
+  const [{ data: orgs }, { data: usuarios }] = await Promise.all([
+    sb.from('organizacoes').select('id,nome,ativo,created_at').order('created_at', { ascending: false }),
+    sb.from('usuarios').select('id,org_id,perfil,ativo'),
+  ]);
+
+  const orgsAll  = orgs  || [];
+  const usrsAll  = usuarios || [];
+  const total    = orgsAll.length;
+  const ativas   = orgsAll.filter(o => o.ativo).length;
+  const hoje     = new Date();
+  const mes      = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  const novasMes = orgsAll.filter(o => o.created_at?.startsWith(mes)).length;
+
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Provedor · Toledo Labs</div>`);
+
+  const listaOrgs = orgsAll.map(o => {
+    const admins = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
+    const total_u = usrsAll.filter(u => u.org_id === o.id).length;
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onclick="verOrgProvedor('${o.id}')" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
+      </div>
+      <span class="badge ${o.ativo?'badge-green':'badge-gray'}" style="flex-shrink:0">${o.ativo?'Ativa':'Inativa'}</span>
+    </div>`;
+  }).join('');
+
   setConteudo(`
-    <div class="stats-grid">
-      <div class="stat-card navy"><div class="stat-label">Total de organizações</div><div class="stat-value">${total}</div><div class="stat-sub">${ativas} ativas</div></div>
-      <div class="stat-card accent"><div class="stat-label">Inativas</div><div class="stat-value">${total-ativas}</div><div class="stat-sub">Aguardando ativação</div></div>
+    <div class="home-navy-header" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome.split(' ')[0]}</div>
+          <div class="home-navy-sub">Painel Toledo Labs · Provedor</div>
+        </div>
+        <div style="width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy)">${iniciais(usuarioAtual.nome)}</div>
+      </div>
+      <div class="home-kpi-grid" style="margin-top:16px">
+        <div class="home-kpi">
+          <div class="home-kpi-val">${total}</div>
+          <div class="home-kpi-lbl">Organizações</div>
+          <div class="home-kpi-delta green">${ativas} ativas</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">${total - ativas}</div>
+          <div class="home-kpi-lbl">Inativas</div>
+          <div class="home-kpi-delta amber">Pendentes</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">${novasMes}</div>
+          <div class="home-kpi-lbl">Novas este mês</div>
+          <div class="home-kpi-delta green">Onboarding</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">${usrsAll.filter(u=>u.ativo).length}</div>
+          <div class="home-kpi-lbl">Usuários ativos</div>
+          <div class="home-kpi-delta green">Total</div>
+        </div>
+      </div>
     </div>
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Organizações</div><span class="section-link" data-nav="orgs">Ver todas</span></div>
-      <div class="card">${(orgs||[]).length===0?'<div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div></div>':(orgs||[]).slice(0,5).map(o=>`<div class="list-item"><div class="li-icon" style="background:var(--blue-l);color:var(--blue-h);font-size:13px;font-weight:700">${iniciais(o.nome)}</div><div class="li-info"><div class="li-title">${o.nome}</div></div><span class="badge ${o.ativo?'badge-green':'badge-gray'}">${o.ativo?'Ativa':'Inativa'}</span></div>`).join('')}</div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1)">Organizações (${total})</div>
+      <button class="btn btn-navy btn-sm" onclick="abrirModalNovaOrg()">+ Nova organização</button>
     </div>
-    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>`);
+    <div class="card" style="padding:0;margin-bottom:14px">
+      ${listaOrgs || '<div class="empty" style="padding:32px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div><div class="empty-sub">Crie a primeira organização para começar.</div></div>'}
+    </div>
+    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
+  `);
+}
+
+function abrirModalNovaOrg() {
+  abrirModal('Nova organização', `
+    <div style="background:rgba(30,42,74,.05);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--text-2);line-height:1.6">
+      Crie a organização e configure o administrador. O acesso estará disponível após a ativação.
+    </div>
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Dados da organização</div>
+    <div class="field"><label>Nome da empresa *</label><input type="text" id="mOrgNome" placeholder="Ex.: Construtora Silva Ltda"></div>
+    <div class="field"><label>CNPJ</label><input type="text" id="mOrgCnpj" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)"></div>
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Administrador inicial</div>
+    <div class="field"><label>Nome do administrador *</label><input type="text" id="mOrgAdmNome" placeholder="Nome completo"></div>
+    <div class="field"><label>E-mail *</label><input type="email" id="mOrgAdmEmail" placeholder="admin@empresa.com.br"></div>
+    <div class="field"><label>Senha provisória *</label><input type="password" id="mOrgAdmSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O administrador poderá alterar no primeiro acesso.</div></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarNovaOrg()">Criar organização</button>`
+  );
+}
+
+async function salvarNovaOrg() {
+  const nome      = document.getElementById('mOrgNome')?.value.trim();
+  const cnpj      = document.getElementById('mOrgCnpj')?.value.trim() || null;
+  const admNome   = document.getElementById('mOrgAdmNome')?.value.trim();
+  const admEmail  = document.getElementById('mOrgAdmEmail')?.value.trim();
+  const admSenha  = document.getElementById('mOrgAdmSenha')?.value;
+
+  if (!nome)     { showToast('Nome da organização é obrigatório', 'error'); return; }
+  if (!admNome)  { showToast('Nome do administrador é obrigatório', 'error'); return; }
+  if (!admEmail) { showToast('E-mail do administrador é obrigatório', 'error'); return; }
+  if (!admSenha || admSenha.length < 6) { showToast('Senha mínima de 6 caracteres', 'error'); return; }
+
+  try {
+    setBtnModalLoading(true);
+
+    // 1. Criar a organização
+    const { data: org, error: orgErr } = await sb.from('organizacoes')
+      .insert({ nome, cnpj, ativo: true })
+      .select().single();
+    if (orgErr) throw orgErr;
+
+    // 2. Criar o usuário administrador via Edge Function
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/criar-usuario`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_KEY,
+      },
+      body: JSON.stringify({
+        nome: admNome,
+        email: admEmail,
+        senha: admSenha,
+        perfil: 'administrador',
+        org_id: org.id,
+      }),
+    });
+    const resultado = await res.json();
+    if (!res.ok) {
+      // Rollback: remover a org se o usuário falhou
+      await sb.from('organizacoes').delete().eq('id', org.id);
+      throw new Error(resultado.error || 'Erro ao criar administrador');
+    }
+
+    fecharModal();
+    showToast(`Organização "${nome}" criada com sucesso!`, 'success');
+    await renderHomeProvedor();
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message || 'Erro ao criar organização', 'error');
+  }
+}
+
+async function verOrgProvedor(orgId) {
+  const { data: org }  = await sb.from('organizacoes').select('*').eq('id', orgId).single();
+  const { data: usrs } = await sb.from('usuarios').select('id,nome,perfil,ativo,created_at').eq('org_id', orgId).order('nome');
+  const { data: turms} = await sb.from('turmas').select('id,status').eq('org_id', orgId);
+
+  const orgData  = org  || {};
+  const usrsData = usrs || [];
+  const turmsData = turms || [];
+
+  const totalT  = turmsData.length;
+  const ativasT = turmsData.filter(t => t.status === 'em_andamento').length;
+
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+      <button class="btn btn-ghost btn-sm" onclick="renderHomeProvedor()">${ICONS.back} Voltar</button>
+    </div>
+
+    <div style="background:var(--navy);border-radius:var(--r-xl);padding:20px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="width:48px;height:48px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(orgData.nome||'')}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:17px;font-weight:700;color:#fff">${orgData.nome||'—'}</div>
+          ${orgData.cnpj ? `<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">CNPJ: ${orgData.cnpj}</div>` : ''}
+        </div>
+        <span class="badge ${orgData.ativo?'badge-green':'badge-gray'}">${orgData.ativo?'Ativa':'Inativa'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Usuários</div>
+          <div style="font-size:18px;font-weight:700;color:#fff">${usrsData.length}</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Turmas</div>
+          <div style="font-size:18px;font-weight:700;color:#fff">${totalT}</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Ativas</div>
+          <div style="font-size:18px;font-weight:700;color:${ativasT>0?'var(--amber)':'rgba(255,255,255,.4)'}">${ativasT}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.length})</div>
+    <div class="card" style="padding:0;margin-bottom:14px">
+      ${usrsData.length === 0
+        ? '<div class="empty" style="padding:24px"><div class="empty-title">Nenhum usuário</div></div>'
+        : usrsData.map(u => `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(30,42,74,.1);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--navy)">${u.nome}</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${u.perfil}</div>
+          </div>
+          <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
+        </div>`).join('')
+      }
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
+        ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
+      </button>
+    </div>
+  `);
+}
+
+async function ativarOrg(orgId) {
+  const { error } = await sb.from('organizacoes').update({ ativo: true }).eq('id', orgId);
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast('Organização ativada!', 'success');
+  await renderHomeProvedor();
+}
+
+async function desativarOrg(orgId) {
+  if (!confirm('Deseja desativar esta organização? Os usuários não conseguirão acessar o sistema.')) return;
+  const { error } = await sb.from('organizacoes').update({ ativo: false }).eq('id', orgId);
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast('Organização desativada.', 'success');
+  await renderHomeProvedor();
 }
 
 async function renderHomeAdmin() {
@@ -1491,68 +1700,172 @@ async function salvarColab() {
 // CATÁLOGO
 // ============================================================
 async function renderCatalogo() {
-  const {data,error} = await sb.from('catalogo').select('*').eq('org_id',usuarioAtual.org_id).order('nome');
+  const oi = usuarioAtual.org_id;
+  // Buscar catálogo + contagem de turmas por treinamento em paralelo
+  const [{data, error}, {data: turmasAll}] = await Promise.all([
+    sb.from('catalogo').select('*').eq('org_id', oi).order('nome'),
+    sb.from('turmas').select('catalogo_id, status').eq('org_id', oi),
+  ]);
   if (error) throw error;
-  _catalogoCache = data||[];
+
+  _catalogoCache = data || [];
+
+  // Calcular uso por treinamento
+  const usoMap = {};
+  (turmasAll || []).forEach(t => {
+    if (!t.catalogo_id) return;
+    if (!usoMap[t.catalogo_id]) usoMap[t.catalogo_id] = { total: 0, ativas: 0 };
+    usoMap[t.catalogo_id].total++;
+    if (t.status === 'em_andamento') usoMap[t.catalogo_id].ativas++;
+  });
+  window._catalogoUsoMap = usoMap;
+
+  const total   = _catalogoCache.length;
+  const ativos  = _catalogoCache.filter(t => t.ativo).length;
+  const emUso   = _catalogoCache.filter(t => (usoMap[t.id]?.total || 0) > 0).length;
+
   setMobileHeader(`<div class="mh-greeting">Treinamentos</div><div class="mh-name">Catálogo</div>`);
-  if (['administrador'].includes(usuarioAtual.perfil)) fabOcultar();
+  fabOcultar();
+
+  const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
+
   setConteudo(`
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <input type="search" id="buscaCatalogo" placeholder="Buscar treinamento..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarCatalogo(this.value)">
-      ${['administrador'].includes(usuarioAtual.perfil)?`<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>`:''}
+    <div class="stats-grid" style="margin-bottom:16px">
+      <div class="stat-card navy">
+        <div class="stat-label">Total</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">${ativos} ativo${ativos !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Em uso</div>
+        <div class="stat-value">${emUso}</div>
+        <div class="stat-sub">Com turmas abertas</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Sem uso</div>
+        <div class="stat-value">${total - emUso}</div>
+        <div class="stat-sub">Nunca utilizados</div>
+      </div>
     </div>
-    <div class="card" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache)}</div>`);
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+      <input type="search" id="buscaCatalogo" placeholder="Buscar por nome ou NR..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarCatalogo(this.value)">
+      <select id="filtroCatStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(document.getElementById('buscaCatalogo').value)">
+        <option value="">Todos</option>
+        <option value="ativo">Ativos</option>
+        <option value="inativo">Inativos</option>
+        <option value="em_uso">Em uso</option>
+        <option value="sem_uso">Sem uso</option>
+      </select>
+      ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>` : ''}
+    </div>
+
+    <div class="card" style="padding:0" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache)}</div>`);
 }
 
 function _htmlListaCatalogo(lista) {
-  if (!lista.length) return `<div class="empty"><div class="empty-icon">📚</div><div class="empty-title">Nenhum treinamento</div><div class="empty-sub">Cadastre os tipos de treinamento.</div></div>`;
-  return lista.map(t=>`
-    <div class="list-item" style="padding:14px 4px" data-action="verCatalogo" data-id="${t.id}">
-      <div class="li-icon" style="background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;border-radius:var(--r-md);text-align:center;padding:4px">${t.carga_horaria}h</div>
-      <div class="li-info"><div class="li-title">${t.nome}</div><div class="li-sub">${t.categoria?t.categoria+' · ':''}Validade: ${t.validade_meses} meses</div></div>
+  if (!lista.length) return `<div class="empty" style="padding:32px"><div class="empty-icon">📚</div><div class="empty-title">Nenhum treinamento cadastrado</div><div class="empty-sub">Cadastre os tipos de treinamento oferecidos.</div></div>`;
+  const usoMap = window._catalogoUsoMap || {};
+  return lista.map(t => {
+    const uso   = usoMap[t.id] || { total: 0, ativas: 0 };
+    const nrMatch = t.nome.match(/NR[\s\-]*(\d+)/i);
+    const nrTag = nrMatch ? `<span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(30,42,74,.1);color:var(--navy);margin-right:4px">NR-${nrMatch[1]}</span>` : '';
+    const usoTag = uso.total > 0
+      ? `<span style="font-size:11px;color:var(--green);font-weight:500">${uso.total} turma${uso.total!==1?'s':''} · ${uso.ativas} ativa${uso.ativas!==1?'s':''}</span>`
+      : `<span style="font-size:11px;color:var(--text-3)">Nunca utilizado</span>`;
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="width:44px;height:44px;border-radius:var(--r-md);background:${t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'};color:${t.ativo?'var(--navy)':'var(--text-3)'};font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${t.carga_horaria}h</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${t.nome}</div>
+        <div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span>Val. ${t.validade_meses}m</span>
+          ${t.categoria ? `<span>· ${t.categoria}</span>` : ''}
+          <span>· ${usoTag}</span>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function verCatalogo(id) {
   const t = _catalogoCache.find(x=>x.id===id);
   if (!t) return;
   const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
+  const usoMap  = window._catalogoUsoMap || {};
+  const uso     = usoMap[t.id] || { total: 0, ativas: 0 };
+  const nrMatch = t.nome.match(/NR[\s\-]*(\d+)/i);
+
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="catalogo">${ICONS.back} Voltar</button>
     </div>
-    <div class="card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-        <div style="width:52px;height:52px;border-radius:var(--r-lg);background:rgba(30,42,74,.08);color:var(--navy);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.carga_horaria}h</div>
-        <div style="flex:1">
-          <div style="font-size:17px;font-weight:700;color:var(--navy);line-height:1.3">${t.nome}</div>
-          <span class="badge ${t.ativo?'badge-green':'badge-gray'}" style="margin-top:5px">${t.ativo?'Ativo':'Inativo'}</span>
+
+    <div style="background:var(--navy);border-radius:var(--r-xl);padding:20px;margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;gap:14px">
+        <div style="width:52px;height:52px;border-radius:var(--r-lg);background:rgba(245,158,11,.2);color:var(--amber);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.carga_horaria}h</div>
+        <div style="flex:1;min-width:0">
+          ${nrMatch ? `<div style="font-size:11px;font-weight:700;color:var(--amber);letter-spacing:.06em;margin-bottom:4px">NR-${nrMatch[1]}</div>` : ''}
+          <div style="font-size:17px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:6px">${t.nome}</div>
+          <span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>
         </div>
       </div>
-      <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;gap:10px">
-        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Carga horária</span><span style="font-weight:500">${t.carga_horaria}h</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Validade</span><span style="font-weight:500">${t.validade_meses} meses</span></div>
-        ${t.categoria?`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text-2)">Categoria</span><span style="font-weight:500">${t.categoria}</span></div>`:''}
-        ${t.descricao?`<div style="font-size:13px;padding-top:8px;border-top:1px solid var(--border)"><div style="color:var(--text-2);margin-bottom:4px">Descrição</div><div style="color:var(--text-1);line-height:1.5">${t.descricao}</div></div>`:''}
-        ${t.conteudo_programatico?`<div style="font-size:13px;padding-top:8px;border-top:1px solid var(--border)"><div style="color:var(--text-2);margin-bottom:4px">Conteúdo programático</div><div style="color:var(--text-1);line-height:1.5">${t.conteudo_programatico}</div></div>`:''}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px">
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Carga horária</div>
+          <div style="font-size:16px;font-weight:700;color:#fff">${t.carga_horaria}h</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Validade</div>
+          <div style="font-size:16px;font-weight:700;color:#fff">${t.validade_meses}m</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Turmas</div>
+          <div style="font-size:16px;font-weight:700;color:${uso.total>0?'var(--amber)':'rgba(255,255,255,.4)'}">${uso.total}</div>
+        </div>
       </div>
     </div>
-    ${podeMgr?`
+
+    <div class="card" style="margin-bottom:14px">
+      ${t.categoria ? `<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Categoria</span><span style="font-weight:500;color:var(--navy)">${t.categoria}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Turmas ativas agora</span><span style="font-weight:500;color:${uso.ativas>0?'var(--green)':'var(--text-3)'}">${uso.ativas}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0"><span style="color:var(--text-2)">Total de turmas históricas</span><span style="font-weight:500;color:var(--navy)">${uso.total}</span></div>
+      ${t.descricao ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Descrição</div><div style="color:var(--text-1);line-height:1.6">${t.descricao}</div></div>` : ''}
+      ${t.conteudo_programatico ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Conteúdo programático</div><div style="color:var(--text-1);line-height:1.6">${t.conteudo_programatico}</div></div>` : ''}
+    </div>
+
+    ${podeMgr ? `
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-navy" data-action="editarCatalogo" data-id="${t.id}">${ICONS.plus} Editar</button>
+      <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="editarCatalogo" data-id="${t.id}">${ICONS.plus} Editar</button>
+      <button class="btn btn-outline" onclick="duplicarCatalogo('${t.id}')" title="Criar uma cópia deste treinamento">⧉ Duplicar</button>
       <button class="btn btn-outline" data-action="toggleCatalogo" data-id="${t.id}">${t.ativo?'Desativar':'Ativar'}</button>
-    </div>`:''}
+    </div>` : ''}
   `);
 }
 
 function filtrarCatalogo(q) {
-  const f = q.toLowerCase().trim();
-  const r = f ? _catalogoCache.filter(t=>t.nome.toLowerCase().includes(f)||(t.categoria||'').toLowerCase().includes(f)) : _catalogoCache;
-  document.getElementById('listaCatalogo').innerHTML = _htmlListaCatalogo(r);
+  const f   = (q || '').toLowerCase().trim();
+  const st  = document.getElementById('filtroCatStatus')?.value || '';
+  const usoMap = window._catalogoUsoMap || {};
+  let r = _catalogoCache;
+  if (f) {
+    r = r.filter(t =>
+      t.nome.toLowerCase().includes(f) ||
+      (t.categoria || '').toLowerCase().includes(f) ||
+      // Busca por NR: "nr35", "nr-35", "35" case-insensitive
+      (t.nome.match(/NR[\s\-]*(\d+)/i)||[])[1]?.includes(f.replace(/^nr[\s\-]*/i,''))
+    );
+  }
+  if (st === 'ativo')   r = r.filter(t => t.ativo);
+  if (st === 'inativo') r = r.filter(t => !t.ativo);
+  if (st === 'em_uso')  r = r.filter(t => (usoMap[t.id]?.total || 0) > 0);
+  if (st === 'sem_uso') r = r.filter(t => (usoMap[t.id]?.total || 0) === 0);
+  const el = document.getElementById('listaCatalogo');
+  if (el) el.innerHTML = _htmlListaCatalogo(r);
 }
 
 function menuCatalogo(btn, id) {
@@ -1570,7 +1883,7 @@ function abrirModalCatalogo(id=null) {
   const t = id ? _catalogoCache.find(x=>x.id===id) : null;
   abrirModal(t?'Editar treinamento':'Novo treinamento', `
     <div class="field"><label>Nome *</label><input type="text" id="mCatNome" value="${t?.nome||''}" placeholder="Ex.: NR-35 Trabalho em Altura"></div>
-    <div class="field"><label>Descrição *</label><textarea id="mCatDesc" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Descrição do treinamento...">${t?.descricao||''}</textarea></div>
+    <div class="field"><label>Descrição <span style="font-size:11px;color:var(--text-3);font-weight:400">(opcional)</span></label><textarea id="mCatDesc" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Breve descrição do treinamento...">${t?.descricao||''}</textarea></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Carga horária (h) *</label><input type="number" id="mCatCH" value="${t?.carga_horaria||''}" placeholder="8" min="1" step="0.5"></div>
       <div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatVal" value="${t?.validade_meses||''}" placeholder="24" min="1"></div>
@@ -1587,7 +1900,6 @@ async function salvarCatalogo() {
   const ch   = parseFloat(document.getElementById('mCatCH')?.value);
   const val  = parseInt(document.getElementById('mCatVal')?.value);
   if (!nome) { showToast('Nome obrigatório','error'); return; }
-  if (!desc) { showToast('Descrição obrigatória','error'); return; }
   if (!ch||ch<=0) { showToast('Carga horária inválida','error'); return; }
   if (!val||val<=0) { showToast('Validade inválida','error'); return; }
   const dados = {nome, descricao:desc, carga_horaria:ch, validade_meses:val, categoria:document.getElementById('mCatCat')?.value.trim()||null, conteudo_programatico:document.getElementById('mCatCP')?.value.trim()||null};
@@ -1600,9 +1912,34 @@ async function salvarCatalogo() {
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
 
+async function duplicarCatalogo(id) {
+  const t = _catalogoCache.find(x => x.id === id);
+  if (!t) return;
+  try {
+    showLoading('Duplicando treinamento...');
+    const { error } = await sb.from('catalogo').insert({
+      org_id:               usuarioAtual.org_id,
+      nome:                 t.nome + ' (cópia)',
+      descricao:            t.descricao,
+      carga_horaria:        t.carga_horaria,
+      validade_meses:       t.validade_meses,
+      categoria:            t.categoria,
+      conteudo_programatico: t.conteudo_programatico,
+      ativo:                true,
+    });
+    if (error) throw error;
+    hideLoading();
+    showToast('Treinamento duplicado com sucesso!', 'success');
+    await renderCatalogo();
+  } catch(e) {
+    hideLoading();
+    showToast(e.message || 'Erro ao duplicar', 'error');
+  }
+}
+
 async function toggleCatalogo(id) {
   const t = _catalogoCache.find(x=>x.id===id);
-  if (!t||!confirm(`Deseja ${t.ativo?'desativar':'ativar'} este treinamento?`)) return;
+  if (!t) return; if (!confirm('Deseja ' + (t.ativo?'desativar':'ativar') + ' "' + t.nome + '"?')) return;
   const {error} = await sb.from('catalogo').update({ativo:!t.ativo}).eq('id',id);
   if (error) { showToast(error.message,'error'); return; }
   showToast(`Treinamento ${t.ativo?'desativado':'ativado'}!`,'success');
@@ -3496,11 +3833,17 @@ async function renderRelatorios() {
 }
 
 function _relFiltrarPorPeriodo(turmas, sessoes, meses) {
-  // Calcular a data de corte com base no número de meses
-  const hoje = new Date();
+  const hoje  = new Date();
   const corte = new Date(hoje.getFullYear(), hoje.getMonth() - meses + 1, 1);
-  const tFilt = turmas.filter(t => new Date(t.created_at) >= corte);
-  const sFilt = sessoes.filter(s => s.data && new Date(s.data) >= corte);
+  let tFilt   = turmas.filter(t => new Date(t.created_at) >= corte);
+  let sFilt   = sessoes.filter(s => s.data && new Date(s.data) >= corte);
+
+  // Aplicar filtros adicionais (catálogo e cliente) se estiverem ativos
+  const filtroCat = document.getElementById('relFiltroCat')?.value || '';
+  const filtroCli = document.getElementById('relFiltroCliente')?.value || '';
+  if (filtroCat) tFilt = tFilt.filter(t => t.catalogo?.nome === filtroCat);
+  if (filtroCli) tFilt = tFilt.filter(t => t.clientes?.nome === filtroCli);
+
   return { tFilt, sFilt };
 }
 
@@ -3515,6 +3858,15 @@ function _renderRelatorioView() {
   const tAtivas     = tFilt.filter(t => t.status === 'em_andamento').length;
   const tAgendadas  = tFilt.filter(t => t.status === 'agendada').length;
   const tConcluidas = tFilt.filter(t => t.status === 'concluida').length;
+  // Período anterior para comparativo
+  const hojeComp = new Date();
+  const corteAnt = new Date(hojeComp.getFullYear(), hojeComp.getMonth() - meses * 2 + 1, 1);
+  const corteAtual = new Date(hojeComp.getFullYear(), hojeComp.getMonth() - meses + 1, 1);
+  const tConcluidasAnt = tAll.filter(t =>
+    t.status === 'concluida' &&
+    new Date(t.created_at) >= corteAnt &&
+    new Date(t.created_at) < corteAtual
+  ).length;
   const tCanceladas = tFilt.filter(t => t.status === 'cancelada').length;
   const cliAtivos   = cliAll.filter(c => c.ativo).length;
   const totalTurmas = tFilt.length;
@@ -3638,6 +3990,16 @@ function _renderRelatorioView() {
         <button class="rel2-chip${meses===6?' active':''}" onclick="relSetPeriodo(6,this)">6 meses</button>
         <button class="rel2-chip${meses===12?' active':''}" onclick="relSetPeriodo(12,this)">Este ano</button>
       </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <select id="relFiltroCat" style="padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
+          <option value="">Todos os treinamentos</option>
+          ${[...new Set((window._relRaw?.turmas||[]).map(t=>t.catalogo?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}" style="color:var(--navy);background:#fff">${n}</option>`).join('')}
+        </select>
+        <select id="relFiltroCliente" style="padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
+          <option value="">Todos os clientes</option>
+          ${[...new Set((window._relRaw?.turmas||[]).map(t=>t.clientes?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}" style="color:var(--navy);background:#fff">${n}</option>`).join('')}
+        </select>
+      </div>
     </div>
 
     <div class="rel2-kpis">
@@ -3652,6 +4014,12 @@ function _renderRelatorioView() {
         <div class="rel2-kpi-val">${tConcluidas}</div>
         <div class="rel2-kpi-lbl">Concluídas</div>
         <div class="rel2-kpi-delta">${meses === 1 ? 'Este mês' : `Últimos ${meses} meses`}</div>
+      </div>
+      <div class="rel2-kpi" style="border-left:3px solid #7C3AED">
+        <span class="rel2-kpi-icon">📈</span>
+        <div class="rel2-kpi-val">${tConcluidas > 0 && tConcluidasAnt > 0 ? (tConcluidas >= tConcluidasAnt ? '+' : '') + Math.round((tConcluidas - tConcluidasAnt) / tConcluidasAnt * 100) + '%' : '—'}</div>
+        <div class="rel2-kpi-lbl">Variação</div>
+        <div class="rel2-kpi-delta" style="color:${tConcluidas >= tConcluidasAnt ? 'var(--green)' : 'var(--red)'}">vs período anterior</div>
       </div>
       <div class="rel2-kpi" style="border-left:3px solid var(--amber)">
         <span class="rel2-kpi-icon">👥</span>
@@ -3888,6 +4256,15 @@ function exportarRelatorioPDF() {
 
   const tAtivas     = tFilt.filter(t => t.status === 'em_andamento').length;
   const tConcluidas = tFilt.filter(t => t.status === 'concluida').length;
+  // Período anterior para comparativo
+  const hojeComp = new Date();
+  const corteAnt = new Date(hojeComp.getFullYear(), hojeComp.getMonth() - meses * 2 + 1, 1);
+  const corteAtual = new Date(hojeComp.getFullYear(), hojeComp.getMonth() - meses + 1, 1);
+  const tConcluidasAnt = tAll.filter(t =>
+    t.status === 'concluida' &&
+    new Date(t.created_at) >= corteAnt &&
+    new Date(t.created_at) < corteAtual
+  ).length;
   const tAgendadas  = tFilt.filter(t => t.status === 'agendada').length;
   const tCanceladas = tFilt.filter(t => t.status === 'cancelada').length;
   const turmaIds    = new Set(tFilt.map(t => t.id));
