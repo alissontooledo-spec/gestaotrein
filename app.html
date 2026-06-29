@@ -761,13 +761,14 @@ async function fazerLogin() {
 async function entrarNoApp() {
   // Provedor não tem org — acesso sempre liberado
   if (usuarioAtual.perfil !== 'provedor' && usuarioAtual.org_id) {
-    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento').eq('id',usuarioAtual.org_id).single();
+    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome').eq('id',usuarioAtual.org_id).single();
     if (org && !org.ativo) {
       document.getElementById('bloqueadoMsg').textContent =
         'Sua assinatura está vencida ou foi cancelada. Entre em contato para regularizar e continuar usando o sistema.';
       showScreen('screenBloqueado');
       return;
     }
+    if (org?.nome) usuarioAtual.orgNome = org.nome;
   }
   showScreen('screenApp');
   configurarNavegacao();
@@ -4530,8 +4531,8 @@ function exportarRelatorioExecutivoPDF() {
   doc.text('RELATORIO EXECUTIVO DE TREINAMENTOS', W-14, 20, {align:'right'});
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
   doc.text(`${s(periodoLabel)}  |  Gerado em ${hojeStr}`, W-14, 29, {align:'right'});
-  const orgNome = usuarioAtual?.org_id ? (window._relRaw?.clientes?.[0]?.org?.nome || '') : '';
-  if (orgNome) { doc.setFontSize(7); doc.setTextColor(...AMBER); doc.text(s(orgNome), W-14, 37, {align:'right'}); }
+  const orgNome = pdfSafe(usuarioAtual?.orgNome || '');
+  if (orgNome) { doc.setFontSize(7); doc.setTextColor(...AMBER); doc.text(orgNome, W-14, 37, {align:'right'}); }
 
   // Seção título KPIs
   doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
@@ -4577,7 +4578,7 @@ function exportarRelatorioExecutivoPDF() {
   // Rodapé página 1
   doc.setFillColor(...NAVY); doc.rect(0, H-9, W, 9, 'F');
   doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda  |  toledolabs.com.br', W/2, H-3.5, {align:'center'});
+  doc.text(orgNome ? `${orgNome}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-3.5, {align:'center'});
   doc.setTextColor(...T3); doc.setFont('helvetica','normal');
   doc.text('1 / 3', W-14, H-3.5, {align:'right'});
 
@@ -4651,7 +4652,7 @@ function exportarRelatorioExecutivoPDF() {
   // Rodapé p2
   doc.setFillColor(...NAVY); doc.rect(0, H-9, W, 9, 'F');
   doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda  |  toledolabs.com.br', W/2, H-3.5, {align:'center'});
+  doc.text(orgNome ? `${orgNome}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-3.5, {align:'center'});
   doc.setTextColor(...T3); doc.setFont('helvetica','normal');
   doc.text('2 / 3', W-14, H-3.5, {align:'right'});
 
@@ -4717,7 +4718,7 @@ function exportarRelatorioExecutivoPDF() {
   // Rodapé p3
   doc.setFillColor(...NAVY); doc.rect(0, H-9, W, 9, 'F');
   doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda  |  toledolabs.com.br', W/2, H-3.5, {align:'center'});
+  doc.text(orgNome ? `${orgNome}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-3.5, {align:'center'});
   doc.setTextColor(...T3); doc.setFont('helvetica','normal');
   doc.text('3 / 3', W-14, H-3.5, {align:'right'});
 
@@ -5200,7 +5201,7 @@ async function gerarListaPresenca(turmaId) {
   showLoading('Gerando ficha de presença...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cpf,cargo))')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -5224,6 +5225,7 @@ async function gerarListaPresenca(turmaId) {
     const dataAula = ag?.data ? fmtDataExtensoPDF(ag.data) : '-';
     const local = pdfSafe(ag?.local||t.local||'-');
     const protocolo = t.protocolo||turmaId.slice(0,12).toUpperCase();
+    const nomeOrg = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
 
     // ── Borda dupla externa ──
     doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
@@ -5368,9 +5370,9 @@ async function gerarListaPresenca(turmaId) {
     doc.setFillColor(...NAVY);
     doc.rect(mg, fy, W-mg*2, 14, 'F');
     doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', mg+4, fy+5.5);
+    doc.text(nomeOrg, mg+4, fy+5.5);
     doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text('CNPJ: 17.883.200/0001-32  |  Av. Arno Carlo Gracher, 69 - Sl 4, Brusque-SC  |  toledolabs.com.br/validar', mg+4, fy+10.5);
+    doc.text('toledolabs.com.br/validar', mg+4, fy+10.5);
     doc.text(protocolo, W-mg-4, fy+8, {align:'right'});
 
     doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}.pdf`);
@@ -5390,7 +5392,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade))')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -5409,6 +5411,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nomeT     = t.catalogo?.nome || 'Treinamento';
     const valMeses  = t.catalogo?.validade_meses || 12;
     const cpText    = t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '';
+    const nomeOrg   = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
@@ -5477,7 +5480,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // PÁGINA 1 - CAPA (Modelo B)
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
-    cabecalhoNavy(doc, 'CERTIFICADO DE CONCLUSAO', 'AvanteSeg Cursos e Treinamentos Corporativos Ltda');
+    cabecalhoNavy(doc, 'CERTIFICADO DE CONCLUSAO', nomeOrg);
 
     // Área central
     let cy = 66;
@@ -5705,9 +5708,9 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // ── RODAPÉ ──
     doc.setFillColor(...NAVY); doc.rect(0, H-12, W, 12, 'F');
     doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-6.5, {align:'center'});
+    doc.text(nomeOrg, W/2, H-6.5, {align:'center'});
     doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('Av. Arno Carlo Gracher, 69 Sala 4  -  Brusque - SC  -  (47) 3351-4266  -  www.avanteseg.com.br', W/2, H-2.5, {align:'center'});
+    doc.text('toledolabs.com.br/validar', W/2, H-2.5, {align:'center'});
 
     const nomeSafe = s(col.nome,60).replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-${nomeSafe}.pdf`);
@@ -5726,7 +5729,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cargo,cpf))')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -5743,6 +5746,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const valMeses      = t.catalogo?.validade_meses || 12;
     const cpText        = t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '';
     const nomeEmp       = t.clientes?.nome || 'empresa nao informada';
+    const nomeOrg       = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
@@ -5788,7 +5792,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFontSize(7.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text('CERTIFICADO COLETIVO DE CONCLUSAO', W/2, 16, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...LGRAY);
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, 22, {align:'center'});
+    doc.text(nomeOrg, W/2, 22, {align:'center'});
     // Medalha NR
     if (nrNum) {
       doc.setFillColor(...AMBER); doc.circle(W-30,22,16,'F');
@@ -6004,9 +6008,9 @@ async function gerarCertificadoColetivo(turmaId) {
     // ── RODAPÉ ──
     doc.setFillColor(...NAVY); doc.rect(0, H-12, W, 12, 'F');
     doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-    doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-6.5, {align:'center'});
+    doc.text(nomeOrg, W/2, H-6.5, {align:'center'});
     doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('Av. Arno Carlo Gracher, 69 Sala 4  -  Brusque - SC  -  (47) 3351-4266  -  www.avanteseg.com.br', W/2, H-2.5, {align:'center'});
+    doc.text('toledolabs.com.br/validar', W/2, H-2.5, {align:'center'});
 
     // ════════════════════════════════
     // PÁGINAS ADICIONAIS - participantes excedentes (20 por página)
@@ -6055,7 +6059,7 @@ async function gerarCertificadoColetivo(turmaId) {
       // Rodapé página adicional
       doc.setFillColor(...NAVY); doc.rect(0,H-12,W,12,'F');
       doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-      doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-6.5, {align:'center'});
+      doc.text(nomeOrg, W/2, H-6.5, {align:'center'});
     }
 
     const nomeCli = s(nomeEmp,40).replace(/\s+/g,'-').toLowerCase();
@@ -6527,7 +6531,8 @@ function exportarRelatorioComparativoPDF() {
   // Footer
   doc.setFillColor(...NAVY); doc.rect(0,H-10,W,10,'F');
   doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text('AvanteSeg Cursos e Treinamentos Corporativos Ltda', W/2, H-4, {align:'center'});
+  const orgNomeComp = pdfSafe(usuarioAtual?.orgNome || '');
+  doc.text(orgNomeComp ? `${orgNomeComp}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-4, {align:'center'});
 
   doc.save(`relatorio-comparativo-${hoje.toISOString().slice(0,10)}.pdf`);
   showToast('PDF comparativo gerado!', 'success');
