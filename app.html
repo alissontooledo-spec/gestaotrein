@@ -497,6 +497,47 @@ let _turmasCache    = [];
 let _colabsCache    = [];
 
 // ============================================================
+// PLANOS — helpers de acesso
+// ============================================================
+// Hierarquia: starter < pro < enterprise
+// Provedor (Toledo Labs) sempre tem acesso total — sem restrições de plano
+
+const PLANO_NIVEL = { starter: 1, pro: 2, enterprise: 3 };
+
+function _nivelPlano() {
+  if (usuarioAtual?.perfil === 'provedor') return 99;
+  return PLANO_NIVEL[usuarioAtual?.orgPlano] || 1; // fallback: starter
+}
+
+// Retorna true se o plano atual atinge o mínimo exigido
+function planoAtinge(minPlano) {
+  return _nivelPlano() >= (PLANO_NIVEL[minPlano] || 1);
+}
+
+// Exibe modal de upgrade quando recurso não está disponível no plano atual
+function modalUpgrade(recurso, planoNecessario) {
+  const nomes = { starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
+  const atual  = nomes[usuarioAtual?.orgPlano] || 'Starter';
+  const necessario = nomes[planoNecessario] || 'Pro';
+  abrirModal('Recurso não disponível', `
+    <div style="text-align:center;padding:8px 0 16px">
+      <div style="font-size:40px;margin-bottom:12px">🔒</div>
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">${recurso}</div>
+      <div style="font-size:14px;color:var(--text-2);line-height:1.6;margin-bottom:20px">
+        Este recurso está disponível a partir do plano <strong>${necessario}</strong>.<br>
+        Seu plano atual é <strong>${atual}</strong>.
+      </div>
+      <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:12px 16px;font-size:13px;color:var(--amber-text);text-align:left">
+        <strong>Quer fazer upgrade?</strong><br>
+        Entre em contato com a Toledo Labs pelo WhatsApp para migrar seu plano.
+      </div>
+    </div>`,
+    \`<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
+     <a href="https://wa.me/5547992809019?text=Ol%C3%A1%2C+gostaria+de+fazer+upgrade+do+meu+plano+Toledo+Labs" target="_blank" rel="noopener" class="btn btn-amber" onclick="fecharModal()">📲 Falar com Toledo Labs</a>\`
+  );
+}
+
+// ============================================================
 // UTILITÁRIOS
 // ============================================================
 const isMobile = () => window.innerWidth < 768;
@@ -768,7 +809,8 @@ async function entrarNoApp() {
       showScreen('screenBloqueado');
       return;
     }
-    if (org?.nome) usuarioAtual.orgNome = org.nome;
+    if (org?.nome)  usuarioAtual.orgNome  = org.nome;
+    if (org?.plano) usuarioAtual.orgPlano = org.plano; // 'starter' | 'pro' | 'enterprise'
   }
   showScreen('screenApp');
   configurarNavegacao();
@@ -1525,6 +1567,16 @@ async function criarUsuarioOrg() {
   const especialidade   = document.getElementById('mUsrEspecialidade')?.value.trim()||null;
   if (!nome||!email||!senha) { showToast('Preencha todos os campos','error'); return; }
   if (senha.length<6) { showToast('Senha deve ter no mínimo 6 caracteres','error'); return; }
+  // ── Guard Starter: máximo 3 usuários ativos ──
+  if (!planoAtinge('pro')) {
+    const orgId = _modalCurrentId || usuarioAtual.org_id;
+    const {count} = await sb.from('usuarios').select('id', {count:'exact',head:true}).eq('org_id', orgId).eq('ativo', true);
+    if (count >= 3) {
+      fecharModal();
+      modalUpgrade('Limite de usuários atingido', 'pro');
+      return;
+    }
+  }
   try {
     setBtnModalLoading(true);
     const {data:{session}} = await sb.auth.getSession();
@@ -4232,8 +4284,12 @@ function _renderRelatorioView() {
         </div>
         <div class="rel2-export" style="flex-shrink:0">
           <button class="rel2-export-btn" onclick="exportarRelatorioCSV()">⬇ CSV</button>
-          <button class="rel2-export-btn" onclick="exportarRelatorioExecutivoPDF()">⬇ PDF Executivo</button>
-          <button class="rel2-export-btn" onclick="exportarRelatorioComparativoPDF()" id="btnExportComp" style="display:${meses>1?'inline-block':'none'}">⬇ PDF Comparativo</button>
+          ${planoAtinge('pro')
+            ? `<button class="rel2-export-btn" onclick="exportarRelatorioExecutivoPDF()">⬇ PDF Executivo</button>
+               <button class="rel2-export-btn" onclick="exportarRelatorioComparativoPDF()" id="btnExportComp" style="display:${meses>1?'inline-block':'none'}">⬇ PDF Comparativo</button>`
+            : `<button class="rel2-export-btn" style="opacity:.5" onclick="modalUpgrade('Relatório Executivo em PDF','pro')" title="Disponível no plano Pro">🔒 PDF Executivo</button>
+               <button class="rel2-export-btn" style="opacity:.5;${meses>1?'':'display:none'}" onclick="modalUpgrade('Relatório Comparativo em PDF','pro')" id="btnExportComp" title="Disponível no plano Pro">🔒 PDF Comparativo</button>`
+          }
         </div>
       </div>
       <div class="rel2-period">
@@ -4306,6 +4362,23 @@ function _renderRelatorioView() {
     <div class="rel2-card" style="margin-top:12px">
       <div class="rel2-card-title">Relatório por cliente — clique para detalhes</div>
       ${cliListHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
+    </div>
+
+    <!-- Relatório mensal automático — Em breve no plano Pro -->
+    <div class="rel2-card" style="margin-top:12px;border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:var(--r-md);background:var(--amber-l);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📅</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--navy)">Relatório mensal automático
+            <span style="margin-left:8px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--amber);color:var(--navy);letter-spacing:.04em">EM BREVE</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-2);margin-top:3px;line-height:1.5">
+            ${planoAtinge('pro')
+              ? 'Disponível no seu plano Pro — em breve você receberá relatórios mensais automaticamente por e-mail.'
+              : 'No plano Pro, receba um relatório mensal consolidado automaticamente por e-mail. <span style="color:var(--amber-text);font-weight:600;cursor:pointer" onclick="modalUpgrade('Relatório mensal automático','pro')">Saiba mais →</span>'}
+          </div>
+        </div>
+      </div>
     </div>
   `);
 }
@@ -4443,6 +4516,7 @@ function exportarRelatorioCSV() {
 }
 
 function exportarRelatorioExecutivoPDF() {
+  if (!planoAtinge('pro')) { modalUpgrade('Relatório Executivo em PDF', 'pro'); return; }
   showToast('Gerando PDF Executivo...', 'info');
   const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
@@ -4786,7 +4860,10 @@ async function renderEquipe() {
         <div class="stat-sub">Pausados</div>
       </div>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:12px;color:var(--text-3)">
+        ${!planoAtinge('pro') ? `<span style="color:var(--amber-text);background:var(--amber-l);border:1px solid var(--amber);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600">Starter · máx. 3 usuários ativos</span>` : `<span class="badge badge-navy">${usuarioAtual.orgPlano==='enterprise'?'Enterprise':'Pro'} · usuários ilimitados</span>`}
+      </div>
       <button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
     </div>
     <div class="card" style="padding:0">${listaHtml}</div>`);
@@ -6144,9 +6221,18 @@ async function renderDocumentosTurma(turmaId) {
 
     // Bloco de envio
     const htmlEnvio = `
-      <div class="card" style="margin-bottom:16px;${todosConcluidos&&emailCliente?'border-color:var(--blue)':''}" id="cardEnvio">
+      <div class="card" style="margin-bottom:16px;${planoAtinge('pro')&&todosConcluidos&&emailCliente?'border-color:var(--blue)':''}" id="cardEnvio">
         <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:8px">✉️ Envio automático</div>
-        ${!emailCliente ? `
+        ${!planoAtinge('pro') ? `
+          <div style="display:flex;align-items:center;gap:10px;background:var(--amber-l);border:1px solid var(--amber);padding:12px;border-radius:var(--r-md)">
+            <span style="font-size:20px">🔒</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--amber-text)">Disponível no plano Pro</div>
+              <div style="font-size:12px;color:var(--amber-text);margin-top:2px">Faça upgrade para enviar documentos automaticamente por e-mail.</div>
+            </div>
+          </div>
+          <button class="btn btn-amber" style="width:100%;margin-top:10px" onclick="modalUpgrade('Envio automático de documentos','pro')">Ver planos</button>
+        ` : !emailCliente ? `
           <div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">
             ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail do cliente para habilitar o envio.
           </div>` : `
@@ -6206,12 +6292,18 @@ async function renderDocumentosTurma(turmaId) {
       </div>
 
       <!-- Bloco 2: Gerar tudo e enviar -->
-      <div class="card" style="border:2px solid var(--navy);background:rgba(30,42,74,.03)">
+      <div class="card" style="border:2px solid ${planoAtinge('pro')?'var(--navy)':'var(--amber)'};background:rgba(30,42,74,.03)">
         <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px">📦 Gerar tudo e enviar por e-mail</div>
         <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
           Gera automaticamente todos os documentos pendentes e envia por e-mail para a empresa cliente em uma única ação.
         </div>
-        ${(()=>{
+        ${!planoAtinge('pro') ? `
+          <div style="display:flex;align-items:center;gap:10px;background:var(--amber-l);border:1px solid var(--amber);padding:12px;border-radius:var(--r-md);margin-bottom:10px">
+            <span style="font-size:20px">🔒</span>
+            <div style="font-size:13px;font-weight:600;color:var(--amber-text)">Disponível no plano Pro</div>
+          </div>
+          <button class="btn btn-amber" style="width:100%" onclick="modalUpgrade('Envio automático de documentos','pro')">Ver planos</button>
+        ` : (()=>{
           if (!emailCliente) return '<div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">&#9888; A empresa cliente não possui e-mail cadastrado.</div>';
           const destHtml = '<div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Destinatário: <strong>' + emailCliente + '</strong></div>';
           if (!todosConcluidos) return destHtml + '<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">&#9203; Aguardando conclusão de todos os agendamentos.</div>';
@@ -6232,6 +6324,7 @@ async function renderDocumentosTurma(turmaId) {
 
 // Gera todos os documentos pendentes e envia em lote
 async function gerarTudoEnviarEmail(turmaId) {
+  if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return; }
   showLoading('Gerando documentos pendentes...');
   try {
     // Carrega turma completa
@@ -6279,6 +6372,7 @@ async function gerarTudoEnviarEmail(turmaId) {
 }
 
 async function enviarDocumentosPorEmail(turmaId) {
+  if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return; }
   // confirm() nao funciona em WebView/mobile — usar modal customizado
   const confirmado = await new Promise(resolve => {
     abrirModal('Confirmar envio', `
@@ -6432,6 +6526,7 @@ function _buildKpiGrid({tAtivas,tConcluidas,tConcluidasAnt,partUnicos,partUnicos
 }
 
 function exportarRelatorioComparativoPDF() {
+  if (!planoAtinge('pro')) { modalUpgrade('Relatório Comparativo em PDF', 'pro'); return; }
   const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
   const meses = window._relPeriodo || 6;
