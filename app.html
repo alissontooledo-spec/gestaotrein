@@ -927,7 +927,7 @@ async function renderHome() {
 
 async function renderHomeProvedor() {
   const [{ data: orgs }, { data: usuarios }] = await Promise.all([
-    sb.from('organizacoes').select('id,nome,ativo,created_at').order('created_at', { ascending: false }),
+    sb.from('organizacoes').select('id,nome,ativo,plano,created_at').order('created_at', { ascending: false }),
     sb.from('usuarios').select('id,org_id,perfil,ativo'),
   ]);
 
@@ -939,10 +939,26 @@ async function renderHomeProvedor() {
   const mes      = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   const novasMes = orgsAll.filter(o => o.created_at?.startsWith(mes)).length;
 
+  // KPIs financeiros
+  const starters    = orgsAll.filter(o => o.ativo && (!o.plano || o.plano === 'starter')).length;
+  const pros        = orgsAll.filter(o => o.ativo && o.plano === 'pro').length;
+  const enterprises = orgsAll.filter(o => o.ativo && o.plano === 'enterprise').length;
+  const mrrStarter  = starters * 197;
+  const mrrPro      = pros * 397;
+  const mrr         = mrrStarter + mrrPro; // enterprise é sob consulta
+
+  const _badgePlano = (plano, ativo) => {
+    if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
+    const map = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
+    const label = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+    const p = plano || 'starter';
+    return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
+  };
+
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Provedor · Toledo Labs</div>`);
 
   const listaOrgs = orgsAll.map(o => {
-    const admins = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
+    const admins  = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
     const total_u = usrsAll.filter(u => u.org_id === o.id).length;
     return `
     <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onclick="verOrgProvedor('${o.id}')" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
@@ -951,7 +967,9 @@ async function renderHomeProvedor() {
         <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
         <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
       </div>
-      <span class="badge ${o.ativo?'badge-green':'badge-gray'}" style="flex-shrink:0">${o.ativo?'Ativa':'Inativa'}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${_badgePlano(o.plano, o.ativo)}
+      </div>
     </div>`;
   }).join('');
 
@@ -971,20 +989,39 @@ async function renderHomeProvedor() {
           <div class="home-kpi-delta green">${ativas} ativas</div>
         </div>
         <div class="home-kpi">
-          <div class="home-kpi-val">${total - ativas}</div>
-          <div class="home-kpi-lbl">Inativas</div>
-          <div class="home-kpi-delta amber">Pendentes</div>
-        </div>
-        <div class="home-kpi">
           <div class="home-kpi-val">${novasMes}</div>
           <div class="home-kpi-lbl">Novas este mês</div>
           <div class="home-kpi-delta green">Onboarding</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">R$${mrr.toLocaleString('pt-BR')}</div>
+          <div class="home-kpi-lbl">MRR estimado</div>
+          <div class="home-kpi-delta green">${pros}P · ${starters}S · ${enterprises}E</div>
         </div>
         <div class="home-kpi">
           <div class="home-kpi-val">${usrsAll.filter(u=>u.ativo).length}</div>
           <div class="home-kpi-lbl">Usuários ativos</div>
           <div class="home-kpi-delta green">Total</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Dashboard financeiro por plano -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--blue-h);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Starter</div>
+        <div style="font-size:22px;font-weight:700;color:var(--navy)">${starters}</div>
+        <div style="font-size:11px;color:var(--text-3)">R$${mrrStarter.toLocaleString('pt-BR')}/mês</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--amber);border-radius:var(--r-lg);padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--amber-h);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Pro</div>
+        <div style="font-size:22px;font-weight:700;color:var(--navy)">${pros}</div>
+        <div style="font-size:11px;color:var(--text-3)">R$${mrrPro.toLocaleString('pt-BR')}/mês</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid rgba(30,42,74,.3);border-radius:var(--r-lg);padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Enterprise</div>
+        <div style="font-size:22px;font-weight:700;color:var(--navy)">${enterprises}</div>
+        <div style="font-size:11px;color:var(--text-3)">Sob consulta</div>
       </div>
     </div>
 
@@ -1075,28 +1112,36 @@ async function verOrgProvedor(orgId) {
   const { data: usrs } = await sb.from('usuarios').select('id,nome,perfil,ativo,created_at').eq('org_id', orgId).order('nome');
   const { data: turms} = await sb.from('turmas').select('id,status').eq('org_id', orgId);
 
-  const orgData  = org  || {};
-  const usrsData = usrs || [];
+  const orgData   = org  || {};
+  const usrsData  = usrs || [];
   const turmsData = turms || [];
+  const totalT    = turmsData.length;
+  const ativasT   = turmsData.filter(t => t.status === 'em_andamento').length;
+  const concT     = turmsData.filter(t => t.status === 'concluida').length;
 
-  const totalT  = turmsData.length;
-  const ativasT = turmsData.filter(t => t.status === 'em_andamento').length;
+  const plano     = orgData.plano || 'starter';
+  const planoNome = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' }[plano] || 'Starter';
+  const planoClr  = { starter:'var(--blue-h)', pro:'var(--amber-h)', enterprise:'var(--navy)' }[plano] || 'var(--blue-h)';
+  const planoValor= { starter:'R$ 197/mês', pro:'R$ 397/mês', enterprise:'Sob consulta' }[plano] || 'R$ 197/mês';
+  const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
 
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" onclick="renderHomeProvedor()">${ICONS.back} Voltar</button>
     </div>
 
+    <!-- Cabeçalho navy com info da org -->
     <div style="background:var(--navy);border-radius:var(--r-xl);padding:20px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
         <div style="width:48px;height:48px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(orgData.nome||'')}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:17px;font-weight:700;color:#fff">${orgData.nome||'—'}</div>
           ${orgData.cnpj ? `<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">CNPJ: ${orgData.cnpj}</div>` : ''}
+          ${orgData.email ? `<div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:1px">${orgData.email}</div>` : ''}
         </div>
         <span class="badge ${orgData.ativo?'badge-green':'badge-gray'}">${orgData.ativo?'Ativa':'Inativa'}</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
           <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Usuários</div>
           <div style="font-size:18px;font-weight:700;color:#fff">${usrsData.length}</div>
@@ -1109,9 +1154,29 @@ async function verOrgProvedor(orgId) {
           <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Ativas</div>
           <div style="font-size:18px;font-weight:700;color:${ativasT>0?'var(--amber)':'rgba(255,255,255,.4)'}">${ativasT}</div>
         </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Concluídas</div>
+          <div style="font-size:18px;font-weight:700;color:rgba(255,255,255,.8)">${concT}</div>
+        </div>
       </div>
     </div>
 
+    <!-- Card de plano -->
+    <div style="background:var(--surface);border:2px solid ${planoClr};border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Plano contratado</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:20px;font-weight:800;color:${planoClr}">${planoNome}</div>
+            <div style="font-size:13px;color:var(--text-2)">${planoValor}</div>
+          </div>
+          ${venc ? `<div style="font-size:12px;color:var(--text-3);margin-top:4px">Vencimento: ${venc}</div>` : ''}
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="abrirModalAlterarPlano('${orgId}','${plano}')">Alterar plano</button>
+      </div>
+    </div>
+
+    <!-- Usuários -->
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.length})</div>
     <div class="card" style="padding:0;margin-bottom:14px">
       ${usrsData.length === 0
@@ -1121,14 +1186,16 @@ async function verOrgProvedor(orgId) {
           <div style="width:36px;height:36px;border-radius:50%;background:rgba(30,42,74,.1);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--navy)">${u.nome}</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${u.perfil}</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${labelPerfil(u.perfil)}</div>
           </div>
           <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
         </div>`).join('')
       }
     </div>
 
+    <!-- Ações -->
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
       <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
         ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
       </button>
@@ -1150,6 +1217,44 @@ async function desativarOrg(orgId) {
   if (error) { showToast(error.message, 'error'); return; }
   showToast('Organização desativada.', 'success');
   await renderHomeProvedor();
+}
+
+// ── Alterar plano de uma organização (Provedor) ──
+function abrirModalAlterarPlano(orgId, planoAtual) {
+  _modalCurrentId = orgId;
+  const nomes  = { starter:'Starter — R$ 197/mês', pro:'Pro — R$ 397/mês', enterprise:'Enterprise — Sob consulta' };
+  abrirModal('Alterar plano', `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">Selecione o novo plano para esta organização. A alteração terá efeito imediato no acesso às funcionalidades.</div>
+      <div class="field"><label>Plano contratado *</label>
+        <select id="mAlterarPlano" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+          <option value="starter" ${planoAtual==='starter'?'selected':''}>Starter — R$ 197/mês</option>
+          <option value="pro"     ${planoAtual==='pro'    ?'selected':''}>Pro — R$ 397/mês</option>
+          <option value="enterprise" ${planoAtual==='enterprise'?'selected':''}>Enterprise — Sob consulta</option>
+        </select>
+      </div>
+      <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--amber-text);margin-top:4px">
+        ⚠️ Ao rebaixar um plano, funcionalidades não incluídas serão bloqueadas automaticamente na próxima vez que o usuário acessar o sistema.
+      </div>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="alterarPlanoOrg()">Confirmar alteração</button>`);
+}
+
+async function alterarPlanoOrg() {
+  const novoPlano = document.getElementById('mAlterarPlano')?.value;
+  if (!novoPlano) { showToast('Selecione um plano','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const { error } = await sb.from('organizacoes').update({ plano: novoPlano }).eq('id', _modalCurrentId);
+    if (error) throw error;
+    fecharModal();
+    showToast('Plano alterado com sucesso!', 'success');
+    await verOrgProvedor(_modalCurrentId);
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message || 'Erro ao alterar plano', 'error');
+  }
 }
 
 async function renderHomeAdmin() {
@@ -1453,12 +1558,19 @@ function _renderOrgsLista(orgs) {
 
 function _htmlListaOrgs(orgs) {
   if (!orgs.length) return `<div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div><div class="empty-sub">Clique em "Nova" para cadastrar.</div></div>`;
+  const _badgePlanoLista = (plano, ativo) => {
+    if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
+    const map   = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
+    const label = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+    const p = plano || 'starter';
+    return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
+  };
   return orgs.map(o=>`
     <div class="list-item" style="padding:14px 4px">
       <div class="li-icon" style="background:${o.ativo?'var(--blue-l)':'var(--gray-100)'};color:${o.ativo?'var(--blue-h)':'var(--gray-500)'};font-size:13px;font-weight:700;border-radius:var(--r-md)">${iniciais(o.nome)}</div>
       <div class="li-info"><div class="li-title">${o.nome}</div><div class="li-sub">${o.cnpj?`CNPJ ${o.cnpj} · `:''}${o.email||'Sem e-mail'}${o.cidade?` · ${o.cidade}/${o.uf||''}`:''}</div></div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <span class="badge ${o.ativo?'badge-green':'badge-gray'}">${o.ativo?'Ativa':'Inativa'}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${_badgePlanoLista(o.plano, o.ativo)}
         <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="menuOrg" data-id="${o.id}">${ICONS.dots}</button>
       </div>
     </div>`).join('');
@@ -1495,6 +1607,7 @@ function menuOrg(btn, id) {
 function abrirModalOrg(id=null) {
   _modalCurrentId = id;
   const org = id ? _orgsCache.find(o=>o.id===id) : null;
+  const planoAtual = org?.plano || 'starter';
   abrirModal(org?'Editar organização':'Nova organização', `
     <div class="field"><label>Nome *</label><input type="text" id="mOrgNome" value="${org?.nome||''}" placeholder="Ex.: Consultoria SST Brasil"></div>
     ${_cnpjRow('mOrgCnpj', org?.cnpj||'', 'mOrgNome', 'mOrgCidade', 'mOrgUf', 'mOrgEmail')}
@@ -1503,7 +1616,14 @@ function abrirModalOrg(id=null) {
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mOrgUf" value="${org?.uf||''}" placeholder="SP" maxlength="2" style="text-transform:uppercase"></div>
     </div>
     <div class="field"><label>E-mail</label><input type="email" id="mOrgEmail" value="${org?.email||''}" placeholder="contato@consultoria.com.br"></div>
-    <div class="field"><label>Telefone</label><input type="tel" id="mOrgTel" value="${org?.telefone||''}" placeholder="(11) 99999-9999"></div>`,
+    <div class="field"><label>Telefone</label><input type="tel" id="mOrgTel" value="${org?.telefone||''}" placeholder="(11) 99999-9999"></div>
+    <div class="field"><label>Plano contratado *</label>
+      <select id="mOrgPlano" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="starter" ${planoAtual==='starter'?'selected':''}>Starter — R$ 197/mês</option>
+        <option value="pro" ${planoAtual==='pro'?'selected':''}>Pro — R$ 397/mês</option>
+        <option value="enterprise" ${planoAtual==='enterprise'?'selected':''}>Enterprise — Sob consulta</option>
+      </select>
+    </div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarOrg()">${org?'Salvar':'Cadastrar'}</button>`);
 }
@@ -1511,7 +1631,8 @@ function abrirModalOrg(id=null) {
 async function salvarOrg() {
   const nome = document.getElementById('mOrgNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const dados = {nome, cnpj:document.getElementById('mOrgCnpj')?.value.trim()||null, cidade:document.getElementById('mOrgCidade')?.value.trim()||null, uf:(document.getElementById('mOrgUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mOrgEmail')?.value.trim()||null, telefone:document.getElementById('mOrgTel')?.value.trim()||null};
+  const plano = document.getElementById('mOrgPlano')?.value || 'starter';
+  const dados = {nome, plano, cnpj:document.getElementById('mOrgCnpj')?.value.trim()||null, cidade:document.getElementById('mOrgCidade')?.value.trim()||null, uf:(document.getElementById('mOrgUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mOrgEmail')?.value.trim()||null, telefone:document.getElementById('mOrgTel')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('organizacoes').update(dados).eq('id',_modalCurrentId) : await sb.from('organizacoes').insert({...dados,ativo:true});
