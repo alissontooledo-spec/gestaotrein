@@ -401,6 +401,21 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   </div>
 </div>
 
+<div class="screen" id="screenBloqueado" style="background:var(--surface,#F4F6FA);align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border-radius:16px;border:1px solid #E2E8F0;padding:40px 32px;max-width:480px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.07)">
+    <div style="width:56px;height:56px;background:#FEF3C7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div style="font-size:20px;font-weight:800;color:#1E2A4A;margin-bottom:10px">Acesso suspenso</div>
+    <div style="font-size:14px;color:#64748B;line-height:1.65;margin-bottom:28px" id="bloqueadoMsg">Sua assinatura está vencida ou foi cancelada. Regularize para continuar usando o sistema.</div>
+    <a id="bloqueadoWhatsApp" href="https://wa.me/5547992809019?text=Ol%C3%A1%2C+preciso+regularizar+minha+assinatura+do+Toledo+Labs" target="_blank" rel="noopener"
+      style="display:block;background:#F59E0B;color:#1E2A4A;font-weight:700;font-size:15px;padding:14px 24px;border-radius:8px;text-decoration:none;margin-bottom:12px">
+      Regularizar via WhatsApp
+    </a>
+    <button onclick="fazerLogout()" style="background:transparent;border:1.5px solid #E2E8F0;color:#64748B;font-size:13px;font-weight:500;padding:10px 20px;border-radius:8px;cursor:pointer;width:100%">Sair da conta</button>
+  </div>
+</div>
+
 <div class="screen" id="screenApp">
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="fecharSidebar()"></div>
   <nav class="sidebar" id="sidebar">
@@ -744,6 +759,16 @@ async function fazerLogin() {
 }
 
 async function entrarNoApp() {
+  // Provedor não tem org — acesso sempre liberado
+  if (usuarioAtual.perfil !== 'provedor' && usuarioAtual.org_id) {
+    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento').eq('id',usuarioAtual.org_id).single();
+    if (org && !org.ativo) {
+      document.getElementById('bloqueadoMsg').textContent =
+        'Sua assinatura está vencida ou foi cancelada. Entre em contato para regularizar e continuar usando o sistema.';
+      showScreen('screenBloqueado');
+      return;
+    }
+  }
   showScreen('screenApp');
   configurarNavegacao();
   // Lê hash da URL para restaurar a página ao fazer login ou recarregar
