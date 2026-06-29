@@ -537,6 +537,215 @@ function modalUpgrade(recurso, planoNecessario) {
   );
 }
 
+
+// ============================================================
+// SESSÃO — timeout por inatividade
+// ============================================================
+// Logout automático após 60 min sem interação.
+// Aviso exibido 5 minutos antes. Provedor sujeito às mesmas regras.
+
+const SESSAO_TIMEOUT_MS = 60 * 60 * 1000; // 60 min
+const SESSAO_AVISO_MS   = 55 * 60 * 1000; // aviso aos 55 min
+let _sessaoTimerLogout  = null;
+let _sessaoTimerAviso   = null;
+let _sessaoAvisoAtivo   = false;
+
+function _sessaoReset() {
+  if (!usuarioAtual) return;
+  clearTimeout(_sessaoTimerLogout);
+  clearTimeout(_sessaoTimerAviso);
+  if (_sessaoAvisoAtivo) {
+    _sessaoAvisoAtivo = false;
+    const av = document.getElementById('_sessaoAviso');
+    if (av) av.remove();
+  }
+  _sessaoTimerAviso  = setTimeout(_sessaoMostrarAviso, SESSAO_AVISO_MS);
+  _sessaoTimerLogout = setTimeout(_sessaoExpirar,      SESSAO_TIMEOUT_MS);
+}
+
+function _sessaoMostrarAviso() {
+  if (!usuarioAtual) return;
+  _sessaoAvisoAtivo = true;
+  const antigo = document.getElementById('_sessaoAviso');
+  if (antigo) antigo.remove();
+  const div = document.createElement('div');
+  div.id = '_sessaoAviso';
+  div.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:var(--r-lg);padding:14px 20px;box-shadow:0 8px 32px rgba(0,0,0,.28);z-index:9999;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:14px;max-width:360px;width:calc(100% - 32px);border:1px solid rgba(245,158,11,.4)';
+  div.innerHTML = '<span style="font-size:22px;flex-shrink:0">⏱️</span><div style="flex:1"><div style="font-weight:600;margin-bottom:2px">Sessão expirando</div><div style="font-size:12px;color:rgba(255,255,255,.65)">Você será desconectado em 5 minutos por inatividade.</div></div><button onclick="_sessaoReset()" style="background:var(--amber);color:var(--navy);border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:inherit">Continuar</button>';
+  document.body.appendChild(div);
+}
+
+async function _sessaoExpirar() {
+  if (!usuarioAtual) return;
+  _sessaoAvisoAtivo = false;
+  const av = document.getElementById('_sessaoAviso');
+  if (av) av.remove();
+  clearTimeout(_sessaoTimerLogout);
+  clearTimeout(_sessaoTimerAviso);
+  // Se está em modo suporte, encerrar antes de sair
+  if (window._suporteAtivo) await encerrarModoSuporte(true);
+  await sb.auth.signOut();
+  usuarioAtual = null;
+  showScreen('screenLogin');
+  const err = document.getElementById('loginError');
+  if (err) { err.textContent = 'Sua sessão expirou por inatividade. Faça login novamente.'; err.classList.add('show'); }
+  const btn = document.getElementById('loginBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+}
+
+function _sessaoIniciar() {
+  const eventos = ['mousedown','mousemove','keydown','scroll','touchstart','click','wheel'];
+  eventos.forEach(ev => document.addEventListener(ev, _sessaoReset, { passive: true }));
+  _sessaoReset();
+}
+
+function _sessaoEncerrar() {
+  clearTimeout(_sessaoTimerLogout);
+  clearTimeout(_sessaoTimerAviso);
+  _sessaoAvisoAtivo = false;
+  const av = document.getElementById('_sessaoAviso');
+  if (av) av.remove();
+}
+
+// ============================================================
+// MODO SUPORTE — Provedor acessa organização cliente
+// ============================================================
+// O Provedor assume temporariamente o org_id de uma organização
+// e navega na interface completa como se fosse administrador dela.
+// Um banner laranja fica visível durante todo o modo suporte.
+// Cada acesso é registrado em logs_acesso no Supabase.
+
+let _suporteAtivo     = false; // flag de modo suporte ativo
+let _suporteOrgId     = null;  // org_id da org em suporte
+let _suporteOrgNome   = null;  // nome da org para exibição
+let _suporteLogId     = null;  // id do registro em logs_acesso
+let _suporteAcoes     = [];    // páginas visitadas durante o suporte
+
+async function iniciarModoSuporte(orgId, orgNome) {
+  const ok = await confirmarAcao(
+    `Você está prestes a acessar "${orgNome}" em modo suporte. Todas as ações serão registradas em log de auditoria.`,
+    'Acessar',
+    false
+  );
+  if (!ok) return;
+
+  showLoading('Iniciando modo suporte...');
+  try {
+    // Registrar início do acesso no log
+    const { data: log, error: logErr } = await sb.from('logs_acesso').insert({
+      provedor_uid: usuarioAtual.id,
+      org_id:       orgId,
+      acoes:        []
+    }).select().single();
+    if (logErr) throw logErr;
+
+    // Salvar estado do Provedor
+    window._suporteProvedorState = {
+      perfil:   usuarioAtual.perfil,
+      org_id:   usuarioAtual.org_id,
+      orgNome:  usuarioAtual.orgNome,
+      orgPlano: usuarioAtual.orgPlano,
+    };
+
+    // Buscar dados da org para simular o perfil de administrador
+    const { data: org } = await sb.from('organizacoes')
+      .select('nome,plano,ativo')
+      .eq('id', orgId).single();
+
+    // Assumir identidade de administrador da org
+    usuarioAtual.perfil   = 'administrador';
+    usuarioAtual.org_id   = orgId;
+    usuarioAtual.orgNome  = org?.nome  || orgNome;
+    usuarioAtual.orgPlano = org?.plano || 'starter';
+
+    // Ativar flags de suporte
+    _suporteAtivo   = true;
+    _suporteOrgId   = orgId;
+    _suporteOrgNome = org?.nome || orgNome;
+    _suporteLogId   = log.id;
+    _suporteAcoes   = [];
+
+    // Reconfigurar navegação para o perfil administrador
+    configurarNavegacao();
+    _suporteMostrarBanner();
+
+    // Registrar página inicial
+    _suporteRegistrarAcao('home');
+    await irPara('home');
+
+    showToast(`Modo suporte ativo — ${_suporteOrgNome}`, 'info');
+  } catch(e) {
+    showToast(e.message || 'Erro ao iniciar modo suporte', 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function encerrarModoSuporte(silencioso = false) {
+  if (!_suporteAtivo) return;
+
+  try {
+    // Atualizar log com encerramento e lista de ações
+    if (_suporteLogId) {
+      await sb.from('logs_acesso').update({
+        encerrado_em: new Date().toISOString(),
+        acoes: _suporteAcoes
+      }).eq('id', _suporteLogId);
+    }
+  } catch(e) { /* silencioso — não bloquear logout */ }
+
+  // Restaurar estado do Provedor
+  const estado = window._suporteProvedorState || {};
+  usuarioAtual.perfil   = 'provedor';
+  usuarioAtual.org_id   = estado.org_id   || null;
+  usuarioAtual.orgNome  = estado.orgNome  || null;
+  usuarioAtual.orgPlano = estado.orgPlano || null;
+
+  // Limpar flags
+  _suporteAtivo   = false;
+  _suporteOrgId   = null;
+  _suporteOrgNome = null;
+  _suporteLogId   = null;
+  _suporteAcoes   = [];
+  window._suporteProvedorState = null;
+
+  // Remover banner e restaurar posição do header
+  const banner = document.getElementById('_suporteBanner');
+  if (banner) banner.remove();
+  const mh = document.querySelector('.main-header');
+  if (mh) mh.style.top = '';
+  const mbh = document.querySelector('.mobile-header');
+  if (mbh) mbh.style.top = '';
+
+  if (silencioso) return;
+
+  // Reconfigurar navegação para Provedor e voltar ao painel
+  configurarNavegacao();
+  showToast('Modo suporte encerrado', 'success');
+  await irPara('home');
+}
+
+function _suporteMostrarBanner() {
+  const antigo = document.getElementById('_suporteBanner');
+  if (antigo) antigo.remove();
+
+  const banner = document.createElement('div');
+  banner.id = '_suporteBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:8000;background:#D97706;color:#fff;font-size:12px;font-weight:600;padding:6px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+  banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px">🔧</span><span>MODO SUPORTE — ' + _suporteOrgNome + '</span></div><button onclick="encerrarModoSuporte(false)" style="background:rgba(0,0,0,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:5px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✕ Encerrar suporte</button>';
+  document.body.appendChild(banner);
+  // Empurrar main-header e mobile-header para baixo para não sobrepor o banner
+  const mh = document.querySelector('.main-header');
+  if (mh) mh.style.top = '30px';
+  const mbh = document.querySelector('.mobile-header');
+  if (mbh) mbh.style.top = '30px';
+}
+
+function _suporteRegistrarAcao(pagina) {
+  if (!_suporteAtivo) return;
+  _suporteAcoes.push({ pagina, ts: new Date().toISOString() });
+}
+
 // ============================================================
 // UTILITÁRIOS
 // ============================================================
@@ -806,6 +1015,7 @@ async function entrarNoApp() {
     if (org && !org.ativo) {
       document.getElementById('bloqueadoMsg').textContent =
         'Sua assinatura está vencida ou foi cancelada. Entre em contato para regularizar e continuar usando o sistema.';
+      _sessaoEncerrar();
       showScreen('screenBloqueado');
       return;
     }
@@ -814,6 +1024,7 @@ async function entrarNoApp() {
   }
   showScreen('screenApp');
   configurarNavegacao();
+  _sessaoIniciar(); // iniciar monitoramento de inatividade
   // Lê hash da URL para restaurar a página ao fazer login ou recarregar
   const paginaHash = location.hash.replace('#','').trim();
   const paginaInicial = (paginaHash && TITULOS[paginaHash]) ? paginaHash : 'home';
@@ -823,6 +1034,8 @@ async function entrarNoApp() {
 async function fazerLogout() {
   const ok = await confirmarAcao('Deseja sair do sistema?', 'Sair', false);
   if (!ok) return;
+  if (_suporteAtivo) await encerrarModoSuporte(true); // encerrar suporte antes de sair
+  _sessaoEncerrar(); // limpar timers
   showLoading('Saindo...');
   await sb.auth.signOut();
   usuarioAtual = null;
@@ -887,6 +1100,7 @@ async function irPara(pagina, params={}) {
   fecharSidebar();
   fabOcultar();
   document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
+  if (_suporteAtivo) _suporteRegistrarAcao(pagina); // log de auditoria
   // Atualiza URL com hash sem recarregar a página
   const novoHash = '#' + pagina;
   if (location.hash !== novoHash) history.pushState({pagina}, '', novoHash);
@@ -1194,6 +1408,9 @@ async function verOrgProvedor(orgId) {
     </div>
 
     <!-- Ações -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      ${orgData.ativo ? `<button class="btn btn-amber" style="flex:1;justify-content:center" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
       <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
