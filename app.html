@@ -376,6 +376,9 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .turma-card-nova{min-height:72px}
   .turmas-toolbar-mobile{flex-direction:column;align-items:stretch!important}
   .turmas-toolbar-mobile .btn-amber{width:100%;justify-content:center}
+  .turma-ag-row{flex-wrap:wrap;align-items:flex-start!important;row-gap:10px}
+  .turma-ag-row .turma-ag-actions{flex-wrap:wrap;flex-basis:100%;padding-left:50px}
+  .turma-ag-row .turma-ag-actions .btn{flex:1;justify-content:center;min-width:80px}
 }
 </style>
 </head>
@@ -3155,13 +3158,13 @@ async function verTurma(id) {
         ${agendamentos.length===0
           ?'<div class="empty" style="padding:20px"><div class="empty-title">Nenhum agendamento</div><div class="empty-sub">Adicione a data e o instrutor do treinamento.</div></div>'
           :agendamentos.map((ag,i)=>`
-          <div class="list-item" style="padding:12px 0">
+          <div class="list-item turma-ag-row" style="padding:12px 0">
             <div class="li-icon" style="background:var(--gray-100);color:var(--text-2);font-size:12px;font-weight:700;border-radius:var(--r-md)">${i+1}</div>
             <div class="li-info">
               <div class="li-title">${formatarData(ag.data)}${ag.hora_inicio?' · '+ag.hora_inicio.slice(0,5):''}${ag.hora_fim?' - '+ag.hora_fim.slice(0,5):''}</div>
               <div class="li-sub">${ag.usuarios?.nome?'Instrutor: '+ag.usuarios.nome:'Sem instrutor'}${ag.local?' · '+ag.local:''}${ag.modalidade?' · '+ag.modalidade:''}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <div class="turma-ag-actions" style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <span class="badge ${ag.concluida?'badge-green':'badge-gray'}">${ag.concluida?'Concluído':'Pendente'}</span>
               ${podeEditar?`<button class="btn btn-navy btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
               <button class="btn btn-outline btn-sm" data-action="excluirAgendamento" data-id="${ag.id}" data-extra="${id}" style="color:var(--red);border-color:var(--red)">Excluir</button>`:``}
