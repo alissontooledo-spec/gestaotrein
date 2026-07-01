@@ -972,6 +972,7 @@ const ICONS = {
   chart:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
   book:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>`,
   team:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  shield:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`,
   dots:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>`,
   logout:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
   back:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>`,
@@ -1048,14 +1049,14 @@ async function fazerLogout() {
 // ============================================================
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'conta',l:'Minha conta',icon:'user'}],
-  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
-  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 const NAV_BOTTOM = {
   provedor:['home','orgs','conta'],
-  administrador:['home','turmas','clientes','colaboradores','relatorios','equipe','conta'],
-  comercial:['home','turmas','relatorios','clientes','conta'],
+  administrador:['home','turmas','clientes','colaboradores','conformidade','relatorios','equipe','conta'],
+  comercial:['home','turmas','relatorios','clientes','conformidade','conta'],
   instrutor:['home','agenda','historico','conta'],
 };
 
@@ -1092,7 +1093,7 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {home:'Início',orgs:'Organizações',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
+const TITULOS = {home:'Início',orgs:'Organizações',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
 async function irPara(pagina, params={}) {
   paginaAtual = pagina;
@@ -1112,6 +1113,7 @@ async function irPara(pagina, params={}) {
       case 'clientes':      await renderClientes(); break;
       case 'colaboradores': await renderColaboradores(); break;
       case 'catalogo':      await renderCatalogo(); break;
+      case 'conformidade':  await renderConformidade(); break;
       case 'turmas':        await renderTurmas(); break;
       case 'equipe':        await renderEquipe(); break;
       case 'agenda':        await renderAgenda(); break;
@@ -1490,6 +1492,9 @@ async function renderHomeAdmin() {
   const cliAll = clientes||[];
   const sesAll = sessoes||[];
 
+  const {count:certEmitidos} = await sb.from('documentos').select('id',{count:'exact',head:true}).eq('org_id',oi).in('tipo',['certificado_individual','certificado_coletivo']);
+  const confResumo = await calcConformidade();
+
   const ativas     = tAll.filter(t=>t.status==='em_andamento').length;
   const agendadas  = tAll.filter(t=>t.status==='agendada').length;
   const concluidas = tAll.filter(t=>t.status==='concluida').length;
@@ -1637,6 +1642,42 @@ async function renderHomeAdmin() {
     </div>
 
     ${alertasHtml}
+
+    <div class="home-chart-card" style="margin-bottom:16px">
+      <div class="home-chart-title">${ICONS.shield} Conformidade</div>
+      <div style="display:grid;grid-template-columns:repeat(${planoAtinge('pro')?3:2},1fr);gap:10px;margin-top:10px">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--navy)">${confResumo.colaboradoresTreinados}</div>
+          <div style="font-size:11px;color:var(--text-3)">Colaboradores treinados</div>
+        </div>
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--navy)">${certEmitidos||0}</div>
+          <div style="font-size:11px;color:var(--text-3)">Certificados emitidos</div>
+        </div>
+        ${planoAtinge('pro') ? `
+        <div>
+          <div style="font-size:20px;font-weight:700;color:${confResumo.indice>=90?'var(--green)':confResumo.indice>=70?'var(--amber-h)':'var(--red)'}">${confResumo.indice}%</div>
+          <div style="font-size:11px;color:var(--text-3)">Índice de conformidade</div>
+        </div>` : ''}
+      </div>
+      ${planoAtinge('pro') ? `
+        ${confResumo.statusPorTreinamento.length ? `
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px">
+          ${confResumo.statusPorTreinamento.slice(0,5).map(s => `
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--text-2);width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.nome}">${s.nome}</span>
+              <div style="flex:1;height:6px;background:var(--gray-100);border-radius:3px"><div style="width:${s.pct}%;height:6px;background:${s.pct>=90?'var(--green)':s.pct>=70?'var(--amber)':'var(--red)'};border-radius:3px"></div></div>
+              <span style="font-size:11px;color:var(--text-3);width:30px;text-align:right">${s.pct}%</span>
+            </div>`).join('')}
+        </div>` : ''}
+        <button class="btn btn-outline btn-sm" style="margin-top:12px" data-nav="conformidade">Ver detalhes →</button>
+      ` : `
+        <div style="margin-top:12px;font-size:12px;color:var(--text-2);line-height:1.5">
+          Acompanhe vencimentos por colaborador e o índice de conformidade da organização.
+          <span style="color:var(--amber-text);font-weight:600;cursor:pointer" onclick="modalUpgrade('Controle de Conformidade','pro')">Disponível no plano Pro →</span>
+        </div>
+      `}
+    </div>
 
     <div class="home-chart-card">
       <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
@@ -2436,6 +2477,204 @@ function filtrarCatalogo(q) {
   const maxUso = Math.max(..._catalogoCache.map(t => usoMap[t.id]?.total || 0), 1);
   const el = document.getElementById('listaCatalogo');
   if (el) el.innerHTML = _htmlListaCatalogo(r, maxUso);
+}
+
+// ============================================================
+// CONFORMIDADE
+// ============================================================
+// Regra: para cada colaborador e treinamento, considera-se a participação
+// na turma concluída mais recente. A data da última sessão dessa turma é
+// usada como data de conclusão. A validade (meses) do catálogo define o
+// vencimento. Concluir novamente o mesmo treinamento renova a validade,
+// substituindo a ocorrência anterior.
+// O índice de conformidade mede apenas treinamentos já realizados que
+// seguem dentro da validade — não existe matriz de obrigatoriedade por
+// colaborador, então não mede pendências nunca realizadas.
+async function calcConformidade() {
+  const oi = usuarioAtual.org_id;
+  const [{data:turmasC}, {data:partsAll}, {data:sessAll}, {data:colabsAll}] = await Promise.all([
+    sb.from('turmas').select('id,catalogo_id,cliente_id,clientes(nome),catalogo(nome,validade_meses)').eq('org_id',oi).eq('status','concluida'),
+    sb.from('turma_participantes').select('turma_id,colaborador_id'),
+    sb.from('sessoes').select('turma_id,data'),
+    sb.from('colaboradores').select('id,nome'), // sem filtro org_id (coluna não existe na tabela)
+  ]);
+
+  const turmasMap = {};
+  (turmasC||[]).forEach(t => { turmasMap[t.id] = t; });
+
+  const ultimaDataTurma = {};
+  (sessAll||[]).forEach(s => {
+    if (!turmasMap[s.turma_id]) return;
+    if (!ultimaDataTurma[s.turma_id] || s.data > ultimaDataTurma[s.turma_id]) ultimaDataTurma[s.turma_id] = s.data;
+  });
+
+  const colabMap = {};
+  (colabsAll||[]).forEach(c => { colabMap[c.id] = c.nome; });
+
+  const pares = {};
+  (partsAll||[]).forEach(p => {
+    const t = turmasMap[p.turma_id];
+    if (!t || !t.catalogo_id) return;
+    const dataConclusao = ultimaDataTurma[p.turma_id];
+    if (!dataConclusao) return;
+    const key = p.colaborador_id + '|' + t.catalogo_id;
+    const atual = pares[key];
+    if (!atual || dataConclusao > atual.dataConclusao) {
+      pares[key] = {
+        colaborador_id: p.colaborador_id,
+        colaboradorNome: colabMap[p.colaborador_id] || 'Colaborador',
+        catalogo_id: t.catalogo_id,
+        treinamentoNome: t.catalogo?.nome || 'Treinamento',
+        empresa: t.clientes?.nome || '—',
+        dataConclusao,
+        validadeMeses: t.catalogo?.validade_meses || 12,
+      };
+    }
+  });
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const lista = Object.values(pares).map(p => {
+    const dtConc = new Date(p.dataConclusao+'T12:00:00');
+    const dtVenc = new Date(dtConc); dtVenc.setMonth(dtVenc.getMonth()+p.validadeMeses);
+    const diffDias = Math.round((dtVenc - hoje) / 86400000);
+    let status;
+    if (diffDias < 0) status = 'vencido';
+    else if (diffDias <= 7) status = 'urgente';
+    else if (diffDias <= 20) status = 'atencao';
+    else if (diffDias <= 35) status = 'planejar';
+    else status = 'ok';
+    return {...p, diffDias, status};
+  });
+
+  const total     = lista.length;
+  const vencidos  = lista.filter(x => x.status === 'vencido').length;
+  const conformes = total - vencidos;
+  const indice    = total > 0 ? Math.round((conformes/total)*100) : 100;
+  const colaboradoresTreinados = new Set(lista.map(x => x.colaborador_id)).size;
+
+  const porTreinamento = {};
+  lista.forEach(x => {
+    if (!porTreinamento[x.treinamentoNome]) porTreinamento[x.treinamentoNome] = {total:0, conformes:0};
+    porTreinamento[x.treinamentoNome].total++;
+    if (x.status !== 'vencido') porTreinamento[x.treinamentoNome].conformes++;
+  });
+  const statusPorTreinamento = Object.entries(porTreinamento)
+    .map(([nome,v]) => ({nome, pct: v.total > 0 ? Math.round((v.conformes/v.total)*100) : 100}))
+    .sort((a,b) => a.pct-b.pct);
+
+  const proximos = lista
+    .filter(x => x.status === 'vencido' || x.diffDias <= 35)
+    .sort((a,b) => a.diffDias-b.diffDias);
+
+  return {total, vencidos, conformes, indice, colaboradoresTreinados, statusPorTreinamento, proximos};
+}
+
+async function renderConformidade() {
+  setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Conformidade</div>`);
+  fabOcultar();
+
+  if (!planoAtinge('pro')) {
+    setConteudo(`
+      <div class="card" style="border:2px solid var(--amber);background:rgba(245,158,11,.04);text-align:center;padding:32px 24px">
+        <div style="width:52px;height:52px;border-radius:50%;background:rgba(245,158,11,.15);color:var(--amber-h);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">${ICONS.shield}</div>
+        <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Controle de Conformidade</div>
+        <p style="font-size:13px;color:var(--text-2);line-height:1.6;max-width:420px;margin:0 auto 18px">
+          Acompanhe vencimentos de certificados por colaborador, o índice de conformidade da organização e receba alertas de renovação antes que expirem.
+        </p>
+        <button class="btn btn-amber" onclick="modalUpgrade('Controle de Conformidade','pro')">Ver planos</button>
+      </div>`);
+    return;
+  }
+
+  window._confData = await calcConformidade();
+  const d = window._confData;
+  const proximos30 = d.proximos.filter(x => x.diffDias <= 30 && x.status !== 'vencido').length;
+
+  setConteudo(`
+    <div class="stats-grid" style="margin-bottom:16px">
+      <div class="stat-card navy">
+        <div class="stat-label">Total avaliado</div>
+        <div class="stat-value">${d.total}</div>
+        <div class="stat-sub">pares colaborador × treinamento</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Conformes</div>
+        <div class="stat-value" style="color:var(--green)">${d.indice}%</div>
+        <div class="stat-sub">${d.conformes} dentro da validade</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Vencidos</div>
+        <div class="stat-value" style="color:var(--red)">${d.vencidos}</div>
+        <div class="stat-sub">certificado expirado</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">Próx. 30 dias</div>
+        <div class="stat-value" style="color:var(--amber)">${proximos30}</div>
+        <div class="stat-sub">vencem em breve</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+      <input type="search" id="buscaConf" placeholder="Buscar colaborador ou treinamento..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarConformidade(this.value)">
+      <select id="filtroConfStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarConformidade(document.getElementById('buscaConf').value)">
+        <option value="">Todos</option>
+        <option value="vencido">Vencido</option>
+        <option value="urgente">Urgente</option>
+        <option value="atencao">Atenção</option>
+        <option value="planejar">Planejar</option>
+      </select>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--navy)">Vencimentos próximos e pendências</div>
+      <div id="listaConformidade" style="overflow-x:auto">${_htmlListaConformidade(d.proximos)}</div>
+    </div>
+
+    <p style="font-size:11px;color:var(--text-3);line-height:1.6;margin-top:14px">
+      O índice de conformidade representa o percentual de treinamentos já realizados que permanecem dentro da validade. Como não existe uma matriz de obrigatoriedade por colaborador, o índice considera apenas treinamentos realizados ao menos uma vez — não treinamentos obrigatórios ainda não realizados.
+    </p>
+  `);
+}
+
+function _htmlListaConformidade(lista) {
+  if (!lista.length) return `<div class="empty" style="padding:32px"><div class="empty-icon">✅</div><div class="empty-title">Nenhuma pendência</div><div class="empty-sub">Não há certificados vencidos ou vencendo nos próximos 35 dias.</div></div>`;
+  const badgeCls = {vencido:'badge-red', urgente:'badge-red', atencao:'badge-amber', planejar:'badge-blue'};
+  const badgeLbl = {vencido:'Vencido', urgente:'Urgente', atencao:'Atenção', planejar:'Planejar'};
+  return `<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">
+    <thead><tr style="background:var(--surface)">
+      <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Colaborador</th>
+      <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Treinamento</th>
+      <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Empresa</th>
+      <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Vence em</th>
+      <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Status</th>
+    </tr></thead>
+    <tbody>
+      ${lista.map(x => {
+        const vencTxt = x.status === 'vencido'
+          ? `vencido há ${Math.abs(x.diffDias)} dia${Math.abs(x.diffDias)!==1?'s':''}`
+          : `${x.diffDias} dia${x.diffDias!==1?'s':''}`;
+        return `<tr style="border-top:1px solid var(--border)">
+          <td style="padding:9px 16px;color:var(--navy);font-weight:500">${x.colaboradorNome}</td>
+          <td style="padding:9px 12px;color:var(--text-1)">${x.treinamentoNome}</td>
+          <td style="padding:9px 12px;color:var(--text-2)">${x.empresa}</td>
+          <td style="padding:9px 12px;color:${x.status==='vencido'?'var(--red)':'var(--navy)'};font-weight:${x.status==='vencido'?'600':'400'}">${vencTxt}</td>
+          <td style="padding:9px 16px"><span class="badge ${badgeCls[x.status]||'badge-gray'}" style="font-size:11px">${badgeLbl[x.status]||x.status}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+function filtrarConformidade(q) {
+  const f  = (q||'').toLowerCase().trim();
+  const st = document.getElementById('filtroConfStatus')?.value || '';
+  const d  = window._confData;
+  if (!d) return;
+  let r = d.proximos;
+  if (st) r = r.filter(x => x.status === st);
+  if (f) r = r.filter(x => x.colaboradorNome.toLowerCase().includes(f) || x.treinamentoNome.toLowerCase().includes(f));
+  const el = document.getElementById('listaConformidade');
+  if (el) el.innerHTML = _htmlListaConformidade(r);
 }
 
 function menuCatalogo(btn, id) {
@@ -5554,6 +5793,7 @@ window.addEventListener('popstate', async (e) => {
         case 'clientes':      await renderClientes(); break;
         case 'colaboradores': await renderColaboradores(); break;
         case 'catalogo':      await renderCatalogo(); break;
+        case 'conformidade':  await renderConformidade(); break;
         case 'turmas':        await renderTurmas(); break;
         case 'equipe':        await renderEquipe(); break;
         case 'agenda':        await renderAgenda(); break;
