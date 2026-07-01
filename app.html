@@ -1482,16 +1482,17 @@ async function renderHomeAdmin() {
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
 
-  const [{data:turmas},{data:clientes},{data:sessoes},{data:colabs}] = await Promise.all([
+  const [{data:turmas},{data:clientes},{data:sessoes}] = await Promise.all([
     sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,clientes(nome),catalogo(nome)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
     sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida,local').order('data',{ascending:true}),
-    sb.from('colaboradores').select('id'), // sem filtro org_id (coluna não existe na tabela)
   ]);
 
   const tAll   = turmas||[];
   const cliAll = clientes||[];
-  const sesAll = sessoes||[];
+  // sessoes não tem org_id — isolar via turma_id pertencente às turmas já filtradas por org acima
+  const tAllIds = new Set(tAll.map(t=>t.id));
+  const sesAll = (sessoes||[]).filter(s=>tAllIds.has(s.turma_id));
 
   const {count:certEmitidos} = await sb.from('documentos').select('id',{count:'exact',head:true}).eq('org_id',oi).in('tipo',['certificado_individual','certificado_coletivo']);
   let confResumo = {total:0, vencidos:0, conformes:0, indice:100, colaboradoresTreinados:0, statusPorTreinamento:[], proximos:[]};
@@ -2256,7 +2257,7 @@ async function executarImportacaoClientes() {
 // COLABORADORES
 // ============================================================
 async function renderColaboradores() {
-  const {data,error} = await sb.from('colaboradores').select('*').order('nome').limit(500);
+  const {data,error} = await sb.from('colaboradores').select('*').eq('org_id',usuarioAtual.org_id).order('nome').limit(500);
   if (error) throw error;
   _colabsCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Colaboradores</div>`);
@@ -2369,7 +2370,9 @@ async function salvarColab() {
   const dados = {nome, cpf:document.getElementById('mColCpf')?.value.trim()||null, cargo:document.getElementById('mColCargo')?.value.trim()||null, email:document.getElementById('mColEmail')?.value.trim()||null, telefone:document.getElementById('mColTel')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
-    const {error} = _modalCurrentId ? await sb.from('colaboradores').update(dados).eq('id',_modalCurrentId) : await sb.from('colaboradores').insert(dados);
+    const {error} = _modalCurrentId
+      ? await sb.from('colaboradores').update(dados).eq('id',_modalCurrentId).eq('org_id',usuarioAtual.org_id)
+      : await sb.from('colaboradores').insert({...dados, org_id:usuarioAtual.org_id});
     if (error) throw error;
     fecharModal(); showToast(_modalCurrentId?'Colaborador atualizado!':'Colaborador cadastrado!','success');
     await renderColaboradores();
@@ -3463,7 +3466,7 @@ async function removerParticipante(presencaId, turmaId) {
 async function abrirModalAddParticipante(turmaId, clienteId) {
   _modalCurrentId = turmaId;
   window._partCliId = clienteId;
-  const {data:todos}        = await sb.from('colaboradores').select('id,nome,cpf,cargo').order('nome').limit(500);
+  const {data:todos}        = await sb.from('colaboradores').select('id,nome,cpf,cargo').eq('org_id',usuarioAtual.org_id).order('nome').limit(500);
   const {data:jaAdicionados}= await sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId);
   const jaIds = new Set((jaAdicionados||[]).map(x=>x.colaborador_id));
   window._partDisp = (todos||[]).filter(c=>!jaIds.has(c.id));
@@ -3501,7 +3504,7 @@ async function selecionarParticipante(colId) {
   const clienteId = window._partCliId;
   if (!turmaId||!colId) return;
   try {
-    const {data:col} = await sb.from('colaboradores').select('nome,cargo').eq('id',colId).single();
+    const {data:col} = await sb.from('colaboradores').select('nome,cargo').eq('id',colId).eq('org_id',usuarioAtual.org_id).single();
     const {data:cli} = clienteId ? await sb.from('clientes').select('nome').eq('id',clienteId).single() : {data:null};
     const {error} = await sb.from('turma_participantes').insert({
       turma_id:turmaId, colaborador_id:colId, org_id:usuarioAtual.org_id,
@@ -3540,7 +3543,7 @@ async function salvarCadastroRapido() {
   const cargo = document.getElementById('mCRCargo')?.value.trim()||null;
   try {
     setBtnModalLoading(true);
-    const {data:col,error} = await sb.from('colaboradores').insert({nome,cpf,cargo}).select().single();
+    const {data:col,error} = await sb.from('colaboradores').insert({nome,cpf,cargo,org_id:usuarioAtual.org_id}).select().single();
     if (error) throw error;
     // Adicionar direto à turma
     const {data:cli} = window._crClienteId ? await sb.from('clientes').select('nome').eq('id',window._crClienteId).single() : {data:null};
@@ -3641,14 +3644,15 @@ async function executarImportacao() {
   if (!_dadosImportacao.length) { showToast('Selecione um arquivo CSV válido','error'); return; }
   try {
     setBtnModalLoading(true);
-    // upsert por cpf dentro da mesma org (CPF pode repetir entre orgs diferentes)
-    // Para orgs sem CPF, inserir sem conflito
-    const comCpf = _dadosImportacao.filter(r => r.cpf);
-    const semCpf = _dadosImportacao.filter(r => !r.cpf);
+    // org_id sempre explícito — cada linha importada pertence exclusivamente à organização atual
+    const comOrg = _dadosImportacao.map(r => ({...r, org_id: usuarioAtual.org_id}));
+    // upsert por (org_id, cpf) — mesmo CPF pode existir em organizações diferentes sem conflito
+    const comCpf = comOrg.filter(r => r.cpf);
+    const semCpf = comOrg.filter(r => !r.cpf);
     let totalOk = 0;
     if (comCpf.length) {
       const {data: d1, error: e1} = await sb.from('colaboradores')
-        .upsert(comCpf, {onConflict:'cpf', ignoreDuplicates:false}).select();
+        .upsert(comCpf, {onConflict:'org_id,cpf', ignoreDuplicates:false}).select();
       if (e1) throw e1;
       totalOk += d1?.length || comCpf.length;
     }
@@ -3657,11 +3661,8 @@ async function executarImportacao() {
       if (e2) throw e2;
       totalOk += d2?.length || semCpf.length;
     }
-    const data = {length: totalOk};
-    const error = null;
-    if (error) throw error;
     fecharModal();
-    showToast(`${data?.length||_dadosImportacao.length} colaboradores importados com sucesso!`,'success');
+    showToast(`${totalOk} colaboradores importados com sucesso!`,'success');
     await renderColaboradores();
   } catch(e) {
     setBtnModalLoading(false);
@@ -4571,7 +4572,7 @@ async function confirmarAssinatura() {
     const dataUrl = canvas.toDataURL('image/png');
 
     // Upload da assinatura para o Storage
-    const blob    = await (await fetch(dataUrl)).blob();
+    const blob    = _dataUrlToBlob(dataUrl);
     const path    = `${usuarioAtual.org_id}/${turmaId}/${colId}.png`;
     const {error:upErr} = await sb.storage.from('assinaturas').upload(path, blob, {upsert:true, contentType:'image/png'});
     if (upErr) throw upErr;
@@ -4835,12 +4836,14 @@ async function renderRelatorios() {
   ]);
 
   // Guardar globalmente para filtros e exportação
+  const turmaIdsOrg = new Set((turmasRaw||[]).map(t=>t.id));
   window._relRaw = {
     turmas: turmasRaw||[],
     clientes: clientesRaw||[],
-    sessoes: sessoesRaw||[],
+    // sessoes não tem org_id — isolar via turma_id pertencente às turmas já filtradas por org acima
+    sessoes: (sessoesRaw||[]).filter(s=>turmaIdsOrg.has(s.turma_id)),
     usuarios: usuariosRaw||[],
-    participantes: participantesRaw||[],
+    participantes: (participantesRaw||[]).filter(p=>turmaIdsOrg.has(p.turma_id)),
   };
   window._relPeriodo = 6; // padrão: 6 meses
   window._relComparativo = false; // comparativo desligado por padrão
@@ -5940,6 +5943,19 @@ const LOGO_AVANTESEG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAFaCA
 // PDF — UTILITÁRIOS
 // ============================================================
 
+// Converte uma data URL (base64) em Blob sem usar fetch() — o CSP bloqueia
+// fetch para URIs data:, então a conversão é feita decodificando o base64
+// diretamente em JS.
+function _dataUrlToBlob(dataUrl) {
+  const [header, base64] = dataUrl.split(',');
+  const mimeMatch = header.match(/data:(.*?);base64/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  return new Blob([bytes], {type: mime});
+}
+
 // Gera QR Code como dataURL PNG usando QRCode.js
 function gerarQRCodeDataURL(texto) {
   return new Promise((resolve) => {
@@ -6263,7 +6279,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
       .eq('id', turmaId).single();
     if (error) throw error;
 
-    const {data:col} = await sb.from('colaboradores').select('*').eq('id',colaboradorId).single();
+    const {data:col} = await sb.from('colaboradores').select('*').eq('id',colaboradorId).eq('org_id',usuarioAtual.org_id).single();
     if (!col) throw new Error('Colaborador nao encontrado');
 
     const ag           = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
