@@ -2410,7 +2410,6 @@ function verCatalogo(id) {
         ? `<button class="btn btn-outline" data-action="desarquivarCatalogo" data-id="${t.id}">↩ Restaurar</button>`
         : `<button class="btn btn-outline" data-action="arquivarCatalogo" data-id="${t.id}">📦 Arquivar</button>`
       }
-      <button class="btn btn-outline" data-action="toggleCatalogo" data-id="${t.id}">${t.ativo?"Desativar":"Ativar"}</button>
     </div>` : ""}
   `);
 }
@@ -2449,7 +2448,6 @@ function menuCatalogo(btn, id) {
     isArq
       ? {action:'desarquivarCatalogo',id,label:'Restaurar'}
       : {action:'arquivarCatalogo',id,label:'Arquivar'},
-    {action:'toggleCatalogo',id,label:t.ativo?'Desativar':'Ativar',danger:t.ativo},
   ]);
 }
 
@@ -2493,25 +2491,67 @@ async function desarquivarCatalogo(id) {
   await renderCatalogo();
 }
 
-async function toggleCatalogo(id) {
+function abrirModalCatalogo(id=null) {
+  _modalCurrentId = id;
+  const t = id ? _catalogoCache.find(x=>x.id===id) : null;
+  abrirModal(t?'Editar treinamento':'Novo treinamento', `
+    <div class="field"><label>Nome *</label><input type="text" id="mCatNome" value="${t?.nome||''}" placeholder="Ex: NR-35 Trabalho em Altura"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Carga horária (h) *</label><input type="number" id="mCatCH" value="${t?.carga_horaria||''}" min="1" placeholder="8"></div>
+      <div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatValidade" value="${t?.validade_meses||''}" min="1" placeholder="12"></div>
+    </div>
+    <div class="field"><label>Categoria</label><input type="text" id="mCatCategoria" value="${t?.categoria||''}" placeholder="Opcional"></div>
+    <div class="field"><label>Descrição</label><textarea id="mCatDescricao" rows="3" placeholder="Opcional">${t?.descricao||''}</textarea></div>
+    <div class="field"><label>Conteúdo programático</label><textarea id="mCatConteudo" rows="4" placeholder="Usado na contracapa do certificado (opcional)">${t?.conteudo_programatico||''}</textarea></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCatalogo()">${t?'Salvar':'Cadastrar'}</button>`);
+}
+
+async function salvarCatalogo() {
+  const nome = document.getElementById('mCatNome')?.value.trim();
+  const ch = parseInt(document.getElementById('mCatCH')?.value, 10);
+  const validade = parseInt(document.getElementById('mCatValidade')?.value, 10);
+  if (!nome) { showToast('Nome é obrigatório','error'); return; }
+  if (!ch || ch <= 0) { showToast('Carga horária é obrigatória','error'); return; }
+  if (!validade || validade <= 0) { showToast('Validade é obrigatória','error'); return; }
+  const dados = {
+    nome,
+    carga_horaria: ch,
+    validade_meses: validade,
+    categoria: document.getElementById('mCatCategoria')?.value.trim() || null,
+    descricao: document.getElementById('mCatDescricao')?.value.trim() || null,
+    conteudo_programatico: document.getElementById('mCatConteudo')?.value.trim() || null,
+  };
+  try {
+    setBtnModalLoading(true);
+    const {error} = _modalCurrentId
+      ? await sb.from('catalogo').update(dados).eq('id',_modalCurrentId)
+      : await sb.from('catalogo').insert({...dados, org_id:usuarioAtual.org_id, ativo:true, arquivado:false});
+    if (error) throw error;
+    fecharModal(); showToast(_modalCurrentId?'Treinamento atualizado!':'Treinamento cadastrado!','success');
+    await renderCatalogo();
+  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+}
+
+async function duplicarCatalogo(id) {
   const t = _catalogoCache.find(x=>x.id===id);
   if (!t) return;
-  const confirmado = await new Promise(resolve => {
-    abrirModal(t.ativo?'Desativar treinamento':'Ativar treinamento', `
-      <p style="font-size:14px;color:var(--text-2);line-height:1.6;padding:8px 0">
-        Deseja ${t.ativo?'desativar':'ativar'} <strong>${t.nome}</strong>?
-      </p>`,
-      `<button class="btn btn-outline" onclick="fecharModal();window._resolveToggleCat(false)">Cancelar</button>
-       <button class="btn btn-navy" onclick="fecharModal();window._resolveToggleCat(true)">${t.ativo?'Desativar':'Ativar'}</button>`
-    );
-    window._resolveToggleCat = resolve;
-  });
-  delete window._resolveToggleCat;
-  if (!confirmado) return;
-  const {error} = await sb.from('catalogo').update({ativo:!t.ativo}).eq('id',id);
-  if (error) { showToast(error.message,'error'); return; }
-  showToast(`Treinamento ${t.ativo?'desativado':'ativado'}!`,'success');
-  await renderCatalogo();
+  try {
+    const {error} = await sb.from('catalogo').insert({
+      nome: `${t.nome} (cópia)`,
+      carga_horaria: t.carga_horaria,
+      validade_meses: t.validade_meses,
+      categoria: t.categoria,
+      descricao: t.descricao,
+      conteudo_programatico: t.conteudo_programatico,
+      org_id: usuarioAtual.org_id,
+      ativo: true,
+      arquivado: false,
+    });
+    if (error) throw error;
+    showToast(`"${t.nome}" duplicado.`,'success');
+    await renderCatalogo();
+  } catch(e) { showToast(e.message||'Erro ao duplicar','error'); }
 }
 
 // ============================================================
@@ -5455,7 +5495,6 @@ document.addEventListener('click', function(e) {
     case 'verCatalogo':          verCatalogo(id); break;
     case 'menuCatalogo':         menuCatalogo(el, id); break;
     case 'editarCatalogo':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCatalogo(id); break;
-    case 'toggleCatalogo':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCatalogo(id); break;
     case 'arquivarCatalogo':     document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); arquivarCatalogo(id); break;
     case 'desarquivarCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); desarquivarCatalogo(id); break;
     // Equipe
