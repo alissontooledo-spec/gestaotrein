@@ -1494,7 +1494,8 @@ async function renderHomeAdmin() {
   const sesAll = sessoes||[];
 
   const {count:certEmitidos} = await sb.from('documentos').select('id',{count:'exact',head:true}).eq('org_id',oi).in('tipo',['certificado_individual','certificado_coletivo']);
-  const confResumo = await calcConformidade();
+  let confResumo = {total:0, vencidos:0, conformes:0, indice:100, colaboradoresTreinados:0, statusPorTreinamento:[], proximos:[]};
+  try { confResumo = await calcConformidade(); } catch(e) { console.warn('Conformidade indisponível:', e.message); }
 
   const ativas     = tAll.filter(t=>t.status==='em_andamento').length;
   const agendadas  = tAll.filter(t=>t.status==='agendada').length;
@@ -2022,7 +2023,7 @@ async function renderClientes() {
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
       <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarClientes(this.value)">
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo</button>`:''}
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoClientes()" style="white-space:nowrap">⬆ Importar</button>`:''}
     </div>
     <div class="card" style="padding:0" id="listaClientes">${_htmlListaClientes(_clientesCache)}</div>`);
 }
@@ -2146,6 +2147,109 @@ async function toggleCliente(id) {
   if (error) { showToast(error.message,'error'); return; }
   showToast(`Cliente ${c.ativo?'desativado':'ativado'}!`,'success');
   await renderClientes();
+}
+
+// ── Importação em massa de clientes (CSV) ──
+function abrirModalImportacaoClientes() {
+  abrirModal('Importar clientes', `
+    <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.6">
+      <div style="font-weight:600;margin-bottom:4px">Como importar:</div>
+      1. Baixe o modelo de planilha abaixo<br>
+      2. Preencha com os dados das empresas-cliente<br>
+      3. Salve como CSV e selecione o arquivo
+    </div>
+    <button class="btn btn-outline" style="width:100%;margin-bottom:16px" onclick="baixarModeloImportacaoClientes()">
+      ⬇ Baixar modelo CSV
+    </button>
+    <div class="field"><label>Selecione o arquivo CSV *</label>
+      <input type="file" id="mImpCliArquivo" accept=".csv" style="width:100%;padding:9px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit"></div>
+    <div id="mImpCliPreview" style="margin-top:8px;font-size:13px;color:var(--text-2)"></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="executarImportacaoClientes()">Importar</button>`);
+  document.getElementById('mImpCliArquivo').addEventListener('change', previewImportacaoClientes);
+}
+
+function baixarModeloImportacaoClientes() {
+  const csv = 'nome,cnpj,cidade,uf,email,telefone\nIndústria Exemplo Ltda,00.000.000/0001-00,São Paulo,SP,contato@industriaexemplo.com.br,(11) 99999-9999\nConstrutora Modelo S.A.,11.111.111/0001-11,Curitiba,PR,financeiro@construtoramodelo.com.br,(41) 88888-8888';
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'modelo-clientes.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+let _dadosImportacaoClientes = [];
+function previewImportacaoClientes(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const texto  = ev.target.result;
+    const linhas = texto.split(/\r?\n/).filter(l => l.trim());
+    if (!linhas.length) { document.getElementById('mImpCliPreview').innerHTML = '<span style="color:var(--red)">Arquivo vazio.</span>'; return; }
+    const sep = linhas[0].includes(';') ? ';' : ',';
+    const parseLinha = l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+    const header = parseLinha(linhas[0]).map(h => h.toLowerCase().trim());
+    const idx = k => header.findIndex(h => h === k || h.startsWith(k));
+    const nomeIdx = idx('nome');
+    if (nomeIdx < 0) { document.getElementById('mImpCliPreview').innerHTML = '<span style="color:var(--red)">Coluna "nome" não encontrada. Verifique o arquivo.</span>'; return; }
+    const cnpjIdx = idx('cnpj'), cidadeIdx = idx('cidade'), ufIdx = idx('uf'), emailIdx = idx('email'), telIdx = idx('telefone');
+
+    // Duplicados verificados apenas dentro da própria organização — clientes
+    // com o mesmo CNPJ em organizações diferentes são registros independentes.
+    const cnpjsExistentes = new Set(_clientesCache.map(c => (c.cnpj||'').replace(/\D/g,'')).filter(Boolean));
+
+    const linhasParse = linhas.slice(1).map(l => {
+      const cols = parseLinha(l);
+      return {
+        nome:     cols[nomeIdx] || '',
+        cnpj:     cnpjIdx   >= 0 ? cols[cnpjIdx]   || null : null,
+        cidade:   cidadeIdx >= 0 ? cols[cidadeIdx] || null : null,
+        uf:       ufIdx     >= 0 ? (cols[ufIdx]||'').toUpperCase() || null : null,
+        email:    emailIdx  >= 0 ? cols[emailIdx]  || null : null,
+        telefone: telIdx    >= 0 ? cols[telIdx]    || null : null,
+      };
+    }).filter(r => r.nome.length > 1);
+
+    _dadosImportacaoClientes = linhasParse.filter(r => !r.cnpj || !cnpjsExistentes.has(r.cnpj.replace(/\D/g,'')));
+    const duplicados = linhasParse.length - _dadosImportacaoClientes.length;
+
+    const el = document.getElementById('mImpCliPreview');
+    el.innerHTML = _dadosImportacaoClientes.length > 0
+      ? `<div style="color:var(--green);font-weight:500;margin-bottom:8px">✓ ${_dadosImportacaoClientes.length} cliente${_dadosImportacaoClientes.length!==1?'s':''} prontos para importar</div>
+         ${duplicados > 0 ? `<div style="color:var(--amber-text);font-size:12px;margin-bottom:8px">${duplicados} linha${duplicados!==1?'s':''} ignorada${duplicados!==1?'s':''} — CNPJ já cadastrado nesta organização</div>` : ''}
+         <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto">
+           ${_dadosImportacaoClientes.slice(0,5).map(r =>
+             `<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px">
+               <span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nome}</span>
+               <span style="color:var(--text-3)">${r.cnpj||''}</span>
+             </div>`).join('')}
+           ${_dadosImportacaoClientes.length > 5 ? `<div style="padding:7px 12px;font-size:12px;color:var(--text-3)">+ ${_dadosImportacaoClientes.length-5} mais...</div>` : ''}
+         </div>`
+      : (duplicados > 0
+          ? `<span style="color:var(--amber-text)">Todas as ${duplicados} linhas já existem nesta organização (CNPJ duplicado).</span>`
+          : '<span style="color:var(--red)">Nenhuma linha válida. Verifique se a coluna "nome" está preenchida.</span>');
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+async function executarImportacaoClientes() {
+  if (!_dadosImportacaoClientes.length) { showToast('Selecione um arquivo CSV válido','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    // org_id sempre explícito — cada linha importada pertence exclusivamente
+    // à organização do usuário autenticado.
+    const registros = _dadosImportacaoClientes.map(r => ({...r, org_id: usuarioAtual.org_id, ativo: true}));
+    const {data, error} = await sb.from('clientes').insert(registros).select();
+    if (error) throw error;
+    const qtd = data?.length || registros.length;
+    fecharModal();
+    showToast(`${qtd} cliente${qtd!==1?'s':''} importado${qtd!==1?'s':''} com sucesso!`,'success');
+    await renderClientes();
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message||'Erro ao importar','error');
+  }
 }
 
 // ============================================================
@@ -2491,52 +2595,21 @@ function filtrarCatalogo(q) {
 // O índice de conformidade mede apenas treinamentos já realizados que
 // seguem dentro da validade — não existe matriz de obrigatoriedade por
 // colaborador, então não mede pendências nunca realizadas.
+//
+// Os pares (colaborador × treinamento) já calculados ficam salvos em
+// conformidade_status, atualizados por _atualizarConformidadeTurma() no
+// momento em que cada turma é concluída — evita reprocessar o histórico
+// inteiro da organização toda vez que a tela é aberta.
 async function calcConformidade() {
   const oi = usuarioAtual.org_id;
-  const [{data:turmasC}, {data:partsAll}, {data:sessAll}, {data:colabsAll}] = await Promise.all([
-    sb.from('turmas').select('id,catalogo_id,cliente_id,clientes(nome),catalogo(nome,validade_meses)').eq('org_id',oi).eq('status','concluida'),
-    sb.from('turma_participantes').select('turma_id,colaborador_id'),
-    sb.from('sessoes').select('turma_id,data'),
-    sb.from('colaboradores').select('id,nome'), // sem filtro org_id (coluna não existe na tabela)
-  ]);
-
-  const turmasMap = {};
-  (turmasC||[]).forEach(t => { turmasMap[t.id] = t; });
-
-  const ultimaDataTurma = {};
-  (sessAll||[]).forEach(s => {
-    if (!turmasMap[s.turma_id]) return;
-    if (!ultimaDataTurma[s.turma_id] || s.data > ultimaDataTurma[s.turma_id]) ultimaDataTurma[s.turma_id] = s.data;
-  });
-
-  const colabMap = {};
-  (colabsAll||[]).forEach(c => { colabMap[c.id] = c.nome; });
-
-  const pares = {};
-  (partsAll||[]).forEach(p => {
-    const t = turmasMap[p.turma_id];
-    if (!t || !t.catalogo_id) return;
-    const dataConclusao = ultimaDataTurma[p.turma_id];
-    if (!dataConclusao) return;
-    const key = p.colaborador_id + '|' + t.catalogo_id;
-    const atual = pares[key];
-    if (!atual || dataConclusao > atual.dataConclusao) {
-      pares[key] = {
-        colaborador_id: p.colaborador_id,
-        colaboradorNome: colabMap[p.colaborador_id] || 'Colaborador',
-        catalogo_id: t.catalogo_id,
-        treinamentoNome: t.catalogo?.nome || 'Treinamento',
-        empresa: t.clientes?.nome || '—',
-        dataConclusao,
-        validadeMeses: t.catalogo?.validade_meses || 12,
-      };
-    }
-  });
+  const {data:rows, error} = await sb.from('conformidade_status')
+    .select('colaborador_id,data_vencimento,colaboradores(nome),catalogo(nome),clientes(nome)')
+    .eq('org_id', oi);
+  if (error) throw error;
 
   const hoje = new Date(); hoje.setHours(0,0,0,0);
-  const lista = Object.values(pares).map(p => {
-    const dtConc = new Date(p.dataConclusao+'T12:00:00');
-    const dtVenc = new Date(dtConc); dtVenc.setMonth(dtVenc.getMonth()+p.validadeMeses);
+  const lista = (rows||[]).map(r => {
+    const dtVenc = new Date(r.data_vencimento+'T12:00:00');
     const diffDias = Math.round((dtVenc - hoje) / 86400000);
     let status;
     if (diffDias < 0) status = 'vencido';
@@ -2544,7 +2617,13 @@ async function calcConformidade() {
     else if (diffDias <= 20) status = 'atencao';
     else if (diffDias <= 35) status = 'planejar';
     else status = 'ok';
-    return {...p, diffDias, status};
+    return {
+      colaborador_id: r.colaborador_id,
+      colaboradorNome: r.colaboradores?.nome || 'Colaborador',
+      treinamentoNome: r.catalogo?.nome || 'Treinamento',
+      empresa: r.clientes?.nome || '—',
+      diffDias, status,
+    };
   });
 
   const total     = lista.length;
@@ -4667,7 +4746,7 @@ async function finalizarTurma(turmaId) {
 
     // 2. Verificar se TODAS as sessões da turma estão concluídas
     const {data:todasSessoes} = await sb.from('sessoes')
-      .select('id,concluida')
+      .select('id,concluida,data')
       .eq('turma_id', turmaId);
 
     const todasConcluidas = (todasSessoes||[]).length > 0
@@ -4680,6 +4759,7 @@ async function finalizarTurma(turmaId) {
         .eq('id', turmaId);
       if (errTurma) throw errTurma;
       showToast('Treinamento concluído! Todos os dias finalizados.', 'success');
+      await _atualizarConformidadeTurma(turmaId, todasSessoes);
     } else {
       showToast('Etapa finalizada! Retorne na próxima data para continuar.', 'success');
     }
@@ -4688,6 +4768,44 @@ async function finalizarTurma(turmaId) {
   } catch(e) {
     showToast(e.message||'Erro ao finalizar','error');
   } finally { hideLoading(); }
+}
+
+// Atualiza a tabela conformidade_status (cache) quando uma turma é concluída.
+// Best-effort: nunca bloqueia nem quebra a finalização da turma se falhar.
+async function _atualizarConformidadeTurma(turmaId, sessoesTurma) {
+  try {
+    const oi = usuarioAtual.org_id;
+    const [{data:turma}, {data:parts}] = await Promise.all([
+      sb.from('turmas').select('catalogo_id,cliente_id,catalogo(validade_meses)').eq('id',turmaId).single(),
+      sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId),
+    ]);
+    if (!turma?.catalogo_id || !parts?.length) return;
+
+    const datas = (sessoesTurma||[]).map(s => s.data).filter(Boolean).sort();
+    const dataConclusao = datas[datas.length-1];
+    if (!dataConclusao) return;
+
+    const validadeMeses = turma.catalogo?.validade_meses || 12;
+    const dtVenc = new Date(dataConclusao+'T12:00:00');
+    dtVenc.setMonth(dtVenc.getMonth()+validadeMeses);
+    const dataVencimento = dtVenc.toISOString().split('T')[0];
+
+    const registros = parts.map(p => ({
+      org_id: oi,
+      colaborador_id: p.colaborador_id,
+      catalogo_id: turma.catalogo_id,
+      turma_id: turmaId,
+      cliente_id: turma.cliente_id || null,
+      data_conclusao: dataConclusao,
+      data_vencimento: dataVencimento,
+      atualizado_em: new Date().toISOString(),
+    }));
+    const {error} = await sb.from('conformidade_status')
+      .upsert(registros, {onConflict:'org_id,colaborador_id,catalogo_id'});
+    if (error) console.warn('Conformidade não atualizada:', error.message);
+  } catch(e) {
+    console.warn('Conformidade não atualizada:', e.message);
+  }
 }
 
 
