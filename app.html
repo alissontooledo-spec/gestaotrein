@@ -1810,9 +1810,29 @@ function _renderOrgsLista(orgs) {
       <div class="stat-card blue"><div class="stat-label">Total</div><div class="stat-value">${orgs.length}</div><div class="stat-sub">${ativas} ativas</div></div>
       <div class="stat-card"><div class="stat-label">Inativas</div><div class="stat-value">${orgs.length-ativas}</div></div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="filtrarOrgs(this.value)">
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="aplicarFiltrosOrgs()">
       <button class="btn btn-navy" onclick="abrirModalOrg()">${ICONS.plus} Nova</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <select id="filtroOrgStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosOrgs()">
+        <option value="">Todos os status</option>
+        <option value="ativa">Ativas</option>
+        <option value="inativa">Inativas</option>
+      </select>
+      <select id="filtroOrgPlano" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosOrgs()">
+        <option value="">Todos os planos</option>
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+      <select id="ordenarOrgs" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosOrgs()">
+        <option value="nome_asc">Nome (A-Z)</option>
+        <option value="nome_desc">Nome (Z-A)</option>
+        <option value="recente">Mais recente</option>
+        <option value="antiga">Mais antiga</option>
+        <option value="plano">Plano</option>
+      </select>
     </div>
     <div class="card" id="listaOrgs">${_htmlListaOrgs(orgs)}</div>`);
 }
@@ -1837,9 +1857,29 @@ function _htmlListaOrgs(orgs) {
     </div>`).join('');
 }
 
-function filtrarOrgs(q) {
-  const f = q.toLowerCase().trim();
-  const r = f ? _orgsCache.filter(o=>o.nome.toLowerCase().includes(f)||(o.cnpj||'').includes(f)) : _orgsCache;
+function aplicarFiltrosOrgs() {
+  const busca  = (document.getElementById('buscaOrg')?.value || '').toLowerCase().trim();
+  const status = document.getElementById('filtroOrgStatus')?.value || '';
+  const plano  = document.getElementById('filtroOrgPlano')?.value || '';
+  const ordem  = document.getElementById('ordenarOrgs')?.value || 'nome_asc';
+
+  let r = _orgsCache;
+  if (busca)            r = r.filter(o => o.nome.toLowerCase().includes(busca) || (o.cnpj||'').includes(busca));
+  if (status==='ativa')   r = r.filter(o => o.ativo);
+  if (status==='inativa') r = r.filter(o => !o.ativo);
+  if (plano)             r = r.filter(o => (o.plano||'starter') === plano);
+
+  const NIVEL_PLANO = {starter:1, pro:2, enterprise:3};
+  r = [...r].sort((a,b) => {
+    switch (ordem) {
+      case 'nome_desc': return b.nome.localeCompare(a.nome);
+      case 'recente':   return (b.created_at||'').localeCompare(a.created_at||'');
+      case 'antiga':    return (a.created_at||'').localeCompare(b.created_at||'');
+      case 'plano':     return (NIVEL_PLANO[a.plano||'starter']||1) - (NIVEL_PLANO[b.plano||'starter']||1) || a.nome.localeCompare(b.nome);
+      default:          return a.nome.localeCompare(b.nome);
+    }
+  });
+
   document.getElementById('listaOrgs').innerHTML = _htmlListaOrgs(r);
 }
 
