@@ -1463,13 +1463,14 @@ function abrirModalAlterarPlano(orgId, planoAtual) {
 async function alterarPlanoOrg() {
   const novoPlano = document.getElementById('mAlterarPlano')?.value;
   if (!novoPlano) { showToast('Selecione um plano','error'); return; }
+  const orgId = _modalCurrentId; // capturar antes de fecharModal() zerar _modalCurrentId
   try {
     setBtnModalLoading(true);
-    const { error } = await sb.from('organizacoes').update({ plano: novoPlano }).eq('id', _modalCurrentId);
+    const { error } = await sb.from('organizacoes').update({ plano: novoPlano }).eq('id', orgId);
     if (error) throw error;
     fecharModal();
     showToast('Plano alterado com sucesso!', 'success');
-    await verOrgProvedor(_modalCurrentId);
+    await verOrgProvedor(orgId);
   } catch(e) {
     setBtnModalLoading(false);
     showToast(e.message || 'Erro ao alterar plano', 'error');
@@ -3140,6 +3141,7 @@ async function abrirModalClienteRapido() {
 async function salvarClienteRapido() {
   const nome = document.getElementById('mCRNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
+  const turmaId = _modalCurrentId; // capturar antes de fecharModal() zerar _modalCurrentId
   const dados = {
     nome,
     cnpj: document.getElementById('mCRCnpj')?.value.trim()||null,
@@ -3158,7 +3160,7 @@ async function salvarClienteRapido() {
     _clientesCache = clis||[];
     fecharModal();
     showToast(`${nome} cadastrado!`,'success');
-    await abrirModalTurma(_modalCurrentId||null);
+    await abrirModalTurma(turmaId||null);
     setTimeout(()=>{ const sel = document.getElementById('mTurCli'); if(sel && data) sel.value = data.id; },100);
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
