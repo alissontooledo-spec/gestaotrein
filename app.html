@@ -5147,11 +5147,9 @@ async function renderEquipe() {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Equipe</div>`);
   fabOcultar();
 
-  const total   = usuarios.length;
-  const ativos  = usuarios.filter(u=>u.ativo).length;
-  const instrutores = usuarios.filter(u=>u.perfil==='instrutor').length;
+  const ativos   = usuarios.filter(u=>u.ativo).length;
+  const inativos = usuarios.filter(u=>!u.ativo);
 
-  // Paleta por perfil no novo design
   const PERFIL_STYLE = {
     provedor:      {bg:'rgba(124,58,237,.12)', cor:'#7C3AED',  badge:'badge-navy'},
     administrador: {bg:'rgba(30,42,74,.12)',   cor:'#1E2A4A',  badge:'badge-navy'},
@@ -5159,50 +5157,107 @@ async function renderEquipe() {
     instrutor:     {bg:'rgba(245,158,11,.12)', cor:'#D97706',  badge:'badge-amber'},
   };
 
-  const listaHtml = usuarios.length===0
-    ? `<div class="empty" style="padding:32px 20px"><div class="empty-icon">👤</div><div class="empty-title">Nenhum usuário</div><div class="empty-sub">Crie o primeiro membro da equipe.</div></div>`
-    : usuarios.map(u=>{
-        const st = PERFIL_STYLE[u.perfil] || {bg:'rgba(100,116,139,.12)',cor:'#64748B',badge:'badge-gray'};
-        return `
-        <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-          <div style="width:40px;height:40px;border-radius:50%;background:${st.bg};color:${st.cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
-            <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email||'Sem e-mail'}</div>
+  // Ordem dos grupos: Administrador → Comercial → Instrutor
+  const GRUPOS = [
+    { perfil:'administrador', label:'Administradores', cor:'#1E2A4A' },
+    { perfil:'comercial',     label:'Comercial',       cor:'#059669' },
+    { perfil:'instrutor',     label:'Instrutores',     cor:'#D97706' },
+  ];
+
+  function _itemUsuario(u) {
+    const st = PERFIL_STYLE[u.perfil] || {bg:'rgba(100,116,139,.12)',cor:'#64748B',badge:'badge-gray'};
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+        <div style="width:40px;height:40px;border-radius:50%;background:${st.bg};color:${st.cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+          <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email||'Sem e-mail'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span class="badge ${st.badge}" style="text-transform:capitalize">${labelPerfil(u.perfil)}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>`;
+  }
+
+  // Construir grupos de usuários ativos
+  let gruposHtml = '';
+  let totalAtivosNaLista = 0;
+  GRUPOS.forEach(g => {
+    const membros = usuarios.filter(u => u.ativo && u.perfil === g.perfil);
+    if (!membros.length) return;
+    totalAtivosNaLista += membros.length;
+    gruposHtml += `
+      <div style="padding:8px 18px 4px;background:var(--surface);border-bottom:1px solid var(--border)">
+        <span style="font-size:10px;font-weight:700;color:${g.cor};text-transform:uppercase;letter-spacing:.06em">${g.label} (${membros.length})</span>
+      </div>
+      ${membros.map(_itemUsuario).join('')}`;
+  });
+
+  if (!totalAtivosNaLista) {
+    gruposHtml = `<div class="empty" style="padding:32px 20px"><div class="empty-icon">👤</div><div class="empty-title">Nenhum usuário ativo</div><div class="empty-sub">Crie o primeiro membro da equipe.</div></div>`;
+  }
+
+  // Seção de inativos — colapsável
+  let inativosHtml = '';
+  if (inativos.length) {
+    inativosHtml = `
+      <div style="margin-top:14px">
+        <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('.inativ-arrow').style.transform=this.nextElementSibling.style.display==='none'?'rotate(0deg)':'rotate(90deg)'"
+          style="width:100%;display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;cursor:pointer;font-family:inherit">
+          <span style="font-size:12px;font-weight:600;color:var(--text-2)">Inativos (${inativos.length})</span>
+          <svg class="inativ-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);transition:transform .2s;transform:rotate(0deg)"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <div style="display:none">
+          <div class="card" style="padding:0;margin-top:6px;border:1px solid var(--border)">
+            ${inativos.map(u => {
+              const st = PERFIL_STYLE[u.perfil] || {bg:'rgba(100,116,139,.12)',cor:'#64748B',badge:'badge-gray'};
+              return `
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;opacity:.65;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+                <div style="width:36px;height:36px;border-radius:50%;background:var(--gray-100);color:var(--text-3);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:600;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+                  <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${labelPerfil(u.perfil)}</div>
+                </div>
+                <span class="badge badge-gray">Inativo</span>
+              </div>`;
+            }).join('')}
           </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            <span class="badge ${st.badge}" style="text-transform:capitalize">${labelPerfil(u.perfil)}</span>
-            <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-        </div>`;
-      }).join('');
+        </div>
+      </div>`;
+  }
 
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:20px">
+    <div class="stats-grid" style="margin-bottom:16px">
       <div class="stat-card navy">
         <div class="stat-label">Total da equipe</div>
-        <div class="stat-value">${total}</div>
+        <div class="stat-value">${usuarios.length}</div>
         <div class="stat-sub">${ativos} ativo${ativos!==1?'s':''}</div>
       </div>
       <div class="stat-card accent">
         <div class="stat-label">Instrutores</div>
-        <div class="stat-value">${instrutores}</div>
+        <div class="stat-value">${usuarios.filter(u=>u.ativo&&u.perfil==='instrutor').length}</div>
         <div class="stat-sub">Em campo</div>
       </div>
       <div class="stat-card accent">
         <div class="stat-label">Inativos</div>
-        <div class="stat-value">${total-ativos}</div>
+        <div class="stat-value">${inativos.length}</div>
         <div class="stat-sub">Pausados</div>
       </div>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div style="font-size:12px;color:var(--text-3)">
-        ${!planoAtinge('pro') ? `<span style="color:var(--amber-text);background:var(--amber-l);border:1px solid var(--amber);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600">Starter · máx. 3 usuários ativos</span>` : `<span class="badge badge-navy">${usuarioAtual.orgPlano==='enterprise'?'Enterprise':'Pro'} · usuários ilimitados</span>`}
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div>
+        ${!planoAtinge('pro')
+          ? `<span style="color:var(--amber-text);background:var(--amber-l);border:1px solid var(--amber);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600">Starter · máx. 3 usuários ativos</span>`
+          : `<span class="badge badge-navy">${usuarioAtual.orgPlano==='enterprise'?'Enterprise':'Pro'} · usuários ilimitados</span>`}
       </div>
       <button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
     </div>
-    <div class="card" style="padding:0">${listaHtml}</div>`);
+
+    <div class="card" style="padding:0">${gruposHtml}</div>
+    ${inativosHtml}
+  `);
 }
 
 function verUsuarioEquipe(id) {
