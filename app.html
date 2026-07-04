@@ -507,6 +507,22 @@ let _colabsCache    = [];
 
 const PLANO_NIVEL = { starter: 1, pro: 2, enterprise: 3 };
 
+// Limites numéricos por plano — fonte única de verdade.
+// Qualquer limite novo (usuários, turmas, etc.) deve ser adicionado aqui,
+// nunca como número mágico direto no código da tela.
+const LIMITES_PLANO = {
+  starter:    { maxUsuarios: 3 },
+  pro:        { maxUsuarios: Infinity },
+  enterprise: { maxUsuarios: Infinity },
+};
+
+// Retorna o limite numérico do plano atual para a chave informada
+function limitePlano(chave) {
+  if (usuarioAtual?.perfil === 'provedor') return Infinity;
+  const cfg = LIMITES_PLANO[usuarioAtual?.orgPlano] || LIMITES_PLANO.starter;
+  return cfg[chave] ?? Infinity;
+}
+
 function _nivelPlano() {
   if (usuarioAtual?.perfil === 'provedor') return 99;
   return PLANO_NIVEL[usuarioAtual?.orgPlano] || 1; // fallback: starter
@@ -2077,11 +2093,11 @@ async function criarUsuarioOrg() {
   const especialidade   = document.getElementById('mUsrEspecialidade')?.value.trim()||null;
   if (!nome||!email||!senha) { showToast('Preencha todos os campos','error'); return; }
   if (senha.length<6) { showToast('Senha deve ter no mínimo 6 caracteres','error'); return; }
-  // ── Guard Starter: máximo 3 usuários ativos ──
+  // ── Guard Starter: limite de usuários ativos por plano ──
   if (!planoAtinge('pro')) {
     const orgId = _modalCurrentId || usuarioAtual.org_id;
     const {count} = await sb.from('usuarios').select('id', {count:'exact',head:true}).eq('org_id', orgId).eq('ativo', true);
-    if (count >= 3) {
+    if (count >= limitePlano('maxUsuarios')) {
       fecharModal();
       modalUpgrade('Limite de usuários atingido', 'pro');
       return;
@@ -5779,7 +5795,7 @@ async function renderEquipe() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <div>
         ${!planoAtinge('pro')
-          ? `<span style="color:var(--amber-text);background:var(--amber-l);border:1px solid var(--amber);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600">Starter · máx. 3 usuários ativos</span>`
+          ? `<span style="color:var(--amber-text);background:var(--amber-l);border:1px solid var(--amber);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600">Starter · máx. ${limitePlano('maxUsuarios')} usuários ativos</span>`
           : `<span class="badge badge-navy">${usuarioAtual.orgPlano==='enterprise'?'Enterprise':'Pro'} · usuários ilimitados</span>`}
       </div>
       <button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
