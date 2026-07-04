@@ -1471,7 +1471,31 @@ async function desativarOrg(orgId) {
   if (!ok) return;
   const { error } = await sb.from('organizacoes').update({ ativo: false }).eq('id', orgId);
   if (error) { showToast(error.message, 'error'); return; }
-  showToast('Organização desativada.', 'success');
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/gerenciar-assinatura-asaas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_KEY,
+      },
+      body: JSON.stringify({ org_id: orgId, action: 'cancelar' }),
+    });
+    if (!res.ok) {
+      const r = await res.json();
+      showToast(`Organização desativada, mas houve erro ao cancelar a assinatura no Asaas: ${r.error || 'erro desconhecido'}. Cancele manualmente.`, 'error', 8000);
+      await renderHomeProvedor();
+      return;
+    }
+  } catch(eAsaas) {
+    showToast('Organização desativada, mas não foi possível cancelar a assinatura no Asaas. Cancele manualmente.', 'error', 8000);
+    await renderHomeProvedor();
+    return;
+  }
+
+  showToast('Organização desativada e assinatura cancelada.', 'success');
   await renderHomeProvedor();
 }
 
@@ -1503,8 +1527,35 @@ async function alterarPlanoOrg() {
   const orgId = _modalCurrentId; // capturar antes de fecharModal() zerar _modalCurrentId
   try {
     setBtnModalLoading(true);
-    const { error } = await sb.from('organizacoes').update({ plano: novoPlano }).eq('id', orgId);
-    if (error) throw error;
+
+    const { data: org, error: orgErr } = await sb.from('organizacoes')
+      .select('nome,cnpj').eq('id', orgId).single();
+    if (orgErr) throw orgErr;
+
+    const { data: adm } = await sb.from('usuarios')
+      .select('email').eq('org_id', orgId).eq('perfil','administrador').eq('ativo', true)
+      .limit(1).maybeSingle();
+
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/gerenciar-assinatura-asaas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_KEY,
+      },
+      body: JSON.stringify({
+        org_id: orgId,
+        action: 'atualizar',
+        novo_plano: novoPlano,
+        nome: org.nome,
+        cnpj: org.cnpj,
+        email: adm?.email,
+      }),
+    });
+    const resultado = await res.json();
+    if (!res.ok) throw new Error(resultado.error || 'Erro ao atualizar assinatura no Asaas');
+
     fecharModal();
     showToast('Plano alterado com sucesso!', 'success');
     await verOrgProvedor(orgId);
