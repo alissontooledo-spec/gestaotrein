@@ -491,6 +491,7 @@ let usuarioAtual = null;
 let paginaAtual  = 'home';
 let fabCallback  = null;
 let _modalCurrentId = null;
+let _modalEditUsuarioId = null; // id do usuário em edição (null = criando novo)
 
 // ---- Caches de dados ----
 let _orgsCache      = [];
@@ -922,6 +923,7 @@ function abrirModal(titulo, corpo, rodape='') {
 function fecharModal() {
   document.getElementById('modalOverlay').style.display = 'none';
   _modalCurrentId = null;
+  _modalEditUsuarioId = null;
 }
 function fecharModalOverlay(e) {
   // Modal so fecha pelo botao X, Cancelar ou apos operacao concluida
@@ -2058,29 +2060,66 @@ async function toggleOrg(id) {
   await renderOrgs();
 }
 
-function abrirModalUsuarioOrg(orgId) {
+async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
   _modalCurrentId = orgId;
+  _modalEditUsuarioId = usuarioId;
   const org = _orgsCache.find(o=>o.id===orgId);
-  abrirModal(`Novo usuário — ${org?.nome||''}`, `
-    <div class="field"><label>Nome completo *</label><input type="text" id="mUsrNome" placeholder="Nome do usuário"></div>
-    <div class="field"><label>E-mail *</label><input type="email" id="mUsrEmail" placeholder="email@exemplo.com.br"></div>
-    <div class="field"><label>Senha provisória *</label><input type="password" id="mUsrSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O usuário poderá alterar após o primeiro acesso.</div></div>
+
+  let u = null;
+  if (usuarioId) {
+    const { data, error } = await sb.from('usuarios').select('*').eq('id', usuarioId).single();
+    if (error || !data) { showToast('Usuário não encontrado', 'error'); return; }
+    u = data;
+  }
+
+  const campoSenha = u ? '' : `
+    <div class="field"><label>Senha provisória *</label><input type="password" id="mUsrSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O usuário poderá alterar após o primeiro acesso.</div></div>`;
+
+  abrirModal(u ? `Editar usuário — ${u.nome}` : `Novo usuário — ${org?.nome||''}`, `
+    <div class="field"><label>Nome completo *</label><input type="text" id="mUsrNome" value="${u?.nome||''}" placeholder="Nome do usuário"></div>
+    <div class="field"><label>E-mail *</label><input type="email" id="mUsrEmail" value="${u?.email||''}" placeholder="email@exemplo.com.br" ${u?'disabled style="background:var(--gray-50);color:var(--text-3)"':''}></div>
+    ${u ? '<div style="font-size:11px;color:var(--text-3);margin:-8px 0 12px">O e-mail não pode ser alterado aqui. Para trocar, inative este usuário e crie um novo.</div>' : ''}
+    ${campoSenha}
     <div class="field"><label>Perfil *</label>
       <select id="mUsrPerfil" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="administrador">Administrador</option>
-        <option value="comercial">Comercial</option>
-        <option value="instrutor">Instrutor</option>
+        <option value="administrador" ${u?.perfil==='administrador'?'selected':''}>Administrador</option>
+        <option value="comercial" ${u?.perfil==='comercial'?'selected':''}>Comercial</option>
+        <option value="instrutor" ${u?.perfil==='instrutor'?'selected':''}>Instrutor</option>
       </select></div>
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Identificação profissional <span style="font-weight:400;text-transform:none">(exibida no certificado)</span></div>
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:10px">
-        <div class="field" style="margin:0"><label>Sigla do conselho</label><input type="text" id="mUsrSiglaConselho" placeholder="Ex: CREA, COREN"></div>
-        <div class="field" style="margin:0"><label>Registro</label><input type="text" id="mUsrConselho" placeholder="Ex: CREA-SC 109085-1"></div>
+        <div class="field" style="margin:0"><label>Sigla do conselho</label><input type="text" id="mUsrSiglaConselho" value="${u?.sigla_conselho||''}" placeholder="Ex: CREA, COREN"></div>
+        <div class="field" style="margin:0"><label>Registro</label><input type="text" id="mUsrConselho" value="${u?.conselho_classe||''}" placeholder="Ex: CREA-SC 109085-1"></div>
       </div>
-      <div class="field"><label>Especialidade</label><input type="text" id="mUsrEspecialidade" placeholder="Ex: Engenheiro de Segurança do Trabalho"></div>
+      <div class="field"><label>Especialidade</label><input type="text" id="mUsrEspecialidade" value="${u?.especialidade||''}" placeholder="Ex: Engenheiro de Segurança do Trabalho"></div>
     </div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="criarUsuarioOrg()">Criar usuário</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="${u?'salvarUsuarioOrg()':'criarUsuarioOrg()'}">${u?'Salvar alterações':'Criar usuário'}</button>`);
+}
+
+async function salvarUsuarioOrg() {
+  const usuarioId       = _modalEditUsuarioId;
+  const nome            = document.getElementById('mUsrNome')?.value.trim();
+  const perfil          = document.getElementById('mUsrPerfil')?.value;
+  const sigla_conselho  = document.getElementById('mUsrSiglaConselho')?.value.trim()||null;
+  const conselho_classe = document.getElementById('mUsrConselho')?.value.trim()||null;
+  const especialidade   = document.getElementById('mUsrEspecialidade')?.value.trim()||null;
+  if (!nome) { showToast('Nome é obrigatório', 'error'); return; }
+
+  try {
+    setBtnModalLoading(true);
+    const { error } = await sb.from('usuarios').update({
+      nome, perfil, sigla_conselho, conselho_classe, especialidade,
+    }).eq('id', usuarioId);
+    if (error) throw error;
+    fecharModal();
+    showToast('Usuário atualizado com sucesso!', 'success');
+    await verUsuarioEquipe(usuarioId);
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message || 'Erro ao salvar usuário', 'error');
+  }
 }
 
 async function criarUsuarioOrg() {
@@ -5246,17 +5285,17 @@ function _renderRelatorioView() {
       ${cliListHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
     </div>
 
-    <!-- Relatório mensal automático — Em breve no plano Pro -->
+    <!-- Relatório mensal automático (plano Pro) -->
     <div class="rel2-card" style="margin-top:12px;border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:var(--r-md);background:var(--amber-l);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📅</div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600;color:var(--navy)">Relatório mensal automático
-            <span style="margin-left:8px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--amber);color:var(--navy);letter-spacing:.04em">EM BREVE</span>
+            ${planoAtinge('pro') ? '<span style="margin-left:8px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:#059669;color:#fff;letter-spacing:.04em">ATIVO</span>' : ''}
           </div>
           <div style="font-size:12px;color:var(--text-2);margin-top:3px;line-height:1.5">
             ${planoAtinge('pro')
-              ? 'Disponível no seu plano Pro — em breve você receberá relatórios mensais automaticamente por e-mail.'
+              ? 'Todo dia 1º, você recebe por e-mail um resumo do mês anterior (turmas concluídas, certificados emitidos, sessões realizadas e novos clientes).'
               : 'No plano Pro, receba um relatório mensal consolidado automaticamente por e-mail. <span style="color:var(--amber-text);font-weight:600;cursor:pointer" onclick="modalUpgrade(&quot;Relatório mensal automático&quot;,&quot;pro&quot;)">Saiba mais →</span>'}
           </div>
         </div>
