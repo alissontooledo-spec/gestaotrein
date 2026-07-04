@@ -1263,6 +1263,14 @@ function abrirModalNovaOrg() {
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Dados da organização</div>
     <div class="field"><label>Nome da empresa *</label><input type="text" id="mOrgNome" placeholder="Ex.: Construtora Silva Ltda"></div>
     ${_cnpjRow('mOrgCnpj','','mOrgNome','','','')}
+    <div class="field"><label>Plano contratado *</label>
+      <select id="mOrgPlano" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="starter">Starter — R$ 197/mês</option>
+        <option value="pro">Pro — R$ 397/mês</option>
+        <option value="enterprise">Enterprise — Sob consulta</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Starter e Pro geram assinatura recorrente automática no Asaas. Enterprise é negociado manualmente.</div>
+    </div>
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Administrador inicial</div>
     <div class="field"><label>Nome do administrador *</label><input type="text" id="mOrgAdmNome" placeholder="Nome completo"></div>
     <div class="field"><label>E-mail *</label><input type="email" id="mOrgAdmEmail" placeholder="admin@empresa.com.br"></div>
@@ -1275,6 +1283,7 @@ function abrirModalNovaOrg() {
 async function salvarNovaOrg() {
   const nome      = document.getElementById('mOrgNome')?.value.trim();
   const cnpj      = document.getElementById('mOrgCnpj')?.value.trim() || null;
+  const plano     = document.getElementById('mOrgPlano')?.value || 'starter';
   const admNome   = document.getElementById('mOrgAdmNome')?.value.trim();
   const admEmail  = document.getElementById('mOrgAdmEmail')?.value.trim();
   const admSenha  = document.getElementById('mOrgAdmSenha')?.value;
@@ -1283,18 +1292,22 @@ async function salvarNovaOrg() {
   if (!admNome)  { showToast('Nome do administrador é obrigatório', 'error'); return; }
   if (!admEmail) { showToast('E-mail do administrador é obrigatório', 'error'); return; }
   if (!admSenha || admSenha.length < 6) { showToast('Senha mínima de 6 caracteres', 'error'); return; }
+  if ((plano === 'starter' || plano === 'pro') && !cnpj) {
+    showToast('CNPJ é obrigatório para gerar a assinatura no Asaas (Starter/Pro)', 'error'); return;
+  }
 
   try {
     setBtnModalLoading(true);
 
     // 1. Criar a organização
     const { data: org, error: orgErr } = await sb.from('organizacoes')
-      .insert({ nome, cnpj, ativo: true })
+      .insert({ nome, cnpj, plano, ativo: true })
       .select().single();
     if (orgErr) throw orgErr;
 
-    // 2. Criar o usuário administrador via Edge Function
     const { data: { session } } = await sb.auth.getSession();
+
+    // 2. Criar o usuário administrador via Edge Function
     const res = await fetch(`${SUPABASE_URL}/functions/v1/criar-usuario`, {
       method: 'POST',
       headers: {
@@ -1315,6 +1328,27 @@ async function salvarNovaOrg() {
       // Rollback: remover a org se o usuário falhou
       await sb.from('organizacoes').delete().eq('id', org.id);
       throw new Error(resultado.error || 'Erro ao criar administrador');
+    }
+
+    // 3. Criar a assinatura recorrente no Asaas (apenas Starter/Pro; Enterprise é manual)
+    if (plano === 'starter' || plano === 'pro') {
+      try {
+        const resAsaas = await fetch(`${SUPABASE_URL}/functions/v1/criar-assinatura-asaas`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': SUPABASE_KEY,
+          },
+          body: JSON.stringify({ org_id: org.id, plano, nome, cnpj, email: admEmail }),
+        });
+        const resultadoAsaas = await resAsaas.json();
+        if (!resAsaas.ok) {
+          showToast(`Organização criada, mas houve erro ao gerar a assinatura no Asaas: ${resultadoAsaas.error || 'erro desconhecido'}. Verifique manualmente.`, 'error', 8000);
+        }
+      } catch(eAsaas) {
+        showToast('Organização criada, mas não foi possível gerar a assinatura no Asaas. Verifique manualmente.', 'error', 8000);
+      }
     }
 
     fecharModal();
