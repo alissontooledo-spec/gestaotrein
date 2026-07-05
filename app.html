@@ -1033,7 +1033,7 @@ async function fazerLogin() {
 async function entrarNoApp() {
   // Provedor não tem org — acesso sempre liberado
   if (usuarioAtual.perfil !== 'provedor' && usuarioAtual.org_id) {
-    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome').eq('id',usuarioAtual.org_id).single();
+    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome,trial_fim,logo_url,cor_primaria').eq('id',usuarioAtual.org_id).single();
     if (org && !org.ativo) {
       document.getElementById('bloqueadoMsg').textContent =
         'Sua assinatura está vencida ou foi cancelada. Entre em contato para regularizar e continuar usando o sistema.';
@@ -1043,6 +1043,10 @@ async function entrarNoApp() {
     }
     if (org?.nome)  usuarioAtual.orgNome  = org.nome;
     if (org?.plano) usuarioAtual.orgPlano = org.plano; // 'starter' | 'pro' | 'enterprise'
+    usuarioAtual.orgTrialFim = org?.trial_fim || null;
+    // Branding Enterprise: aplica cor/logo da organização, se configurados
+    if (org?.cor_primaria) document.documentElement.style.setProperty('--navy', org.cor_primaria);
+    if (org?.logo_url) usuarioAtual.orgLogoUrl = org.logo_url;
   }
   showScreen('screenApp');
   configurarNavegacao();
@@ -1317,9 +1321,12 @@ async function salvarNovaOrg() {
   try {
     setBtnModalLoading(true);
 
-    // 1. Criar a organização
+    // 1. Criar a organização (trial de 15 dias contado a partir de hoje —
+    //    apenas informativo/visível para o Provedor; não bloqueia acesso
+    //    automaticamente, já que isso é decidido caso a caso por enquanto)
+    const trialFim = new Date(Date.now() + 15*24*60*60*1000).toISOString().slice(0,10);
     const { data: org, error: orgErr } = await sb.from('organizacoes')
-      .insert({ nome, cnpj, plano, ativo: true })
+      .insert({ nome, cnpj, plano, ativo: true, trial_fim: trialFim })
       .select().single();
     if (orgErr) throw orgErr;
 
@@ -1952,11 +1959,18 @@ function _htmlListaOrgs(orgs) {
     const p = plano || 'starter';
     return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
   };
+  const _badgeTrial = (o) => {
+    if (!o.ativo || !o.trial_fim || o.assinatura_id) return ''; // só mostra durante trial sem assinatura ativa
+    const dias = Math.ceil((new Date(o.trial_fim) - new Date()) / 86400000);
+    if (dias < 0) return `<span class="badge" style="background:var(--red-l);color:var(--red-text)">Trial expirado</span>`;
+    return `<span class="badge" style="background:var(--blue-l);color:var(--blue-h)">Trial · ${dias}d</span>`;
+  };
   return orgs.map(o=>`
     <div class="list-item" style="padding:14px 4px">
       <div class="li-icon" style="background:${o.ativo?'var(--blue-l)':'var(--gray-100)'};color:${o.ativo?'var(--blue-h)':'var(--gray-500)'};font-size:13px;font-weight:700;border-radius:var(--r-md)">${iniciais(o.nome)}</div>
       <div class="li-info"><div class="li-title">${o.nome}</div><div class="li-sub">${o.cnpj?`CNPJ ${o.cnpj} · `:''}${o.email||'Sem e-mail'}${o.cidade?` · ${o.cidade}/${o.uf||''}`:''}</div></div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${_badgeTrial(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
         <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="menuOrg" data-id="${o.id}">${ICONS.dots}</button>
       </div>
