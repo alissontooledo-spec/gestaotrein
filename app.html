@@ -2044,6 +2044,14 @@ function abrirModalOrg(id=null) {
         <option value="pro" ${planoAtual==='pro'?'selected':''}>Pro — R$ 397/mês</option>
         <option value="enterprise" ${planoAtual==='enterprise'?'selected':''}>Enterprise — Sob consulta</option>
       </select>
+    </div>
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Personalização visual <span style="font-weight:400;text-transform:none">(benefício Enterprise)</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field" style="margin:0"><label>Cor primária</label><input type="color" id="mOrgCorPrimaria" value="${org?.cor_primaria||'#1E2A4A'}" style="width:100%;height:40px;padding:2px;border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer"></div>
+        <div class="field" style="margin:0"><label>URL da logo</label><input type="url" id="mOrgLogoUrl" value="${org?.logo_url||''}" placeholder="https://..."></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Aplica-se apenas quando o plano é Enterprise. Suba a logo em qualquer serviço de hospedagem de imagens e cole o link aqui.</div>
     </div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarOrg()">${org?'Salvar':'Cadastrar'}</button>`);
@@ -2053,7 +2061,16 @@ async function salvarOrg() {
   const nome = document.getElementById('mOrgNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   const plano = document.getElementById('mOrgPlano')?.value || 'starter';
-  const dados = {nome, plano, cnpj:document.getElementById('mOrgCnpj')?.value.trim()||null, cidade:document.getElementById('mOrgCidade')?.value.trim()||null, uf:(document.getElementById('mOrgUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mOrgEmail')?.value.trim()||null, telefone:document.getElementById('mOrgTel')?.value.trim()||null};
+  const dados = {
+    nome, plano,
+    cnpj:document.getElementById('mOrgCnpj')?.value.trim()||null,
+    cidade:document.getElementById('mOrgCidade')?.value.trim()||null,
+    uf:(document.getElementById('mOrgUf')?.value.trim()||'').toUpperCase()||null,
+    email:document.getElementById('mOrgEmail')?.value.trim()||null,
+    telefone:document.getElementById('mOrgTel')?.value.trim()||null,
+    cor_primaria: plano==='enterprise' ? (document.getElementById('mOrgCorPrimaria')?.value||null) : null,
+    logo_url: plano==='enterprise' ? (document.getElementById('mOrgLogoUrl')?.value.trim()||null) : null,
+  };
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('organizacoes').update(dados).eq('id',_modalCurrentId) : await sb.from('organizacoes').insert({...dados,ativo:true});
