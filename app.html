@@ -2035,23 +2035,75 @@ async function renderHomeInstrutor() {
 // ORGANIZAÇÕES
 // ============================================================
 async function renderOrgs() {
-  const {data,error} = await sb.from('organizacoes').select('*').order('nome');
+  const [{data,error}, {data:usuarios}] = await Promise.all([
+    sb.from('organizacoes').select('*').order('nome'),
+    sb.from('usuarios').select('org_id,perfil,ativo'),
+  ]);
   if (error) throw error;
   _orgsCache = data||[];
+  _orgsUsuariosCache = usuarios||[];
   setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Organizações</div>`);
   fabMostrar(()=>abrirModalOrg());
   _renderOrgsLista(_orgsCache);
 }
 
+let _orgsUsuariosCache = [];
+
 function _renderOrgsLista(orgs) {
-  const ativas = orgs.filter(o=>o.ativo).length;
+  const hoje    = new Date();
+  const ativas  = orgs.filter(o=>o.ativo).length;
+  const usrsAll = _orgsUsuariosCache;
+
+  const starters    = orgs.filter(o => o.ativo && (!o.plano || o.plano === 'starter')).length;
+  const pros        = orgs.filter(o => o.ativo && o.plano === 'pro').length;
+  const enterprises = orgs.filter(o => o.ativo && o.plano === 'enterprise').length;
+  const mrr = starters*197 + pros*397;
+
+  // Central de alertas — mesma lógica da Home, disponível aqui também
+  const diasAte = (d) => Math.ceil((new Date(d) - hoje) / 86400000);
+  const trialVencendo = orgs.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) >= 0 && diasAte(o.trial_fim) <= 3);
+  const trialVencido  = orgs.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
+  const semAdmin       = orgs.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
+  const alertas = [
+    ...trialVencido.map(o => `🔴 Trial vencido: <strong>${o.nome}</strong>`),
+    ...trialVencendo.map(o => `⚠️ Trial vence em ${diasAte(o.trial_fim)}d: <strong>${o.nome}</strong>`),
+    ...semAdmin.map(o => `⚠️ Sem administrador ativo: <strong>${o.nome}</strong>`),
+  ];
+
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:16px">
-      <div class="stat-card blue"><div class="stat-label">Total</div><div class="stat-value">${orgs.length}</div><div class="stat-sub">${ativas} ativas</div></div>
-      <div class="stat-card"><div class="stat-label">Inativas</div><div class="stat-value">${orgs.length-ativas}</div></div>
+    <div class="home-navy-header" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="home-navy-greeting">Organizações</div>
+          <div class="home-navy-sub">Portfólio de clientes · Toledo Labs</div>
+        </div>
+      </div>
+      <div class="home-kpi-grid" style="margin-top:16px">
+        <div class="home-kpi">
+          <div class="home-kpi-val">${orgs.length}</div>
+          <div class="home-kpi-lbl">Total</div>
+          <div class="home-kpi-delta green">${ativas} ativas</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">${orgs.length-ativas}</div>
+          <div class="home-kpi-lbl">Inativas</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">R$${mrr.toLocaleString('pt-BR')}</div>
+          <div class="home-kpi-lbl">MRR estimado</div>
+          <div class="home-kpi-delta green">${pros}P · ${starters}S · ${enterprises}E</div>
+        </div>
+      </div>
     </div>
+
+    ${alertas.length ? `
+    <div style="margin-bottom:14px">
+      ${alertas.slice(0,6).map(a => `<div style="padding:9px 14px;border-radius:var(--r-md);margin-bottom:6px;font-size:12.5px;color:var(--amber-text);background:var(--amber-l);border-left:3px solid var(--amber)">${a}</div>`).join('')}
+    </div>` : ''}
+
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="aplicarFiltrosOrgs()">
+      <button class="btn btn-outline" onclick="exportarPortfolioCSV()">⬇ CSV</button>
       <button class="btn btn-navy" onclick="abrirModalOrg()">${ICONS.plus} Nova</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
@@ -2074,11 +2126,12 @@ function _renderOrgsLista(orgs) {
         <option value="plano">Plano</option>
       </select>
     </div>
-    <div class="card" id="listaOrgs">${_htmlListaOrgs(orgs)}</div>`);
+    <div class="card" style="padding:0" id="listaOrgs">${_htmlListaOrgs(orgs)}</div>`);
 }
 
 function _htmlListaOrgs(orgs) {
   if (!orgs.length) return `<div class="empty"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div><div class="empty-sub">Clique em "Nova" para cadastrar.</div></div>`;
+  const usrsAll = _orgsUsuariosCache;
   const _badgePlanoLista = (plano, ativo) => {
     if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
     const map   = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
@@ -2092,16 +2145,25 @@ function _htmlListaOrgs(orgs) {
     if (dias < 0) return `<span class="badge" style="background:var(--red-l);color:var(--red-text)">Trial expirado</span>`;
     return `<span class="badge" style="background:var(--blue-l);color:var(--blue-h)">Trial · ${dias}d</span>`;
   };
-  return orgs.map(o=>`
-    <div class="list-item" style="padding:14px 4px">
-      <div class="li-icon" style="background:${o.ativo?'var(--blue-l)':'var(--gray-100)'};color:${o.ativo?'var(--blue-h)':'var(--gray-500)'};font-size:13px;font-weight:700;border-radius:var(--r-md)">${iniciais(o.nome)}</div>
-      <div class="li-info"><div class="li-title">${o.nome}</div><div class="li-sub">${o.cnpj?`CNPJ ${o.cnpj} · `:''}${o.email||'Sem e-mail'}${o.cidade?` · ${o.cidade}/${o.uf||''}`:''}</div></div>
+  return orgs.map(o=>{
+    const totalU = usrsAll.filter(u=>u.org_id===o.id).length;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer" onclick="verOrgProvedor('${o.id}')">
+        <div style="width:40px;height:40px;border-radius:var(--r-md);background:${o.ativo?'var(--blue-l)':'var(--gray-100)'};color:${o.ativo?'var(--blue-h)':'var(--gray-500)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
+          <div style="font-size:12px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${totalU} usuário${totalU!==1?'s':''} · ${o.cnpj?`CNPJ ${o.cnpj}`:(o.email||'Sem e-mail')}</div>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_badgeTrial(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
+        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">🛟</button>` : ''}
         <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="menuOrg" data-id="${o.id}">${ICONS.dots}</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function aplicarFiltrosOrgs() {
