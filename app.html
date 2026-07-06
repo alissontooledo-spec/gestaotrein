@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://brasilapi.com.br https://api.resend.com; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://brasilapi.com.br https://api.resend.com; frame-ancestors 'none';">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <meta name="theme-color" content="#1E2A4A">
@@ -15,6 +15,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.8/purify.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
 <style>
 :root{
   /* ── Navy Clean v2 — Toledo Labs ── */
@@ -380,6 +383,18 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   .turma-ag-row .turma-ag-actions{flex-wrap:wrap;flex-basis:100%;padding-left:50px}
   .turma-ag-row .turma-ag-actions .btn{flex:1;justify-content:center;min-width:80px}
 }
+/* ── Editor de texto rico (Quill) — alinhado ao Navy Clean v2 ── */
+.ql-editor-wrap{border:1.5px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.ql-toolbar.ql-snow{border:none;border-bottom:1px solid var(--border);background:var(--gray-50);font-family:inherit}
+.ql-container.ql-snow{border:none;font-family:inherit;font-size:14px}
+.ql-editor{min-height:120px;max-height:320px;overflow-y:auto;color:var(--text-1)}
+.ql-editor.ql-blank::before{color:var(--text-3);font-style:normal}
+.ql-snow .ql-picker{color:var(--text-2)}
+.ql-snow .ql-stroke{stroke:var(--text-2)}
+.ql-snow .ql-fill{fill:var(--text-2)}
+.ql-toolbar-undo-redo{display:flex;gap:2px;align-items:center;border-right:1px solid var(--border);padding-right:6px;margin-right:6px}
+.ql-toolbar-undo-redo button{background:none;border:none;padding:5px 7px;border-radius:6px;cursor:pointer;color:var(--text-2);font-size:13px;line-height:1}
+.ql-toolbar-undo-redo button:hover{background:var(--border)}
 </style>
 </head>
 <body>
@@ -497,6 +512,8 @@ let paginaAtual  = 'home';
 let fabCallback  = null;
 let _modalCurrentId = null;
 let _modalEditUsuarioId = null; // id do usuário em edição (null = criando novo)
+let _quillDescricao = null; // instância do editor rico — campo Descrição (Catálogo)
+let _quillConteudo = null;  // instância do editor rico — campo Conteúdo programático (Catálogo)
 
 // ---- Caches de dados ----
 let _orgsCache      = [];
@@ -3042,10 +3059,21 @@ function abrirModalCatalogo(id=null) {
       <div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatValidade" value="${t?.validade_meses||''}" min="1" placeholder="12"></div>
     </div>
     <div class="field"><label>Categoria</label><input type="text" id="mCatCategoria" value="${t?.categoria||''}" placeholder="Opcional"></div>
-    <div class="field"><label>Descrição</label><textarea id="mCatDescricao" rows="3" placeholder="Opcional">${t?.descricao||''}</textarea></div>
-    <div class="field"><label>Conteúdo programático</label><textarea id="mCatConteudo" rows="4" placeholder="Usado na contracapa do certificado (opcional)">${t?.conteudo_programatico||''}</textarea></div>`,
+    <div class="field"><label>Descrição</label>
+      <div class="ql-editor-wrap">${_htmlToolbarRica('tbDescricao')}<div id="edDescricao"></div></div>
+    </div>
+    <div class="field"><label>Conteúdo programático *</label>
+      <div class="ql-editor-wrap">${_htmlToolbarRica('tbConteudo')}<div id="edConteudo"></div></div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Usado na contracapa do certificado.</div>
+    </div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCatalogo()">${t?'Salvar':'Cadastrar'}</button>`);
+
+  // Instancia os editores após o HTML do modal já estar no DOM
+  _quillDescricao = criarEditorRico('edDescricao', 'tbDescricao');
+  _quillConteudo  = criarEditorRico('edConteudo', 'tbConteudo');
+  carregarConteudoQuill(_quillDescricao, t?.descricao);
+  carregarConteudoQuill(_quillConteudo, t?.conteudo_programatico);
 }
 
 async function salvarCatalogo() {
@@ -3055,13 +3083,14 @@ async function salvarCatalogo() {
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   if (!ch || ch <= 0) { showToast('Carga horária é obrigatória','error'); return; }
   if (!validade || validade <= 0) { showToast('Validade é obrigatória','error'); return; }
+  if (!_quillConteudo.getText().trim()) { showToast('Conteúdo programático é obrigatório','error'); return; }
   const dados = {
     nome,
     carga_horaria: ch,
     validade_meses: validade,
     categoria: document.getElementById('mCatCategoria')?.value.trim() || null,
-    descricao: document.getElementById('mCatDescricao')?.value.trim() || null,
-    conteudo_programatico: document.getElementById('mCatConteudo')?.value.trim() || null,
+    descricao: _quillDescricao.getText().trim() ? sanitizarHtml(_quillDescricao.root.innerHTML) : null,
+    conteudo_programatico: sanitizarHtml(_quillConteudo.root.innerHTML),
   };
   try {
     setBtnModalLoading(true);
@@ -6237,6 +6266,91 @@ function pdfSafe(v, maxLen) {
     .slice(0, maxLen || 400);
 }
 
+// Sanitiza HTML vindo do editor rico (Quill) antes de salvar no banco —
+// protege contra XSS permitindo apenas tags/atributos usados pelo editor.
+function sanitizarHtml(dirty) {
+  if (!dirty) return '';
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: ['p','br','strong','em','u','s','h1','h2','h3','ol','ul','li','a',
+      'blockquote','img','span','table','thead','tbody','tr','td','th','colgroup','col'],
+    ALLOWED_ATTR: ['href','target','rel','src','alt','style','class','colspan','rowspan'],
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  });
+}
+
+// Converte HTML rico em texto plano com quebras de linha e marcadores de lista —
+// usado ao gerar certificados em PDF, para NUNCA alterar o layout existente
+// (o PDF sempre recebeu texto puro; aqui só garantimos que continue recebendo
+// texto puro mesmo que o campo agora armazene HTML formatado).
+function htmlParaTextoPlano(html) {
+  if (!html) return '';
+  if (!/<[a-z][\s\S]*>/i.test(html)) return html; // registro legado em texto puro — retorna como está
+  const div = document.createElement('div');
+  div.innerHTML = sanitizarHtml(html);
+  div.querySelectorAll('li').forEach(li => li.insertAdjacentText('afterbegin', '- '));
+  div.querySelectorAll('p, div, h1, h2, h3, li, blockquote, tr').forEach(el => el.insertAdjacentText('afterend', '\n'));
+  div.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+  return (div.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Carrega um valor (HTML novo ou texto puro legado) dentro de uma instância Quill
+function carregarConteudoQuill(quill, valor) {
+  if (!valor) { quill.setText(''); return; }
+  if (/<[a-z][\s\S]*>/i.test(valor)) {
+    quill.root.innerHTML = sanitizarHtml(valor);
+  } else {
+    quill.setText(valor);
+  }
+}
+
+// Cria uma instância Quill completa (toolbar + editor) dentro do container informado.
+function criarEditorRico(containerId, toolbarId) {
+  const quill = new Quill(`#${containerId}`, {
+    theme: 'snow',
+    modules: {
+      toolbar: `#${toolbarId}`,
+    },
+  });
+  // Botões customizados de desfazer/refazer (Quill não inclui no toolbar por padrão)
+  const btnUndo = document.getElementById(toolbarId + '-undo');
+  const btnRedo = document.getElementById(toolbarId + '-redo');
+  if (btnUndo) btnUndo.onclick = () => quill.history.undo();
+  if (btnRedo) btnRedo.onclick = () => quill.history.redo();
+  return quill;
+}
+
+// HTML da toolbar padrão usada nos editores ricos do Catálogo
+function _htmlToolbarRica(toolbarId) {
+  return `
+  <div id="${toolbarId}">
+    <span class="ql-toolbar-undo-redo">
+      <button type="button" id="${toolbarId}-undo" title="Desfazer">↶</button>
+      <button type="button" id="${toolbarId}-redo" title="Refazer">↷</button>
+    </span>
+    <span class="ql-formats">
+      <select class="ql-header"><option value="1"></option><option value="2"></option><option value="3"></option><option selected></option></select>
+    </span>
+    <span class="ql-formats">
+      <button class="ql-bold"></button><button class="ql-italic"></button><button class="ql-underline"></button><button class="ql-strike"></button>
+    </span>
+    <span class="ql-formats">
+      <select class="ql-color"></select><select class="ql-background"></select>
+    </span>
+    <span class="ql-formats">
+      <button class="ql-list" value="ordered"></button><button class="ql-list" value="bullet"></button>
+    </span>
+    <span class="ql-formats">
+      <select class="ql-align"></select>
+    </span>
+    <span class="ql-formats">
+      <button class="ql-blockquote"></button><button class="ql-link"></button><button class="ql-image"></button>
+    </span>
+    <span class="ql-formats">
+      <button class="ql-clean"></button>
+    </span>
+  </div>`;
+}
+
 // Formata data por extenso sem acentos (para uso nos PDFs)
 function fmtDataExtensoPDF(iso) {
   return pdfSafe(fmtDataExtenso(iso));
@@ -6512,7 +6626,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const ch        = t.catalogo?.carga_horaria || 0;
     const nomeT     = t.catalogo?.nome || 'Treinamento';
     const valMeses  = t.catalogo?.validade_meses || 12;
-    const cpText    = t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '';
+    const cpText    = htmlParaTextoPlano(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
     const nomeOrg   = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
 
     const dtObj = new Date(dataCert+'T12:00:00');
@@ -6846,7 +6960,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const ch            = t.catalogo?.carga_horaria || 0;
     const nomeT         = t.catalogo?.nome || 'Treinamento';
     const valMeses      = t.catalogo?.validade_meses || 12;
-    const cpText        = t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '';
+    const cpText        = htmlParaTextoPlano(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
     const nomeEmp       = t.clientes?.nome || 'empresa nao informada';
     const nomeOrg       = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
 
