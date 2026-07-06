@@ -1191,10 +1191,11 @@ async function renderHome() {
 }
 
 async function renderHomeProvedor() {
-  const [{ data: orgs }, { data: usuarios }, { data: acessos }] = await Promise.all([
+  const [{ data: orgs }, { data: usuarios }, { data: acessos }, { data: eventosAuditoria }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
     sb.from('usuarios').select('id,nome,org_id,perfil,ativo,created_at'),
     sb.from('logs_acesso').select('id,org_id,created_at,encerrado_em,organizacoes(nome)').order('created_at', { ascending: false }).limit(5),
+    sb.from('eventos_sistema').select('id,tabela,acao,dados_antigos,dados_novos,usuario_id,criado_em').order('criado_em', { ascending: false }).limit(8),
   ]);
 
   const orgsAll  = orgs  || [];
@@ -1265,11 +1266,30 @@ async function renderHomeProvedor() {
       }).join('')}
     </div>`;
 
-  // ── Feed de atividade recente (orgs/usuários criados + acessos de suporte) ──
+  // ── Feed de atividade recente (eventos reais de auditoria + acessos de suporte) ──
   const acessosAll = acessos || [];
+  const _labelAcao = { INSERT:'criad', UPDATE:'atualizad', DELETE:'removid' };
+  const _labelTabela = { organizacoes:'Organização', usuarios:'Usuário' };
+  const _iconeTabela = { organizacoes:'🏢', usuarios:'👤' };
+  const eventosAud = (eventosAuditoria || []).map(e => {
+    const dados = e.dados_novos || e.dados_antigos || {};
+    const nome  = dados.nome || '—';
+    const ator  = usrsAll.find(u => u.id === e.usuario_id)?.nome;
+    const sufixoGenero = e.tabela === 'organizacoes' ? 'a' : 'o';
+    return {
+      data: e.criado_em,
+      icone: _iconeTabela[e.tabela] || '📋',
+      texto: `${_labelTabela[e.tabela]||e.tabela} ${_labelAcao[e.acao]||e.acao}${sufixoGenero}: <strong>${nome}</strong>${ator ? ` <span style="color:var(--text-3)">· por ${ator}</span>` : ''}`,
+    };
+  });
+  // Fallback (só entra em jogo se a migração de auditoria ainda não tiver sido aplicada)
+  const eventosFallback = eventosAud.length ? [] : [
+    ...orgsAll.slice(0,4).map(o => ({ data:o.created_at, texto:`Organização criada: <strong>${o.nome}</strong>`, icone:'🏢' })),
+    ...usrsAll.filter(u=>u.created_at).sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,4).map(u => ({ data:u.created_at, texto:`Usuário criado: <strong>${u.nome||'—'}</strong>`, icone:'👤' })),
+  ];
   const eventos = [
-    ...orgsAll.slice(0,8).map(o => ({ data:o.created_at, texto:`Organização criada: <strong>${o.nome}</strong>`, icone:'🏢' })),
-    ...usrsAll.filter(u=>u.created_at).sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,8).map(u => ({ data:u.created_at, texto:`Usuário criado: <strong>${u.nome||'—'}</strong>`, icone:'👤' })),
+    ...eventosAud,
+    ...eventosFallback,
     ...acessosAll.map(a => ({ data:a.created_at, texto:`Acesso de suporte: <strong>${a.organizacoes?.nome||'—'}</strong>${a.encerrado_em?'':' <span style="color:var(--amber-h)">(em andamento)</span>'}`, icone:'🔧' })),
   ].sort((a,b) => b.data > a.data ? 1 : -1).slice(0,6);
 
