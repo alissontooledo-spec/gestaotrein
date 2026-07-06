@@ -1020,6 +1020,7 @@ const ICONS = {
   logout:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
   back:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>`,
   plus:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  support: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 00-10 10v3a2 2 0 002 2h1a1 1 0 001-1v-4a1 1 0 00-1-1H4a8 8 0 0116 0h-1a1 1 0 00-1 1v4a1 1 0 001 1h1a2 2 0 002-2v-3A10 10 0 0012 2z"/><path d="M8 20a2 2 0 002 2h4a2 2 0 002-2v-1H8z"/></svg>`,
 };
 
 // ============================================================
@@ -1095,13 +1096,13 @@ async function fazerLogout() {
 // NAVEGAÇÃO
 // ============================================================
 const NAV = {
-  provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'conta',l:'Minha conta',icon:'user'}],
+  provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'conta',l:'Minha conta',icon:'user'}],
   administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 const NAV_BOTTOM = {
-  provedor:['home','orgs','conta'],
+  provedor:['home','orgs','financeiro','conta'],
   administrador:['home','turmas','clientes','colaboradores','conformidade','relatorios','equipe','conta'],
   comercial:['home','turmas','relatorios','clientes','conformidade','conta'],
   instrutor:['home','agenda','historico','conta'],
@@ -1140,7 +1141,7 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {home:'Início',orgs:'Organizações',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
+const TITULOS = {home:'Início',orgs:'Organizações',financeiro:'Financeiro',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
 async function irPara(pagina, params={}) {
   paginaAtual = pagina;
@@ -1157,6 +1158,7 @@ async function irPara(pagina, params={}) {
     switch(pagina) {
       case 'home':          await renderHome(); break;
       case 'orgs':          await renderOrgs(); break;
+      case 'financeiro':    await renderFinanceiroProvedor(); break;
       case 'clientes':      await renderClientes(); break;
       case 'colaboradores': await renderColaboradores(); break;
       case 'catalogo':      await renderCatalogo(); break;
@@ -1289,7 +1291,7 @@ async function renderHomeProvedor() {
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_badgePlano(o.plano, o.ativo)}
-        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">🛟</button>` : ''}
+        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">${ICONS.support}</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -2034,6 +2036,134 @@ async function renderHomeInstrutor() {
 // ============================================================
 // ORGANIZAÇÕES
 // ============================================================
+async function renderFinanceiroProvedor() {
+  const [{ data: orgs }] = await Promise.all([
+    sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_vencimento,assinatura_id'),
+  ]);
+  const orgsAll = orgs || [];
+  const hoje = new Date();
+  const VALOR_PLANO = { starter: 197, pro: 397, enterprise: 0 }; // enterprise sob consulta, não soma no MRR
+
+  const ativasComPlano = orgsAll.filter(o => o.ativo);
+  const starters    = ativasComPlano.filter(o => (!o.plano || o.plano === 'starter')).length;
+  const pros        = ativasComPlano.filter(o => o.plano === 'pro').length;
+  const enterprises = ativasComPlano.filter(o => o.plano === 'enterprise').length;
+  const mrr = starters*VALOR_PLANO.starter + pros*VALOR_PLANO.pro;
+  const arr = mrr * 12;
+  const ticketMedio = ativasComPlano.length ? Math.round(mrr / (starters+pros || 1)) : 0;
+
+  setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Financeiro</div>`);
+  fabOcultar();
+
+  // ── Histórico de MRR (estimativa) — últimos 6 meses ──
+  // Aproximação: conta organizações com created_at até o fim de cada mês e ainda ativas hoje.
+  // Não reflete cancelamentos/upgrades ocorridos dentro do período — é uma estimativa de tendência,
+  // não um valor contábil exato (não há snapshot histórico de MRR armazenado).
+  const mesesLabel = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    const fimMes = new Date(hoje.getFullYear(), hoje.getMonth()-i+1, 0);
+    mesesLabel.push({ label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''), fimMes });
+  }
+  const dadosMrr = mesesLabel.map(m => {
+    const orgsNoMes = ativasComPlano.filter(o => new Date(o.created_at) <= m.fimMes);
+    const s = orgsNoMes.filter(o => (!o.plano||o.plano==='starter')).length;
+    const p = orgsNoMes.filter(o => o.plano==='pro').length;
+    return s*VALOR_PLANO.starter + p*VALOR_PLANO.pro;
+  });
+  const maxMrr = Math.max(...dadosMrr, 1);
+  const htmlGraficoMrr = `
+    <div style="display:flex;align-items:flex-end;gap:8px;height:110px;padding:0 4px">
+      ${mesesLabel.map((m,i) => {
+        const altura = Math.max(Math.round((dadosMrr[i]/maxMrr)*84), dadosMrr[i]>0?6:2);
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px">
+          <div style="font-size:10px;color:var(--text-2);font-weight:700">R$${dadosMrr[i].toLocaleString('pt-BR')}</div>
+          <div style="width:100%;max-width:34px;height:${altura}px;background:${i===mesesLabel.length-1?'var(--amber)':'var(--navy)'};border-radius:4px 4px 0 0;opacity:${i===mesesLabel.length-1?1:.75}"></div>
+          <div style="font-size:10.5px;color:var(--text-3)">${m.label}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.4">Estimativa baseada em organizações criadas até cada período e ainda ativas hoje — não considera cancelamentos ocorridos dentro do intervalo.</div>`;
+
+  // ── Próximos vencimentos (assinatura ou trial) nos próximos 30 dias ──
+  const diasAte = (d) => Math.ceil((new Date(d) - hoje) / 86400000);
+  const vencimentos = orgsAll
+    .filter(o => o.ativo && ((o.assinatura_vencimento && diasAte(o.assinatura_vencimento) <= 30) || (!o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) <= 30)))
+    .map(o => {
+      const isTrial = !o.assinatura_id && o.trial_fim;
+      const data = isTrial ? o.trial_fim : o.assinatura_vencimento;
+      return { nome: o.nome, data, dias: diasAte(data), tipo: isTrial ? 'Trial' : 'Assinatura' };
+    })
+    .sort((a,b) => a.dias - b.dias);
+
+  const htmlVencimentos = vencimentos.length ? vencimentos.map(v => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
+      <span class="badge ${v.dias<0?'badge-gray':v.dias<=3?'':'badge-blue'}" style="${v.dias>=0&&v.dias<=3?'background:var(--amber-l);color:var(--amber-text)':''}">${v.tipo}</span>
+      <span style="font-size:13px;color:var(--text-1);flex:1">${v.nome}</span>
+      <span style="font-size:12px;color:${v.dias<0?'var(--red-text)':'var(--text-3)'};font-weight:600">${v.dias<0?`Venceu há ${Math.abs(v.dias)}d`:v.dias===0?'Vence hoje':`Vence em ${v.dias}d`}</span>
+    </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Nenhum vencimento nos próximos 30 dias.</div>';
+
+  // ── Ranking de organizações por plano/valor ──
+  const ranking = [...ativasComPlano]
+    .map(o => ({ nome:o.nome, plano:o.plano||'starter', valor: VALOR_PLANO[o.plano||'starter'] || 0 }))
+    .sort((a,b) => b.valor - a.valor)
+    .slice(0, 8);
+  const _labelPlano = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+  const htmlRanking = ranking.length ? ranking.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text-1);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</span>
+      <span style="font-size:11px;color:var(--text-3)">${_labelPlano[r.plano]}</span>
+      <span style="font-size:13px;color:var(--navy);font-weight:700;min-width:70px;text-align:right">${r.valor>0?`R$${r.valor}`:'—'}</span>
+    </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Sem organizações pagantes ainda.</div>';
+
+  setConteudo(`
+    <div class="home-navy-header" style="margin-bottom:14px">
+      <div class="home-navy-greeting">Financeiro</div>
+      <div class="home-navy-sub">Visão consolidada de receita · Toledo Labs</div>
+      <div class="home-kpi-grid" style="margin-top:16px">
+        <div class="home-kpi">
+          <div class="home-kpi-val">R$${mrr.toLocaleString('pt-BR')}</div>
+          <div class="home-kpi-lbl">MRR atual</div>
+          <div class="home-kpi-delta green">${pros}P · ${starters}S · ${enterprises}E</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">R$${arr.toLocaleString('pt-BR')}</div>
+          <div class="home-kpi-lbl">ARR projetado</div>
+          <div class="home-kpi-delta green">Anualizado</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">R$${ticketMedio.toLocaleString('pt-BR')}</div>
+          <div class="home-kpi-lbl">Ticket médio</div>
+          <div class="home-kpi-delta green">Por org. paga</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">${vencimentos.filter(v=>v.dias<=7 && v.dias>=0).length}</div>
+          <div class="home-kpi-lbl">Vencem em 7d</div>
+          <div class="home-kpi-delta">Atenção</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:10px">Evolução do MRR (6 meses)</div>
+      ${htmlGraficoMrr}
+    </div>
+
+    <div class="home-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="card" style="padding:14px 14px 4px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:6px">Próximos vencimentos (30 dias)</div>
+        ${htmlVencimentos}
+      </div>
+      <div class="card" style="padding:14px 14px 4px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:6px">Top organizações por receita</div>
+        ${htmlRanking}
+      </div>
+    </div>
+
+    <button class="btn btn-outline" onclick="exportarPortfolioCSV()">⬇ Exportar portfólio (CSV)</button>
+  `);
+}
+
 async function renderOrgs() {
   const [{data,error}, {data:usuarios}] = await Promise.all([
     sb.from('organizacoes').select('*').order('nome'),
@@ -2159,7 +2289,7 @@ function _htmlListaOrgs(orgs) {
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_badgeTrial(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
-        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">🛟</button>` : ''}
+        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">${ICONS.support}</button>` : ''}
         <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="menuOrg" data-id="${o.id}">${ICONS.dots}</button>
       </div>
     </div>`;
@@ -6328,6 +6458,7 @@ window.addEventListener('popstate', async (e) => {
       switch(pagina) {
         case 'home':          await renderHome(); break;
         case 'orgs':          await renderOrgs(); break;
+        case 'financeiro':    await renderFinanceiroProvedor(); break;
         case 'clientes':      await renderClientes(); break;
         case 'colaboradores': await renderColaboradores(); break;
         case 'catalogo':      await renderCatalogo(); break;
