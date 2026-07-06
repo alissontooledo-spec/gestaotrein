@@ -2059,6 +2059,14 @@ async function renderHomeInstrutor() {
 // ============================================================
 // ORGANIZAÇÕES
 // ============================================================
+function _atualizarProjecaoMrr() {
+  const taxa = parseInt(document.getElementById('taxaConversaoMrr')?.value || '50', 10);
+  document.getElementById('taxaConversaoLabel').textContent = `${taxa}%`;
+  const { mrr, mrrPotencialTrials } = window._financeiroCalc || { mrr:0, mrrPotencialTrials:0 };
+  const projetado = mrr + mrrPotencialTrials * (taxa/100);
+  document.getElementById('mrrProjetadoValor').textContent = `R$${Math.round(projetado).toLocaleString('pt-BR')}`;
+}
+
 async function renderFinanceiroProvedor() {
   const [{ data: orgs }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_vencimento,assinatura_id'),
@@ -2074,6 +2082,15 @@ async function renderFinanceiroProvedor() {
   const mrr = starters*VALOR_PLANO.starter + pros*VALOR_PLANO.pro;
   const arr = mrr * 12;
   const ticketMedio = ativasComPlano.length ? Math.round(mrr / (starters+pros || 1)) : 0;
+
+  // ── Projeção de MRR a partir dos trials ativos ──
+  // Não há base histórica suficiente ainda para calcular uma taxa de conversão
+  // real (poucos clientes até agora). Por isso a taxa é um controle deslizante
+  // ajustável pelo próprio usuário, não um número apresentado como certeza.
+  const diasAteFn = (d) => Math.ceil((new Date(d) - hoje) / 86400000);
+  const trialsAtivos = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAteFn(o.trial_fim) >= 0);
+  const mrrPotencialTrials = trialsAtivos.reduce((acc,o) => acc + (VALOR_PLANO[o.plano||'starter']||0), 0);
+  window._financeiroCalc = { mrr, mrrPotencialTrials };
 
   setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Financeiro</div>`);
   fabOcultar();
@@ -2163,6 +2180,30 @@ async function renderFinanceiroProvedor() {
           <div class="home-kpi-val">${vencimentos.filter(v=>v.dias<=7 && v.dias>=0).length}</div>
           <div class="home-kpi-lbl">Vencem em 7d</div>
           <div class="home-kpi-delta">Atenção</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:4px">Projeção de MRR (trials ativos)</div>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:14px;line-height:1.4">Ainda não há histórico suficiente de conversão para calcular uma taxa real — ajuste a estimativa manualmente conforme sua experiência com os clientes atuais.</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text-2);white-space:nowrap">Taxa de conversão estimada:</span>
+        <input type="range" id="taxaConversaoMrr" min="0" max="100" step="10" value="50" oninput="_atualizarProjecaoMrr()" style="flex:1">
+        <span id="taxaConversaoLabel" style="font-size:13px;font-weight:700;color:var(--navy);min-width:38px;text-align:right">50%</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px">
+          <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em">Trials ativos</div>
+          <div style="font-size:18px;font-weight:700;color:var(--navy)">${trialsAtivos.length}</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px">
+          <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em">Potencial (100%)</div>
+          <div style="font-size:18px;font-weight:700;color:var(--navy)">R$${mrrPotencialTrials.toLocaleString('pt-BR')}</div>
+        </div>
+        <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px">
+          <div style="font-size:10px;color:var(--amber-text);text-transform:uppercase;letter-spacing:.04em">MRR projetado</div>
+          <div style="font-size:18px;font-weight:700;color:var(--navy)" id="mrrProjetadoValor">R$${(mrr + mrrPotencialTrials*0.5).toLocaleString('pt-BR',{maximumFractionDigits:0})}</div>
         </div>
       </div>
     </div>
