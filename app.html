@@ -1190,8 +1190,8 @@ async function renderHome() {
 
 async function renderHomeProvedor() {
   const [{ data: orgs }, { data: usuarios }] = await Promise.all([
-    sb.from('organizacoes').select('id,nome,ativo,plano,created_at').order('created_at', { ascending: false }),
-    sb.from('usuarios').select('id,org_id,perfil,ativo'),
+    sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
+    sb.from('usuarios').select('id,nome,org_id,perfil,ativo,created_at'),
   ]);
 
   const orgsAll  = orgs  || [];
@@ -1210,6 +1210,28 @@ async function renderHomeProvedor() {
   const mrrPro      = pros * 397;
   const mrr         = mrrStarter + mrrPro; // enterprise é sob consulta
 
+  // ── Central de alertas (só o que é realmente acionável) ──
+  const diasAte = (dataStr) => Math.ceil((new Date(dataStr) - hoje) / 86400000);
+  const trialVencendo = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) >= 0 && diasAte(o.trial_fim) <= 3);
+  const trialVencido  = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
+  const orgsSemAdmin  = orgsAll.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
+
+  const alertas = [
+    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${o.nome}`, orgId:o.id })),
+    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${o.nome}`, orgId:o.id })),
+    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${o.nome}`, orgId:o.id })),
+  ];
+
+  const htmlAlertas = alertas.length ? `
+    <div style="margin-bottom:14px">
+      ${alertas.slice(0,6).map(a => `
+        <div onclick="verOrgProvedor('${a.orgId}')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-md);margin-bottom:6px;cursor:pointer;background:${a.tipo==='critico'?'var(--red-l)':'var(--amber-l)'};border-left:3px solid ${a.tipo==='critico'?'var(--red)':'var(--amber)'}">
+          <span style="font-size:15px">${a.tipo==='critico'?'🔴':'⚠️'}</span>
+          <span style="font-size:13px;color:${a.tipo==='critico'?'var(--red-text)':'var(--amber-text)'};font-weight:500;flex:1">${a.texto}</span>
+          <span style="font-size:11px;color:var(--text-3)">Ver →</span>
+        </div>`).join('')}
+    </div>` : '';
+
   const _badgePlano = (plano, ativo) => {
     if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
     const map = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
@@ -1220,18 +1242,54 @@ async function renderHomeProvedor() {
 
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Provedor · Toledo Labs</div>`);
 
+  // ── Gráfico de crescimento — novas orgs por mês, últimos 6 meses ──
+  const mesesLabel = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    mesesLabel.push({ chave: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','') });
+  }
+  const dadosCrescimento = mesesLabel.map(m => orgsAll.filter(o => o.created_at?.startsWith(m.chave)).length);
+  const maxCrescimento   = Math.max(...dadosCrescimento, 1);
+  const htmlGrafico = `
+    <div style="display:flex;align-items:flex-end;gap:6px;height:70px;padding:0 4px">
+      ${mesesLabel.map((m,i) => {
+        const altura = Math.max(Math.round((dadosCrescimento[i]/maxCrescimento)*54), dadosCrescimento[i]>0?6:2);
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="font-size:10px;color:var(--text-3);font-weight:600">${dadosCrescimento[i]||''}</div>
+          <div style="width:100%;max-width:26px;height:${altura}px;background:${i===mesesLabel.length-1?'var(--amber)':'var(--navy)'};border-radius:3px 3px 0 0;opacity:${i===mesesLabel.length-1?1:.75}"></div>
+          <div style="font-size:10px;color:var(--text-3)">${m.label}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  // ── Feed de atividade recente (últimas orgs + usuários criados) ──
+  const eventos = [
+    ...orgsAll.slice(0,8).map(o => ({ data:o.created_at, texto:`Organização criada: <strong>${o.nome}</strong>`, icone:'🏢' })),
+    ...usrsAll.filter(u=>u.created_at).sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,8).map(u => ({ data:u.created_at, texto:`Usuário criado: <strong>${u.nome||'—'}</strong>`, icone:'👤' })),
+  ].sort((a,b) => b.data > a.data ? 1 : -1).slice(0,6);
+
+  const htmlFeed = eventos.length ? eventos.map(e => `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border)">
+      <span style="font-size:14px">${e.icone}</span>
+      <span style="font-size:12.5px;color:var(--text-2);flex:1">${e.texto}</span>
+      <span style="font-size:11px;color:var(--text-3);flex-shrink:0">${new Date(e.data).toLocaleDateString('pt-BR')}</span>
+    </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Sem atividade recente.</div>';
+
   const listaOrgs = orgsAll.map(o => {
     const admins  = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
     const total_u = usrsAll.filter(u => u.org_id === o.id).length;
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onclick="verOrgProvedor('${o.id}')" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-      <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
-        <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+      <div onclick="verOrgProvedor('${o.id}')" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer">
+        <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
+          <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_badgePlano(o.plano, o.ativo)}
+        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">🛟</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1269,8 +1327,10 @@ async function renderHomeProvedor() {
       </div>
     </div>
 
+    ${htmlAlertas}
+
     <!-- Dashboard financeiro por plano -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px">
         <div style="font-size:10px;font-weight:700;color:var(--blue-h);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Starter</div>
         <div style="font-size:22px;font-weight:700;color:var(--navy)">${starters}</div>
@@ -1288,15 +1348,60 @@ async function renderHomeProvedor() {
       </div>
     </div>
 
+    <!-- Crescimento e atividade -->
+    <div class="home-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="card" style="padding:14px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:10px">Crescimento (6 meses)</div>
+        ${htmlGrafico}
+      </div>
+      <div class="card" style="padding:14px 14px 4px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:6px">Atividade recente</div>
+        ${htmlFeed}
+      </div>
+    </div>
+
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-size:13px;font-weight:600;color:var(--text-1)">Organizações (${total})</div>
-      <button class="btn btn-navy btn-sm" onclick="abrirModalNovaOrg()">+ Nova organização</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="exportarPortfolioCSV()">⬇ CSV</button>
+        <button class="btn btn-navy btn-sm" onclick="abrirModalNovaOrg()">+ Nova organização</button>
+      </div>
     </div>
     <div class="card" style="padding:0;margin-bottom:14px">
       ${listaOrgs || '<div class="empty" style="padding:32px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div><div class="empty-sub">Crie a primeira organização para começar.</div></div>'}
     </div>
     <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
   `);
+}
+
+async function exportarPortfolioCSV() {
+  const [{ data: orgsAll }, { data: usuarios }] = await Promise.all([
+    sb.from('organizacoes').select('id,nome,cnpj,ativo,plano,created_at,trial_fim'),
+    sb.from('usuarios').select('org_id,perfil,ativo'),
+  ]);
+  const usrsAll = usuarios || [];
+
+  const linhas = [['Organização','CNPJ','Status','Plano','Usuários ativos','Administradores ativos','Criada em','Trial até']];
+  (orgsAll||[]).forEach(o => {
+    const ativosU = usrsAll.filter(u => u.org_id === o.id && u.ativo).length;
+    const adminsU = usrsAll.filter(u => u.org_id === o.id && u.ativo && u.perfil === 'administrador').length;
+    linhas.push([
+      o.nome || '', o.cnpj || '', o.ativo ? 'Ativa' : 'Inativa', o.plano || 'starter',
+      String(ativosU), String(adminsU),
+      o.created_at ? new Date(o.created_at).toLocaleDateString('pt-BR') : '',
+      o.trial_fim ? new Date(o.trial_fim).toLocaleDateString('pt-BR') : '',
+    ]);
+  });
+
+  const csv = linhas.map(l => l.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `portfolio-toledolabs-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('CSV exportado.', 'success');
 }
 
 function abrirModalNovaOrg() {
