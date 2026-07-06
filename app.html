@@ -6261,6 +6261,13 @@ function pdfSafe(v, maxLen) {
   return String(v)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    // Caracteres tipográficos comuns → equivalente ASCII, para não virarem '?' no PDF
+    .replace(/[\u2013\u2014]/g, '-')      // en-dash / em-dash
+    .replace(/[\u2018\u2019]/g, "'")      // aspas simples curvas
+    .replace(/[\u201C\u201D]/g, '"')      // aspas duplas curvas
+    .replace(/\u2026/g, '...')            // elipse
+    .replace(/[\u2022\u25CF]/g, '-')      // marcador de lista (bullet)
+    .replace(/\u00A0/g, ' ')              // espaço não separável
     .replace(/[^\x20-\x7E]/g, '?')
     .trim()
     .slice(0, maxLen || 400);
@@ -6285,12 +6292,17 @@ function sanitizarHtml(dirty) {
 function htmlParaTextoPlano(html) {
   if (!html) return '';
   if (!/<[a-z][\s\S]*>/i.test(html)) return html; // registro legado em texto puro — retorna como está
+  let texto = sanitizarHtml(html);
+  texto = texto.replace(/<li[^>]*>/gi, '- ');                          // marcador de lista
+  texto = texto.replace(/<br\s*\/?>/gi, '\n');                          // quebra manual de linha
+  texto = texto.replace(/<\/(p|div|h1|h2|h3|li|blockquote|tr)>/gi, '\n'); // quebra após blocos
+  texto = texto.replace(/<[^>]+>/g, '');                                // remove qualquer tag restante
+  // Decodifica entidades HTML (&amp;, &lt;, etc.) — nesse ponto não há
+  // mais tags reais na string, então isso só decodifica texto, com segurança
   const div = document.createElement('div');
-  div.innerHTML = sanitizarHtml(html);
-  div.querySelectorAll('li').forEach(li => li.insertAdjacentText('afterbegin', '- '));
-  div.querySelectorAll('p, div, h1, h2, h3, li, blockquote, tr').forEach(el => el.insertAdjacentText('afterend', '\n'));
-  div.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
-  return (div.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  div.innerHTML = texto;
+  texto = div.textContent || div.innerText || texto;
+  return texto.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // Carrega um valor (HTML novo ou texto puro legado) dentro de uma instância Quill
