@@ -1191,9 +1191,10 @@ async function renderHome() {
 }
 
 async function renderHomeProvedor() {
-  const [{ data: orgs }, { data: usuarios }] = await Promise.all([
+  const [{ data: orgs }, { data: usuarios }, { data: acessos }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
     sb.from('usuarios').select('id,nome,org_id,perfil,ativo,created_at'),
+    sb.from('logs_acesso').select('id,org_id,created_at,encerrado_em,organizacoes(nome)').order('created_at', { ascending: false }).limit(5),
   ]);
 
   const orgsAll  = orgs  || [];
@@ -1264,10 +1265,12 @@ async function renderHomeProvedor() {
       }).join('')}
     </div>`;
 
-  // ── Feed de atividade recente (últimas orgs + usuários criados) ──
+  // ── Feed de atividade recente (orgs/usuários criados + acessos de suporte) ──
+  const acessosAll = acessos || [];
   const eventos = [
     ...orgsAll.slice(0,8).map(o => ({ data:o.created_at, texto:`Organização criada: <strong>${o.nome}</strong>`, icone:'🏢' })),
     ...usrsAll.filter(u=>u.created_at).sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,8).map(u => ({ data:u.created_at, texto:`Usuário criado: <strong>${u.nome||'—'}</strong>`, icone:'👤' })),
+    ...acessosAll.map(a => ({ data:a.created_at, texto:`Acesso de suporte: <strong>${a.organizacoes?.nome||'—'}</strong>${a.encerrado_em?'':' <span style="color:var(--amber-h)">(em andamento)</span>'}`, icone:'🔧' })),
   ].sort((a,b) => b.data > a.data ? 1 : -1).slice(0,6);
 
   const htmlFeed = eventos.length ? eventos.map(e => `
