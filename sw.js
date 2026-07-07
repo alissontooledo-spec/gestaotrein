@@ -3,7 +3,7 @@
 // e fallback amigável quando não há conexão. NÃO faz cache de dados (Supabase) —
 // todas as operações de dados continuam exigindo internet.
 
-const CACHE_VERSION = 'toledo-labs-shell-v1';
+const CACHE_VERSION = 'toledo-labs-shell-v2';
 const CORE_ASSETS = [
   './app.html',
   './manifest.json',
@@ -43,7 +43,10 @@ self.addEventListener('fetch', (event) => {
   // em cache se estiver offline.
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(() => caches.match('./app.html'))
+      // cache:'no-store' força ignorar qualquer cache HTTP do navegador aqui —
+      // o app shell sempre deve vir da rede quando há conexão, para nunca servir
+      // uma versão desatualizada da página depois de uma publicação nova.
+      fetch(req, {cache:'no-store'}).catch(() => caches.match('./app.html'))
     );
     return;
   }
