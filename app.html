@@ -824,7 +824,7 @@ function mascararCnpj(input) {
   else if (v.length > 2) v = v.replace(/^(\d{2})(\d*).*/,'$1.$2');
   input.value = v;
 }
-async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId) {
+async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId, cnaeId) {
   const raw = document.getElementById(cnpjId)?.value.replace(/\D/g,'');
   if (!raw || raw.length !== 14) { showToast('Digite um CNPJ completo (14 dígitos)','error'); return; }
   const btn = document.getElementById('btnBuscarCnpj_'+cnpjId);
@@ -837,10 +837,13 @@ async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId) {
     const cidade = d.municipio || '';
     const uf = d.uf || '';
     const email = d.email || '';
+    const cnae = d.cnae_fiscal ? String(d.cnae_fiscal) : '';
+    const cnaeDesc = d.cnae_fiscal_descricao || '';
     if (nomeId) { const el=document.getElementById(nomeId); if(el&&nome) el.value=nome; }
     if (cidadeId) { const el=document.getElementById(cidadeId); if(el&&cidade) el.value=cidade; }
     if (ufId) { const el=document.getElementById(ufId); if(el&&uf) el.value=uf.toUpperCase(); }
     if (emailId) { const el=document.getElementById(emailId); if(el&&email&&!el.value) el.value=email; }
+    if (cnaeId) { const el=document.getElementById(cnaeId); if(el&&cnae) el.value=cnae; _atualizarSugestaoNR(cnae, cnaeDesc); }
     showToast('Dados preenchidos pela Receita Federal','success');
   } catch(e) {
     showToast(e.message||'Erro ao consultar CNPJ','error');
@@ -849,12 +852,59 @@ async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId) {
   }
 }
 
-function _cnpjRow(inputId, valorAtual, nomeId, cidadeId, ufId, emailId) {
+// Mapeamento CNAE (divisão de 2 dígitos) → NRs comumente aplicáveis.
+// É uma referência indicativa baseada no setor econômico, não um laudo de
+// segurança do trabalho — o enquadramento real depende das atividades
+// específicas de cada empresa e deve ser confirmado por profissional de SST.
+const CNAE_NR_MAP = {
+  '01':['NR-31','NR-06','NR-12'], '02':['NR-31','NR-06','NR-12'], '03':['NR-31','NR-06'],
+  '05':['NR-22','NR-06','NR-33','NR-12'], '06':['NR-22','NR-06','NR-33'], '07':['NR-22','NR-06','NR-33'], '08':['NR-22','NR-06','NR-33'], '09':['NR-22','NR-06'],
+  '10':['NR-12','NR-06','NR-17','NR-23'], '11':['NR-12','NR-06','NR-23'], '12':['NR-12','NR-06'],
+  '13':['NR-12','NR-06','NR-17'], '14':['NR-12','NR-06','NR-17'], '15':['NR-12','NR-06'],
+  '16':['NR-12','NR-06','NR-23'], '17':['NR-12','NR-06','NR-23'], '18':['NR-12','NR-06'],
+  '19':['NR-20','NR-12','NR-06','NR-23'], '20':['NR-20','NR-12','NR-06','NR-23'], '21':['NR-12','NR-06'],
+  '22':['NR-12','NR-06','NR-23'], '23':['NR-12','NR-06','NR-23'], '24':['NR-12','NR-06','NR-14','NR-23'],
+  '25':['NR-12','NR-06','NR-18'], '26':['NR-12','NR-06','NR-10'], '27':['NR-12','NR-06','NR-10'],
+  '28':['NR-12','NR-06'], '29':['NR-12','NR-06'], '30':['NR-12','NR-06'],
+  '31':['NR-12','NR-06'], '32':['NR-12','NR-06'], '33':['NR-12','NR-06','NR-10'],
+  '35':['NR-10','NR-06','NR-35'], '36':['NR-06','NR-33'], '37':['NR-06','NR-33'], '38':['NR-06','NR-33','NR-35'], '39':['NR-06','NR-33'],
+  '41':['NR-18','NR-35','NR-06','NR-12'], '42':['NR-18','NR-35','NR-06','NR-12'], '43':['NR-18','NR-35','NR-06','NR-10'],
+  '45':['NR-17','NR-12','NR-06'], '46':['NR-17','NR-11','NR-06'], '47':['NR-17','NR-23','NR-06'],
+  '49':['NR-11','NR-06'], '50':['NR-11','NR-06'], '51':['NR-11','NR-06'], '52':['NR-11','NR-06','NR-12'], '53':['NR-11','NR-06'],
+  '55':['NR-17','NR-23','NR-06'], '56':['NR-17','NR-23','NR-06'],
+  '58':['NR-17'], '59':['NR-17'], '60':['NR-17'], '61':['NR-17'], '62':['NR-17'], '63':['NR-17'],
+  '64':['NR-17'], '65':['NR-17'], '66':['NR-17'],
+  '68':['NR-17'],
+  '69':['NR-17'], '70':['NR-17'], '71':['NR-17'], '72':['NR-17'], '73':['NR-17'], '74':['NR-17'], '75':['NR-17'],
+  '77':['NR-17','NR-23'], '78':['NR-17'], '79':['NR-17'], '80':['NR-17','NR-23'], '81':['NR-06','NR-23'], '82':['NR-17'],
+  '84':['NR-17'],
+  '85':['NR-17','NR-23'],
+  '86':['NR-32','NR-06','NR-07'], '87':['NR-32','NR-06','NR-07'], '88':['NR-32','NR-06'],
+  '90':['NR-17'], '91':['NR-17'], '92':['NR-17'], '93':['NR-17','NR-23'],
+  '94':['NR-17'], '95':['NR-12','NR-06'], '96':['NR-17'],
+  '97':['NR-17'], '99':['NR-17'],
+};
+
+function _atualizarSugestaoNR(cnae, cnaeDesc) {
+  const el = document.getElementById('sugestaoNRBox');
+  if (!el) return;
+  const divisao = String(cnae).replace(/\D/g,'').slice(0,2);
+  const nrs = CNAE_NR_MAP[divisao];
+  if (!nrs) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-top:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">NRs comumente aplicáveis${cnaeDesc?` — ${cnaeDesc}`:''}</div>
+      <div style="font-size:13px;color:var(--navy);font-weight:600">${nrs.join(' · ')}</div>
+      <div style="font-size:10.5px;color:var(--text-3);margin-top:4px;line-height:1.4">Sugestão indicativa com base no setor econômico (CNAE) — não substitui avaliação de um profissional de Segurança do Trabalho.</div>
+    </div>`;
+}
+
+function _cnpjRow(inputId, valorAtual, nomeId, cidadeId, ufId, emailId, cnaeId) {
   return `<div class="field">
     <label>CNPJ</label>
     <div style="display:flex;gap:8px;align-items:center">
       <input type="text" id="${inputId}" value="${valorAtual||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)" style="flex:1">
-      <button type="button" id="btnBuscarCnpj_${inputId}" class="btn btn-outline btn-sm" style="white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px" onclick="buscarCnpjModal('${inputId}','${nomeId}','${cidadeId}','${ufId}','${emailId||''}')">Consultar</button>
+      <button type="button" id="btnBuscarCnpj_${inputId}" class="btn btn-outline btn-sm" style="white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px" onclick="buscarCnpjModal('${inputId}','${nomeId}','${cidadeId}','${ufId}','${emailId||''}','${cnaeId||''}')">Consultar</button>
     </div>
   </div>`;
 }
@@ -2712,7 +2762,9 @@ function abrirModalCliente(id=null) {
   const c = id ? _clientesCache.find(x=>x.id===id) : null;
   abrirModal(c?'Editar cliente':'Novo cliente', `
     <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${c?.nome||''}" placeholder="Razão social"></div>
-    ${_cnpjRow('mCliCnpj', c?.cnpj||'', 'mCliNome', 'mCliCidade', 'mCliUf', 'mCliEmail')}
+    ${_cnpjRow('mCliCnpj', c?.cnpj||'', 'mCliNome', 'mCliCidade', 'mCliUf', 'mCliEmail', 'mCliCnae')}
+    <input type="hidden" id="mCliCnae" value="${c?.cnae||''}">
+    <div id="sugestaoNRBox"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
@@ -2721,12 +2773,13 @@ function abrirModalCliente(id=null) {
     <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCliente()">${c?'Salvar':'Cadastrar'}</button>`);
+  if (c?.cnae) _atualizarSugestaoNR(c.cnae, '');
 }
 
 async function salvarCliente() {
   const nome = document.getElementById('mCliNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const dados = {nome, cnpj:document.getElementById('mCliCnpj')?.value.trim()||null, cidade:document.getElementById('mCliCidade')?.value.trim()||null, uf:(document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mCliEmail')?.value.trim()||null, telefone:document.getElementById('mCliTel')?.value.trim()||null};
+  const dados = {nome, cnpj:document.getElementById('mCliCnpj')?.value.trim()||null, cnae:document.getElementById('mCliCnae')?.value.trim()||null, cidade:document.getElementById('mCliCidade')?.value.trim()||null, uf:(document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mCliEmail')?.value.trim()||null, telefone:document.getElementById('mCliTel')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('clientes').update(dados).eq('id',_modalCurrentId) : await sb.from('clientes').insert({...dados,org_id:usuarioAtual.org_id,ativo:true});
