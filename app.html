@@ -957,19 +957,30 @@ function _calcularEnquadramento(cnae, cnaeDesc, cnaesSecundarios) {
 // HTML da sugestão de NRs — usado tanto no modal de cadastro (#sugestaoNRBox)
 // quanto no Painel de Enquadramento SST da tela principal do cliente.
 function _htmlSugestaoNR(cnae, cnaeDesc, cnaesSecundarios) {
-  const { itens, todasNrs } = _calcularEnquadramento(cnae, cnaeDesc, cnaesSecundarios||[]);
+  const { todasNrs } = _calcularEnquadramento(cnae, cnaeDesc, cnaesSecundarios||[]);
   if (!todasNrs.length) return '';
-  const extras = itens.slice(1).filter(i=>i.nrs.length);
-  const extrasHtml = extras.length
-    ? `<div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Considerando também atividade(s) secundária(s): ${extras.map(i=>i.codigo).join(', ')}</div>`
-    : '';
   return `
     <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-top:8px;min-width:0">
       <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">NRs comumente aplicáveis${cnaeDesc?` — ${cnaeDesc}`:''}</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${todasNrs.map(nr=>`<span class="badge badge-navy">${nr}</span>`).join('')}</div>
-      ${extrasHtml}
       <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Sugestão indicativa com base no setor econômico (CNAE) — não substitui avaliação de um profissional de Segurança do Trabalho.</div>
     </div>`;
+}
+
+// Chips do(s) CNAE(s) considerados no enquadramento — principal em destaque
+// (âmbar) + secundários em cinza. Usado apenas no Painel de Enquadramento SST
+// da tela principal do cliente (o modal de edição mantém a versão compacta).
+function _htmlChipsCnaes(cnae, cnaeDesc, cnaesSecundarios) {
+  const secundarios = cnaesSecundarios||[];
+  if (!cnae && !secundarios.length) return '';
+  const total = (cnae?1:0) + secundarios.length;
+  const principalChip = cnae
+    ? `<span class="badge" style="background:var(--amber-l);color:var(--amber-text);border:1px solid var(--amber)" title="${escapeHtml(cnaeDesc||'')}">${escapeHtml(cnae)} · principal</span>`
+    : '';
+  const secChips = secundarios.map(s=>`<span class="badge badge-gray" title="${escapeHtml(s.descricao||'')}">${escapeHtml(s.codigo||'')}</span>`).join('');
+  return `
+    <div style="font-size:10.5px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px">CNAEs considerados (${total})</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${principalChip}${secChips}</div>`;
 }
 
 function _atualizarSugestaoNR(cnae, cnaeDesc, cnaesSecundarios) {
@@ -2792,23 +2803,43 @@ function _htmlListaClientes(lista) {
   }).join('');
 }
 
+// Linha label/valor de uma seção de "Informações cadastradas" (sem borda —
+// a separação entre grupos é feita pelos sub-rótulos, não por linhas soltas).
+function _htmlLinhaInfo(label, val) {
+  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:5px 0;min-width:0">
+    <span style="font-size:13px;color:var(--text-2);flex-shrink:0">${label}</span>
+    <span style="font-size:13px;font-weight:500;color:var(--navy);text-align:right;min-width:0;word-break:break-word">${val}</span>
+  </div>`;
+}
+function _htmlSubRotulo(text, primeiro) {
+  return `<div style="font-size:10.5px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:${primeiro?'0':'14px'} 0 6px">${text}</div>`;
+}
+
 function verCliente(id) {
   const c = _clientesCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  const enderecoPartes = [c.logradouro, c.numero, c.complemento].filter(Boolean).join(', ');
-  const enderecoLinha2 = [c.bairro, c.cep?`CEP ${c.cep}`:null].filter(Boolean).join(' · ');
-  const enderecoCompleto = [enderecoPartes, enderecoLinha2].filter(Boolean).join(' — ');
-  const campos = [
-    c.cnpj        ? {label:'CNPJ',       val:c.cnpj}                          : null,
-    enderecoCompleto ? {label:'Endereço', val:enderecoCompleto}                : null,
-    c.cidade      ? {label:'Cidade',      val:`${c.cidade}${c.uf?'/'+c.uf:''}`} : null,
-    c.porte       ? {label:'Porte',       val:c.porte}                        : null,
-    c.email       ? {label:'E-mail',      val:c.email}                         : null,
-    c.telefone    ? {label:'Telefone',    val:c.telefone}                      : null,
-  ].filter(Boolean);
+
+  const linhaLogradouro = [c.logradouro, c.numero].filter(Boolean).map(escapeHtml).join(', ');
+  const complementoTxt = c.complemento ? ` — ${escapeHtml(c.complemento)}` : '';
+  const enderecoLinha1 = linhaLogradouro + complementoTxt;
+  const enderecoLinha2 = [c.bairro, (c.cidade?`${c.cidade}${c.uf?'/'+c.uf:''}`:null), c.cep?`CEP ${c.cep}`:null].filter(Boolean).map(escapeHtml).join(' · ');
+  const temEndereco = !!(enderecoLinha1 || enderecoLinha2);
+
+  const grupoIdentificacao = [
+    c.cnpj  ? _htmlLinhaInfo('CNPJ', escapeHtml(c.cnpj))   : '',
+    c.porte ? _htmlLinhaInfo('Porte', escapeHtml(c.porte)) : '',
+  ].join('');
+  const grupoContato = [
+    c.email    ? _htmlLinhaInfo('E-mail', escapeHtml(c.email))       : '',
+    c.telefone ? _htmlLinhaInfo('Telefone', escapeHtml(c.telefone))  : '',
+  ].join('');
+  const temAlgumDado = !!(grupoIdentificacao || temEndereco || grupoContato);
+
   const cnaesSec = Array.isArray(c.cnaes_secundarios) ? c.cnaes_secundarios : [];
   const nrsHtml = _htmlSugestaoNR(c.cnae, c.cnae_descricao||'', cnaesSec);
+  const chipsCnaesHtml = _htmlChipsCnaes(c.cnae, c.cnae_descricao||'', cnaesSec);
+
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="clientes">${ICONS.back} Voltar</button>
@@ -2828,27 +2859,20 @@ function verCliente(id) {
     </div>
 
     <div class="card" style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Informações cadastradas</div>
-      ${campos.length ? campos.map(f=>`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);min-width:0">
-          <span style="font-size:13px;color:var(--text-2);flex-shrink:0">${f.label}</span>
-          <span style="font-size:13px;font-weight:500;color:var(--navy);text-align:right;min-width:0;word-break:break-word">${f.val}</span>
-        </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">Informações cadastradas</div>
+      ${temAlgumDado ? `
+        ${grupoIdentificacao ? _htmlSubRotulo('Identificação', true) + grupoIdentificacao : ''}
+        ${temEndereco ? _htmlSubRotulo('Endereço', !grupoIdentificacao) + `<div style="font-size:13px;color:var(--navy);line-height:1.5;word-break:break-word">${enderecoLinha1}${enderecoLinha1&&enderecoLinha2?'<br>':''}${enderecoLinha2}</div>` : ''}
+        ${grupoContato ? _htmlSubRotulo('Contato', !grupoIdentificacao && !temEndereco) + grupoContato : ''}
+      ` : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
     </div>
-
-    ${cnaesSec.length ? `
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Atividades secundárias (CNAE)</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${cnaesSec.map(s=>`<span class="badge badge-gray" title="${escapeHtml(s.descricao||'')}">${escapeHtml(s.codigo||'')}</span>`).join('')}
-      </div>
-    </div>` : ''}
 
     <div class="card" style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Painel de enquadramento SST</div>
       ${nrsHtml || (podeMgr
         ? `<div style="font-size:13px;color:var(--text-3)">Cadastre o CNAE deste cliente (consulte o CNPJ em Editar dados) para ver as NRs comumente aplicáveis.</div>`
         : `<div style="font-size:13px;color:var(--text-3)">CNAE ainda não cadastrado para este cliente.</div>`)}
+      ${chipsCnaesHtml}
     </div>
 
     ${podeMgr?`
