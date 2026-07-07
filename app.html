@@ -101,7 +101,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .main-content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
 .main-header{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
 .main-header-title{font-size:16px;font-weight:600;color:var(--text-1);flex:1;letter-spacing:-.2px}
-.main-body{flex:1;overflow-y:auto;padding:24px}
+.main-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
 .hamburger{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--navy)}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
 .sidebar-overlay.show{display:block}
@@ -120,7 +120,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .mh-greeting{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:2px;font-weight:400}
 .mh-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.4px}
 .mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(245,158,11,.18);padding:4px 10px;border-radius:999px;font-size:11px;color:var(--amber);font-weight:500;border:1px solid rgba(245,158,11,.25)}
-.mobile-content{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
+.mobile-content{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
 
 /* ── Cards & surfaces ── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
@@ -276,8 +276,10 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .home-list-name{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-list-sub{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
+.fin-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:767px){
   .home-2col{grid-template-columns:1fr;gap:10px}
+  .fin-mini-grid{grid-template-columns:1fr;gap:8px}
   .home-qa{grid-template-columns:repeat(2,minmax(0,1fr))}
   .home-kpi-val{font-size:20px}
   .home-list-card{padding:12px 10px}
@@ -350,7 +352,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── Turmas grid v2 ── */
-.turmas-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+.turmas-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;min-width:0}
 .turmas-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap}
 .turmas-tab:hover{border-color:var(--border-2);color:var(--text-1)}
 .turmas-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
@@ -1434,7 +1436,7 @@ async function renderHomeProvedor() {
     </div>
 
     <!-- Crescimento e atividade -->
-    <div class="home-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div class="home-2col">
       <div class="card" style="padding:14px">
         <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:10px">Crescimento (6 meses)</div>
         ${htmlGrafico}
@@ -2252,7 +2254,7 @@ async function renderFinanceiroProvedor() {
         <input type="range" id="taxaConversaoMrr" min="0" max="100" step="10" value="50" oninput="_atualizarProjecaoMrr()" style="flex:1">
         <span id="taxaConversaoLabel" style="font-size:13px;font-weight:700;color:var(--navy);min-width:38px;text-align:right">50%</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div class="fin-mini-grid">
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px">
           <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em">Trials ativos</div>
           <div style="font-size:18px;font-weight:700;color:var(--navy)">${trialsAtivos.length}</div>
@@ -2273,7 +2275,7 @@ async function renderFinanceiroProvedor() {
       ${htmlGraficoMrr}
     </div>
 
-    <div class="home-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div class="home-2col">
       <div class="card" style="padding:14px 14px 4px">
         <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:6px">Próximos vencimentos (30 dias)</div>
         ${htmlVencimentos}
@@ -3567,7 +3569,7 @@ async function renderTurmas(abaInicial) {
   const nCa = _turmasCache.filter(t=>t.status==='cancelada').length;
   const abaAtiva = abaInicial || (nAn>0?'em_andamento':nAg>0?'agendada':'concluida');
   setConteudo(`
-    <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+    <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
       <div class="turmas-tabs" id="turmasTabsEl">
         ${_turmaTabHtml('em_andamento','Em andamento',nAn,abaAtiva)}
         ${_turmaTabHtml('agendada','Agendadas',nAg,abaAtiva)}
@@ -3882,7 +3884,9 @@ async function abrirModalClienteRapido() {
       O cliente será selecionado automaticamente após o cadastro.
     </div>
     <div class="field"><label>Nome *</label><input type="text" id="mCRNome" placeholder="Razão social" autofocus></div>
-    ${_cnpjRow('mCRCnpj', '', 'mCRNome', 'mCRCidade', 'mCRUf', 'mCREmail')}
+    ${_cnpjRow('mCRCnpj', '', 'mCRNome', 'mCRCidade', 'mCRUf', 'mCREmail', 'mCRCnae')}
+    <input type="hidden" id="mCRCnae" value="">
+    <div id="sugestaoNRBox"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCRUf" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
@@ -3899,6 +3903,7 @@ async function salvarClienteRapido() {
   const dados = {
     nome,
     cnpj: document.getElementById('mCRCnpj')?.value.trim()||null,
+    cnae: document.getElementById('mCRCnae')?.value.trim()||null,
     cidade: document.getElementById('mCRCidade')?.value.trim()||null,
     uf: (document.getElementById('mCRUf')?.value.trim()||'').toUpperCase()||null,
     email: document.getElementById('mCREmail')?.value.trim()||null,
