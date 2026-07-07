@@ -22,6 +22,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.8/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
 <style>
@@ -6406,6 +6407,15 @@ async function renderConta() {
   const u = usuarioAtual;
   setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Minha conta</div>`);
   fabOcultar();
+
+  let certHtml = '';
+  if (u.perfil === 'instrutor') {
+    try {
+      const {data:cert} = await sb.from('certificados_digitais').select('*').eq('usuario_id', u.id).maybeSingle();
+      certHtml = _htmlCardCertificadoDigital(cert);
+    } catch(e) { console.warn('Não foi possível carregar certificado digital:', e.message); }
+  }
+
   setConteudo(`
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
@@ -6438,7 +6448,8 @@ async function renderConta() {
       </div>
       <button class="btn btn-outline" id="btnAlterarSenha" onclick="mostrarFormSenha()" style="width:100%;margin-bottom:12px">🔒 Alterar senha</button>
       <button class="btn btn-danger" style="width:100%" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
-    </div>`);
+    </div>
+    ${certHtml}`);
 }
 
 function mostrarFormSenha() {
@@ -6486,6 +6497,177 @@ async function salvarConta() {
     document.getElementById('sidebarNome').textContent   = nome;
     showToast('Dados atualizados!','success');
   } catch(e) { showToast(e.message||'Erro ao salvar','error'); }
+}
+
+// ============================================================
+// CERTIFICADO DIGITAL (ICP-Brasil) — Fase 1: cadastro e gestão
+// A leitura do arquivo .pfx/.p12 e do PIN acontece 100% no navegador
+// do instrutor (via forge.js). O PIN nunca é enviado ao servidor e
+// nunca é armazenado. Apenas o arquivo (já criptografado pelo padrão
+// PKCS#12) e os metadados do certificado são salvos.
+// ============================================================
+
+function _statusCertDigital(dataValidade) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const validade = new Date(dataValidade+'T00:00:00');
+  const dias = Math.ceil((validade - hoje) / 86400000);
+  if (dias < 0)   return {label:`⛔ Vencido em ${formatarData(dataValidade)}`, cor:'red', dias};
+  if (dias <= 30) return {label:`⚠️ Vence em ${dias} dia(s) — ${formatarData(dataValidade)}`, cor:'amber', dias};
+  return {label:`✅ Válido até ${formatarData(dataValidade)}`, cor:'green', dias};
+}
+
+function _htmlCardCertificadoDigital(cert) {
+  if (!cert) {
+    return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">🔐 Certificado Digital (ICP-Brasil)</div>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
+        Cadastre seu certificado digital A1 para assinar eletronicamente os certificados e listas de presença que você emitir, com validade jurídica. Sem certificado cadastrado, a assinatura convencional continua sendo usada normalmente.
+      </p>
+      <button class="btn btn-navy" style="width:100%" onclick="abrirModalCertificadoDigital()">📄 Cadastrar certificado digital</button>
+    </div>`;
+  }
+  const st = _statusCertDigital(cert.data_validade);
+  const corMap = {green:'var(--green)', amber:'var(--amber)', red:'var(--red)'};
+  const bgMap  = {green:'var(--green-l)', amber:'var(--amber-l)', red:'var(--red-l)'};
+  return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">🔐 Certificado Digital (ICP-Brasil)</div>
+      <div style="display:flex;align-items:center;gap:10px;background:${bgMap[st.cor]};border:1px solid ${corMap[st.cor]};padding:10px 14px;border-radius:var(--r-md);margin-bottom:14px">
+        <span style="font-size:13px;font-weight:700;color:${corMap[st.cor]}">${st.label}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.8;margin-bottom:16px">
+        <div><strong style="color:var(--text-1)">Titular:</strong> ${escapeHtml(cert.titular_nome)}</div>
+        <div><strong style="color:var(--text-1)">Tipo:</strong> A1 (arquivo digital)</div>
+        <div><strong style="color:var(--text-1)">Emissor:</strong> ${escapeHtml(cert.emissor)}</div>
+        <div><strong style="color:var(--text-1)">Validade:</strong> ${formatarData(cert.data_validade)}</div>
+      </div>
+      <button class="btn btn-outline" style="width:100%" onclick="abrirModalCertificadoDigital()">🔄 Substituir certificado</button>
+    </div>`;
+}
+
+function abrirModalCertificadoDigital() {
+  abrirModal('Certificado Digital (ICP-Brasil)', `
+    <div style="margin-bottom:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md)">
+      <p style="font-size:12px;color:var(--text-2);line-height:1.6">
+        Selecione o arquivo do seu certificado (.pfx ou .p12) e informe o PIN. O PIN não é enviado ao servidor — a leitura acontece aqui, no seu navegador.
+      </p>
+    </div>
+    <div class="field"><label>Arquivo do certificado (.pfx / .p12)</label>
+      <input type="file" id="certArquivo" accept=".pfx,.p12" style="width:100%;padding:9px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit"></div>
+    <div class="field"><label>PIN do certificado</label>
+      <input type="password" id="certPin" placeholder="Digite o PIN"></div>
+    <div id="certErro" style="display:none;font-size:12px;color:var(--red);margin-top:4px"></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnLerCert" onclick="_lerCertificadoDigital()">Ler certificado</button>`
+  );
+}
+
+async function _lerCertificadoDigital() {
+  const fileInput = document.getElementById('certArquivo');
+  const pin       = document.getElementById('certPin')?.value || '';
+  const erroEl    = document.getElementById('certErro');
+  erroEl.style.display = 'none';
+  const file = fileInput?.files?.[0];
+  if (!file) { erroEl.textContent = 'Selecione o arquivo do certificado.'; erroEl.style.display='block'; return; }
+  if (!pin)  { erroEl.textContent = 'Informe o PIN do certificado.'; erroEl.style.display='block'; return; }
+
+  const btn = document.getElementById('btnLerCert');
+  btn.disabled = true; btn.textContent = 'Lendo...';
+
+  try {
+    const buffer  = await file.arrayBuffer();
+    const derBuf  = forge.util.createBuffer(new Uint8Array(buffer));
+    const asn1    = forge.asn1.fromDer(derBuf);
+    const p12     = forge.pkcs12.pkcs12FromAsn1(asn1, pin);
+
+    let certForge = null;
+    for (const sc of p12.safeContents) {
+      for (const bag of sc.safeBags) {
+        if (bag.type === forge.pki.oids.certBag && bag.cert) { certForge = bag.cert; break; }
+      }
+      if (certForge) break;
+    }
+    if (!certForge) throw new Error('Não foi possível localizar o certificado no arquivo.');
+
+    const attrCN = (attrs) => (attrs.find(a=>a.shortName==='CN')||{}).value || '—';
+    const dados = {
+      titular_nome:  attrCN(certForge.subject.attributes),
+      emissor:       attrCN(certForge.issuer.attributes),
+      numero_serie:  certForge.serialNumber,
+      data_emissao:  certForge.validity.notBefore.toISOString().slice(0,10),
+      data_validade: certForge.validity.notAfter.toISOString().slice(0,10),
+    };
+
+    window._certPendente = { file, dados };
+    _abrirConfirmacaoCertificado(dados);
+  } catch (e) {
+    erroEl.textContent = 'PIN incorreto ou arquivo inválido. Verifique e tente novamente.';
+    erroEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ler certificado';
+  }
+}
+
+function _abrirConfirmacaoCertificado(dados) {
+  abrirModal('Confirme os dados do certificado', `
+    <div style="font-size:13px;color:var(--text-2);line-height:1.9;margin-bottom:16px">
+      <div><strong style="color:var(--text-1)">Titular:</strong> ${escapeHtml(dados.titular_nome)}</div>
+      <div><strong style="color:var(--text-1)">Tipo:</strong> A1 (arquivo digital)</div>
+      <div><strong style="color:var(--text-1)">Emissor:</strong> ${escapeHtml(dados.emissor)}</div>
+      <div><strong style="color:var(--text-1)">Validade:</strong> ${formatarData(dados.data_validade)}</div>
+    </div>
+    <div style="background:var(--amber-l);border:1px solid var(--amber);padding:10px 12px;border-radius:var(--r-md);margin-bottom:14px">
+      <p style="font-size:12px;color:var(--amber-text);font-weight:600">Confira se o titular acima corresponde ao seu nome antes de continuar.</p>
+    </div>
+    <div style="max-height:160px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;margin-bottom:14px;font-size:11px;color:var(--text-2);line-height:1.6">
+      <strong>Termo de responsabilidade:</strong> Ao cadastrar este certificado digital, declaro que sou o único titular e responsável pela guarda do PIN. Autorizo que este certificado seja utilizado exclusivamente para assinatura eletrônica dos documentos que eu emitir através do Toledo Labs. O Toledo Labs não armazena o PIN em nenhum momento, e a leitura do certificado ocorre localmente no meu navegador. Sou responsável por manter o PIN em sigilo e por comunicar imediatamente qualquer suspeita de uso indevido.
+    </div>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text-2);cursor:pointer">
+      <input type="checkbox" id="certAceite" style="margin-top:2px">
+      Li e aceito o termo de responsabilidade acima.
+    </label>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnConfirmarCert" onclick="_salvarCertificadoDigital()">Confirmar e salvar</button>`
+  );
+}
+
+async function _salvarCertificadoDigital() {
+  const aceite = document.getElementById('certAceite')?.checked;
+  if (!aceite) { showToast('É necessário aceitar o termo de responsabilidade.','error'); return; }
+  const pendente = window._certPendente;
+  if (!pendente) { showToast('Sessão expirada, selecione o arquivo novamente.','error'); return; }
+
+  const btn = document.getElementById('btnConfirmarCert');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  try {
+    const path = `${usuarioAtual.id}/certificado.pfx`;
+    const {error:upErr} = await sb.storage.from('certificados-digitais').upload(path, pendente.file, {upsert:true, contentType:'application/x-pkcs12'});
+    if (upErr) throw upErr;
+
+    const registro = {
+      usuario_id:      usuarioAtual.id,
+      titular_nome:    pendente.dados.titular_nome,
+      emissor:         pendente.dados.emissor,
+      numero_serie:    pendente.dados.numero_serie,
+      data_emissao:    pendente.dados.data_emissao,
+      data_validade:   pendente.dados.data_validade,
+      arquivo_path:    path,
+      termo_aceite_em: new Date().toISOString(),
+      atualizado_em:   new Date().toISOString(),
+    };
+    const {error:dbErr} = await sb.from('certificados_digitais').upsert(registro, {onConflict:'usuario_id'});
+    if (dbErr) throw dbErr;
+
+    delete window._certPendente;
+    fecharModal();
+    showToast('Certificado digital cadastrado com sucesso!','success');
+    await renderConta();
+  } catch(e) {
+    showToast(e.message||'Erro ao salvar certificado','error');
+    btn.disabled = false; btn.textContent = 'Confirmar e salvar';
+  }
 }
 
 // ============================================================
