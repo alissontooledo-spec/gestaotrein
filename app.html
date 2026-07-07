@@ -835,7 +835,12 @@ function mascararCnpj(input) {
   else if (v.length > 2) v = v.replace(/^(\d{2})(\d*).*/,'$1.$2');
   input.value = v;
 }
-async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId, cnaeId) {
+// prefix (opcional): quando informado, também preenche os campos estendidos
+// (endereço, telefone, situação cadastral, porte, Simples/MEI, CNAEs
+// secundários) seguindo a convenção de nomes `${prefix}Campo`. Usado pelos
+// cadastros de cliente (mCli/mCR); organizações não usam prefix e continuam
+// funcionando exatamente como antes.
+async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId, cnaeId, prefix) {
   const raw = document.getElementById(cnpjId)?.value.replace(/\D/g,'');
   if (!raw || raw.length !== 14) { showToast('Digite um CNPJ completo (14 dígitos)','error'); return; }
   const btn = document.getElementById('btnBuscarCnpj_'+cnpjId);
@@ -850,12 +855,40 @@ async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId, cnaeId) 
     const email = d.email || '';
     const cnae = d.cnae_fiscal ? String(d.cnae_fiscal) : '';
     const cnaeDesc = d.cnae_fiscal_descricao || '';
-    if (nomeId) { const el=document.getElementById(nomeId); if(el&&nome) el.value=nome; }
-    if (cidadeId) { const el=document.getElementById(cidadeId); if(el&&cidade) el.value=cidade; }
+    const cnaesSecundarios = Array.isArray(d.cnaes_secundarios)
+      ? d.cnaes_secundarios.map(x=>({codigo:String(x.codigo||''),descricao:x.descricao||''})).filter(x=>x.codigo)
+      : [];
+    const setVal = (id, val) => { if(!id) return; const el=document.getElementById(id); if(el && val!==undefined && val!==null && val!=='') el.value=val; };
+    setVal(nomeId, nome);
+    setVal(cidadeId, cidade);
     if (ufId) { const el=document.getElementById(ufId); if(el&&uf) el.value=uf.toUpperCase(); }
     if (emailId) { const el=document.getElementById(emailId); if(el&&email&&!el.value) el.value=email; }
-    if (cnaeId) { const el=document.getElementById(cnaeId); if(el&&cnae) el.value=cnae; _atualizarSugestaoNR(cnae, cnaeDesc); }
-    showToast('Dados preenchidos pela Receita Federal','success');
+    if (cnaeId) { const el=document.getElementById(cnaeId); if(el&&cnae) el.value=cnae; }
+    if (prefix) {
+      setVal(prefix+'Tel', d.ddd_telefone_1);
+      setVal(prefix+'Cep', d.cep);
+      setVal(prefix+'Logradouro', d.logradouro);
+      setVal(prefix+'Numero', d.numero);
+      setVal(prefix+'Complemento', d.complemento);
+      setVal(prefix+'Bairro', d.bairro);
+      setVal(prefix+'CnaeDesc', cnaeDesc);
+      setVal(prefix+'Situacao', d.descricao_situacao_cadastral);
+      setVal(prefix+'SituacaoData', d.data_situacao_cadastral);
+      setVal(prefix+'SituacaoMotivo', d.descricao_motivo_situacao_cadastral);
+      setVal(prefix+'Porte', d.descricao_porte);
+      const simplesEl = document.getElementById(prefix+'OpcaoSimples');
+      if (simplesEl) simplesEl.value = d.opcao_pelo_simples===true?'true':d.opcao_pelo_simples===false?'false':'';
+      const meiEl = document.getElementById(prefix+'OpcaoMei');
+      if (meiEl) meiEl.value = d.opcao_pelo_mei===true?'true':d.opcao_pelo_mei===false?'false':'';
+      const secEl = document.getElementById(prefix+'CnaesSec');
+      if (secEl) secEl.value = JSON.stringify(cnaesSecundarios);
+    }
+    if (cnaeId) _atualizarSugestaoNR(cnae, cnaeDesc, cnaesSecundarios);
+    if (d.descricao_situacao_cadastral && d.descricao_situacao_cadastral.toUpperCase() !== 'ATIVA') {
+      showToast(`Dados preenchidos — atenção: situação cadastral na Receita Federal é ${d.descricao_situacao_cadastral}`, 'error', 6000);
+    } else {
+      showToast('Dados preenchidos pela Receita Federal','success');
+    }
   } catch(e) {
     showToast(e.message||'Erro ao consultar CNPJ','error');
   } finally {
@@ -896,26 +929,77 @@ const CNAE_NR_MAP = {
   '97':['NR-17'], '99':['NR-17'],
 };
 
-function _atualizarSugestaoNR(cnae, cnaeDesc) {
-  const el = document.getElementById('sugestaoNRBox');
-  if (!el) return;
-  const divisao = String(cnae).replace(/\D/g,'').slice(0,2);
-  const nrs = CNAE_NR_MAP[divisao];
-  if (!nrs) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-    <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-top:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">NRs comumente aplicáveis${cnaeDesc?` — ${cnaeDesc}`:''}</div>
-      <div style="font-size:13px;color:var(--navy);font-weight:600">${nrs.join(' · ')}</div>
-      <div style="font-size:10.5px;color:var(--text-3);margin-top:4px;line-height:1.4">Sugestão indicativa com base no setor econômico (CNAE) — não substitui avaliação de um profissional de Segurança do Trabalho.</div>
+// Retorna as NRs mapeadas para a divisão (2 dígitos) de um código CNAE.
+function _nrsParaCnae(cnae) {
+  const divisao = String(cnae||'').replace(/\D/g,'').slice(0,2);
+  return CNAE_NR_MAP[divisao] || [];
+}
+
+function _ordenarNrs(nrs) {
+  return [...nrs].sort((a,b) => (parseInt(String(a).replace(/\D/g,''),10)||0) - (parseInt(String(b).replace(/\D/g,''),10)||0));
+}
+
+// Consolida CNAE principal + CNAEs secundários em uma lista única de NRs
+// potencialmente aplicáveis — uma atividade secundária pode indicar NRs que
+// o CNAE principal sozinho não indicaria (ex: escritório administrativo com
+// atividade secundária de manutenção predial).
+function _calcularEnquadramento(cnae, cnaeDesc, cnaesSecundarios) {
+  const itens = [];
+  if (cnae) itens.push({ codigo: String(cnae), descricao: cnaeDesc||'', nrs: _nrsParaCnae(cnae) });
+  (cnaesSecundarios||[]).forEach(s => {
+    if (!s || !s.codigo) return;
+    itens.push({ codigo: String(s.codigo), descricao: s.descricao||'', nrs: _nrsParaCnae(s.codigo) });
+  });
+  const todasNrs = _ordenarNrs([...new Set(itens.flatMap(i=>i.nrs))]);
+  return { itens, todasNrs };
+}
+
+// HTML da sugestão de NRs — usado tanto no modal de cadastro (#sugestaoNRBox)
+// quanto no Painel de Enquadramento SST da tela principal do cliente.
+function _htmlSugestaoNR(cnae, cnaeDesc, cnaesSecundarios) {
+  const { itens, todasNrs } = _calcularEnquadramento(cnae, cnaeDesc, cnaesSecundarios||[]);
+  if (!todasNrs.length) return '';
+  const extras = itens.slice(1).filter(i=>i.nrs.length);
+  const extrasHtml = extras.length
+    ? `<div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Considerando também atividade(s) secundária(s): ${extras.map(i=>i.codigo).join(', ')}</div>`
+    : '';
+  return `
+    <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-top:8px;min-width:0">
+      <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">NRs comumente aplicáveis${cnaeDesc?` — ${cnaeDesc}`:''}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${todasNrs.map(nr=>`<span class="badge badge-navy">${nr}</span>`).join('')}</div>
+      ${extrasHtml}
+      <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Sugestão indicativa com base no setor econômico (CNAE) — não substitui avaliação de um profissional de Segurança do Trabalho.</div>
     </div>`;
 }
 
-function _cnpjRow(inputId, valorAtual, nomeId, cidadeId, ufId, emailId, cnaeId) {
+function _atualizarSugestaoNR(cnae, cnaeDesc, cnaesSecundarios) {
+  const el = document.getElementById('sugestaoNRBox');
+  if (!el) return;
+  el.innerHTML = _htmlSugestaoNR(cnae, cnaeDesc, cnaesSecundarios);
+}
+
+function _htmlBadgeSituacao(situacao) {
+  if (!situacao) return '';
+  const s = String(situacao).toUpperCase();
+  const cls = s==='ATIVA' ? 'badge-green' : (s==='BAIXADA'||s==='INAPTA'||s==='NULA') ? 'badge-red' : 'badge-amber';
+  return `<span class="badge ${cls}">CNPJ ${escapeHtml(situacao)}</span>`;
+}
+
+// Extrai valores de campos ocultos/inputs do formulário de forma segura,
+// compartilhado por salvarCliente() e salvarClienteRapido().
+function _valorCampo(id) { const v = document.getElementById(id)?.value?.trim(); return v ? v : null; }
+function _valorBooleano(id) { const v = document.getElementById(id)?.value; return v==='true'?true:v==='false'?false:null; }
+function _valorCnaesSecundarios(id) {
+  try { const v = JSON.parse(document.getElementById(id)?.value||'[]'); return Array.isArray(v)&&v.length?v:null; }
+  catch(e) { return null; }
+}
+
+function _cnpjRow(inputId, valorAtual, nomeId, cidadeId, ufId, emailId, cnaeId, prefix) {
   return `<div class="field">
     <label>CNPJ</label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input type="text" id="${inputId}" value="${valorAtual||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)" style="flex:1">
-      <button type="button" id="btnBuscarCnpj_${inputId}" class="btn btn-outline btn-sm" style="white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px" onclick="buscarCnpjModal('${inputId}','${nomeId}','${cidadeId}','${ufId}','${emailId||''}','${cnaeId||''}')">Consultar</button>
+    <div style="display:flex;gap:8px;align-items:center;min-width:0">
+      <input type="text" id="${inputId}" value="${valorAtual||''}" placeholder="00.000.000/0001-00" maxlength="18" oninput="mascararCnpj(this)" style="flex:1;min-width:0">
+      <button type="button" id="btnBuscarCnpj_${inputId}" class="btn btn-outline btn-sm" style="white-space:nowrap;flex-shrink:0;padding:8px 12px;font-size:12px" onclick="buscarCnpjModal('${inputId}','${nomeId}','${cidadeId}','${ufId}','${emailId||''}','${cnaeId||''}','${prefix||''}')">Consultar</button>
     </div>
   </div>`;
 }
@@ -2712,24 +2796,32 @@ function verCliente(id) {
   const c = _clientesCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  const enderecoPartes = [c.logradouro, c.numero, c.complemento].filter(Boolean).join(', ');
+  const enderecoLinha2 = [c.bairro, c.cep?`CEP ${c.cep}`:null].filter(Boolean).join(' · ');
+  const enderecoCompleto = [enderecoPartes, enderecoLinha2].filter(Boolean).join(' — ');
   const campos = [
     c.cnpj        ? {label:'CNPJ',       val:c.cnpj}                          : null,
+    enderecoCompleto ? {label:'Endereço', val:enderecoCompleto}                : null,
     c.cidade      ? {label:'Cidade',      val:`${c.cidade}${c.uf?'/'+c.uf:''}`} : null,
+    c.porte       ? {label:'Porte',       val:c.porte}                        : null,
     c.email       ? {label:'E-mail',      val:c.email}                         : null,
     c.telefone    ? {label:'Telefone',    val:c.telefone}                      : null,
   ].filter(Boolean);
+  const cnaesSec = Array.isArray(c.cnaes_secundarios) ? c.cnaes_secundarios : [];
+  const nrsHtml = _htmlSugestaoNR(c.cnae, c.cnae_descricao||'', cnaesSec);
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="clientes">${ICONS.back} Voltar</button>
     </div>
 
     <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:14px">
+      <div style="display:flex;align-items:center;gap:14px;min-width:0">
         <div style="width:52px;height:52px;border-radius:12px;background:rgba(245,158,11,.2);color:var(--amber);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.5px">${iniciais(c.nome)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
-          <div style="margin-top:6px">
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
             <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${c.ativo?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${c.ativo?'#6EE7B7':'#94A3B8'};border:1px solid ${c.ativo?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${c.ativo?'Ativo':'Inativo'}</span>
+            ${_htmlBadgeSituacao(c.situacao_cadastral)}
           </div>
         </div>
       </div>
@@ -2738,10 +2830,25 @@ function verCliente(id) {
     <div class="card" style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Informações cadastradas</div>
       ${campos.length ? campos.map(f=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:13px;color:var(--text-2)">${f.label}</span>
-          <span style="font-size:13px;font-weight:500;color:var(--navy)">${f.val}</span>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);min-width:0">
+          <span style="font-size:13px;color:var(--text-2);flex-shrink:0">${f.label}</span>
+          <span style="font-size:13px;font-weight:500;color:var(--navy);text-align:right;min-width:0;word-break:break-word">${f.val}</span>
         </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
+    </div>
+
+    ${cnaesSec.length ? `
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Atividades secundárias (CNAE)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${cnaesSec.map(s=>`<span class="badge badge-gray" title="${escapeHtml(s.descricao||'')}">${escapeHtml(s.codigo||'')}</span>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Painel de enquadramento SST</div>
+      ${nrsHtml || (podeMgr
+        ? `<div style="font-size:13px;color:var(--text-3)">Cadastre o CNAE deste cliente (consulte o CNPJ em Editar dados) para ver as NRs comumente aplicáveis.</div>`
+        : `<div style="font-size:13px;color:var(--text-3)">CNAE ainda não cadastrado para este cliente.</div>`)}
     </div>
 
     ${podeMgr?`
@@ -2773,9 +2880,26 @@ function abrirModalCliente(id=null) {
   const c = id ? _clientesCache.find(x=>x.id===id) : null;
   abrirModal(c?'Editar cliente':'Novo cliente', `
     <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${c?.nome||''}" placeholder="Razão social"></div>
-    ${_cnpjRow('mCliCnpj', c?.cnpj||'', 'mCliNome', 'mCliCidade', 'mCliUf', 'mCliEmail', 'mCliCnae')}
+    ${_cnpjRow('mCliCnpj', c?.cnpj||'', 'mCliNome', 'mCliCidade', 'mCliUf', 'mCliEmail', 'mCliCnae', 'mCli')}
     <input type="hidden" id="mCliCnae" value="${c?.cnae||''}">
+    <input type="hidden" id="mCliCnaeDesc" value="${escapeHtml(c?.cnae_descricao||'')}">
+    <input type="hidden" id="mCliCnaesSec" value="${escapeHtml(JSON.stringify(c?.cnaes_secundarios||[]))}">
+    <input type="hidden" id="mCliSituacao" value="${escapeHtml(c?.situacao_cadastral||'')}">
+    <input type="hidden" id="mCliSituacaoData" value="${c?.data_situacao_cadastral||''}">
+    <input type="hidden" id="mCliSituacaoMotivo" value="${escapeHtml(c?.motivo_situacao_cadastral||'')}">
+    <input type="hidden" id="mCliPorte" value="${escapeHtml(c?.porte||'')}">
+    <input type="hidden" id="mCliOpcaoSimples" value="${c?.opcao_simples===true?'true':c?.opcao_simples===false?'false':''}">
+    <input type="hidden" id="mCliOpcaoMei" value="${c?.opcao_mei===true?'true':c?.opcao_mei===false?'false':''}">
     <div id="sugestaoNRBox"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>CEP</label><input type="text" id="mCliCep" value="${c?.cep||''}" placeholder="88350-000"></div>
+      <div class="field" style="margin:0"><label>Número</label><input type="text" id="mCliNumero" value="${c?.numero||''}" placeholder="123"></div>
+    </div>
+    <div class="field"><label>Logradouro</label><input type="text" id="mCliLogradouro" value="${c?.logradouro||''}" placeholder="Rua, Avenida..."></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Complemento</label><input type="text" id="mCliComplemento" value="${c?.complemento||''}" placeholder="Sala, bloco..."></div>
+      <div class="field" style="margin:0"><label>Bairro</label><input type="text" id="mCliBairro" value="${c?.bairro||''}" placeholder="Centro"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
@@ -2784,13 +2908,34 @@ function abrirModalCliente(id=null) {
     <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCliente()">${c?'Salvar':'Cadastrar'}</button>`);
-  if (c?.cnae) _atualizarSugestaoNR(c.cnae, '');
+  if (c?.cnae) _atualizarSugestaoNR(c.cnae, c.cnae_descricao||'', c.cnaes_secundarios||[]);
 }
 
 async function salvarCliente() {
   const nome = document.getElementById('mCliNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const dados = {nome, cnpj:document.getElementById('mCliCnpj')?.value.trim()||null, cnae:document.getElementById('mCliCnae')?.value.trim()||null, cidade:document.getElementById('mCliCidade')?.value.trim()||null, uf:(document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null, email:document.getElementById('mCliEmail')?.value.trim()||null, telefone:document.getElementById('mCliTel')?.value.trim()||null};
+  const dados = {
+    nome,
+    cnpj: _valorCampo('mCliCnpj'),
+    cnae: _valorCampo('mCliCnae'),
+    cnae_descricao: _valorCampo('mCliCnaeDesc'),
+    cnaes_secundarios: _valorCnaesSecundarios('mCliCnaesSec'),
+    cep: _valorCampo('mCliCep'),
+    logradouro: _valorCampo('mCliLogradouro'),
+    numero: _valorCampo('mCliNumero'),
+    complemento: _valorCampo('mCliComplemento'),
+    bairro: _valorCampo('mCliBairro'),
+    cidade: _valorCampo('mCliCidade'),
+    uf: (document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null,
+    email: _valorCampo('mCliEmail'),
+    telefone: _valorCampo('mCliTel'),
+    situacao_cadastral: _valorCampo('mCliSituacao'),
+    data_situacao_cadastral: _valorCampo('mCliSituacaoData'),
+    motivo_situacao_cadastral: _valorCampo('mCliSituacaoMotivo'),
+    porte: _valorCampo('mCliPorte'),
+    opcao_simples: _valorBooleano('mCliOpcaoSimples'),
+    opcao_mei: _valorBooleano('mCliOpcaoMei'),
+  };
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('clientes').update(dados).eq('id',_modalCurrentId) : await sb.from('clientes').insert({...dados,org_id:usuarioAtual.org_id,ativo:true});
@@ -3883,8 +4028,22 @@ async function abrirModalClienteRapido() {
       O cliente será selecionado automaticamente após o cadastro.
     </div>
     <div class="field"><label>Nome *</label><input type="text" id="mCRNome" placeholder="Razão social" autofocus></div>
-    ${_cnpjRow('mCRCnpj', '', 'mCRNome', 'mCRCidade', 'mCRUf', 'mCREmail', 'mCRCnae')}
+    ${_cnpjRow('mCRCnpj', '', 'mCRNome', 'mCRCidade', 'mCRUf', 'mCREmail', 'mCRCnae', 'mCR')}
     <input type="hidden" id="mCRCnae" value="">
+    <input type="hidden" id="mCRCnaeDesc" value="">
+    <input type="hidden" id="mCRCnaesSec" value="">
+    <input type="hidden" id="mCRSituacao" value="">
+    <input type="hidden" id="mCRSituacaoData" value="">
+    <input type="hidden" id="mCRSituacaoMotivo" value="">
+    <input type="hidden" id="mCRPorte" value="">
+    <input type="hidden" id="mCROpcaoSimples" value="">
+    <input type="hidden" id="mCROpcaoMei" value="">
+    <input type="hidden" id="mCRCep" value="">
+    <input type="hidden" id="mCRLogradouro" value="">
+    <input type="hidden" id="mCRNumero" value="">
+    <input type="hidden" id="mCRComplemento" value="">
+    <input type="hidden" id="mCRBairro" value="">
+    <input type="hidden" id="mCRTel" value="">
     <div id="sugestaoNRBox"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCRCidade" placeholder="São Paulo"></div>
@@ -3901,11 +4060,25 @@ async function salvarClienteRapido() {
   const turmaId = _modalCurrentId; // capturar antes de fecharModal() zerar _modalCurrentId
   const dados = {
     nome,
-    cnpj: document.getElementById('mCRCnpj')?.value.trim()||null,
-    cnae: document.getElementById('mCRCnae')?.value.trim()||null,
-    cidade: document.getElementById('mCRCidade')?.value.trim()||null,
+    cnpj: _valorCampo('mCRCnpj'),
+    cnae: _valorCampo('mCRCnae'),
+    cnae_descricao: _valorCampo('mCRCnaeDesc'),
+    cnaes_secundarios: _valorCnaesSecundarios('mCRCnaesSec'),
+    cep: _valorCampo('mCRCep'),
+    logradouro: _valorCampo('mCRLogradouro'),
+    numero: _valorCampo('mCRNumero'),
+    complemento: _valorCampo('mCRComplemento'),
+    bairro: _valorCampo('mCRBairro'),
+    cidade: _valorCampo('mCRCidade'),
     uf: (document.getElementById('mCRUf')?.value.trim()||'').toUpperCase()||null,
-    email: document.getElementById('mCREmail')?.value.trim()||null,
+    email: _valorCampo('mCREmail'),
+    telefone: _valorCampo('mCRTel'),
+    situacao_cadastral: _valorCampo('mCRSituacao'),
+    data_situacao_cadastral: _valorCampo('mCRSituacaoData'),
+    motivo_situacao_cadastral: _valorCampo('mCRSituacaoMotivo'),
+    porte: _valorCampo('mCRPorte'),
+    opcao_simples: _valorBooleano('mCROpcaoSimples'),
+    opcao_mei: _valorBooleano('mCROpcaoMei'),
     org_id: usuarioAtual.org_id,
     ativo: true,
   };
