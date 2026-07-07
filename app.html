@@ -278,8 +278,8 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
 .fin-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:767px){
-  .home-2col{grid-template-columns:1fr;gap:10px}
-  .fin-mini-grid{grid-template-columns:1fr;gap:8px}
+  .home-2col{grid-template-columns:minmax(0,1fr);gap:10px}
+  .fin-mini-grid{grid-template-columns:minmax(0,1fr);gap:8px}
   .home-qa{grid-template-columns:repeat(2,minmax(0,1fr))}
   .home-kpi-val{font-size:20px}
   .home-list-card{padding:12px 10px}
@@ -328,7 +328,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .rel2-back:hover{background:var(--gray-50)}
 @media(max-width:767px){
   .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .rel2-rankings{grid-template-columns:1fr;gap:10px}
+  .rel2-rankings{grid-template-columns:minmax(0,1fr);gap:10px}
   .rel2-card{padding:12px 10px}
   .rel2-kpi{padding:12px 10px}
   .rel2-kpi-val{font-size:20px}
@@ -359,10 +359,10 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .turmas-tab .tab-count{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
 .turmas-tab:not(.active) .tab-count{background:var(--gray-100);color:var(--text-3)}
 .turmas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:8px}
-.turma-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.turma-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
 .turma-card:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
 .turma-card-nr{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;background:rgba(30,42,74,.09);color:var(--navy);padding:2px 7px;border-radius:10px;letter-spacing:.02em}
-.turma-card-title{font-size:14px;font-weight:600;color:var(--text-1);line-height:1.35;padding-right:44px}
+.turma-card-title{font-size:14px;font-weight:600;color:var(--text-1);line-height:1.35;padding-right:44px;word-break:break-word}
 .turma-card-meta{font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-card-date{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:4px}
 .turma-card-progress{display:flex;flex-direction:column;gap:5px}
@@ -381,7 +381,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .turmas-section-line{flex:1;height:1px;background:var(--border)}
 .turmas-empty-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-3);gap:8px}
 @media(max-width:767px){
-  .turmas-grid{grid-template-columns:1fr}
+  .turmas-grid{grid-template-columns:minmax(0,1fr)}
   .turmas-tab{font-size:12px;padding:6px 11px}
   .turmas-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .turmas-tabs::-webkit-scrollbar{display:none}
@@ -2212,10 +2212,10 @@ async function renderFinanceiroProvedor() {
     .slice(0, 8);
   const _labelPlano = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
   const htmlRanking = ranking.length ? ranking.map(r => `
-    <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border)">
-      <span style="font-size:13px;color:var(--text-1);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</span>
-      <span style="font-size:11px;color:var(--text-3)">${_labelPlano[r.plano]}</span>
-      <span style="font-size:13px;color:var(--navy);font-weight:700;min-width:70px;text-align:right">${r.valor>0?`R$${r.valor}`:'—'}</span>
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);min-width:0">
+      <span style="font-size:13px;color:var(--text-1);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</span>
+      <span style="font-size:11px;color:var(--text-3);flex-shrink:0">${_labelPlano[r.plano]}</span>
+      <span style="font-size:13px;color:var(--navy);font-weight:700;min-width:70px;text-align:right;flex-shrink:0">${r.valor>0?`R$${r.valor}`:'—'}</span>
     </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Sem organizações pagantes ainda.</div>';
 
   setConteudo(`
@@ -2280,7 +2280,7 @@ async function renderFinanceiroProvedor() {
         <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:6px">Próximos vencimentos (30 dias)</div>
         ${htmlVencimentos}
       </div>
-      <div class="card" style="padding:14px 14px 4px">
+      <div class="card" style="padding:14px 14px 4px;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:6px">Top organizações por receita</div>
         ${htmlRanking}
       </div>
@@ -3650,7 +3650,7 @@ function _htmlTurmaCard(t) {
     <div class="turma-card-title">${t.catalogo?.nome||'Treinamento'}</div>
     <div class="turma-card-meta">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M3 21l1.9-5.7a8.5 8.5 0 113.8 3.8z"/></svg>
-      <span style="overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}</span>
+      <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}</span>
     </div>
     ${progressHtml}
     <div class="turma-card-footer">
