@@ -1031,6 +1031,61 @@ const NR_INFO = {
   },
 };
 
+// Grau de Risco (GR, 1 a 4) por divisão de CNAE (2 dígitos), extraído do
+// Anexo I da NR-4 (redação da Portaria MTP nº 2.318/2022 — fonte: PDF oficial
+// fornecido por Alisson em jul/2026). Como o Anexo I classifica por CNAE
+// subclasse/classe (mais granular que a divisão usada aqui), cada divisão é
+// representada por [mínimo, máximo] encontrado entre suas classes — quando os
+// dois valores são iguais, a divisão é uniforme; quando diferem, a faixa é
+// mostrada explicitamente em vez de escolher um único número.
+// ATENÇÃO: o Anexo I está em processo de revisão pelo MTE (consulta pública
+// encerrada em dez/2025) — esta tabela reflete a versão vigente em 2022 e
+// deve ser reconferida quando a nova versão for publicada.
+const CNAE_GR_MAP = {
+  '01':[3,3], '02':[3,4], '03':[3,3], '05':[4,4], '06':[4,4], '07':[4,4],
+  '08':[4,4], '09':[4,4], '10':[3,3], '11':[3,3], '12':[3,3], '13':[3,3],
+  '14':[2,2], '15':[2,3], '16':[3,3], '17':[2,3], '18':[3,3], '19':[3,3],
+  '20':[2,4], '21':[3,3], '22':[3,3], '23':[3,4], '24':[4,4], '25':[3,4],
+  '26':[3,3], '27':[3,3], '28':[3,3], '29':[3,3], '30':[3,3], '31':[2,3],
+  '32':[3,3], '33':[3,3], '35':[3,3], '36':[3,3], '37':[3,3], '38':[3,3],
+  '39':[3,3], '41':[1,3], '42':[3,4], '43':[3,4], '45':[2,3], '46':[2,3],
+  '47':[1,3], '49':[3,3], '50':[3,3], '51':[3,3], '52':[3,3], '53':[2,2],
+  '55':[2,2], '56':[2,2], '58':[3,3], '59':[2,2], '60':[2,2], '61':[2,2],
+  '62':[2,2], '63':[1,2], '64':[1,1], '65':[1,1], '66':[1,1], '68':[1,1],
+  '69':[1,1], '70':[1,1], '71':[1,2], '72':[2,2], '73':[1,1], '74':[1,2],
+  '75':[3,3], '77':[1,1], '78':[1,1], '79':[1,1], '80':[3,3], '81':[1,3],
+  '82':[1,2], '84':[1,1], '85':[2,2], '86':[1,3], '87':[1,1], '88':[1,1],
+  '90':[1,2], '91':[2,2], '92':[1,1], '93':[1,2], '94':[1,1], '95':[3,3],
+  '96':[2,2], '97':[2,2], '99':[1,1]
+};
+
+const GR_LABEL = {1:'Leve', 2:'Médio', 3:'Alto', 4:'Altíssimo'};
+
+// Grau de Risco é atrelado à atividade PRINCIPAL do estabelecimento (é o que
+// vale para dimensionamento de SESMT/CIPA) — diferente das NRs aplicáveis,
+// aqui não consideramos CNAEs secundários.
+function _grauRiscoParaCnae(cnae) {
+  const divisao = String(cnae||'').replace(/\D/g,'').slice(0,2);
+  return CNAE_GR_MAP[divisao] || null;
+}
+
+function _htmlGrauRisco(cnae) {
+  const gr = _grauRiscoParaCnae(cnae);
+  if (!gr) return '';
+  const [min, max] = gr;
+  const faixa  = min===max ? `${min}` : `${min} a ${max}`;
+  const rotulo = min===max ? GR_LABEL[min] : `${GR_LABEL[min]} a ${GR_LABEL[max]}`;
+  return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;min-width:0">
+      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Grau de risco (NR-4) — atividade principal</div>
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span style="font-size:22px;font-weight:700;color:var(--navy)">${faixa}</span>
+        <span style="font-size:12px;color:var(--text-2)">${rotulo}</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Referência por divisão de CNAE (Anexo I da NR-4, 2022) — usado para dimensionamento de SESMT/CIPA. Tabela em revisão pelo MTE; não substitui o enquadramento oficial feito por profissional de SST.</div>
+    </div>`;
+}
+
 function verDetalheNR(nr) {
   const info = NR_INFO[nr];
   if (!info) return;
@@ -2952,8 +3007,10 @@ function verCliente(id) {
   const temAlgumDado = !!(grupoIdentificacao || temEndereco || grupoContato);
 
   const cnaesSec = Array.isArray(c.cnaes_secundarios) ? c.cnaes_secundarios : [];
+  const grHtml = _htmlGrauRisco(c.cnae);
   const nrsHtml = _htmlSugestaoNR(c.cnae, c.cnae_descricao||'', cnaesSec);
   const chipsCnaesHtml = _htmlChipsCnaes(c.cnae, c.cnae_descricao||'', cnaesSec);
+  const { todasNrs } = _calcularEnquadramento(c.cnae, c.cnae_descricao||'', cnaesSec);
 
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
@@ -2984,11 +3041,20 @@ function verCliente(id) {
 
     <div class="card" style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Painel de enquadramento SST</div>
-      ${nrsHtml || (podeMgr
-        ? `<div style="font-size:13px;color:var(--text-3)">Cadastre o CNAE deste cliente (consulte o CNPJ em Editar dados) para ver as NRs comumente aplicáveis.</div>`
-        : `<div style="font-size:13px;color:var(--text-3)">CNAE ainda não cadastrado para este cliente.</div>`)}
+      ${grHtml}
+      ${(nrsHtml || chipsCnaesHtml) ? `<div style="margin-top:${grHtml?'12px':'0'}">${nrsHtml}</div>` : ''}
+      ${!nrsHtml && !grHtml ? (podeMgr
+        ? `<div style="font-size:13px;color:var(--text-3)">Cadastre o CNAE deste cliente (consulte o CNPJ em Editar dados) para ver o enquadramento SST.</div>`
+        : `<div style="font-size:13px;color:var(--text-3)">CNAE ainda não cadastrado para este cliente.</div>`)
+        : ''}
       ${chipsCnaesHtml}
     </div>
+
+    ${podeMgr && todasNrs.length ? `
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Oportunidades comerciais</div>
+      <div id="oportunidadesBox"><div style="font-size:13px;color:var(--text-3)">Verificando turmas já realizadas para este cliente...</div></div>
+    </div>` : ''}
 
     ${podeMgr?`
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2996,6 +3062,48 @@ function verCliente(id) {
       <button class="btn btn-outline" style="flex:1;justify-content:center" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar cliente':'Reativar cliente'}</button>
     </div>`:''}
   `);
+
+  if (podeMgr && todasNrs.length) _carregarOportunidadesComerciais(c.id, todasNrs);
+}
+
+async function _carregarOportunidadesComerciais(clienteId, todasNrs) {
+  try {
+    const [{data: turmasCliente}, {data: catalogoOrg}] = await Promise.all([
+      sb.from('turmas').select('status, catalogo(nrs)').eq('cliente_id', clienteId).neq('status', 'cancelada'),
+      sb.from('catalogo').select('nrs').eq('org_id', usuarioAtual.org_id).eq('ativo', true).eq('arquivado', false),
+    ]);
+    const nrsCobertas = new Set();
+    (turmasCliente||[]).forEach(t => (t.catalogo?.nrs||[]).forEach(nr => nrsCobertas.add(nr)));
+    const nrsCatalogo = new Set();
+    (catalogoOrg||[]).forEach(cat => (cat.nrs||[]).forEach(nr => nrsCatalogo.add(nr)));
+
+    const semCobertura = todasNrs.filter(nr => !nrsCobertas.has(nr));
+    const comOferta = semCobertura.filter(nr => nrsCatalogo.has(nr));
+    const semOferta  = semCobertura.filter(nr => !nrsCatalogo.has(nr));
+
+    let html = '';
+    if (comOferta.length) {
+      html += `
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;min-width:0">Aplicáveis a este cliente, já no seu catálogo, mas ainda sem turma:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${semOferta.length?'14px':'0'}">
+          ${comOferta.map(nr=>`<span class="badge" style="background:var(--amber-l);color:var(--amber-text);border:1px solid var(--amber);cursor:pointer" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}
+        </div>`;
+    }
+    if (semOferta.length) {
+      html += `
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;min-width:0">Aplicáveis a este cliente, sem treinamento correspondente no seu catálogo:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${semOferta.map(nr=>`<span class="badge badge-gray" style="cursor:pointer" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}
+        </div>`;
+    }
+    if (!html) {
+      html = `<div style="font-size:13px;color:var(--text-3)">Nenhuma lacuna identificada — as NRs aplicáveis já têm turma registrada para este cliente.</div>`;
+    }
+    html += `<div style="font-size:10.5px;color:var(--text-3);margin-top:10px;line-height:1.4">Cruzamento entre o Painel de Enquadramento SST e as turmas/catálogo já cadastrados — use como sinal para prospecção, não como confirmação de necessidade do cliente.</div>`;
+    _setElBoth('oportunidadesBox', html);
+  } catch(e) {
+    _setElBoth('oportunidadesBox', `<div style="font-size:13px;color:var(--text-3)">Não foi possível calcular oportunidades comerciais agora.</div>`);
+  }
 }
 
 function filtrarClientes(q) {
@@ -3761,6 +3869,7 @@ async function desarquivarCatalogo(id) {
 function abrirModalCatalogo(id=null) {
   _modalCurrentId = id;
   const t = id ? _catalogoCache.find(x=>x.id===id) : null;
+  const nrsAtuais = (Array.isArray(t?.nrs) ? t.nrs : []).map(n=>String(n).replace(/\D/g,'')).filter(Boolean).join(', ');
   abrirModal(t?'Editar treinamento':'Novo treinamento', `
     <div class="field"><label>Nome *</label><input type="text" id="mCatNome" value="${t?.nome||''}" placeholder="Ex: NR-35 Trabalho em Altura"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -3768,6 +3877,7 @@ function abrirModalCatalogo(id=null) {
       <div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatValidade" value="${t?.validade_meses||''}" min="1" placeholder="12"></div>
     </div>
     <div class="field"><label>Categoria</label><input type="text" id="mCatCategoria" value="${t?.categoria||''}" placeholder="Opcional"></div>
+    <div class="field"><label>NRs relacionadas</label><input type="text" id="mCatNrs" value="${nrsAtuais}" placeholder="Ex: 35, 33"><div style="font-size:11px;color:var(--text-3);margin-top:4px">Números separados por vírgula — usado para sugerir este treinamento aos clientes certos no Painel de Enquadramento SST.</div></div>
     <div class="field"><label>Descrição</label>
       <div class="ql-editor-wrap">${_htmlToolbarRica('tbDescricao')}<div id="edDescricao"></div></div>
     </div>
@@ -3793,11 +3903,17 @@ async function salvarCatalogo() {
   if (!ch || ch <= 0) { showToast('Carga horária é obrigatória','error'); return; }
   if (!validade || validade <= 0) { showToast('Validade é obrigatória','error'); return; }
   if (!_quillConteudo.getText().trim()) { showToast('Conteúdo programático é obrigatório','error'); return; }
+  const nrsInput = (document.getElementById('mCatNrs')?.value || '')
+    .split(',')
+    .map(s => s.replace(/\D/g,''))
+    .filter(Boolean)
+    .map(s => `NR-${s.padStart(2,'0')}`);
   const dados = {
     nome,
     carga_horaria: ch,
     validade_meses: validade,
     categoria: document.getElementById('mCatCategoria')?.value.trim() || null,
+    nrs: nrsInput.length ? [...new Set(nrsInput)] : null,
     descricao: _quillDescricao.getText().trim() ? sanitizarHtml(_quillDescricao.root.innerHTML) : null,
     conteudo_programatico: sanitizarHtml(_quillConteudo.root.innerHTML),
   };
