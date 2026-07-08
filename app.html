@@ -929,6 +929,121 @@ const CNAE_NR_MAP = {
   '97':['NR-17'], '99':['NR-17'],
 };
 
+// Referência curada por NR: nome oficial, resumo, o que a norma exige em
+// termos de treinamento/capacitação (quando aplicável) e uma observação
+// prática. Curadoria própria a partir de fontes públicas — sempre que a
+// própria norma não fixa um número exato (carga horária/periodicidade),
+// isso é sinalizado no texto em vez de inventar um valor. Não é um laudo
+// técnico e não substitui avaliação de profissional de SST. Grau de Risco
+// (Anexo I da NR-4) fica de fora por ora — a tabela oficial está em
+// revisão (consulta pública 2025/2026) e não há fonte digitalizada
+// confiável para reproduzir com segurança no momento.
+const NR_INFO = {
+  'NR-06': {
+    nome: 'Equipamento de Proteção Individual (EPI)',
+    resumo: 'Regras para seleção, fornecimento, uso e conservação de EPI pelo empregador.',
+    treinamento: 'A norma não fixa carga horária nem periodicidade — exige orientação sempre que necessário (admissão, troca de EPI ou de risco).',
+    observacao: 'Fornecer o EPI não é suficiente: a fiscalização cobra o treino documentado de uso, guarda e conservação.',
+  },
+  'NR-07': {
+    nome: 'Programa de Controle Médico de Saúde Ocupacional (PCMSO)',
+    resumo: 'Programa de exames médicos ocupacionais (admissional, periódico, demissional) vinculado aos riscos da empresa.',
+    treinamento: 'Não é um curso — é um programa médico obrigatório para toda empresa com empregados, sem carga horária associada.',
+    observacao: 'Desde 2022 o PCMSO precisa estar tecnicamente alinhado ao PGR/inventário de riscos (NR-01).',
+  },
+  'NR-10': {
+    nome: 'Segurança em Instalações e Serviços em Eletricidade',
+    resumo: 'Medidas de proteção contra riscos elétricos em instalações e serviços com eletricidade.',
+    treinamento: 'Curso básico: mínimo 40h, validade de 2 anos, com reciclagem periódica (a norma não fixa a carga horária da reciclagem).',
+    observacao: 'Reciclagem antecipada é obrigatória em troca de função/empresa, afastamento superior a 3 meses ou mudança significativa nas instalações.',
+  },
+  'NR-11': {
+    nome: 'Transporte, Movimentação, Armazenagem e Manuseio de Materiais',
+    resumo: 'Operação segura de máquinas de transporte e movimentação — empilhadeiras, guindastes, transportadores.',
+    treinamento: 'Carga horária e periodicidade não são fixadas pela norma — defina uma política interna documentada (prática comum no mercado: ~20h).',
+    observacao: 'Por não ter prazo legal de reciclagem, é comum empresas nunca reciclarem o treinamento — vale formalizar isso no PGR.',
+  },
+  'NR-12': {
+    nome: 'Segurança no Trabalho em Máquinas e Equipamentos',
+    resumo: 'Requisitos de segurança de máquinas e equipamentos (proteções, dispositivos) e capacitação de operadores.',
+    treinamento: 'Carga horária geral não é fixa — definida conforme o risco/complexidade da máquina; exceções específicas (ex: injetoras, motosserras) têm mínimo de 8h.',
+    observacao: 'Não confundir com a NR-11: a capacitação do operador de empilhadeira é NR-11; a adequação/segurança da máquina em si é NR-12.',
+  },
+  'NR-14': {
+    nome: 'Fornos',
+    resumo: 'Construção, instalação e ventilação segura de fornos industriais.',
+    treinamento: 'Não prevê capacitação formal com carga horária — é majoritariamente uma norma de engenharia/instalação, não de treinamento de pessoas.',
+    observacao: 'Aplica-se a qualquer forno industrial, não só grandes indústrias — ventilação e chaminé costumam ser o ponto mais checado em fiscalização.',
+  },
+  'NR-17': {
+    nome: 'Ergonomia',
+    resumo: 'Adaptação das condições de trabalho às características psicofisiológicas dos trabalhadores.',
+    treinamento: 'Não é um curso — exige Análise Ergonômica Preliminar (AEP) de cada posto de trabalho, integrada ao PGR.',
+    observacao: 'Aplica-se a qualquer posto de trabalho, incluindo home office — não é exclusiva de função de escritório.',
+  },
+  'NR-18': {
+    nome: 'Segurança e Saúde no Trabalho na Indústria da Construção',
+    resumo: 'Condições de segurança em canteiros de obra, incluindo PCMAT e proteções coletivas.',
+    treinamento: 'Inicial: mínimo 6h antes do início das atividades. Periódico: a cada 2 anos, mínimo 4h — mais treinamento a cada nova fase da obra.',
+    observacao: 'Obra com várias fases (fundação, estrutura, acabamento) exige retreinamento a cada fase, não só admissional + bienal.',
+  },
+  'NR-20': {
+    nome: 'Segurança e Saúde no Trabalho com Inflamáveis e Combustíveis',
+    resumo: 'Segurança em operações com inflamáveis e combustíveis, conforme a classe de risco da instalação.',
+    treinamento: 'Carga horária e periodicidade variam por classe da instalação (I, II, III) e nível do curso — não há um número único válido para todos os casos.',
+    observacao: 'Classificar errado a instalação muda toda a exigência de treinamento — vale confirmar a classe com profissional habilitado.',
+  },
+  'NR-22': {
+    nome: 'Segurança e Saúde Ocupacional na Mineração',
+    resumo: 'Requisitos mínimos de segurança para atividades de mineração, a céu aberto e subterrânea.',
+    treinamento: 'Carga horária e periodicidade não são padronizadas na norma — definidas pelo PGRSM (Programa de Gerenciamento de Riscos) da empresa.',
+    observacao: 'O escopo cobre também atividades de apoio (beneficiamento, transporte interno), não só a operação de lavra.',
+  },
+  'NR-23': {
+    nome: 'Proteção Contra Incêndios',
+    resumo: 'Medidas contra incêndio — saídas de emergência, sinalização, equipamentos de combate.',
+    treinamento: 'Brigada de incêndio obrigatória conforme porte/risco; o treinamento de brigadista é regido por norma do Corpo de Bombeiros do estado, não pela NR-23 diretamente.',
+    observacao: 'Estar em dia com a NR-23 não equivale a estar em dia com o Corpo de Bombeiros — são exigências complementares que variam por estado.',
+  },
+  'NR-31': {
+    nome: 'Segurança e Saúde no Trabalho na Agricultura, Pecuária, Silvicultura, Exploração Florestal e Aquicultura',
+    resumo: 'Condições de segurança no meio rural, incluindo uso de agrotóxicos e máquinas agrícolas.',
+    treinamento: 'Carga horária varia por atividade (ex: agrotóxicos exige mínimo 20h teórico-prática) — não generalizar para todas as funções.',
+    observacao: 'Trabalho rural eventual ou terceirizado também entra no escopo — não é exclusivo do empregado rural fixo.',
+  },
+  'NR-32': {
+    nome: 'Segurança e Saúde no Trabalho em Serviços de Saúde',
+    resumo: 'Medidas de proteção para trabalhadores em hospitais, clínicas e laboratórios (riscos biológicos, químicos, radiação, perfurocortantes).',
+    treinamento: 'Carga horária citada de forma inconsistente entre fontes de mercado — confirme o número exato com um profissional de SST antes de divulgar ao cliente.',
+    observacao: 'O escopo cobre também terceirizados dentro do estabelecimento (limpeza, portaria), não só profissionais assistenciais.',
+  },
+  'NR-33': {
+    nome: 'Segurança e Saúde nos Trabalhos em Espaços Confinados',
+    resumo: 'Identificação, isolamento e trabalho seguro em espaços confinados.',
+    treinamento: 'Trabalhador autorizado/vigia: mínimo 16h. Supervisor de entrada: mínimo 40h. Reciclagem anual, mínimo 8h para todas as funções.',
+    observacao: '"Espaço confinado" é definição técnica — forros, poços e dutos também podem se enquadrar, não só tanques e silos óbvios.',
+  },
+  'NR-35': {
+    nome: 'Trabalho em Altura',
+    resumo: 'Requisitos para trabalho acima de 2m do nível inferior com risco de queda.',
+    treinamento: 'Inicial: mínimo 8h antes do início da atividade. Reciclagem: a cada 2 anos, também 8h.',
+    observacao: 'Aplica-se mesmo a trabalho eventual (ex: troca de lâmpada em pé-direito alto); reciclagem antecipada é obrigatória se houver afastamento superior a 90 dias.',
+  },
+};
+
+function verDetalheNR(nr) {
+  const info = NR_INFO[nr];
+  if (!info) return;
+  abrirModal(`${nr} — ${info.nome}`, `
+    <div style="font-size:13px;color:var(--text-2);line-height:1.5;margin-bottom:14px">${info.resumo}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Treinamento / capacitação</div>
+    <div style="font-size:13px;color:var(--navy);line-height:1.5;margin-bottom:14px">${info.treinamento}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Observação</div>
+    <div style="font-size:13px;color:var(--navy);line-height:1.5;margin-bottom:14px">${info.observacao}</div>
+    <div style="font-size:10.5px;color:var(--text-3);line-height:1.4;border-top:1px solid var(--border);padding-top:10px">Referência informativa — não substitui avaliação de um profissional de Segurança do Trabalho.</div>`,
+    `<button class="btn btn-navy" style="width:100%;justify-content:center" onclick="fecharModal()">Fechar</button>`);
+}
+
 // Retorna as NRs mapeadas para a divisão (2 dígitos) de um código CNAE.
 function _nrsParaCnae(cnae) {
   const divisao = String(cnae||'').replace(/\D/g,'').slice(0,2);
@@ -962,7 +1077,7 @@ function _htmlSugestaoNR(cnae, cnaeDesc, cnaesSecundarios) {
   return `
     <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-top:8px;min-width:0">
       <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">NRs comumente aplicáveis${cnaeDesc?` — ${cnaeDesc}`:''}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">${todasNrs.map(nr=>`<span class="badge badge-navy">${nr}</span>`).join('')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${todasNrs.map(nr=>`<span class="badge badge-navy" style="cursor:pointer" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}</div>
       <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Sugestão indicativa com base no setor econômico (CNAE) — não substitui avaliação de um profissional de Segurança do Trabalho.</div>
     </div>`;
 }
@@ -6901,6 +7016,7 @@ document.addEventListener('click', function(e) {
     case 'toggleOrg':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleOrg(id); break;
     // Clientes
     case 'verCliente':      verCliente(id); break;
+    case 'verDetalheNR':    if(id) verDetalheNR(id); break;
     case 'menuCliente':     menuCliente(el, id); break;
     case 'editarCliente':   document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalCliente(id); break;
     case 'toggleCliente':   document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCliente(id); break;
