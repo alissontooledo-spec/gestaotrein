@@ -2806,7 +2806,14 @@ function abrirModalOrg(id=null) {
         <div class="field" style="margin:0"><label>URL da logo</label><input type="url" id="mOrgLogoUrl" value="${org?.logo_url||''}" placeholder="https://..."></div>
       </div>
       <div style="font-size:11px;color:var(--text-3);margin-top:4px">Aplica-se apenas quando o plano é Enterprise. Suba a logo em qualquer serviço de hospedagem de imagens e cole o link aqui.</div>
-    </div>`,
+    </div>
+    ${!org ? `
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+        <input type="checkbox" id="mOrgCatalogoModelo" checked style="margin-top:3px">
+        <span style="font-size:13px;color:var(--text-1)">Carregar catálogo modelo de treinamentos (${CATALOGO_MODELO.length} NRs comuns) <span style="color:var(--text-3);font-weight:400">— opcional, editável depois</span></span>
+      </label>
+    </div>` : ''}`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarOrg()">${org?'Salvar':'Cadastrar'}</button>`);
 }
@@ -2815,6 +2822,7 @@ async function salvarOrg() {
   const nome = document.getElementById('mOrgNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   const plano = document.getElementById('mOrgPlano')?.value || 'starter';
+  const carregarModelo = !_modalCurrentId && !!document.getElementById('mOrgCatalogoModelo')?.checked;
   const dados = {
     nome, plano,
     cnpj:document.getElementById('mOrgCnpj')?.value.trim()||null,
@@ -2827,9 +2835,22 @@ async function salvarOrg() {
   };
   try {
     setBtnModalLoading(true);
-    const {error} = _modalCurrentId ? await sb.from('organizacoes').update(dados).eq('id',_modalCurrentId) : await sb.from('organizacoes').insert({...dados,ativo:true});
-    if (error) throw error;
+    let novaOrgId = null;
+    if (_modalCurrentId) {
+      const {error} = await sb.from('organizacoes').update(dados).eq('id',_modalCurrentId);
+      if (error) throw error;
+    } else {
+      const {data: orgCriada, error} = await sb.from('organizacoes').insert({...dados,ativo:true}).select('id').single();
+      if (error) throw error;
+      novaOrgId = orgCriada?.id || null;
+    }
     fecharModal(); showToast(_modalCurrentId?'Organização atualizada!':'Organização cadastrada!','success');
+    if (novaOrgId && carregarModelo) {
+      try {
+        const n = await importarCatalogoModelo(novaOrgId);
+        showToast(`Catálogo modelo carregado (${n} treinamentos).`,'success');
+      } catch(e2) { showToast('Organização criada, mas houve um erro ao carregar o catálogo modelo — carregue depois pela tela Catálogo. Detalhe: '+(e2.message||''),'error',7000); }
+    }
     await renderOrgs();
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
@@ -3552,11 +3573,19 @@ async function renderCatalogo() {
       ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache, maxUso)}</div>`);
+    <div class="card" style="padding:0" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache, maxUso, podeMgr)}</div>`);
 }
 
-function _htmlListaCatalogo(lista, maxUso) {
-  if (!lista.length) return `<div class="empty" style="padding:32px"><div class="empty-icon">📚</div><div class="empty-title">Nenhum treinamento encontrado</div><div class="empty-sub">Tente ajustar o filtro ou cadastre um novo treinamento.</div></div>`;
+function _htmlListaCatalogo(lista, maxUso, podeMgr) {
+  if (!lista.length) {
+    const vazioTotal = !_catalogoCache.length;
+    return `<div class="empty" style="padding:32px">
+      <div class="empty-icon">📚</div>
+      <div class="empty-title">Nenhum treinamento encontrado</div>
+      <div class="empty-sub">${vazioTotal ? 'Cadastre o primeiro treinamento ou comece a partir de um catálogo modelo.' : 'Tente ajustar o filtro ou cadastre um novo treinamento.'}</div>
+      ${vazioTotal && podeMgr ? `<button class="btn btn-outline" style="margin-top:16px" onclick="carregarCatalogoModeloUI()">${ICONS.book} Carregar catálogo modelo</button><div style="font-size:11px;color:var(--text-3);margin-top:8px;max-width:320px;margin-left:auto;margin-right:auto">Adiciona ${CATALOGO_MODELO.length} treinamentos comuns de NRs como ponto de partida — edite, remova ou complemente cada um depois.</div>` : ''}
+    </div>`;
+  }
   const usoMap  = window._catalogoUsoMap || {};
   const _maxUso = maxUso || Math.max(...lista.map(t => usoMap[t.id]?.total || 0), 1);
   return lista.map(t => {
@@ -3680,8 +3709,9 @@ function filtrarCatalogo(q) {
     );
   }
   const maxUso = Math.max(..._catalogoCache.map(t => usoMap[t.id]?.total || 0), 1);
+  const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
   const el = document.getElementById('listaCatalogo');
-  if (el) el.innerHTML = _htmlListaCatalogo(r, maxUso);
+  if (el) el.innerHTML = _htmlListaCatalogo(r, maxUso, podeMgr);
 }
 
 // ============================================================
@@ -3991,6 +4021,96 @@ async function duplicarCatalogo(id) {
     showToast(`"${t.nome}" duplicado.`,'success');
     await renderCatalogo();
   } catch(e) { showToast(e.message||'Erro ao duplicar','error'); }
+}
+
+// ============================================================
+// CATÁLOGO MODELO (opt-in)
+// ------------------------------------------------------------
+// Base inicial de treinamentos comuns (NRs mais frequentemente
+// vendidas por consultorias de SST), oferecida como PONTO DE PARTIDA
+// opcional — nunca preenchida automaticamente. Ao importar, cada item
+// vira uma linha própria e independente na tabela `catalogo` da
+// organização (mesmo mecanismo de duplicarCatalogo, acima): pode ser
+// editado, arquivado ou excluído livremente, sem qualquer vínculo
+// remanescente com esta lista central. Alterar CATALOGO_MODELO no
+// futuro não afeta organizações que já importaram.
+//
+// Carga horária e validade são SUGESTÕES de mercado a revisar — não
+// são valores fixados por norma nos casos em que a NR não padroniza
+// um número (ver ressalva no campo `descricao` de cada item, e o
+// detalhamento completo em NR_INFO).
+const CATALOGO_MODELO = [
+  { nrs:['NR-01'], nome:'Curso NR-01 — Integração e Noções Gerais de SST', carga_horaria:8, validade_meses:12,
+    descricao:'Integração de segurança do trabalho e noções gerais sobre o Programa de Gerenciamento de Riscos (PGR), base das demais NRs. Carga horária e validade sugeridas — revise conforme a política interna do cliente.',
+    conteudo_programatico:'<p>Noções introdutórias de Segurança e Saúde no Trabalho e apresentação do Programa de Gerenciamento de Riscos (PGR).</p><ul><li>Conceitos gerais de SST e legislação aplicável</li><li>Estrutura do PGR e inventário de riscos ocupacionais</li><li>Direitos e deveres do trabalhador e do empregador</li><li>Uso de EPI e procedimentos em emergência</li></ul>' },
+  { nrs:['NR-05'], nome:'Curso NR-05 — CIPA (Comissão Interna de Prevenção de Acidentes e de Assédio)', carga_horaria:20, validade_meses:12,
+    descricao:'Capacitação de membros da CIPA para prevenção de acidentes de trabalho e de assédio. Carga horária varia conforme o Grau de Risco da empresa — confirme o valor exato antes de divulgar ao cliente.',
+    conteudo_programatico:'<p>Formação de membros da Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA).</p><ul><li>Estudo do ambiente, condições e organização do trabalho</li><li>Metodologia de investigação e análise de acidentes</li><li>Noções sobre prevenção e combate a incêndios</li><li>Prevenção e combate ao assédio no ambiente de trabalho</li><li>Relações humanas no trabalho e princípios gerais de higiene do trabalho</li></ul>' },
+  { nrs:['NR-06'], nome:'Curso NR-06 — Uso Correto de EPI', carga_horaria:4, validade_meses:12,
+    descricao:'Orientação sobre seleção, uso, guarda e conservação de Equipamentos de Proteção Individual. A norma não fixa carga horária — aplique sempre que houver admissão, troca de EPI ou de risco.',
+    conteudo_programatico:'<p>Orientação prática sobre uso correto de Equipamento de Proteção Individual (EPI).</p><ul><li>Tipos de EPI e sua relação com os riscos do posto de trabalho</li><li>Forma correta de uso, higienização e guarda</li><li>Prazo de validade e critérios de substituição</li><li>Responsabilidades do empregador e do trabalhador</li></ul>' },
+  { nrs:['NR-10'], nome:'Curso NR-10 — Segurança em Instalações e Serviços em Eletricidade (Básico)', carga_horaria:40, validade_meses:24,
+    descricao:'Curso básico para trabalhadores que atuam em instalações e serviços com eletricidade. Mínimo de 40h conforme a norma, com reciclagem periódica.',
+    conteudo_programatico:'<p>Curso básico de segurança em instalações e serviços com eletricidade.</p><ul><li>Riscos em instalações elétricas e medidas de controle</li><li>Normas técnicas, regulamentadoras e organizacionais</li><li>Equipamentos de proteção coletiva e individual</li><li>Procedimentos de trabalho seguro e rotinas de trabalho</li><li>Noções de primeiros socorros e técnicas de remoção de acidentados</li></ul>' },
+  { nrs:['NR-12'], nome:'Curso NR-12 — Segurança no Trabalho em Máquinas e Equipamentos', carga_horaria:8, validade_meses:12,
+    descricao:'Capacitação de operadores para trabalho seguro com máquinas e equipamentos. Carga horária de referência — normas específicas (ex.: injetoras, motosserras) podem ter exigência própria.',
+    conteudo_programatico:'<p>Capacitação para operação segura de máquinas e equipamentos.</p><ul><li>Riscos mecânicos e principais causas de acidentes</li><li>Dispositivos de segurança, proteções e intertravamentos</li><li>Procedimentos de operação, manutenção e limpeza seguros</li><li>Sinalização de segurança e procedimentos de bloqueio (LOTO)</li></ul>' },
+  { nrs:['NR-17'], nome:'Curso NR-17 — Ergonomia', carga_horaria:8, validade_meses:12,
+    descricao:'Treinamento introdutório sobre ergonomia no trabalho. A norma em si não exige um curso formal — o requisito central é a Análise Ergonômica Preliminar (AEP) de cada posto.',
+    conteudo_programatico:'<p>Noções de ergonomia aplicadas ao ambiente de trabalho.</p><ul><li>Conceitos de ergonomia e adaptação do posto ao trabalhador</li><li>Posturas, mobiliário e organização do trabalho</li><li>Pausas, ritmo de trabalho e prevenção de LER/DORT</li><li>Ergonomia em escritório e em atividades remotas</li></ul>' },
+  { nrs:['NR-18'], nome:'Curso NR-18 — Segurança na Construção Civil (Inicial)', carga_horaria:6, validade_meses:24,
+    descricao:'Treinamento admissional para trabalhadores da construção civil — mínimo de 6h antes do início das atividades, com periódico bienal e retreinamento a cada nova fase da obra.',
+    conteudo_programatico:'<p>Treinamento admissional de segurança para trabalhadores da construção civil.</p><ul><li>Riscos do canteiro de obras e medidas de proteção coletiva</li><li>Uso de EPI específico da atividade</li><li>Trabalho em altura, andaimes e proteções periféricas</li><li>Ordem, arrumação e sinalização do canteiro</li></ul>' },
+  { nrs:['NR-20'], nome:'Curso NR-20 — Inflamáveis e Combustíveis (Básico)', carga_horaria:8, validade_meses:12,
+    descricao:'Treinamento básico para trabalhadores em áreas com inflamáveis e combustíveis. Carga horária e periodicidade variam conforme a classe da instalação — confirme com profissional habilitado.',
+    conteudo_programatico:'<p>Treinamento básico de segurança para atividades com líquidos combustíveis e inflamáveis.</p><ul><li>Classificação de áreas e produtos inflamáveis/combustíveis</li><li>Riscos de incêndio e explosão e medidas de controle</li><li>Procedimentos seguros de armazenamento e manuseio</li><li>Ações em caso de vazamento ou princípio de incêndio</li></ul>' },
+  { nrs:['NR-23'], nome:'Curso NR-23 — Prevenção e Combate a Incêndios (Brigada)', carga_horaria:8, validade_meses:12,
+    descricao:'Formação de brigada de incêndio. O treinamento de brigadista segue norma do Corpo de Bombeiros do estado, complementar à NR-23 — confirme a carga horária exigida na sua região.',
+    conteudo_programatico:'<p>Formação básica de brigada de incêndio.</p><ul><li>Princípios de combustão e classes de incêndio</li><li>Uso de extintores e equipamentos de combate</li><li>Rotas de fuga, saídas de emergência e sinalização</li><li>Procedimentos de abandono de área e primeiros socorros</li></ul>' },
+  { nrs:['NR-32'], nome:'Curso NR-32 — Segurança e Saúde no Trabalho em Serviços de Saúde', carga_horaria:20, validade_meses:12,
+    descricao:'Capacitação para trabalhadores de serviços de saúde, incluindo terceirizados no estabelecimento. Carga horária citada de forma inconsistente entre fontes — confirme com profissional de SST.',
+    conteudo_programatico:'<p>Segurança do trabalho em ambientes de serviços de saúde.</p><ul><li>Riscos biológicos, químicos e de radiações ionizantes</li><li>Prevenção de acidentes com perfurocortantes</li><li>Gerenciamento de resíduos de serviços de saúde (RSS)</li><li>Uso de EPI específico da área da saúde</li></ul>' },
+  { nrs:['NR-33'], nome:'Curso NR-33 — Espaços Confinados (Trabalhador Autorizado e Vigia)', carga_horaria:16, validade_meses:12,
+    descricao:'Capacitação de trabalhador autorizado e vigia para espaços confinados — mínimo 16h conforme a norma. Reciclagem anual, mínimo 8h.',
+    conteudo_programatico:'<p>Capacitação para trabalho seguro em espaços confinados.</p><ul><li>Identificação e classificação de espaços confinados</li><li>Permissão de Entrada e Trabalho (PET)</li><li>Monitoramento de atmosfera e ventilação</li><li>Papel do vigia e procedimentos de resgate</li></ul>' },
+  { nrs:['NR-35'], nome:'Curso NR-35 — Trabalho em Altura', carga_horaria:8, validade_meses:24,
+    descricao:'Capacitação obrigatória para trabalho acima de 2m com risco de queda — mínimo 8h, com reciclagem bienal (também 8h).',
+    conteudo_programatico:'<p>Capacitação para trabalho seguro em altura.</p><ul><li>Normas e regulamentações sobre trabalho em altura</li><li>Análise de risco e condições impeditivas</li><li>Sistemas de proteção contra quedas e ancoragem</li><li>Procedimentos de emergência e resgate em altura</li></ul>' },
+];
+
+// Insere os itens do catálogo modelo como linhas independentes da
+// organização informada. Não grava nenhuma referência de volta ao
+// modelo — a partir daqui são treinamentos comuns como qualquer outro
+// cadastrado manualmente.
+async function importarCatalogoModelo(orgId) {
+  const linhas = CATALOGO_MODELO.map(m => ({
+    nome: m.nome,
+    carga_horaria: m.carga_horaria,
+    validade_meses: m.validade_meses,
+    categoria: null,
+    nrs: m.nrs,
+    descricao: m.descricao,
+    conteudo_programatico: m.conteudo_programatico,
+    org_id: orgId,
+    ativo: true,
+    arquivado: false,
+  }));
+  const {error} = await sb.from('catalogo').insert(linhas);
+  if (error) throw error;
+  return linhas.length;
+}
+
+// Acionado pelo botão "Carregar catálogo modelo" no estado vazio da
+// tela Catálogo (visível só para administrador da própria organização).
+async function carregarCatalogoModeloUI() {
+  const listaNrs = CATALOGO_MODELO.map(m => m.nrs[0]).join(', ');
+  const ok = await confirmarAcao(`Isso vai adicionar ${CATALOGO_MODELO.length} treinamentos comuns (${listaNrs}) ao seu catálogo. Cada um poderá ser editado, arquivado ou removido livremente depois — sem afetar o modelo padrão.`, 'Carregar catálogo modelo', false);
+  if (!ok) return;
+  try {
+    const n = await importarCatalogoModelo(usuarioAtual.org_id);
+    showToast(`${n} treinamentos adicionados ao catálogo!`,'success');
+    await renderCatalogo();
+  } catch(e) { showToast(e.message||'Erro ao carregar catálogo modelo','error'); }
 }
 
 // ============================================================
