@@ -2774,6 +2774,7 @@ function menuOrg(btn, id) {
   _menuDropdown(btn, [
     {action:'editarOrg',id,label:'Editar organização'},
     {action:'criarUserOrg',id,label:'Criar usuário'},
+    {action:'carregarCatalogoModeloOrg',id,label:'Carregar catálogo modelo'},
     '---',
     {action:'toggleOrg',id,label:org.ativo?'Desativar':'Ativar',danger:org.ativo},
   ]);
@@ -3570,6 +3571,7 @@ async function renderCatalogo() {
         <option value="sem_uso">Sem uso</option>
         <option value="arquivado">Arquivados</option>
       </select>
+      ${podeMgr ? `<button class="btn btn-outline" onclick="carregarCatalogoModeloUI()" title="Adiciona os treinamentos do catálogo modelo que ainda não existem no seu catálogo">${ICONS.book} Catálogo modelo</button>` : ''}
       ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>` : ''}
     </div>
 
@@ -4157,7 +4159,16 @@ const CATALOGO_MODELO = [
 // modelo — a partir daqui são treinamentos comuns como qualquer outro
 // cadastrado manualmente.
 async function importarCatalogoModelo(orgId) {
-  const linhas = CATALOGO_MODELO.map(m => ({
+  // Idempotente: não duplica treinamentos que a organização já tem
+  // cadastrados com o mesmo nome (comparação case-insensitive) — seguro
+  // rodar de novo em organizações já em uso, ou quando o modelo ganhar
+  // novos itens no futuro (só entra o que ainda não existe).
+  const {data: existentes, error: errBusca} = await sb.from('catalogo').select('nome').eq('org_id', orgId);
+  if (errBusca) throw errBusca;
+  const nomesExistentes = new Set((existentes||[]).map(x => (x.nome||'').trim().toLowerCase()));
+  const itensNovos = CATALOGO_MODELO.filter(m => !nomesExistentes.has(m.nome.trim().toLowerCase()));
+  if (!itensNovos.length) return 0;
+  const linhas = itensNovos.map(m => ({
     nome: m.nome,
     carga_horaria: m.carga_horaria,
     validade_meses: m.validade_meses,
@@ -4177,12 +4188,26 @@ async function importarCatalogoModelo(orgId) {
 // Acionado pelo botão "Carregar catálogo modelo" no estado vazio da
 // tela Catálogo (visível só para administrador da própria organização).
 async function carregarCatalogoModeloUI() {
-  const ok = await confirmarAcao(`Isso vai adicionar ${CATALOGO_MODELO.length} treinamentos ao seu catálogo — as NRs mais comuns (01, 05, 06, 07, 10, 11, 12, 13, 17, 18, 20, 23, 26, 31, 32, 33, 34, 35) e cursos complementares (brigada, primeiros socorros, operação de equipamentos, LOTO, entre outros). Cada um poderá ser editado, arquivado ou removido livremente depois — sem afetar o modelo padrão.`, 'Carregar catálogo modelo', false);
+  const ok = await confirmarAcao(`Isso vai adicionar ao seu catálogo os treinamentos do catálogo modelo (até ${CATALOGO_MODELO.length} itens — NRs mais comuns e cursos complementares) que você ainda não tem cadastrados. Quem já existe com o mesmo nome não é duplicado. Cada item importado pode ser editado, arquivado ou removido livremente depois — sem afetar o modelo padrão.`, 'Carregar catálogo modelo', false);
   if (!ok) return;
   try {
     const n = await importarCatalogoModelo(usuarioAtual.org_id);
-    showToast(`${n} treinamentos adicionados ao catálogo!`,'success');
+    showToast(n > 0 ? `${n} treinamento${n!==1?'s':''} adicionado${n!==1?'s':''} ao catálogo!` : 'Seu catálogo já tem todos os treinamentos do modelo — nada novo para adicionar.', 'success');
     await renderCatalogo();
+  } catch(e) { showToast(e.message||'Erro ao carregar catálogo modelo','error'); }
+}
+
+// Acionado pelo Provedor (menu de ações da organização) para levar o
+// catálogo modelo a uma organização já cadastrada, sem precisar que o
+// próprio cliente clique em nada.
+async function carregarCatalogoModeloOrgUI(orgId) {
+  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove());
+  const org = _orgsCache.find(o=>o.id===orgId);
+  const ok = await confirmarAcao(`Carregar o catálogo modelo para "${org?.nome||'esta organização'}"? Adiciona os treinamentos do modelo que essa organização ainda não tem — sem duplicar os que já existem.`, 'Carregar catálogo modelo', false);
+  if (!ok) return;
+  try {
+    const n = await importarCatalogoModelo(orgId);
+    showToast(n > 0 ? `${n} treinamento${n!==1?'s':''} adicionado${n!==1?'s':''} ao catálogo de ${org?.nome||'organização'}.` : 'Essa organização já tem todos os treinamentos do modelo.', 'success');
   } catch(e) { showToast(e.message||'Erro ao carregar catálogo modelo','error'); }
 }
 
@@ -7372,6 +7397,7 @@ document.addEventListener('click', function(e) {
     case 'editarOrg':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalOrg(id); break;
     case 'criarUserOrg':    document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalUsuarioOrg(id); break;
     case 'toggleOrg':       document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleOrg(id); break;
+    case 'carregarCatalogoModeloOrg': carregarCatalogoModeloOrgUI(id); break;
     // Clientes
     case 'verCliente':      verCliente(id); break;
     case 'verDetalheNR':    if(id) verDetalheNR(id); break;
