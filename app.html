@@ -1925,7 +1925,6 @@ async function verOrgProvedor(orgId) {
   const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
 
   setConteudo(`
-    <div class="detail-page">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" onclick="renderHomeProvedor()">${ICONS.back} Voltar</button>
     </div>
@@ -1961,8 +1960,10 @@ async function verOrgProvedor(orgId) {
       </div>
     </div>
 
+    <div class="detail-layout">
+      <div class="detail-sidebar">
     <!-- Card de plano -->
-    <div style="background:var(--surface);border:2px solid ${planoClr};border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
+    <div style="background:var(--surface);border:2px solid ${planoClr};border-radius:var(--r-lg);padding:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
           <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Plano contratado</div>
@@ -1976,9 +1977,11 @@ async function verOrgProvedor(orgId) {
       </div>
     </div>
 
+      </div>
+      <div class="detail-main">
     <!-- Usuários -->
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.length})</div>
-    <div class="card" style="padding:0;margin-bottom:14px">
+    <div class="card" style="padding:0">
       ${usrsData.length === 0
         ? '<div class="empty" style="padding:24px"><div class="empty-title">Nenhum usuário</div></div>'
         : usrsData.map(u => `
@@ -2003,6 +2006,7 @@ async function verOrgProvedor(orgId) {
         ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
       </button>
     </div>
+      </div>
     </div>
   `);
 }
@@ -4417,7 +4421,6 @@ async function verTurma(id) {
             </div>
           </div>`).join('')}
       </div>` : `
-      <div class="detail-page">
       <!-- ===== TELA GESTOR ===== -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
@@ -4428,6 +4431,8 @@ async function verTurma(id) {
         <span class="badge ${SB[st]}" style="flex-shrink:0">${SL[st]}</span>
       </div>
 
+      <div class="detail-layout">
+      <div class="detail-sidebar">
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Informações</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -4445,6 +4450,8 @@ async function verTurma(id) {
         </div>`:``}
       </div>
 
+      </div>
+      <div class="detail-main">
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">Agendamentos (${agendamentos.length})</div>
         ${agendamentos.length===0
@@ -4481,6 +4488,7 @@ async function verTurma(id) {
         ${podeEditar?`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" data-action="addParticipante" data-id="${id}" data-cli="${t.cliente_id||''}">+ Adicionar participante</button>
         </div>`:''}
+      </div>
       </div>
       </div>`;
 
@@ -5548,7 +5556,6 @@ async function verHistoricoTurma(turmaId) {
 
     hideLoading();
     setConteudo(`
-      <div class="detail-page">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="historico">${ICONS.back} Voltar</button>
       </div>
@@ -5580,24 +5587,26 @@ async function verHistoricoTurma(turmaId) {
         </div>
       </div>
 
+      <div class="detail-layout">
+      <div class="detail-sidebar">
+      ${t.observacoes?`
+      <div class="card">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Observações</div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6">${t.observacoes}</div>
+      </div>`:''}
+      <div class="detail-actions">
+        <button class="btn btn-navy" data-action="abrirDocumentos" data-id="${turmaId}">📄 Ver certificados e documentos</button>
+      </div>
+      </div>
+      <div class="detail-main">
       <div class="card" style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Participantes (${nPart})</div>
         ${htmlPart}
       </div>
-
-      ${t.observacoes?`
-      <div class="card" style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Observações</div>
-        <div style="font-size:13px;color:var(--text-1);line-height:1.6">${t.observacoes}</div>
-      </div>`:''}
-
-      <div class="card" style="margin-bottom:12px">
+      <div class="card">
         <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Evidências</div>
         ${htmlEvidencias}
       </div>
-
-      <div class="detail-actions">
-        <button class="btn btn-navy" data-action="abrirDocumentos" data-id="${turmaId}">📄 Ver certificados e documentos</button>
       </div>
       </div>
     `);
