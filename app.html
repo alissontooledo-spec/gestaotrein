@@ -939,6 +939,18 @@ const CNAE_NR_MAP = {
 // revisão (consulta pública 2025/2026) e não há fonte digitalizada
 // confiável para reproduzir com segurança no momento.
 const NR_INFO = {
+  'NR-01': {
+    nome: 'Disposições Gerais e Gerenciamento de Riscos Ocupacionais',
+    resumo: 'Estabelece o Programa de Gerenciamento de Riscos (PGR) e as diretrizes gerais de SST — a base sobre a qual as demais NRs se apoiam.',
+    treinamento: 'Não é um curso único — exige capacitação sobre o PGR aos trabalhadores; carga horária não é padronizada de forma única pela norma.',
+    observacao: 'Aplica-se a praticamente toda empresa com empregados, independente do setor — por isso é sugerida mesmo sem depender do CNAE.',
+  },
+  'NR-05': {
+    nome: 'Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA)',
+    resumo: 'Exige a constituição de CIPA (ou a designação de um responsável, conforme o porte) para prevenção de acidentes e de assédio no trabalho.',
+    treinamento: 'Curso de CIPA com carga horária que varia conforme o Grau de Risco da empresa — confirme o valor exato na NR-5 vigente antes de divulgar ao cliente.',
+    observacao: 'A obrigatoriedade de ter CIPA completa (e não apenas um responsável designado) depende do número de empregados cruzado com o Grau de Risco (Quadro I da NR-5) — não é universal como a NR-01.',
+  },
   'NR-06': {
     nome: 'Equipamento de Proteção Individual (EPI)',
     resumo: 'Regras para seleção, fornecimento, uso e conservação de EPI pelo empregador.',
@@ -1113,6 +1125,14 @@ function _ordenarNrs(nrs) {
 // potencialmente aplicáveis — uma atividade secundária pode indicar NRs que
 // o CNAE principal sozinho não indicaria (ex: escritório administrativo com
 // atividade secundária de manutenção predial).
+// NRs de aplicação praticamente universal — não dependem do CNAE porque se
+// aplicam a qualquer empresa com empregados (ex: NR-01/PGR). Diferente das
+// demais, entram sempre que há um CNAE cadastrado, independente da divisão.
+// NR-05 (CIPA) fica de fora por ora: a obrigatoriedade de comissão completa
+// varia por nº de empregados x Grau de Risco (Quadro I da NR-5), e o sistema
+// ainda não rastreia o total de colaboradores por cliente para calcular isso.
+const NRS_UNIVERSAIS = ['NR-01'];
+
 function _calcularEnquadramento(cnae, cnaeDesc, cnaesSecundarios) {
   const itens = [];
   if (cnae) itens.push({ codigo: String(cnae), descricao: cnaeDesc||'', nrs: _nrsParaCnae(cnae) });
@@ -1120,7 +1140,8 @@ function _calcularEnquadramento(cnae, cnaeDesc, cnaesSecundarios) {
     if (!s || !s.codigo) return;
     itens.push({ codigo: String(s.codigo), descricao: s.descricao||'', nrs: _nrsParaCnae(s.codigo) });
   });
-  const todasNrs = _ordenarNrs([...new Set(itens.flatMap(i=>i.nrs))]);
+  const universaisAplicaveis = cnae ? NRS_UNIVERSAIS : [];
+  const todasNrs = _ordenarNrs([...new Set([...itens.flatMap(i=>i.nrs), ...universaisAplicaveis])]);
   return { itens, todasNrs };
 }
 
@@ -1133,7 +1154,7 @@ function _htmlSugestaoNR(cnae, cnaeDesc, cnaesSecundarios) {
     <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-top:8px;min-width:0">
       <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">NRs comumente aplicáveis${cnaeDesc?` — ${cnaeDesc}`:''}</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${todasNrs.map(nr=>`<span class="badge badge-navy" style="cursor:pointer" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}</div>
-      <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Sugestão indicativa com base no setor econômico (CNAE) — não substitui avaliação de um profissional de Segurança do Trabalho.</div>
+      <div style="font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.4">Sugestão indicativa com base no setor econômico (CNAE) e em NRs de aplicação praticamente universal (ex: NR-01) — não substitui avaliação de um profissional de Segurança do Trabalho.</div>
     </div>`;
 }
 
