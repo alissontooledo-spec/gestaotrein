@@ -277,6 +277,23 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .home-list-sub{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
 .fin-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.detail-layout{display:block}
+.detail-sidebar{display:flex;flex-direction:column;gap:12px;margin-bottom:14px;min-width:0}
+.detail-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.detail-info-row{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text-1);line-height:1.5;min-width:0}
+.detail-info-row:not(:last-child){margin-bottom:9px}
+.detail-info-row svg{flex-shrink:0;color:var(--text-3);margin-top:1px}
+.detail-info-row span{min-width:0;word-break:break-word}
+.detail-actions{display:flex;flex-direction:column;gap:6px}
+.detail-actions .btn{justify-content:center}
+.detail-card-accent{border-left:3px solid var(--navy)}
+.detail-page{max-width:760px}
+@media(min-width:900px){
+  .detail-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+  .detail-sidebar{margin-bottom:0}
+  .detail-actions{flex-direction:row}
+  .detail-actions .btn{flex:0 0 auto;padding:8px 16px;font-size:13px}
+}
 @media(max-width:767px){
   .home-2col{grid-template-columns:minmax(0,1fr);gap:10px}
   .fin-mini-grid{grid-template-columns:minmax(0,1fr);gap:8px}
@@ -1368,6 +1385,10 @@ const ICONS = {
   back:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>`,
   plus:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   support: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 00-10 10v3a2 2 0 002 2h1a1 1 0 001-1v-4a1 1 0 00-1-1H4a8 8 0 0116 0h-1a1 1 0 00-1 1v4a1 1 0 001 1h1a2 2 0 002-2v-3A10 10 0 0012 2z"/><path d="M8 20a2 2 0 002 2h4a2 2 0 002-2v-1H8z"/></svg>`,
+  mail:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>`,
+  phone:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>`,
+  pin:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  target:  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
 };
 
 // ============================================================
@@ -1903,6 +1924,7 @@ async function verOrgProvedor(orgId) {
   const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
 
   setConteudo(`
+    <div class="detail-page">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" onclick="renderHomeProvedor()">${ICONS.back} Voltar</button>
     </div>
@@ -1972,13 +1994,14 @@ async function verOrgProvedor(orgId) {
 
     <!-- Ações -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      ${orgData.ativo ? `<button class="btn btn-amber" style="flex:1;justify-content:center" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
+      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
       <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
         ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
       </button>
+    </div>
     </div>
   `);
 }
@@ -2994,16 +3017,9 @@ function _htmlListaClientes(lista) {
   }).join('');
 }
 
-// Linha label/valor de uma seção de "Informações cadastradas" (sem borda —
-// a separação entre grupos é feita pelos sub-rótulos, não por linhas soltas).
-function _htmlLinhaInfo(label, val) {
-  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:5px 0;min-width:0">
-    <span style="font-size:13px;color:var(--text-2);flex-shrink:0">${label}</span>
-    <span style="font-size:13px;font-weight:500;color:var(--navy);text-align:right;min-width:0;word-break:break-word">${val}</span>
-  </div>`;
-}
-function _htmlSubRotulo(text, primeiro) {
-  return `<div style="font-size:10.5px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:${primeiro?'0':'14px'} 0 6px">${text}</div>`;
+// Linha ícone + valor compacta, usada na barra lateral de dados cadastrais.
+function _htmlInfoIcone(icone, val) {
+  return `<div class="detail-info-row">${icone}<span>${val}</span></div>`;
 }
 
 function verCliente(id) {
@@ -3017,15 +3033,13 @@ function verCliente(id) {
   const enderecoLinha2 = [c.bairro, (c.cidade?`${c.cidade}${c.uf?'/'+c.uf:''}`:null), c.cep?`CEP ${c.cep}`:null].filter(Boolean).map(escapeHtml).join(' · ');
   const temEndereco = !!(enderecoLinha1 || enderecoLinha2);
 
-  const grupoIdentificacao = [
-    c.cnpj  ? _htmlLinhaInfo('CNPJ', escapeHtml(c.cnpj))   : '',
-    c.porte ? _htmlLinhaInfo('Porte', escapeHtml(c.porte)) : '',
+  const linhasCadastro = [
+    c.cnpj ? _htmlInfoIcone(ICONS.building, escapeHtml(c.cnpj) + (c.porte?` <span style="color:var(--text-3)">· ${escapeHtml(c.porte)}</span>`:'')) : '',
+    temEndereco ? _htmlInfoIcone(ICONS.pin, `${enderecoLinha1}${enderecoLinha1&&enderecoLinha2?'<br>':''}${enderecoLinha2}`) : '',
+    c.email ? _htmlInfoIcone(ICONS.mail, escapeHtml(c.email)) : '',
+    c.telefone ? _htmlInfoIcone(ICONS.phone, escapeHtml(c.telefone)) : '',
   ].join('');
-  const grupoContato = [
-    c.email    ? _htmlLinhaInfo('E-mail', escapeHtml(c.email))       : '',
-    c.telefone ? _htmlLinhaInfo('Telefone', escapeHtml(c.telefone))  : '',
-  ].join('');
-  const temAlgumDado = !!(grupoIdentificacao || temEndereco || grupoContato);
+  const temAlgumDado = !!linhasCadastro;
 
   const cnaesSec = Array.isArray(c.cnaes_secundarios) ? c.cnaes_secundarios : [];
   const grHtml = _htmlGrauRisco(c.cnae);
@@ -3051,37 +3065,38 @@ function verCliente(id) {
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">Informações cadastradas</div>
-      ${temAlgumDado ? `
-        ${grupoIdentificacao ? _htmlSubRotulo('Identificação', true) + grupoIdentificacao : ''}
-        ${temEndereco ? _htmlSubRotulo('Endereço', !grupoIdentificacao) + `<div style="font-size:13px;color:var(--navy);line-height:1.5;word-break:break-word">${enderecoLinha1}${enderecoLinha1&&enderecoLinha2?'<br>':''}${enderecoLinha2}</div>` : ''}
-        ${grupoContato ? _htmlSubRotulo('Contato', !grupoIdentificacao && !temEndereco) + grupoContato : ''}
-      ` : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
+    <div class="detail-layout">
+      <div class="detail-sidebar">
+        <div class="card">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Dados cadastrais</div>
+          ${temAlgumDado ? linhasCadastro : '<div style="font-size:13px;color:var(--text-3);padding:4px 0">Nenhum dado adicional cadastrado.</div>'}
+        </div>
+        ${podeMgr?`
+        <div class="detail-actions">
+          <button class="btn btn-navy" data-action="editarCliente" data-id="${c.id}">${ICONS.plus} Editar dados</button>
+          <button class="btn btn-outline" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar cliente':'Reativar cliente'}</button>
+        </div>`:''}
+      </div>
+
+      <div class="detail-main">
+        <div class="card detail-card-accent">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Painel de enquadramento SST</div>
+          ${grHtml}
+          ${(nrsHtml || chipsCnaesHtml) ? `<div style="margin-top:${grHtml?'12px':'0'}">${nrsHtml}</div>` : ''}
+          ${!nrsHtml && !grHtml ? (podeMgr
+            ? `<div style="font-size:13px;color:var(--text-3)">Cadastre o CNAE deste cliente (consulte o CNPJ em Editar dados) para ver o enquadramento SST.</div>`
+            : `<div style="font-size:13px;color:var(--text-3)">CNAE ainda não cadastrado para este cliente.</div>`)
+            : ''}
+          ${chipsCnaesHtml}
+        </div>
+
+        ${podeMgr && todasNrs.length ? `
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">${ICONS.target} Oportunidades comerciais</div>
+          <div id="oportunidadesBox"><div style="font-size:13px;color:var(--text-3)">Verificando turmas já realizadas para este cliente...</div></div>
+        </div>` : ''}
+      </div>
     </div>
-
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Painel de enquadramento SST</div>
-      ${grHtml}
-      ${(nrsHtml || chipsCnaesHtml) ? `<div style="margin-top:${grHtml?'12px':'0'}">${nrsHtml}</div>` : ''}
-      ${!nrsHtml && !grHtml ? (podeMgr
-        ? `<div style="font-size:13px;color:var(--text-3)">Cadastre o CNAE deste cliente (consulte o CNPJ em Editar dados) para ver o enquadramento SST.</div>`
-        : `<div style="font-size:13px;color:var(--text-3)">CNAE ainda não cadastrado para este cliente.</div>`)
-        : ''}
-      ${chipsCnaesHtml}
-    </div>
-
-    ${podeMgr && todasNrs.length ? `
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Oportunidades comerciais</div>
-      <div id="oportunidadesBox"><div style="font-size:13px;color:var(--text-3)">Verificando turmas já realizadas para este cliente...</div></div>
-    </div>` : ''}
-
-    ${podeMgr?`
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="editarCliente" data-id="${c.id}">${ICONS.plus} Editar dados</button>
-      <button class="btn btn-outline" style="flex:1;justify-content:center" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar cliente':'Reativar cliente'}</button>
-    </div>`:''}
   `);
 
   if (podeMgr && todasNrs.length) _carregarOportunidadesComerciais(c.id, todasNrs);
@@ -3102,22 +3117,25 @@ async function _carregarOportunidadesComerciais(clienteId, todasNrs) {
     const comOferta = semCobertura.filter(nr => nrsCatalogo.has(nr));
     const semOferta  = semCobertura.filter(nr => !nrsCatalogo.has(nr));
 
-    let html = '';
+    let miolo = '';
     if (comOferta.length) {
-      html += `
+      miolo += `
         <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;min-width:0">Aplicáveis a este cliente, já no seu catálogo, mas ainda sem turma:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${semOferta.length?'14px':'0'}">
-          ${comOferta.map(nr=>`<span class="badge" style="background:var(--amber-l);color:var(--amber-text);border:1px solid var(--amber);cursor:pointer" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}
+          ${comOferta.map(nr=>`<span class="badge" style="background:var(--amber);color:#fff;border:1px solid var(--amber);cursor:pointer;font-weight:600" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}
         </div>`;
     }
     if (semOferta.length) {
-      html += `
+      miolo += `
         <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;min-width:0">Aplicáveis a este cliente, sem treinamento correspondente no seu catálogo:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${semOferta.map(nr=>`<span class="badge badge-gray" style="cursor:pointer" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}
+          ${semOferta.map(nr=>`<span class="badge" style="background:var(--gray-600);color:#fff;border:1px solid var(--gray-600);cursor:pointer;font-weight:600" data-action="verDetalheNR" data-id="${nr}" title="Ver detalhes">${nr}</span>`).join('')}
         </div>`;
     }
-    if (!html) {
+    let html;
+    if (miolo) {
+      html = `<div style="border-left:3px solid var(--red);background:var(--red-l);border-radius:var(--r-md);padding:12px">${miolo}</div>`;
+    } else {
       html = `<div style="font-size:13px;color:var(--text-3)">Nenhuma lacuna identificada — as NRs aplicáveis já têm turma registrada para este cliente.</div>`;
     }
     html += `<div style="font-size:10.5px;color:var(--text-3);margin-top:10px;line-height:1.4">Cruzamento entre o Painel de Enquadramento SST e as turmas/catálogo já cadastrados — use como sinal para prospecção, não como confirmação de necessidade do cliente.</div>`;
@@ -3389,6 +3407,7 @@ function verColab(id) {
     c.telefone ? {label:'Telefone', val:c.telefone} : null,
   ].filter(Boolean);
   setConteudo(`
+    <div class="detail-page">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
     </div>
@@ -3413,9 +3432,10 @@ function verColab(id) {
     </div>
 
     ${podeMgr?`
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="editarColab" data-id="${c.id}">${ICONS.plus} Editar dados</button>
+    <div class="detail-actions">
+      <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">${ICONS.plus} Editar dados</button>
     </div>`:''}
+    </div>
   `);
 }
 
@@ -3583,6 +3603,7 @@ function verCatalogo(id) {
   const isArq   = !!t.arquivado;
 
   setConteudo(`
+    <div class="detail-page">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="catalogo">${ICONS.back} Voltar</button>
     </div>
@@ -3627,13 +3648,14 @@ function verCatalogo(id) {
 
     ${podeMgr ? `
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="editarCatalogo" data-id="${t.id}">${ICONS.plus} Editar</button>
+      <button class="btn btn-navy" data-action="editarCatalogo" data-id="${t.id}">${ICONS.plus} Editar</button>
       <button class="btn btn-outline" onclick="duplicarCatalogo('${t.id}')" title="Criar uma cópia deste treinamento">⧉ Duplicar</button>
       ${isArq
         ? `<button class="btn btn-outline" data-action="desarquivarCatalogo" data-id="${t.id}">↩ Restaurar</button>`
         : `<button class="btn btn-outline" data-action="arquivarCatalogo" data-id="${t.id}">📦 Arquivar</button>`
       }
     </div>` : ""}
+    </div>
   `);
 }
 
@@ -4176,7 +4198,7 @@ async function verTurma(id) {
             </div>
           </div>`).join('')}
       </div>` : `
-
+      <div class="detail-page">
       <!-- ===== TELA GESTOR ===== -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
@@ -4240,6 +4262,7 @@ async function verTurma(id) {
         ${podeEditar?`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" data-action="addParticipante" data-id="${id}" data-cli="${t.cliente_id||''}">+ Adicionar participante</button>
         </div>`:''}
+      </div>
       </div>`;
 
     setConteudo(html);
@@ -5306,6 +5329,7 @@ async function verHistoricoTurma(turmaId) {
 
     hideLoading();
     setConteudo(`
+      <div class="detail-page">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="historico">${ICONS.back} Voltar</button>
       </div>
@@ -5353,8 +5377,9 @@ async function verHistoricoTurma(turmaId) {
         ${htmlEvidencias}
       </div>
 
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-navy" style="flex:1;justify-content:center" data-action="abrirDocumentos" data-id="${turmaId}">📄 Ver certificados e documentos</button>
+      <div class="detail-actions">
+        <button class="btn btn-navy" data-action="abrirDocumentos" data-id="${turmaId}">📄 Ver certificados e documentos</button>
+      </div>
       </div>
     `);
   } catch(e) {
@@ -6801,6 +6826,7 @@ function verUsuarioEquipe(id) {
     };
     const st = PERFIL_STYLE[u.perfil]||{bg:'rgba(148,163,184,.2)',cor:'#94A3B8'};
     setConteudo(`
+      <div class="detail-page">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="equipe">${ICONS.back} Voltar</button>
       </div>
@@ -6833,10 +6859,11 @@ function verUsuarioEquipe(id) {
       </div>
 
       ${podeMgr && u.id !== usuarioAtual.id ? `
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-navy" style="flex:1;justify-content:center" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}','${u.id}')">${ICONS.plus} Editar usuário</button>
-        <button class="btn btn-outline" style="flex:1;justify-content:center" onclick="toggleUsuarioEquipe('${u.id}','${u.ativo}','${u.nome}')">${u.ativo?'Inativar':'Reativar'}</button>
+      <div class="detail-actions">
+        <button class="btn btn-navy" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}','${u.id}')">${ICONS.plus} Editar usuário</button>
+        <button class="btn btn-outline" onclick="toggleUsuarioEquipe('${u.id}','${u.ativo}','${u.nome}')">${u.ativo?'Inativar':'Reativar'}</button>
       </div>`:''}
+      </div>
     `);
   });
 }
