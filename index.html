@@ -1952,7 +1952,7 @@ async function verOrgProvedor(orgId) {
 
   const plano     = orgData.plano || 'starter';
   const planoNome = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' }[plano] || 'Starter';
-  const planoClr  = { starter:'var(--blue-h)', pro:'var(--amber-h)', enterprise:'var(--navy)' }[plano] || 'var(--blue-h)';
+  const planoClrDark = { starter:'#93C5FD', pro:'var(--amber)', enterprise:'#F1F5F9' }[plano] || '#93C5FD';
   const planoValor= { starter:'R$ 197/mês', pro:'R$ 397/mês', enterprise:'Sob consulta' }[plano] || 'R$ 197/mês';
   const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
 
@@ -1965,16 +1965,7 @@ async function verOrgProvedor(orgId) {
       <button class="btn btn-ghost btn-sm" onclick="renderHomeProvedor()">${ICONS.back} Voltar</button>
     </div>
 
-    <!-- Ações — fixas no topo, sempre visíveis, sem precisar rolar até o fim da lista de usuários -->
-    <div style="position:sticky;top:0;z-index:15;background:var(--bg,var(--surface));padding:8px 0 12px;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
-      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
-      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
-      <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
-        ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
-      </button>
-    </div>
-
-    <!-- Cabeçalho navy com info da org -->
+    <!-- Cabeçalho navy com info da org, KPIs e plano -->
     <div style="background:var(--navy);border-radius:var(--r-xl);padding:20px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
         <div style="width:48px;height:48px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(orgData.nome||'')}</div>
@@ -2003,32 +1994,36 @@ async function verOrgProvedor(orgId) {
           <div style="font-size:18px;font-weight:700;color:rgba(255,255,255,.8)">${concT}</div>
         </div>
       </div>
-    </div>
-
-    <div class="detail-layout">
-      <div class="detail-sidebar">
-    <!-- Card de plano -->
-    <div style="background:var(--surface);border:2px solid ${planoClr};border-radius:var(--r-lg);padding:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Plano contratado</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="font-size:20px;font-weight:800;color:${planoClr}">${planoNome}</div>
-            <div style="font-size:13px;color:var(--text-2)">${planoValor}</div>
-          </div>
-          ${venc ? `<div style="font-size:12px;color:var(--text-3);margin-top:4px">Vencimento: ${venc}</div>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em">Plano</span>
+          <span style="font-size:14px;font-weight:700;color:${planoClrDark}">${planoNome}</span>
+          <span style="font-size:12px;color:rgba(255,255,255,.6)">${planoValor}</span>
+          ${venc ? `<span style="font-size:11px;color:rgba(255,255,255,.4)">· Vence ${venc}</span>` : ''}
         </div>
-        <button class="btn btn-outline btn-sm" onclick="abrirModalAlterarPlano('${orgId}','${plano}')">Alterar plano</button>
+        <button onclick="abrirModalAlterarPlano('${orgId}','${plano}')" style="padding:6px 12px;border-radius:var(--r-md);border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Alterar plano</button>
       </div>
     </div>
 
-      </div>
-      <div class="detail-main">
-    <!-- Usuários -->
+    <!-- Ações — em posição natural, logo após o cabeçalho, sem flutuar durante a rolagem -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
+      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
+      <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
+        ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
+      </button>
+    </div>
+
+    <!-- Usuários — largura total (sem coluna lateral, o plano já está no cabeçalho) -->
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.length})</div>
     ${usrsData.length > 5 ? `
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="search" id="buscaUsuariosOrg" placeholder="Buscar por nome ou perfil..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="_filtrarUsuariosOrg()">
+      <select id="filtroStatusUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
+        <option value="">Todos</option>
+        <option value="ativo">Ativos</option>
+        <option value="inativo">Inativos</option>
+      </select>
       <select id="filtroPerfilUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
         <option value="">Todos os perfis</option>
         <option value="administrador">Administrador</option>
@@ -2037,8 +2032,6 @@ async function verOrgProvedor(orgId) {
       </select>
     </div>` : ''}
     <div class="card" style="padding:0" id="listaUsuariosOrg">${_renderUsuariosOrgLista()}</div>
-      </div>
-    </div>
   `);
 }
 
@@ -2065,7 +2058,10 @@ function _renderUsuariosOrgLista() {
 function _filtrarUsuariosOrg() {
   const f = (document.getElementById('buscaUsuariosOrg')?.value || '').toLowerCase().trim();
   const perfil = document.getElementById('filtroPerfilUsuarioOrg')?.value || '';
+  const status = document.getElementById('filtroStatusUsuarioOrg')?.value || '';
   let r = _usuariosOrgAtual;
+  if (status === 'ativo')   r = r.filter(u => u.ativo);
+  if (status === 'inativo') r = r.filter(u => !u.ativo);
   if (perfil) r = r.filter(u => u.perfil === perfil);
   if (f) r = r.filter(u => u.nome.toLowerCase().includes(f) || labelPerfil(u.perfil).toLowerCase().includes(f));
   _usuariosOrgFiltrado = r;
@@ -8040,8 +8036,15 @@ function htmlParaTextoPlano(html) {
 // Carrega um valor (HTML novo ou texto puro legado) dentro de uma instância Quill
 function carregarConteudoQuill(quill, valor) {
   if (!valor) { quill.setText(''); return; }
+  // IMPORTANTE: nunca atribuir diretamente quill.root.innerHTML — o Quill não
+  // reconstrói seu modelo interno (Delta) a partir dessa atribuição direta, então
+  // uma futura leitura via getContents()/root.innerHTML pode perder parágrafos e
+  // listas (bug identificado: só o primeiro parágrafo do conteúdo salvo aparecia
+  // ao reabrir a edição). dangerouslyPasteHTML() converte o HTML corretamente
+  // para Delta e mantém o editor consistente com o que é exibido.
   if (/<[a-z][\s\S]*>/i.test(valor)) {
-    quill.root.innerHTML = sanitizarHtml(valor);
+    quill.setText('');
+    quill.clipboard.dangerouslyPasteHTML(sanitizarHtml(valor));
   } else {
     quill.setText(valor);
   }
