@@ -5626,8 +5626,9 @@ async function verHistoricoTurma(turmaId) {
 // restrito de propósito: só presença/assinatura e evidências fotográficas.
 // Cadastros novos, PDFs e certificados continuam exigindo internet.
 const FILA_DB_NOME = 'toledo_labs_offline';
-const FILA_DB_VERSAO = 1;
+const FILA_DB_VERSAO = 2;
 const FILA_STORE = 'fila_execucao';
+const CACHE_EXEC_STORE = 'cache_exec';
 
 function _filaDb() {
   return new Promise((resolve, reject) => {
@@ -5637,8 +5638,34 @@ function _filaDb() {
       if (!db.objectStoreNames.contains(FILA_STORE)) {
         db.createObjectStore(FILA_STORE, {keyPath:'id', autoIncrement:true});
       }
+      // Snapshot somente-leitura da turma (participantes/presenças/evidências)
+      // salvo na 1ª abertura online, usado para reabrir a execução totalmente
+      // offline depois (sem precisar de uma nova consulta ao servidor).
+      if (!db.objectStoreNames.contains(CACHE_EXEC_STORE)) {
+        db.createObjectStore(CACHE_EXEC_STORE, {keyPath:'turmaId'});
+      }
     };
     req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _cacheExecSalvar(turmaId, dados) {
+  const db = await _filaDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_EXEC_STORE, 'readwrite');
+    tx.objectStore(CACHE_EXEC_STORE).put({turmaId, ...dados, salvo_em:new Date().toISOString()});
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function _cacheExecCarregar(turmaId) {
+  const db = await _filaDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_EXEC_STORE, 'readonly');
+    const req = tx.objectStore(CACHE_EXEC_STORE).get(turmaId);
+    req.onsuccess = () => resolve(req.result||null);
     req.onerror = () => reject(req.error);
   });
 }
@@ -5715,6 +5742,29 @@ async function _enviarEvidencia(reg) {
   if (dbErr) throw dbErr;
 }
 
+// Reenvia as anotações do instrutor da fila.
+async function _enviarAnotacoes(reg) {
+  const {error} = await sb.from('turmas').update({anotacoes_instrutor:reg.texto}).eq('id',reg.turmaId);
+  if (error) throw error;
+}
+
+// Reenvia a finalização de uma sessão da fila — mesma lógica de
+// finalizarTurma no caminho online: marca a sessão concluída e, se todas as
+// sessões da turma já estiverem concluídas, marca a turma como concluída e
+// atualiza o cache de conformidade.
+async function _enviarFinalizarSessao(reg) {
+  const {error:errSessao} = await sb.from('sessoes').update({concluida:true}).eq('id', reg.sessaoId);
+  if (errSessao) throw errSessao;
+  const {data:todasSessoes} = await sb.from('sessoes').select('id,concluida,data').eq('turma_id', reg.turmaId);
+  const todasConcluidas = (todasSessoes||[]).length > 0 && (todasSessoes||[]).every(s => s.concluida || s.id === reg.sessaoId);
+  if (todasConcluidas) {
+    const {error:errTurma} = await sb.from('turmas').update({status:'concluida'}).eq('id', reg.turmaId);
+    if (errTurma) throw errTurma;
+    try { await _atualizarConformidadeTurma(reg.turmaId, todasSessoes); } catch(e) {}
+  }
+  return todasConcluidas;
+}
+
 let _sincronizandoFila = false;
 async function _sincronizarFilaOffline() {
   if (_sincronizandoFila || !navigator.onLine) return;
@@ -5728,6 +5778,8 @@ async function _sincronizarFilaOffline() {
     try {
       if (item.tipo === 'assinatura') await _enviarAssinatura(item);
       else if (item.tipo === 'evidencia') await _enviarEvidencia(item);
+      else if (item.tipo === 'anotacoes') await _enviarAnotacoes(item);
+      else if (item.tipo === 'finalizar_sessao') await _enviarFinalizarSessao(item);
       await _filaRemover(item.id);
       ok++;
     } catch(e) {
@@ -5788,42 +5840,65 @@ async function abrirExecucaoSessao(turmaId, sessaoId) {
 async function abrirExecucao(turmaId, sessaoIdParam) {
   showLoading('Carregando execução...');
   try {
-    const {data:t,error} = await sb.from('turmas')
-      .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*),turma_participantes(*,colaboradores(*))')
-      .eq('id',turmaId).single();
-    if (error) throw error;
+    let t, presencas, evidencias, sessaoAtiva, deCache = false;
+    const hoje = new Date().toISOString().split('T')[0];
+
+    try {
+      if (!navigator.onLine) throw new Error('__offline__');
+      const {data:tOnline,error} = await sb.from('turmas')
+        .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*),turma_participantes(*,colaboradores(*))')
+        .eq('id',turmaId).single();
+      if (error) throw error;
+      t = tOnline;
+
+      // Determinar sessão ativa: parâmetro > hoje > primeira pendente do instrutor
+      sessaoAtiva = null;
+      if (sessaoIdParam) {
+        sessaoAtiva = (t.sessoes||[]).find(s => s.id === sessaoIdParam) || null;
+      }
+      if (!sessaoAtiva) {
+        const sessoesInstrutor = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id);
+        sessaoAtiva = sessoesInstrutor.find(s => s.data === hoje && !s.concluida)
+          || sessoesInstrutor.find(s => !s.concluida)
+          || sessoesInstrutor[sessoesInstrutor.length - 1]
+          || null;
+      }
+      const sessaoIdAtiva = sessaoAtiva?.id || null;
+
+      const {data:presData} = sessaoIdAtiva
+        ? await sb.from('presencas').select('*').eq('sessao_id', sessaoIdAtiva)
+        : await sb.from('presencas').select('*').eq('turma_id', turmaId);
+      presencas = presData||[];
+
+      const {data:evData} = sessaoIdAtiva
+        ? await sb.from('evidencias').select('*').eq('sessao_id', sessaoIdAtiva)
+        : [];
+      evidencias = evData||[];
+
+      // Guarda um retrato desta turma localmente — permite reabrir a
+      // execução totalmente offline depois, mesmo com o app fechado/reaberto.
+      try { await _cacheExecSalvar(turmaId, {t, sessaoAtivaId: sessaoIdAtiva, presencas, evidencias}); } catch(e) {}
+
+    } catch(erroRede) {
+      const snap = await _cacheExecCarregar(turmaId).catch(()=>null);
+      if (!snap) {
+        renderErro('Esta turma ainda não foi aberta com internet neste dispositivo. Conecte-se uma vez para carregar os dados e depois use offline normalmente.');
+        return;
+      }
+      t = snap.t;
+      presencas = snap.presencas||[];
+      evidencias = snap.evidencias||[];
+      sessaoAtiva = (t.sessoes||[]).find(s => s.id === snap.sessaoAtivaId) || null;
+      deCache = true;
+    }
 
     window._execTurmaId   = turmaId;
     window._execClienteId = t.cliente_id;
     window._execParticipantes = t.turma_participantes||[];
-
-    // Determinar sessão ativa: parâmetro > hoje > primeira pendente do instrutor
-    const hoje = new Date().toISOString().split('T')[0];
-    let sessaoAtiva = null;
-    if (sessaoIdParam) {
-      sessaoAtiva = (t.sessoes||[]).find(s => s.id === sessaoIdParam) || null;
-    }
-    if (!sessaoAtiva) {
-      const sessoesInstrutor = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id);
-      sessaoAtiva = sessoesInstrutor.find(s => s.data === hoje && !s.concluida)
-        || sessoesInstrutor.find(s => !s.concluida)
-        || sessoesInstrutor[sessoesInstrutor.length - 1]
-        || null;
-    }
-
     window._execSessaoId = sessaoAtiva?.id || null;
 
-    // Presenças da sessão ativa
-    const {data:presencas} = window._execSessaoId
-      ? await sb.from('presencas').select('*').eq('sessao_id', window._execSessaoId)
-      : await sb.from('presencas').select('*').eq('turma_id', turmaId);
     window._execPresencas = {};
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
-
-    // Evidências da sessão ativa
-    const {data:evidencias} = window._execSessaoId
-      ? await sb.from('evidencias').select('*').eq('sessao_id', window._execSessaoId)
-      : {data:[]};
     window._execEvidencias = evidencias||[];
 
     // Mescla itens ainda não sincronizados desta turma (sobreviventes de uma
@@ -5856,6 +5931,8 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         </div>
         <span class="badge badge-blue">Em andamento</span>
       </div>
+
+      ${deCache ? `<div style="display:flex;align-items:center;gap:6px;background:var(--blue-l);color:var(--blue-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:12px">📶 Sem conexão agora — exibindo dados salvos localmente na última vez que este dispositivo esteve online.</div>` : ''}
 
       <div class="badge-fila-offline" style="display:none;align-items:center;gap:6px;background:var(--amber-l);color:var(--amber-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:16px">
         ⏳ <span class="badge-fila-offline-n">0</span> ação(ões) guardadas offline aguardando conexão para sincronizar
@@ -6255,22 +6332,50 @@ async function removerEvidencia(evId, path) {
   } catch(e) { showToast(e.message||'Erro','error'); }
 }
 
-async function salvarAnotacoes(turmaId) {
+function _marcarAnotacoesSalvas(pendente) {
   const textarea = execEl('anotacoesInstrutor');
-  if (!textarea) return;
-  const texto = textarea.value.trim();
-  const {error} = await sb.from('turmas').update({anotacoes_instrutor:texto}).eq('id',turmaId);
-  if (error) { showToast(error.message,'error'); return; }
-  textarea.readOnly = true;
-  textarea.style.background = 'var(--gray-50)';
-  textarea.style.color = 'var(--text-2)';
+  if (textarea) {
+    textarea.readOnly = true;
+    textarea.style.background = 'var(--gray-50)';
+    textarea.style.color = 'var(--text-2)';
+  }
   const btnSalvar  = execEl('btnSalvarAnotacoes');
   const btnEditar  = execEl('btnEditarAnotacoes');
   const labelSalvo = execEl('anotacoesSalvas');
   if (btnSalvar)  btnSalvar.style.display  = 'none';
   if (btnEditar)  btnEditar.style.display  = 'inline-flex';
-  if (labelSalvo) labelSalvo.style.display = 'inline';
-  showToast('Anotações salvas!','success');
+  if (labelSalvo) {
+    labelSalvo.style.display = 'inline';
+    labelSalvo.textContent   = pendente ? '⏳ Pendente de sincronização' : '✓ Salvo';
+    labelSalvo.style.color   = pendente ? 'var(--amber-text)' : 'var(--green)';
+  }
+}
+
+async function salvarAnotacoes(turmaId) {
+  const textarea = execEl('anotacoesInstrutor');
+  if (!textarea) return;
+  const texto = textarea.value.trim();
+  const reg = {tipo:'anotacoes', turmaId, texto, criado_em:new Date().toISOString()};
+  try {
+    if (!navigator.onLine) throw new Error('__offline__');
+    const {error} = await sb.from('turmas').update({anotacoes_instrutor:texto}).eq('id',turmaId);
+    if (error) throw error;
+    _marcarAnotacoesSalvas(false);
+    showToast('Anotações salvas!','success');
+  } catch(e) {
+    if (e.message === '__offline__' || _erroDeRede(e)) {
+      try {
+        await _filaAdicionar(reg);
+        _marcarAnotacoesSalvas(true);
+        showToast('Sem conexão — anotações guardadas e serão enviadas quando a internet voltar.','info',6000);
+        _atualizarBadgeFilaOffline();
+      } catch(e2) {
+        showToast('Não foi possível guardar as anotações neste dispositivo: '+(e2.message||''),'error');
+      }
+    } else {
+      showToast(e.message||'Erro ao salvar anotações','error');
+    }
+  }
 }
 
 function editarAnotacoes() {
@@ -6298,41 +6403,29 @@ async function finalizarTurma(turmaId) {
   }
   const okFinalizar = await confirmarAcao('Confirma a finalização desta etapa do treinamento?', 'Finalizar', false);
   if (!okFinalizar) return;
+
+  const sessaoId = window._execSessaoId;
+  if (!sessaoId) { showToast('Sessão não encontrada.','error'); return; }
+  const reg = {tipo:'finalizar_sessao', turmaId, sessaoId, criado_em:new Date().toISOString()};
+
   try {
     showLoading('Finalizando...');
-
-    // 1. Marcar a sessão atual como concluída
-    const sessaoId = window._execSessaoId;
-    if (sessaoId) {
-      const {error:errSessao} = await sb.from('sessoes')
-        .update({concluida: true})
-        .eq('id', sessaoId);
-      if (errSessao) throw errSessao;
-    }
-
-    // 2. Verificar se TODAS as sessões da turma estão concluídas
-    const {data:todasSessoes} = await sb.from('sessoes')
-      .select('id,concluida,data')
-      .eq('turma_id', turmaId);
-
-    const todasConcluidas = (todasSessoes||[]).length > 0
-      && (todasSessoes||[]).every(s => s.concluida || s.id === sessaoId);
-
-    // 3. Só marca turma como concluída se todas as sessões terminaram
-    if (todasConcluidas) {
-      const {error:errTurma} = await sb.from('turmas')
-        .update({status: 'concluida'})
-        .eq('id', turmaId);
-      if (errTurma) throw errTurma;
-      showToast('Treinamento concluído! Todos os dias finalizados.', 'success');
-      await _atualizarConformidadeTurma(turmaId, todasSessoes);
-    } else {
-      showToast('Etapa finalizada! Retorne na próxima data para continuar.', 'success');
-    }
-
+    if (!navigator.onLine) throw new Error('__offline__');
+    const todasConcluidas = await _enviarFinalizarSessao(reg);
+    showToast(todasConcluidas ? 'Treinamento concluído! Todos os dias finalizados.' : 'Etapa finalizada! Retorne na próxima data para continuar.', 'success');
     await verTurma(turmaId);
   } catch(e) {
-    showToast(e.message||'Erro ao finalizar','error');
+    if (e.message === '__offline__' || _erroDeRede(e)) {
+      try {
+        await _filaAdicionar(reg);
+        showToast('Sem conexão — finalização guardada e será processada automaticamente quando a internet voltar (o status muda para Concluída na hora da sincronização).','info',7000);
+        _atualizarBadgeFilaOffline();
+      } catch(e2) {
+        showToast('Não foi possível guardar a finalização neste dispositivo: '+(e2.message||''),'error');
+      }
+    } else {
+      showToast(e.message||'Erro ao finalizar','error');
+    }
   } finally { hideLoading(); }
 }
 
