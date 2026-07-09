@@ -181,7 +181,6 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 .btn-danger:hover{background:#FEE2E2}
 
 /* ── FAB ── */
-.fab{position:fixed;right:20px;bottom:calc(var(--nav-h) + 16px);width:52px;height:52px;border-radius:50%;background:var(--amber);color:var(--navy);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(245,158,11,.45);z-index:80;transition:transform .15s,box-shadow .15s}
 .fab:hover{transform:scale(1.06)}
 .fab svg{width:24px;height:24px}
 
@@ -207,9 +206,10 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 
 /* ── Misc ── */
 .divider{height:1px;background:var(--border);margin:16px 0}
-.scrollable{overflow-y:auto;-webkit-overflow-scrolling:touch}
-.scrollable::-webkit-scrollbar{width:4px}
-.scrollable::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:2px}
+.scrollable{overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--gray-300) transparent}
+.scrollable::-webkit-scrollbar{width:8px}
+.scrollable::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:4px}
+.scrollable::-webkit-scrollbar-thumb:hover{background:var(--gray-400)}
 
 /* ── Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center}
@@ -246,7 +246,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── Responsive breakpoints ── */
-@media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.fab{bottom:24px;right:24px}}
+@media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}}
 @media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block}.mobile-content{display:block}.hamburger{display:flex}#screenApp{flex-direction:column}}
 @media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}.rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rel2-rankings{grid-template-columns:1fr}.home-2col{grid-template-columns:1fr}}
 @media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}.rel2-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
@@ -503,9 +503,6 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
   <div id="mobileHeader" class="mobile-header"></div>
   <div class="mobile-content scrollable" id="mobileBody"></div>
   <nav class="bottom-nav" id="bottomNav"><div class="bn-items" id="bnItems"></div></nav>
-  <button class="fab" id="fabBtn" style="display:none" onclick="fabAcao()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-  </button>
 </div>
 
 <div class="modal-overlay" id="modalOverlay" style="display:none">
@@ -550,6 +547,11 @@ let _clientesCache  = [];
 let _catalogoCache  = [];
 let _turmasCache    = [];
 let _colabsCache    = [];
+
+// ---- Paginação (listas longas) ----
+let _paginaCatalogo = 1, _porPaginaCatalogo = 20, _catalogoListaFiltrada = [], _catalogoMaxUsoAtual = 1, _catalogoPodeMgrAtual = false;
+let _paginaOrgs = 1, _porPaginaOrgs = 20, _orgsListaFiltrada = [];
+let _paginaUsuariosOrg = 1, _porPaginaUsuariosOrg = 20, _usuariosOrgAtual = [], _usuariosOrgFiltrado = [];
 
 // ============================================================
 // PLANOS — helpers de acesso
@@ -1350,15 +1352,45 @@ function _getElVisible(id) {
 function setMobileHeader(html) {
   document.getElementById('mobileHeader').innerHTML = html;
 }
-function fabMostrar(cb) {
-  document.getElementById('fabBtn').style.display = 'flex';
-  fabCallback = cb;
-}
-function fabOcultar() {
-  document.getElementById('fabBtn').style.display = 'none';
-  fabCallback = null;
-}
+// Botão flutuante (+) removido — as ações de criação já ficam nas barras de ferramentas de cada tela.
+function fabMostrar(cb) { fabCallback = cb; }
+function fabOcultar() { fabCallback = null; }
 function fabAcao() { if (fabCallback) fabCallback(); }
+
+// ============================================================
+// Paginação reutilizável — usada em Catálogo, Organizações e
+// na lista de usuários da tela de detalhes da Organização.
+// ============================================================
+function _paginarLista(lista, pagina, porPagina) {
+  const total = lista.length;
+  const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
+  const p = Math.min(Math.max(1, pagina || 1), totalPaginas);
+  const inicio = (p - 1) * porPagina;
+  return { itens: lista.slice(inicio, inicio + porPagina), totalPaginas, paginaAtual: p, total };
+}
+function _htmlPaginacao(cfg) {
+  const { totalPaginas, paginaAtual, porPagina, total, onPageChange, onPageSizeChange } = cfg;
+  if (!total) return '';
+  const inicio = (paginaAtual - 1) * porPagina + 1;
+  const fim = Math.min(paginaAtual * porPagina, total);
+  const nums = [];
+  for (let i = Math.max(1, paginaAtual - 2); i <= Math.min(totalPaginas, paginaAtual + 2); i++) nums.push(i);
+  return `
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;flex-wrap:wrap${total > porPagina || total > 10 ? ';border-top:1px solid var(--border)' : ''}">
+    <div style="font-size:12px;color:var(--text-3)">${inicio}–${fim} de ${total}</div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <select onchange="${onPageSizeChange}(this.value)" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--r-md);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="10" ${porPagina===10?'selected':''}>10/página</option>
+        <option value="20" ${porPagina===20?'selected':''}>20/página</option>
+        <option value="50" ${porPagina===50?'selected':''}>50/página</option>
+      </select>
+      ${totalPaginas > 1 ? `
+      <button class="btn btn-ghost btn-sm" style="padding:5px 9px" ${paginaAtual<=1?'disabled':''} onclick="${onPageChange}(${paginaAtual-1})">‹</button>
+      ${nums.map(n=>`<button class="btn ${n===paginaAtual?'btn-navy':'btn-ghost'} btn-sm" style="padding:5px 10px;min-width:30px" onclick="${onPageChange}(${n})">${n}</button>`).join('')}
+      <button class="btn btn-ghost btn-sm" style="padding:5px 9px" ${paginaAtual>=totalPaginas?'disabled':''} onclick="${onPageChange}(${paginaAtual+1})">›</button>` : ''}
+    </div>
+  </div>`;
+}
 
 function renderEmBreve(nome) {
   setConteudo(`<div class="empty" style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="empty-icon">🚧</div><div class="empty-title">${nome}</div><div class="empty-sub">Esta seção está sendo construída.</div></div>`);
@@ -1924,9 +1956,22 @@ async function verOrgProvedor(orgId) {
   const planoValor= { starter:'R$ 197/mês', pro:'R$ 397/mês', enterprise:'Sob consulta' }[plano] || 'R$ 197/mês';
   const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
 
+  _usuariosOrgAtual = usrsData;
+  _usuariosOrgFiltrado = usrsData;
+  _paginaUsuariosOrg = 1;
+
   setConteudo(`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <button class="btn btn-ghost btn-sm" onclick="renderHomeProvedor()">${ICONS.back} Voltar</button>
+    </div>
+
+    <!-- Ações — fixas no topo, sempre visíveis, sem precisar rolar até o fim da lista de usuários -->
+    <div style="position:sticky;top:0;z-index:15;background:var(--bg,var(--surface));padding:8px 0 12px;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
+      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
+      <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
+        ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
+      </button>
     </div>
 
     <!-- Cabeçalho navy com info da org -->
@@ -1981,10 +2026,25 @@ async function verOrgProvedor(orgId) {
       <div class="detail-main">
     <!-- Usuários -->
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.length})</div>
-    <div class="card" style="padding:0">
-      ${usrsData.length === 0
-        ? '<div class="empty" style="padding:24px"><div class="empty-title">Nenhum usuário</div></div>'
-        : usrsData.map(u => `
+    ${usrsData.length > 5 ? `
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input type="search" id="buscaUsuariosOrg" placeholder="Buscar por nome ou perfil..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="_filtrarUsuariosOrg()">
+      <select id="filtroPerfilUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
+        <option value="">Todos os perfis</option>
+        <option value="administrador">Administrador</option>
+        <option value="comercial">Comercial</option>
+        <option value="instrutor">Instrutor</option>
+      </select>
+    </div>` : ''}
+    <div class="card" style="padding:0" id="listaUsuariosOrg">${_renderUsuariosOrgLista()}</div>
+      </div>
+    </div>
+  `);
+}
+
+function _htmlListaUsuariosOrg(lista) {
+  if (!lista.length) return '<div class="empty" style="padding:24px"><div class="empty-title">Nenhum usuário encontrado</div></div>';
+  return lista.map(u => `
         <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border)">
           <div style="width:36px;height:36px;border-radius:50%;background:rgba(30,42,74,.1);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
           <div style="flex:1;min-width:0">
@@ -1992,23 +2052,34 @@ async function verOrgProvedor(orgId) {
             <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${labelPerfil(u.perfil)}</div>
           </div>
           <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
-        </div>`).join('')
-      }
-    </div>
-
-    <!-- Ações -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
-      <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
-        ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
-      </button>
-    </div>
-      </div>
-    </div>
-  `);
+        </div>`).join('');
+}
+function _renderUsuariosOrgLista() {
+  const { itens, totalPaginas, paginaAtual, total } = _paginarLista(_usuariosOrgFiltrado, _paginaUsuariosOrg, _porPaginaUsuariosOrg);
+  _paginaUsuariosOrg = paginaAtual;
+  return _htmlListaUsuariosOrg(itens) + _htmlPaginacao({
+    totalPaginas, paginaAtual, porPagina: _porPaginaUsuariosOrg, total,
+    onPageChange: '_irPaginaUsuariosOrg', onPageSizeChange: '_alterarPorPaginaUsuariosOrg'
+  });
+}
+function _filtrarUsuariosOrg() {
+  const f = (document.getElementById('buscaUsuariosOrg')?.value || '').toLowerCase().trim();
+  const perfil = document.getElementById('filtroPerfilUsuarioOrg')?.value || '';
+  let r = _usuariosOrgAtual;
+  if (perfil) r = r.filter(u => u.perfil === perfil);
+  if (f) r = r.filter(u => u.nome.toLowerCase().includes(f) || labelPerfil(u.perfil).toLowerCase().includes(f));
+  _usuariosOrgFiltrado = r;
+  _paginaUsuariosOrg = 1;
+  _setElBoth('listaUsuariosOrg', _renderUsuariosOrgLista());
+}
+function _irPaginaUsuariosOrg(p) {
+  _paginaUsuariosOrg = p;
+  _setElBoth('listaUsuariosOrg', _renderUsuariosOrgLista());
+}
+function _alterarPorPaginaUsuariosOrg(v) {
+  _porPaginaUsuariosOrg = parseInt(v, 10) || 20;
+  _paginaUsuariosOrg = 1;
+  _setElBoth('listaUsuariosOrg', _renderUsuariosOrgLista());
 }
 
 async function ativarOrg(orgId) {
@@ -2619,6 +2690,8 @@ async function renderOrgs() {
 let _orgsUsuariosCache = [];
 
 function _renderOrgsLista(orgs) {
+  _orgsListaFiltrada = orgs;
+  _paginaOrgs = 1;
   const hoje    = new Date();
   const ativas  = orgs.filter(o=>o.ativo).length;
   const usrsAll = _orgsUsuariosCache;
@@ -2695,7 +2768,25 @@ function _renderOrgsLista(orgs) {
         <option value="plano">Plano</option>
       </select>
     </div>
-    <div class="card" style="padding:0" id="listaOrgs">${_htmlListaOrgs(orgs)}</div>`);
+    <div class="card" style="padding:0" id="listaOrgs">${_renderOrgsListaPaginada()}</div>`);
+}
+
+function _renderOrgsListaPaginada() {
+  const { itens, totalPaginas, paginaAtual, total } = _paginarLista(_orgsListaFiltrada, _paginaOrgs, _porPaginaOrgs);
+  _paginaOrgs = paginaAtual;
+  return _htmlListaOrgs(itens) + _htmlPaginacao({
+    totalPaginas, paginaAtual, porPagina: _porPaginaOrgs, total,
+    onPageChange: '_irPaginaOrgs', onPageSizeChange: '_alterarPorPaginaOrgs'
+  });
+}
+function _irPaginaOrgs(p) {
+  _paginaOrgs = p;
+  _setElBoth('listaOrgs', _renderOrgsListaPaginada());
+}
+function _alterarPorPaginaOrgs(v) {
+  _porPaginaOrgs = parseInt(v, 10) || 20;
+  _paginaOrgs = 1;
+  _setElBoth('listaOrgs', _renderOrgsListaPaginada());
 }
 
 function _htmlListaOrgs(orgs) {
@@ -2758,7 +2849,9 @@ function aplicarFiltrosOrgs() {
     }
   });
 
-  document.getElementById('listaOrgs').innerHTML = _htmlListaOrgs(r);
+  _orgsListaFiltrada = r;
+  _paginaOrgs = 1;
+  _setElBoth('listaOrgs', _renderOrgsListaPaginada());
 }
 
 function _menuDropdown(btn, items) {
@@ -3543,6 +3636,11 @@ async function renderCatalogo() {
 
   const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
 
+  _catalogoListaFiltrada = _catalogoCache;
+  _catalogoMaxUsoAtual = maxUso;
+  _catalogoPodeMgrAtual = podeMgr;
+  _paginaCatalogo = 1;
+
   setConteudo(`
     <div class="stats-grid" style="margin-bottom:16px">
       <div class="stat-card navy">
@@ -3579,7 +3677,25 @@ async function renderCatalogo() {
       ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0" id="listaCatalogo">${_htmlListaCatalogo(_catalogoCache, maxUso, podeMgr)}</div>`);
+    <div class="card" style="padding:0" id="listaCatalogo">${_renderCatalogoListaPaginada()}</div>`);
+}
+
+function _renderCatalogoListaPaginada() {
+  const { itens, totalPaginas, paginaAtual, total } = _paginarLista(_catalogoListaFiltrada, _paginaCatalogo, _porPaginaCatalogo);
+  _paginaCatalogo = paginaAtual;
+  return _htmlListaCatalogo(itens, _catalogoMaxUsoAtual, _catalogoPodeMgrAtual) + _htmlPaginacao({
+    totalPaginas, paginaAtual, porPagina: _porPaginaCatalogo, total,
+    onPageChange: '_irPaginaCatalogo', onPageSizeChange: '_alterarPorPaginaCatalogo'
+  });
+}
+function _irPaginaCatalogo(p) {
+  _paginaCatalogo = p;
+  _setElBoth('listaCatalogo', _renderCatalogoListaPaginada());
+}
+function _alterarPorPaginaCatalogo(v) {
+  _porPaginaCatalogo = parseInt(v, 10) || 20;
+  _paginaCatalogo = 1;
+  _setElBoth('listaCatalogo', _renderCatalogoListaPaginada());
 }
 
 function _htmlListaCatalogo(lista, maxUso, podeMgr) {
@@ -3716,8 +3832,11 @@ function filtrarCatalogo(q) {
   }
   const maxUso = Math.max(..._catalogoCache.map(t => usoMap[t.id]?.total || 0), 1);
   const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
-  const el = document.getElementById('listaCatalogo');
-  if (el) el.innerHTML = _htmlListaCatalogo(r, maxUso, podeMgr);
+  _catalogoListaFiltrada = r;
+  _catalogoMaxUsoAtual = maxUso;
+  _catalogoPodeMgrAtual = podeMgr;
+  _paginaCatalogo = 1;
+  _setElBoth('listaCatalogo', _renderCatalogoListaPaginada());
 }
 
 // ============================================================
