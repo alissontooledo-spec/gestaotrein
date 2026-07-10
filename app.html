@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://brasilapi.com.br https://api.resend.com; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://brasilapi.com.br https://api.resend.com; frame-ancestors 'none';">a
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <meta name="theme-color" content="#1E2A4A">
@@ -2567,10 +2567,13 @@ async function renderFinanceiroProvedor() {
     </div>
     <div style="font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.4">Estimativa baseada em organizações criadas até cada período e ainda ativas hoje — não considera cancelamentos ocorridos dentro do intervalo.</div>`;
 
-  // ── Próximos vencimentos (assinatura ou trial) nos próximos 30 dias ──
+  // ── Vencimentos e atrasos (assinatura ou trial) — janela de -30 a +30 dias ──
+  // Mostra tanto o que já venceu (para ação de cobrança) quanto o que vai vencer.
+  // Limitado a 30 dias para trás para não acumular indefinidamente contas antigas já vencidas.
   const diasAte = (d) => Math.ceil((new Date(d) - hoje) / 86400000);
+  const dentroDaJanelaVencimento = (dias) => dias >= -30 && dias <= 30;
   const vencimentos = orgsAll
-    .filter(o => o.ativo && ((o.assinatura_vencimento && diasAte(o.assinatura_vencimento) <= 30) || (!o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) <= 30)))
+    .filter(o => o.ativo && ((o.assinatura_vencimento && dentroDaJanelaVencimento(diasAte(o.assinatura_vencimento))) || (!o.assinatura_id && o.trial_fim && dentroDaJanelaVencimento(diasAte(o.trial_fim)))))
     .map(o => {
       const isTrial = !o.assinatura_id && o.trial_fim;
       const data = isTrial ? o.trial_fim : o.assinatura_vencimento;
@@ -2578,12 +2581,15 @@ async function renderFinanceiroProvedor() {
     })
     .sort((a,b) => a.dias - b.dias);
 
+  const qtdVencidos = vencimentos.filter(v => v.dias < 0).length;
+  const tituloVencimentos = `Vencimentos e atrasos (30 dias)${qtdVencidos ? ` <span style="font-size:11px;font-weight:700;color:var(--red-text);background:var(--red-l);padding:2px 8px;border-radius:10px;margin-left:6px;text-transform:none;letter-spacing:0">${qtdVencidos} vencido${qtdVencidos>1?'s':''}</span>` : ''}`;
+
   const htmlVencimentos = vencimentos.length ? vencimentos.map(v => `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
       <span class="badge ${v.dias<0?'badge-gray':v.dias<=3?'':'badge-blue'}" style="${v.dias>=0&&v.dias<=3?'background:var(--amber-l);color:var(--amber-text)':''}">${v.tipo}</span>
       <span style="font-size:13px;color:var(--text-1);flex:1">${v.nome}</span>
       <span style="font-size:12px;color:${v.dias<0?'var(--red-text)':'var(--text-3)'};font-weight:600">${v.dias<0?`Venceu há ${Math.abs(v.dias)}d`:v.dias===0?'Vence hoje':`Vence em ${v.dias}d`}</span>
-    </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Nenhum vencimento nos próximos 30 dias.</div>';
+    </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Nenhum vencimento ou atraso nos últimos/próximos 30 dias.</div>';
 
   // ── Ranking de organizações por plano/valor ──
   const ranking = [...ativasComPlano]
@@ -2657,7 +2663,7 @@ async function renderFinanceiroProvedor() {
 
     <div class="home-2col">
       <div class="card" style="padding:14px 14px 4px">
-        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:6px">Próximos vencimentos (30 dias)</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:6px">${tituloVencimentos}</div>
         ${htmlVencimentos}
       </div>
       <div class="card" style="padding:14px 14px 4px;min-width:0">
