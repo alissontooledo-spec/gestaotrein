@@ -3675,6 +3675,12 @@ async function renderCatalogo() {
         <option value="sem_uso">Sem uso</option>
         <option value="arquivado">Arquivados</option>
       </select>
+      <select id="filtroCatTipo" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(document.getElementById('buscaCatalogo').value)">
+        <option value="">Inicial/Reciclagem/Único</option>
+        <option value="unico">Único</option>
+        <option value="inicial">Inicial</option>
+        <option value="reciclagem">Reciclagem</option>
+      </select>
       ${podeMgr ? `<button class="btn btn-outline" onclick="carregarCatalogoModeloUI()" title="Adiciona os treinamentos do catálogo modelo que ainda não existem no seu catálogo">${ICONS.book} Catálogo modelo</button>` : ''}
       ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>` : ''}
     </div>
@@ -3724,11 +3730,13 @@ function _htmlListaCatalogo(lista, maxUso, podeMgr) {
     const badgeEl = isArq
       ? `<span class="badge badge-gray">Arquivado</span>`
       : `<span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>`;
+    const tipoBadgeEl = t.tipo_curso === 'inicial' ? `<span class="badge badge-blue" style="font-size:10px">Inicial</span>`
+      : t.tipo_curso === 'reciclagem' ? `<span class="badge badge-amber" style="font-size:10px">Reciclagem</span>` : '';
     return `
     <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${isArq?.6:1}" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
       <div style="width:44px;height:44px;border-radius:var(--r-md);background:${!isArq&&t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'};color:${!isArq&&t.ativo?'var(--navy)':'var(--text-3)'};font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${t.carga_horaria}h</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:${isArq?'var(--text-3)':'var(--navy)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${t.nome}</div>
+        <div style="font-size:14px;font-weight:600;color:${isArq?'var(--text-3)':'var(--navy)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${t.nome} ${tipoBadgeEl}</div>
         <div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
           <span>Val. ${t.validade_meses}m</span>
           ${t.categoria ? `<span>· ${t.categoria}</span>` : ''}
@@ -3796,6 +3804,8 @@ function verCatalogo(id) {
       <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Turmas ativas agora</span><span style="font-weight:500;color:${uso.ativas>0?"var(--green)":"var(--text-3)"}">${uso.ativas}</span></div>
       <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-2)">Total de turmas históricas</span><span style="font-weight:500;color:var(--navy)">${uso.total}</span></div>
       <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0"><span style="color:var(--text-2)">Total de pessoas treinadas</span><span style="font-weight:500;color:var(--navy)">${uso.pessoas}</span></div>
+      ${t.tipo_curso && t.tipo_curso !== 'unico' ? `<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-top:1px solid var(--border)"><span style="color:var(--text-2)">Tipo de curso</span><span style="font-weight:500;color:var(--navy)">${t.tipo_curso==='inicial'?'Inicial':'Reciclagem'}</span></div>` : ""}
+      ${t.tipo_curso === 'reciclagem' && t.curso_relacionado_id ? `<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0"><span style="color:var(--text-2)">Curso Inicial correspondente</span><span style="font-weight:500;color:var(--navy)">${_catalogoCache.find(c=>c.id===t.curso_relacionado_id)?.nome || '—'}</span></div>` : ""}
       ${t.descricao ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Descrição</div><div style="color:var(--text-1);line-height:1.6">${t.descricao}</div></div>` : ""}
       ${t.conteudo_programatico ? `<div style="font-size:13px;padding:12px 0 8px;border-top:1px solid var(--border)"><div style="color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Conteúdo programático</div><div style="color:var(--text-1);line-height:1.6">${t.conteudo_programatico}</div></div>` : ""}
     </div>
@@ -3816,6 +3826,7 @@ function verCatalogo(id) {
 function filtrarCatalogo(q) {
   const f   = (q || '').toLowerCase().trim();
   const st  = document.getElementById('filtroCatStatus')?.value || '';
+  const tp  = document.getElementById('filtroCatTipo')?.value || '';
   const usoMap = window._catalogoUsoMap || {};
   let r = _catalogoCache;
   if (st === 'arquivado') {
@@ -3825,6 +3836,7 @@ function filtrarCatalogo(q) {
     if (st === 'em_uso')  r = r.filter(t => (usoMap[t.id]?.total || 0) > 0);
     if (st === 'sem_uso') r = r.filter(t => t.ativo && (usoMap[t.id]?.total || 0) === 0);
   }
+  if (tp) r = r.filter(t => (t.tipo_curso || 'unico') === tp);
   if (f) {
     r = r.filter(t =>
       t.nome.toLowerCase().includes(f) ||
@@ -3859,10 +3871,21 @@ function filtrarCatalogo(q) {
 // inteiro da organização toda vez que a tela é aberta.
 async function calcConformidade() {
   const oi = usuarioAtual.org_id;
-  const {data:rows, error} = await sb.from('conformidade_status')
-    .select('colaborador_id,data_vencimento,colaboradores(nome),catalogo(nome),clientes(nome)')
-    .eq('org_id', oi);
+  const [{data:rows, error}, {data:catalogoAll}] = await Promise.all([
+    sb.from('conformidade_status')
+      .select('colaborador_id,cliente_id,data_vencimento,colaboradores(nome),catalogo(id,nome,carga_horaria,tipo_curso,curso_relacionado_id),clientes(id,nome)')
+      .eq('org_id', oi),
+    sb.from('catalogo').select('id,nome,tipo_curso,curso_relacionado_id').eq('org_id', oi),
+  ]);
   if (error) throw error;
+
+  // Mapa curso Inicial → curso Reciclagem correspondente (o link salvo é
+  // Reciclagem → Inicial; aqui montamos o sentido inverso, que é o que
+  // interessa na hora de sugerir o que agendar quando o Inicial vence).
+  const reciclagemPorInicial = {};
+  (catalogoAll||[]).forEach(c => {
+    if (c.tipo_curso === 'reciclagem' && c.curso_relacionado_id) reciclagemPorInicial[c.curso_relacionado_id] = c;
+  });
 
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   const lista = (rows||[]).map(r => {
@@ -3874,12 +3897,27 @@ async function calcConformidade() {
     else if (diffDias <= 20) status = 'atencao';
     else if (diffDias <= 35) status = 'planejar';
     else status = 'ok';
+
+    // Sugestão de agendamento: se o curso vencendo é o "Inicial" e existe uma
+    // Reciclagem própria cadastrada, sugere a Reciclagem (caminho correto de
+    // renovação); se o próprio curso já é Reciclagem, sugere repeti-lo; nos
+    // demais casos (curso "único"), sugere repetir o mesmo curso.
+    const catId = r.catalogo?.id || null;
+    let sugestaoId = catId, sugestaoNome = r.catalogo?.nome || 'Treinamento', ehReciclagem = r.catalogo?.tipo_curso === 'reciclagem';
+    if (r.catalogo?.tipo_curso === 'inicial' && catId && reciclagemPorInicial[catId]) {
+      sugestaoId = reciclagemPorInicial[catId].id;
+      sugestaoNome = reciclagemPorInicial[catId].nome;
+      ehReciclagem = true;
+    }
+
     return {
       colaborador_id: r.colaborador_id,
+      cliente_id: r.cliente_id || null,
       colaboradorNome: r.colaboradores?.nome || 'Colaborador',
       treinamentoNome: r.catalogo?.nome || 'Treinamento',
       empresa: r.clientes?.nome || '—',
       diffDias, status,
+      sugestaoId, sugestaoNome, ehReciclagem,
     };
   });
 
@@ -3896,14 +3934,29 @@ async function calcConformidade() {
     if (x.status !== 'vencido') porTreinamento[x.treinamentoNome].conformes++;
   });
   const statusPorTreinamento = Object.entries(porTreinamento)
-    .map(([nome,v]) => ({nome, pct: v.total > 0 ? Math.round((v.conformes/v.total)*100) : 100}))
+    .map(([nome,v]) => ({nome, pct: v.total > 0 ? Math.round((v.conformes/v.total)*100) : 100, total: v.total}))
     .sort((a,b) => a.pct-b.pct);
 
   const proximos = lista
     .filter(x => x.status === 'vencido' || x.diffDias <= 35)
     .sort((a,b) => a.diffDias-b.diffDias);
 
-  return {total, vencidos, conformes, indice, colaboradoresTreinados, statusPorTreinamento, proximos};
+  // ── Oportunidades por empresa: agrupa pendências/vencimentos (<=35 dias ou
+  // já vencidos) por cliente, para ajudar o comercial a priorizar quem
+  // abordar primeiro para reciclagem/renovação. ──
+  const porEmpresaMap = {};
+  proximos.forEach(x => {
+    const chave = x.cliente_id || x.empresa;
+    if (!porEmpresaMap[chave]) porEmpresaMap[chave] = { nome: x.empresa, pendentes: 0, vencidos: 0, colaboradores: new Set() };
+    porEmpresaMap[chave].pendentes++;
+    if (x.status === 'vencido') porEmpresaMap[chave].vencidos++;
+    porEmpresaMap[chave].colaboradores.add(x.colaborador_id);
+  });
+  const oportunidadesPorEmpresa = Object.values(porEmpresaMap)
+    .map(o => ({ nome: o.nome, pendentes: o.pendentes, vencidos: o.vencidos, colaboradores: o.colaboradores.size }))
+    .sort((a,b) => b.pendentes - a.pendentes);
+
+  return {total, vencidos, conformes, indice, colaboradoresTreinados, statusPorTreinamento, proximos, oportunidadesPorEmpresa};
 }
 
 async function renderConformidade() {
@@ -3951,6 +4004,31 @@ async function renderConformidade() {
       </div>
     </div>
 
+    ${d.oportunidadesPorEmpresa.length ? `
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--navy)">Oportunidades de venda — reciclagem e renovação por empresa</div>
+      <div style="font-size:11px;color:var(--text-3);padding:8px 16px 0">Empresas com mais colaboradores vencendo ou vencidos nos próximos 35 dias — priorize o contato por aqui.</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:480px">
+          <thead><tr style="background:var(--surface)">
+            <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Empresa</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Colaboradores afetados</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Pendências</th>
+            <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Já vencidas</th>
+          </tr></thead>
+          <tbody>
+            ${d.oportunidadesPorEmpresa.slice(0,10).map(o => `
+              <tr style="border-top:1px solid var(--border)">
+                <td style="padding:9px 16px;color:var(--navy);font-weight:500">${o.nome}</td>
+                <td style="padding:9px 12px;color:var(--text-1)">${o.colaboradores}</td>
+                <td style="padding:9px 12px;color:var(--text-1)">${o.pendentes}</td>
+                <td style="padding:9px 16px;color:${o.vencidos>0?'var(--red)':'var(--text-3)'};font-weight:${o.vencidos>0?'600':'400'}">${o.vencidos}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
       <input type="search" id="buscaConf" placeholder="Buscar colaborador ou treinamento..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarConformidade(this.value)">
       <select id="filtroConfStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarConformidade(document.getElementById('buscaConf').value)">
@@ -3968,7 +4046,7 @@ async function renderConformidade() {
     </div>
 
     <p style="font-size:11px;color:var(--text-3);line-height:1.6;margin-top:14px">
-      O índice de conformidade representa o percentual de treinamentos já realizados que permanecem dentro da validade. Como não existe uma matriz de obrigatoriedade por colaborador, o índice considera apenas treinamentos realizados ao menos uma vez — não treinamentos obrigatórios ainda não realizados.
+      O índice de conformidade representa o percentual de treinamentos já realizados que permanecem dentro da validade. Como não existe uma matriz de obrigatoriedade por colaborador, o índice considera apenas treinamentos realizados ao menos uma vez — não treinamentos obrigatórios ainda não realizados. Quando o curso vencendo tem uma Reciclagem cadastrada, a coluna "Sugestão" na tabela abaixo já aponta o curso certo para agendar.
     </p>
   `);
 }
@@ -3977,29 +4055,44 @@ function _htmlListaConformidade(lista) {
   if (!lista.length) return `<div class="empty" style="padding:32px"><div class="empty-icon">✅</div><div class="empty-title">Nenhuma pendência</div><div class="empty-sub">Não há certificados vencidos ou vencendo nos próximos 35 dias.</div></div>`;
   const badgeCls = {vencido:'badge-red', urgente:'badge-red', atencao:'badge-amber', planejar:'badge-blue'};
   const badgeLbl = {vencido:'Vencido', urgente:'Urgente', atencao:'Atenção', planejar:'Planejar'};
-  return `<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">
+  const podeAgendar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  window._confListaAtual = lista; // usado por agendarReciclagem() para achar o registro clicado
+  return `<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px">
     <thead><tr style="background:var(--surface)">
       <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Colaborador</th>
       <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Treinamento</th>
       <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Empresa</th>
       <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Vence em</th>
       <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Status</th>
+      <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Sugestão</th>
     </tr></thead>
     <tbody>
-      ${lista.map(x => {
+      ${lista.map((x,i) => {
         const vencTxt = x.status === 'vencido'
           ? `vencido há ${Math.abs(x.diffDias)} dia${Math.abs(x.diffDias)!==1?'s':''}`
           : `${x.diffDias} dia${x.diffDias!==1?'s':''}`;
+        const sugestaoDiferente = x.sugestaoNome && x.sugestaoNome !== x.treinamentoNome;
+        const sugestaoTxt = sugestaoDiferente ? `${x.ehReciclagem?'Reciclagem: ':''}${x.sugestaoNome}` : (x.ehReciclagem ? 'Repetir esta reciclagem' : 'Repetir este curso');
         return `<tr style="border-top:1px solid var(--border)">
           <td style="padding:9px 16px;color:var(--navy);font-weight:500">${x.colaboradorNome}</td>
           <td style="padding:9px 12px;color:var(--text-1)">${x.treinamentoNome}</td>
           <td style="padding:9px 12px;color:var(--text-2)">${x.empresa}</td>
           <td style="padding:9px 12px;color:${x.status==='vencido'?'var(--red)':'var(--navy)'};font-weight:${x.status==='vencido'?'600':'400'}">${vencTxt}</td>
           <td style="padding:9px 16px"><span class="badge ${badgeCls[x.status]||'badge-gray'}" style="font-size:11px">${badgeLbl[x.status]||x.status}</span></td>
+          <td style="padding:9px 16px">${podeAgendar && x.sugestaoId ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:5px 10px" onclick="agendarReciclagem(${i})" title="${sugestaoTxt}">${ICONS.plus} Agendar</button>` : `<span style="font-size:11px;color:var(--text-3)">${sugestaoTxt}</span>`}</td>
         </tr>`;
       }).join('')}
     </tbody>
   </table>`;
+}
+
+// Abre "Nova turma" já com cliente e curso sugerido pré-selecionados, a partir
+// de uma pendência de conformidade — o índice `i` referencia window._confListaAtual
+// (a mesma lista renderizada na tabela, garante que bate com o botão clicado).
+function agendarReciclagem(i) {
+  const x = (window._confListaAtual || [])[i];
+  if (!x || !x.sugestaoId) return;
+  abrirModalTurma(null, { clienteId: x.cliente_id, catalogoId: x.sugestaoId });
 }
 
 function filtrarConformidade(q) {
@@ -4079,6 +4172,21 @@ function abrirModalCatalogo(id=null) {
     </div>
     <div class="field"><label>Categoria</label><input type="text" id="mCatCategoria" value="${t?.categoria||''}" placeholder="Opcional"></div>
     <div class="field"><label>NRs relacionadas</label><input type="text" id="mCatNrs" value="${nrsAtuais}" placeholder="Ex: 35, 33"><div style="font-size:11px;color:var(--text-3);margin-top:4px">Números separados por vírgula — usado para sugerir este treinamento aos clientes certos no Painel de Enquadramento SST.</div></div>
+    <div class="field"><label>Tipo de curso</label>
+      <select id="mCatTipo" onchange="_toggleCampoRelacionado()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="unico" ${(!t?.tipo_curso||t?.tipo_curso==='unico')?'selected':''}>Único (padrão — sem reciclagem separada)</option>
+        <option value="inicial" ${t?.tipo_curso==='inicial'?'selected':''}>Inicial (tem uma Reciclagem própria)</option>
+        <option value="reciclagem" ${t?.tipo_curso==='reciclagem'?'selected':''}>Reciclagem (renovação de um curso Inicial)</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Use "Inicial"/"Reciclagem" só quando a norma exige carga horária diferente entre as duas (ex.: NR-18, NR-32, NR-33). Isso alimenta os alertas de vencimento em Conformidade.</div>
+    </div>
+    <div class="field" id="campoRelacionadoWrap" style="display:none">
+      <label>Curso Inicial correspondente *</label>
+      <select id="mCatRelacionado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="">Selecione o curso inicial...</option>
+        ${_catalogoCache.filter(c => c.id !== id && c.tipo_curso !== 'reciclagem').map(c => `<option value="${c.id}" ${t?.curso_relacionado_id===c.id?'selected':''}>${c.nome}</option>`).join('')}
+      </select>
+    </div>
     <div class="field"><label>Descrição</label>
       <div class="ql-editor-wrap">${_htmlToolbarRica('tbDescricao')}<div id="edDescricao"></div></div>
     </div>
@@ -4094,6 +4202,14 @@ function abrirModalCatalogo(id=null) {
   _quillConteudo  = criarEditorRico('edConteudo', 'tbConteudo');
   carregarConteudoQuill(_quillDescricao, t?.descricao);
   carregarConteudoQuill(_quillConteudo, t?.conteudo_programatico);
+  _toggleCampoRelacionado();
+}
+
+// Mostra/esconde o campo "Curso Inicial correspondente" conforme o tipo de curso selecionado
+function _toggleCampoRelacionado() {
+  const tipo = document.getElementById('mCatTipo')?.value;
+  const wrap = document.getElementById('campoRelacionadoWrap');
+  if (wrap) wrap.style.display = tipo === 'reciclagem' ? 'block' : 'none';
 }
 
 async function salvarCatalogo() {
@@ -4104,6 +4220,11 @@ async function salvarCatalogo() {
   if (!ch || ch <= 0) { showToast('Carga horária é obrigatória','error'); return; }
   if (!validade || validade <= 0) { showToast('Validade é obrigatória','error'); return; }
   if (!_quillConteudo.getText().trim()) { showToast('Conteúdo programático é obrigatório','error'); return; }
+  const tipoCurso = document.getElementById('mCatTipo')?.value || 'unico';
+  const cursoRelacionadoId = document.getElementById('mCatRelacionado')?.value || null;
+  if (tipoCurso === 'reciclagem' && !cursoRelacionadoId) {
+    showToast('Selecione o curso Inicial correspondente à Reciclagem','error'); return;
+  }
   const nrsInput = (document.getElementById('mCatNrs')?.value || '')
     .split(',')
     .map(s => s.replace(/\D/g,''))
@@ -4115,6 +4236,8 @@ async function salvarCatalogo() {
     validade_meses: validade,
     categoria: document.getElementById('mCatCategoria')?.value.trim() || null,
     nrs: nrsInput.length ? [...new Set(nrsInput)] : null,
+    tipo_curso: tipoCurso,
+    curso_relacionado_id: tipoCurso === 'reciclagem' ? cursoRelacionadoId : null,
     descricao: _quillDescricao.getText().trim() ? sanitizarHtml(_quillDescricao.root.innerHTML) : null,
     conteudo_programatico: sanitizarHtml(_quillConteudo.root.innerHTML),
   };
@@ -4167,123 +4290,123 @@ async function duplicarCatalogo(id) {
 // um número (ver ressalva no campo `descricao` de cada item, e o
 // detalhamento completo em NR_INFO).
 const CATALOGO_MODELO = [
-  { nrs:['NR-01'], nome:'Curso NR-01 — Integração e Noções Gerais de SST', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-01'], tipo_curso:'unico', nome:'Curso NR-01 — Integração e Noções Gerais de SST', carga_horaria:8, validade_meses:12,
     descricao:'Integração de segurança do trabalho e noções gerais sobre o Programa de Gerenciamento de Riscos (PGR), base das demais NRs. Carga horária e validade sugeridas — a NR-01 não fixa um número; revise conforme a política interna do cliente.',
     conteudo_programatico:'<p>Noções introdutórias de Segurança e Saúde no Trabalho e apresentação do Programa de Gerenciamento de Riscos (PGR).</p><ul><li>Conceitos gerais de SST e legislação aplicável</li><li>Estrutura do PGR/GRO e inventário de riscos ocupacionais</li><li>Riscos psicossociais e seu lugar no PGR</li><li>Direitos e deveres do trabalhador e do empregador</li><li>Uso de EPI e procedimentos em emergência</li></ul>' },
-  { nrs:['NR-05'], nome:'Curso NR-05 — CIPA (Comissão Interna de Prevenção de Acidentes e de Assédio)', carga_horaria:20, validade_meses:24,
+  { nrs:['NR-05'], tipo_curso:'unico', nome:'Curso NR-05 — CIPA (Comissão Interna de Prevenção de Acidentes e de Assédio)', carga_horaria:20, validade_meses:24,
     descricao:'Capacitação de membros da CIPA para prevenção de acidentes de trabalho e de assédio. A norma fixa carga horária por Grau de Risco do estabelecimento: 8h (grau 1), 12h (grau 2), 16h (grau 3) e 20h (grau 4) — ajuste conforme o grau de risco real do cliente antes de divulgar. Validade de 24 meses.',
     conteudo_programatico:'<p>Formação de membros da Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA).</p><ul><li>Estudo do ambiente, condições e organização do trabalho</li><li>Metodologia de investigação e análise de acidentes</li><li>Noções sobre prevenção e combate a incêndios</li><li>Prevenção e combate ao assédio no ambiente de trabalho</li><li>Relações humanas no trabalho e princípios gerais de higiene do trabalho</li></ul>' },
-  { nrs:['NR-06'], nome:'Curso NR-06 — Uso Correto de EPI', carga_horaria:4, validade_meses:12,
+  { nrs:['NR-06'], tipo_curso:'unico', nome:'Curso NR-06 — Uso Correto de EPI', carga_horaria:4, validade_meses:12,
     descricao:'Orientação sobre seleção, uso, guarda e conservação de Equipamentos de Proteção Individual. A norma não fixa carga horária — aplique sempre que houver admissão, troca de EPI ou de risco.',
     conteudo_programatico:'<p>Orientação prática sobre uso correto de Equipamento de Proteção Individual (EPI).</p><ul><li>Tipos de EPI e sua relação com os riscos do posto de trabalho</li><li>Forma correta de uso, higienização e guarda</li><li>Prazo de validade e critérios de substituição</li><li>Responsabilidades do empregador e do trabalhador</li></ul>' },
-  { nrs:['NR-10'], nome:'Curso NR-10 — Segurança em Instalações e Serviços em Eletricidade (Básico)', carga_horaria:40, validade_meses:24,
+  { nrs:['NR-10'], tipo_curso:'unico', nome:'Curso NR-10 — Segurança em Instalações e Serviços em Eletricidade (Básico)', carga_horaria:40, validade_meses:24,
     descricao:'Curso básico para trabalhadores que atuam em instalações e serviços com eletricidade em baixa tensão. Mínimo de 40h conforme a norma. Reciclagem exigida a cada 2 anos ou em troca de função/empresa, retorno de afastamento superior a 3 meses, ou mudança significativa nas instalações/procedimentos.',
     conteudo_programatico:'<p>Curso básico de segurança em instalações e serviços com eletricidade.</p><ul><li>Riscos em instalações elétricas e medidas de controle, com hierarquia de controle e desenergização como medida prioritária</li><li>Risco de choque elétrico, arco elétrico e queimaduras</li><li>Normas técnicas, regulamentadoras e organizacionais</li><li>Equipamentos de proteção coletiva e individual</li><li>Procedimentos de trabalho seguro e rotinas de trabalho</li><li>Noções de primeiros socorros e técnicas de remoção de acidentados</li></ul>' },
-  { nrs:['NR-12'], nome:'Curso NR-12 — Segurança no Trabalho em Máquinas e Equipamentos', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-12'], tipo_curso:'unico', nome:'Curso NR-12 — Segurança no Trabalho em Máquinas e Equipamentos', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação de operadores para trabalho seguro com máquinas e equipamentos. A norma não fixa uma carga horária geral (fica a critério do empregador, dentro da jornada) — 8h é referência de mercado. Exceções com carga horária própria: operadores de injetoras e de motosserra têm mínimo de 8h por tipo de máquina, conforme anexos específicos da NR-12.',
     conteudo_programatico:'<p>Capacitação para operação segura de máquinas e equipamentos.</p><ul><li>Riscos mecânicos e principais causas de acidentes</li><li>Dispositivos de segurança, proteções e intertravamentos</li><li>Como e por que as proteções devem ser usadas, e o que fazer se estiverem danificadas</li><li>Procedimentos de operação, manutenção e limpeza seguros</li><li>Sinalização de segurança e procedimentos de bloqueio e etiquetagem (LOTO)</li></ul>' },
-  { nrs:['NR-17'], nome:'Curso NR-17 — Ergonomia', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-17'], tipo_curso:'unico', nome:'Curso NR-17 — Ergonomia', carga_horaria:8, validade_meses:12,
     descricao:'Treinamento introdutório sobre ergonomia no trabalho. A norma em si não exige um curso formal — o requisito central é a Análise Ergonômica Preliminar (AEP) de cada posto.',
     conteudo_programatico:'<p>Noções de ergonomia aplicadas ao ambiente de trabalho.</p><ul><li>Conceitos de ergonomia e adaptação do posto ao trabalhador</li><li>Posturas, mobiliário e organização do trabalho</li><li>Pausas, ritmo de trabalho e prevenção de LER/DORT</li><li>Ergonomia em escritório e em atividades remotas</li></ul>' },
-  { nrs:['NR-18'], nome:'Curso NR-18 — Segurança na Construção Civil (Treinamento Inicial)', carga_horaria:6, validade_meses:24,
+  { nrs:['NR-18'], tipo_curso:'inicial', nome:'Curso NR-18 — Segurança na Construção Civil (Treinamento Inicial)', carga_horaria:6, validade_meses:24,
     descricao:'Treinamento inicial (antigo "admissional") para trabalhadores da construção civil — mínimo de 6h, ministradas antes do início das atividades. Diferente do periódico: veja o item "NR-18 — Reciclagem/Periódico" para a capacitação de renovação, que tem carga horária própria.',
     conteudo_programatico:'<p>Treinamento inicial de segurança para trabalhadores da construção civil.</p><ul><li>Condições e meio ambiente de trabalho, alinhado ao PGR do canteiro (NR-01)</li><li>Riscos inerentes à função e medidas de controle</li><li>Uso adequado de EPI</li><li>Equipamentos de Proteção Coletiva (EPC) existentes no canteiro</li><li>Ordem, arrumação e sinalização do canteiro</li></ul>' },
-  { nrs:['NR-18'], nome:'Curso NR-18 — Segurança na Construção Civil (Reciclagem/Periódico)', carga_horaria:4, validade_meses:24,
+  { nrs:['NR-18'], tipo_curso:'reciclagem', curso_par:'Curso NR-18 — Segurança na Construção Civil (Treinamento Inicial)', nome:'Curso NR-18 — Segurança na Construção Civil (Reciclagem/Periódico)', carga_horaria:4, validade_meses:24,
     descricao:'Treinamento periódico de renovação, obrigatório a cada 2 anos — carga horária de 4h, conteúdo definido pelo empregador com base nos riscos atuais do canteiro. Não confundir com o treinamento inicial (6h, feito uma vez antes do início das atividades).',
     conteudo_programatico:'<p>Reciclagem periódica de segurança para trabalhadores da construção civil.</p><ul><li>Atualização sobre riscos do canteiro e mudanças desde o último treinamento</li><li>Reforço do uso correto de EPI e EPC</li><li>Análise de acidentes e quase-acidentes ocorridos na obra</li><li>Novas fases da obra e riscos específicos associados</li></ul>' },
-  { nrs:['NR-20'], nome:'Curso NR-20 — Inflamáveis e Combustíveis (Básico)', carga_horaria:8, validade_meses:36,
+  { nrs:['NR-20'], tipo_curso:'unico', nome:'Curso NR-20 — Inflamáveis e Combustíveis (Básico)', carga_horaria:8, validade_meses:36,
     descricao:'Treinamento básico para trabalhadores em áreas com inflamáveis e combustíveis. A norma escalona a carga horária por classe de instalação: 4h (classe I), 6h (classe II) e 8h (classe III) — usamos 8h como referência mais abrangente, ajuste conforme a classe real do cliente. Validade de 36 meses para o básico classe I; confirme a validade específica para classes II/III e para os níveis Intermediário e Avançado, que são capacitações à parte.',
     conteudo_programatico:'<p>Treinamento básico de segurança para atividades com líquidos combustíveis e inflamáveis.</p><ul><li>Classificação de áreas e produtos inflamáveis/combustíveis</li><li>Riscos de incêndio e explosão e medidas de controle</li><li>Procedimentos seguros de armazenamento e manuseio</li><li>Ações em caso de vazamento ou princípio de incêndio</li></ul>' },
-  { nrs:['NR-23'], nome:'Curso NR-23 — Proteção Contra Incêndio (Noções Gerais)', carga_horaria:4, validade_meses:12,
+  { nrs:['NR-23'], tipo_curso:'unico', nome:'Curso NR-23 — Proteção Contra Incêndio (Noções Gerais)', carga_horaria:4, validade_meses:12,
     descricao:'Noções gerais de prevenção contra incêndio para todos os colaboradores — sinalização, saídas de emergência e uso básico de extintores. Para formação de brigadistas, use o curso "Brigada de Incêndio" (mais completo).',
     conteudo_programatico:'<p>Noções gerais de prevenção contra incêndio.</p><ul><li>Classes de incêndio e princípios de combustão</li><li>Sinalização e saídas de emergência</li><li>Uso básico de extintores portáteis</li><li>Procedimentos de abandono de área</li></ul>' },
-  { nrs:['NR-32'], nome:'Curso NR-32 — Segurança e Saúde no Trabalho em Serviços de Saúde (Inicial)', carga_horaria:16, validade_meses:12,
+  { nrs:['NR-32'], tipo_curso:'inicial', nome:'Curso NR-32 — Segurança e Saúde no Trabalho em Serviços de Saúde (Inicial)', carga_horaria:16, validade_meses:12,
     descricao:'Capacitação inicial para trabalhadores de serviços de saúde, incluindo terceirizados no estabelecimento — referência de mercado de 16h (funções de limpeza/conservação sem experiência prévia podem exigir até 40h). Reciclagem anual obrigatória: veja o item "NR-32 — Reciclagem Anual" (8h).',
     conteudo_programatico:'<p>Segurança do trabalho em ambientes de serviços de saúde.</p><ul><li>Riscos biológicos, químicos e de radiações ionizantes</li><li>Prevenção de acidentes com perfurocortantes</li><li>Gerenciamento de resíduos de serviços de saúde (RSS)</li><li>Uso de EPI específico da área da saúde</li></ul>' },
-  { nrs:['NR-32'], nome:'Curso NR-32 — Reciclagem Anual', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-32'], tipo_curso:'reciclagem', curso_par:'Curso NR-32 — Segurança e Saúde no Trabalho em Serviços de Saúde (Inicial)', nome:'Curso NR-32 — Reciclagem Anual', carga_horaria:8, validade_meses:12,
     descricao:'Reciclagem anual obrigatória para quem já concluiu o treinamento inicial de NR-32 — mínimo de 8h. Também exigida em mudança de procedimentos/condições de trabalho, retorno de afastamento superior a 90 dias, mudança de empresa ou de máquina/equipamento.',
     conteudo_programatico:'<p>Reciclagem anual de segurança em serviços de saúde.</p><ul><li>Atualização sobre riscos biológicos, químicos e ocupacionais do setor</li><li>Revisão de procedimentos após perfurocortantes e exposições</li><li>Mudanças em procedimentos, equipamentos ou na RSS desde o último treinamento</li><li>Reforço do uso correto de EPI</li></ul>' },
-  { nrs:['NR-33'], nome:'Curso NR-33 — Espaços Confinados (Trabalhador Autorizado e Vigia — Inicial)', carga_horaria:16, validade_meses:12,
+  { nrs:['NR-33'], tipo_curso:'inicial', nome:'Curso NR-33 — Espaços Confinados (Trabalhador Autorizado e Vigia — Inicial)', carga_horaria:16, validade_meses:12,
     descricao:'Capacitação inicial de trabalhador autorizado e vigia para espaços confinados — 16h conforme a norma, sendo no mínimo 50% de carga prática. Reciclagem anual obrigatória: veja o item "NR-33 — Reciclagem Anual" (8h).',
     conteudo_programatico:'<p>Capacitação para trabalho seguro em espaços confinados.</p><ul><li>Identificação e classificação de espaços confinados</li><li>Permissão de Entrada e Trabalho (PET)</li><li>Monitoramento de atmosfera e ventilação</li><li>Papel do vigia e procedimentos de resgate</li></ul>' },
-  { nrs:['NR-33'], nome:'Curso NR-33 — Espaços Confinados (Reciclagem Anual)', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-33'], tipo_curso:'reciclagem', curso_par:'Curso NR-33 — Espaços Confinados (Trabalhador Autorizado e Vigia — Inicial)', nome:'Curso NR-33 — Espaços Confinados (Reciclagem Anual)', carga_horaria:8, validade_meses:12,
     descricao:'Reciclagem anual obrigatória para trabalhador autorizado, vigia e supervisor de entrada — mínimo de 8h, também com no mínimo 50% de carga prática.',
     conteudo_programatico:'<p>Reciclagem anual para trabalho seguro em espaços confinados.</p><ul><li>Revisão da Permissão de Entrada e Trabalho (PET)</li><li>Atualização de equipamentos de monitoramento e ventilação</li><li>Prática de resgate e uso de equipamentos de emergência</li><li>Análise de incidentes ocorridos desde o último treinamento</li></ul>' },
-  { nrs:['NR-35'], nome:'Curso NR-35 — Trabalho em Altura', carga_horaria:8, validade_meses:24,
+  { nrs:['NR-35'], tipo_curso:'unico', nome:'Curso NR-35 — Trabalho em Altura', carga_horaria:8, validade_meses:24,
     descricao:'Capacitação obrigatória para trabalho acima de 2m com risco de queda — mínimo 8h, com reciclagem bienal (também 8h, mesmo conteúdo do inicial). A partir de 2026, uso de talabarte com absorvedor de energia e uso seguro de escadas passam a integrar o conteúdo mínimo obrigatório.',
     conteudo_programatico:'<p>Capacitação para trabalho seguro em altura.</p><ul><li>Normas e regulamentações sobre trabalho em altura</li><li>Análise de risco e condições impeditivas</li><li>Sistemas de proteção contra quedas e ancoragem</li><li>Uso de talabarte com absorvedor de energia</li><li>Uso seguro de escadas</li><li>Procedimentos de emergência e resgate em altura</li></ul>' },
 
   // ---- Ampliação solicitada por Alisson (jul/2026): mais NRs + temas recorrentes de SST ----
-  { nrs:['NR-01'], nome:'Integração de Segurança do Trabalho', carga_horaria:4, validade_meses:12,
+  { nrs:['NR-01'], tipo_curso:'unico', nome:'Integração de Segurança do Trabalho', carga_horaria:4, validade_meses:12,
     descricao:'Treinamento admissional introdutório de segurança do trabalho para todo colaborador novo. Não é uma NR específica — é prática de mercado. Normalmente é uma capacitação única (admissional); ajuste a validade conforme a política do cliente.',
     conteudo_programatico:'<p>Treinamento introdutório de segurança do trabalho para colaboradores recém-admitidos.</p><ul><li>Política de segurança da empresa e regras gerais</li><li>Principais riscos do ambiente de trabalho</li><li>Uso obrigatório de EPI</li><li>Procedimentos em caso de acidente ou emergência</li><li>Canais de comunicação de riscos e quase-acidentes</li></ul>' },
-  { nrs:['NR-07'], nome:'Curso NR-07 — Orientação sobre PCMSO', carga_horaria:2, validade_meses:12,
+  { nrs:['NR-07'], tipo_curso:'unico', nome:'Curso NR-07 — Orientação sobre PCMSO', carga_horaria:2, validade_meses:12,
     descricao:'Orientação sobre o Programa de Controle Médico de Saúde Ocupacional (PCMSO) — não substitui os exames médicos obrigatórios, é conscientização para gestores e colaboradores. A NR-07 não exige curso formal nem fixa carga horária.',
     conteudo_programatico:'<p>Orientação sobre o Programa de Controle Médico de Saúde Ocupacional (PCMSO).</p><ul><li>Finalidade dos exames admissional, periódico e demissional</li><li>Relação do PCMSO com o PGR/inventário de riscos (NR-01)</li><li>Responsabilidades do empregador e do colaborador</li><li>Encaminhamento em caso de afastamento ou alteração de exame</li></ul>' },
-  { nrs:['NR-11'], nome:'Curso NR-11 — Movimentação, Transporte e Armazenagem de Materiais', carga_horaria:20, validade_meses:12,
+  { nrs:['NR-11'], tipo_curso:'unico', nome:'Curso NR-11 — Movimentação, Transporte e Armazenagem de Materiais', carga_horaria:20, validade_meses:12,
     descricao:'Capacitação para movimentação, transporte e armazenagem segura de materiais. A norma não fixa carga horária nem periodicidade — 20h é referência de mercado; formalize a política de reciclagem no PGR.',
     conteudo_programatico:'<p>Capacitação para movimentação, transporte e armazenagem segura de materiais.</p><ul><li>Riscos de esmagamento, queda de carga e capotamento</li><li>Operação segura de equipamentos de movimentação</li><li>Empilhamento, armazenagem e capacidade de carga</li><li>Sinalização, isolamento de área e comunicação durante a operação</li></ul>' },
-  { nrs:['NR-13'], nome:'Curso NR-13 — Caldeiras, Vasos de Pressão e Tubulações', carga_horaria:40, validade_meses:24,
+  { nrs:['NR-13'], tipo_curso:'unico', nome:'Curso NR-13 — Caldeiras, Vasos de Pressão e Tubulações', carga_horaria:40, validade_meses:24,
     descricao:'Capacitação de operadores de caldeiras — mínimo 40h conforme a norma, mais prática profissional supervisionada de 80h (categoria A) ou 60h (categoria B). A NR-13 não fixa reciclagem periódica obrigatória: exige nova capacitação em caso de modificação da caldeira, acidente/incidente ou mudança de operação. A validade de 24 meses aqui é recomendação de mercado, não uma exigência legal direta — confirme a política com profissional habilitado.',
     conteudo_programatico:'<p>Capacitação para operação segura de caldeiras, vasos de pressão e tubulações.</p><ul><li>Riscos associados a equipamentos pressurizados</li><li>Dispositivos de segurança e controle</li><li>Procedimentos operacionais de partida, operação e parada</li><li>Ações em situações de emergência e vazamento</li></ul>' },
-  { nrs:['NR-26'], nome:'Curso NR-26 — Sinalização de Segurança', carga_horaria:2, validade_meses:12,
+  { nrs:['NR-26'], tipo_curso:'unico', nome:'Curso NR-26 — Sinalização de Segurança', carga_horaria:2, validade_meses:12,
     descricao:'Orientação sobre cores e sinalização de segurança no ambiente de trabalho, incluindo rótulos de produtos químicos. A norma não fixa carga horária — treinamento curto de conscientização.',
     conteudo_programatico:'<p>Orientação sobre sinalização de segurança do trabalho.</p><ul><li>Padrão de cores de segurança e seu significado</li><li>Sinalização de áreas de risco e rotas de fuga</li><li>Rotulagem de produtos químicos (FISPQ)</li><li>Sinalização de EPI obrigatório por área</li></ul>' },
-  { nrs:['NR-31'], nome:'Curso NR-31.7 — Segurança na Aplicação de Agrotóxicos', carga_horaria:20, validade_meses:12,
+  { nrs:['NR-31'], tipo_curso:'unico', nome:'Curso NR-31.7 — Segurança na Aplicação de Agrotóxicos', carga_horaria:20, validade_meses:12,
     descricao:'Capacitação obrigatória para trabalhadores com exposição direta a agrotóxicos, conforme o subitem 31.7 da NR-31 — mínimo de 20h teórico-práticas, é exigência específica da norma (não apenas referência de mercado).',
     conteudo_programatico:'<p>Capacitação em segurança na aplicação de agrotóxicos (NR-31.7).</p><ul><li>Estudo dos agrotóxicos, doenças e acidentes de trabalho relacionados</li><li>Formas de exposição direta e indireta e principais sinais de intoxicação</li><li>Leitura e interpretação de bula, rótulo e ficha de emergência</li><li>Aquisição, transporte, armazenamento, preparo e aplicação seguros</li><li>Equipamentos de Proteção Individual e Coletiva e procedimentos de manuseio</li></ul>' },
-  { nrs:['NR-34'], nome:'Curso NR-34 — Segurança na Indústria Naval', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-34'], tipo_curso:'unico', nome:'Curso NR-34 — Segurança na Indústria Naval', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação de segurança para atividades de construção e reparo naval. Carga horária de referência — a norma detalha exigências específicas por atividade (soldagem, trabalho a quente, espaço confinado); confirme o escopo com profissional de SST.',
     conteudo_programatico:'<p>Capacitação de segurança para atividades da indústria naval.</p><ul><li>Riscos específicos de estaleiros e reparo naval</li><li>Trabalho a quente, soldagem e espaços confinados no contexto naval</li><li>Sinalização e isolamento de áreas de risco</li><li>Procedimentos de emergência em ambiente portuário/estaleiro</li></ul>' },
-  { nrs:['NR-23'], nome:'Curso Brigada de Incêndio', carga_horaria:16, validade_meses:12,
+  { nrs:['NR-23'], tipo_curso:'unico', nome:'Curso Brigada de Incêndio', carga_horaria:16, validade_meses:12,
     descricao:'Formação de brigadistas para prevenção, combate a princípios de incêndio e abandono de área. Segue norma do Corpo de Bombeiros do estado (complementar à NR-23) — carga horária e periodicidade variam por estado e tipo de edificação; confirme localmente.',
     conteudo_programatico:'<p>Formação de integrantes da brigada de incêndio.</p><ul><li>Organização e atribuições da brigada</li><li>Combate a princípios de incêndio com extintores e mangueiras</li><li>Técnicas de abandono de área e ponto de encontro</li><li>Noções de primeiros socorros e uso de DEA, quando aplicável</li></ul>' },
-  { nrs:null, nome:'Curso de Primeiros Socorros', carga_horaria:8, validade_meses:12,
+  { nrs:null, tipo_curso:'unico', nome:'Curso de Primeiros Socorros', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação básica em primeiros socorros para atendimento inicial em emergências no trabalho. Não é exigência de uma NR isolada — reforça obrigações gerais de atendimento de emergência.',
     conteudo_programatico:'<p>Capacitação básica em primeiros socorros.</p><ul><li>Avaliação inicial da vítima e acionamento do socorro</li><li>Reanimação cardiopulmonar (RCP) e uso de DEA</li><li>Controle de hemorragias e imobilização</li><li>Atendimento a queimaduras, engasgos e mal súbito</li></ul>' },
-  { nrs:null, nome:'Curso de Direção Defensiva', carga_horaria:8, validade_meses:12,
+  { nrs:null, tipo_curso:'unico', nome:'Curso de Direção Defensiva', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação para condutores de veículos da empresa, com foco em prevenção de acidentes de trânsito. Não é uma NR — boa prática para empresas com frota ou colaboradores que dirigem a serviço.',
     conteudo_programatico:'<p>Capacitação em direção defensiva.</p><ul><li>Fatores de risco no trânsito e condução preventiva</li><li>Distâncias de segurança e pontos cegos</li><li>Condução em condições adversas (chuva, neblina, noite)</li><li>Procedimentos em caso de acidente ou pane</li></ul>' },
-  { nrs:['NR-11'], nome:'Curso de Operação de Empilhadeira', carga_horaria:16, validade_meses:12,
+  { nrs:['NR-11'], tipo_curso:'unico', nome:'Curso de Operação de Empilhadeira', carga_horaria:16, validade_meses:12,
     descricao:'Capacitação de operadores de empilhadeira, conforme diretrizes da NR-11. Carga horária de referência — formalize a política de reciclagem, já que a norma não fixa prazo obrigatório.',
     conteudo_programatico:'<p>Capacitação para operação segura de empilhadeiras.</p><ul><li>Componentes e princípio de funcionamento da empilhadeira</li><li>Capacidade de carga e estabilidade</li><li>Riscos de tombamento, queda de carga e atropelamento</li><li>Prática de operação e avaliação do candidato</li></ul>' },
-  { nrs:['NR-12','NR-35'], nome:'Curso de Operação de Plataforma Elevatória (PEMT)', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-12','NR-35'], tipo_curso:'unico', nome:'Curso de Operação de Plataforma Elevatória (PEMT)', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação para operação de Plataformas Elevatórias Móveis de Trabalho, combinando diretrizes de máquinas (NR-12) e trabalho em altura (NR-35).',
     conteudo_programatico:'<p>Capacitação para operação de plataforma elevatória móvel de trabalho (PEMT).</p><ul><li>Tipos de PEMT e limites operacionais</li><li>Inspeção pré-operacional e dispositivos de segurança</li><li>Ancoragem e uso de cinto de segurança tipo paraquedista</li><li>Procedimentos de emergência e resgate em altura</li></ul>' },
-  { nrs:['NR-11','NR-12'], nome:'Curso de Operação de Ponte Rolante', carga_horaria:16, validade_meses:12,
+  { nrs:['NR-11','NR-12'], tipo_curso:'unico', nome:'Curso de Operação de Ponte Rolante', carga_horaria:16, validade_meses:12,
     descricao:'Capacitação de operadores de ponte rolante, conforme diretrizes de movimentação de cargas (NR-11) e máquinas (NR-12).',
     conteudo_programatico:'<p>Capacitação para operação segura de ponte rolante.</p><ul><li>Componentes e funcionamento da ponte rolante</li><li>Sinalização de movimentação de carga e comunicação com sinaleiro</li><li>Riscos de queda de carga e área de exclusão</li><li>Inspeção pré-operacional e prática de operação</li></ul>' },
-  { nrs:['NR-11','NR-12'], nome:'Curso de Operação de Guindaste', carga_horaria:20, validade_meses:12,
+  { nrs:['NR-11','NR-12'], tipo_curso:'unico', nome:'Curso de Operação de Guindaste', carga_horaria:20, validade_meses:12,
     descricao:'Capacitação de operadores de guindaste, conforme diretrizes de movimentação de cargas (NR-11) e máquinas (NR-12).',
     conteudo_programatico:'<p>Capacitação para operação segura de guindaste.</p><ul><li>Tipos de guindaste e tabela de carga</li><li>Amarração e sinalização de içamento</li><li>Área de exclusão e riscos de tombamento</li><li>Inspeção pré-operacional e prática de operação</li></ul>' },
-  { nrs:['NR-20'], nome:'Curso de Trabalho a Quente', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-20'], tipo_curso:'unico', nome:'Curso de Trabalho a Quente', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação para atividades que geram calor, faísca ou chama (solda, corte, esmerilhamento) perto de materiais inflamáveis. Relacionada a inflamáveis e combustíveis (NR-20).',
     conteudo_programatico:'<p>Capacitação para trabalho a quente.</p><ul><li>Riscos de incêndio e explosão em trabalho a quente</li><li>Permissão de trabalho e isolamento de área</li><li>Uso de mantas ignífugas e vigia de fogo</li><li>Procedimentos em caso de princípio de incêndio</li></ul>' },
-  { nrs:['NR-12'], nome:'Curso de Bloqueio e Etiquetagem (LOTO)', carga_horaria:4, validade_meses:12,
+  { nrs:['NR-12'], tipo_curso:'unico', nome:'Curso de Bloqueio e Etiquetagem (LOTO)', carga_horaria:4, validade_meses:12,
     descricao:'Capacitação em procedimentos de bloqueio e etiquetagem de máquinas e equipamentos durante manutenção, conforme diretrizes da NR-12.',
     conteudo_programatico:'<p>Capacitação em bloqueio e etiquetagem (Lockout/Tagout).</p><ul><li>Fontes de energia perigosas (elétrica, hidráulica, pneumática)</li><li>Procedimento de bloqueio, etiquetagem e teste</li><li>Responsabilidades de quem bloqueia e de quem libera</li><li>Situações de bloqueio múltiplo (vários trabalhadores)</li></ul>' },
-  { nrs:['NR-26'], nome:'Curso de Manuseio de Produtos Químicos', carga_horaria:8, validade_meses:12,
+  { nrs:['NR-26'], tipo_curso:'unico', nome:'Curso de Manuseio de Produtos Químicos', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação para manuseio, armazenagem e descarte seguro de produtos químicos, incluindo leitura de FISPQ e sinalização (NR-26).',
     conteudo_programatico:'<p>Capacitação em manuseio seguro de produtos químicos.</p><ul><li>Leitura e interpretação da FISPQ</li><li>Armazenagem, incompatibilidade e rotulagem</li><li>EPI específico e procedimentos de manuseio</li><li>Ação em caso de vazamento ou contato acidental</li></ul>' },
-  { nrs:['NR-01'], nome:'Curso de Percepção de Riscos', carga_horaria:4, validade_meses:12,
+  { nrs:['NR-01'], tipo_curso:'unico', nome:'Curso de Percepção de Riscos', carga_horaria:4, validade_meses:12,
     descricao:'Treinamento comportamental para desenvolver a capacidade dos colaboradores de identificar riscos antes que gerem acidentes. Boa prática complementar ao PGR (NR-01).',
     conteudo_programatico:'<p>Desenvolvimento da percepção de riscos no ambiente de trabalho.</p><ul><li>Conceito de risco, perigo e quase-acidente</li><li>Identificação de condições e atos inseguros</li><li>Cultura de reporte e comunicação de riscos</li><li>Estudos de caso e exercícios práticos</li></ul>' },
-  { nrs:null, nome:'Curso DDS — Diálogo Diário de Segurança (Formação de Facilitadores)', carga_horaria:2, validade_meses:12,
+  { nrs:null, tipo_curso:'unico', nome:'Curso DDS — Diálogo Diário de Segurança (Formação de Facilitadores)', carga_horaria:2, validade_meses:12,
     descricao:'Capacitação para líderes e facilitadores conduzirem o Diálogo Diário de Segurança de forma eficaz. Não é uma NR — prática de gestão de SST amplamente adotada.',
     conteudo_programatico:'<p>Formação de facilitadores de Diálogo Diário de Segurança (DDS).</p><ul><li>Objetivo e estrutura de um DDS eficaz</li><li>Escolha de temas e uso de exemplos reais</li><li>Técnicas de comunicação e engajamento da equipe</li><li>Registro e acompanhamento dos temas abordados</li></ul>' },
-  { nrs:['NR-17'], nome:'Curso de Segurança em Escritórios', carga_horaria:2, validade_meses:12,
+  { nrs:['NR-17'], tipo_curso:'unico', nome:'Curso de Segurança em Escritórios', carga_horaria:2, validade_meses:12,
     descricao:'Orientação de segurança e ergonomia para ambientes administrativos. Complementa a NR-17 (ergonomia) para funções de escritório.',
     conteudo_programatico:'<p>Orientação de segurança para ambientes de escritório.</p><ul><li>Ergonomia do posto de trabalho administrativo</li><li>Organização e prevenção de quedas e tropeços</li><li>Uso seguro de equipamentos de escritório</li><li>Procedimentos de evacuação do prédio</li></ul>' },
-  { nrs:null, nome:'Curso de Segurança para Visitantes', carga_horaria:1, validade_meses:12,
+  { nrs:null, tipo_curso:'unico', nome:'Curso de Segurança para Visitantes', carga_horaria:1, validade_meses:12,
     descricao:'Orientação rápida de segurança para visitantes e prestadores eventuais antes de acessarem áreas operacionais.',
     conteudo_programatico:'<p>Orientação de segurança para visitantes.</p><ul><li>Regras básicas de acesso e circulação nas instalações</li><li>EPI obrigatório para a área visitada</li><li>Procedimentos em caso de alarme ou emergência</li><li>Pontos de encontro e saídas de emergência</li></ul>' },
-  { nrs:['NR-05'], nome:'Curso de Prevenção ao Assédio e Conduta no Trabalho', carga_horaria:4, validade_meses:12,
+  { nrs:['NR-05'], tipo_curso:'unico', nome:'Curso de Prevenção ao Assédio e Conduta no Trabalho', carga_horaria:4, validade_meses:12,
     descricao:'Capacitação sobre prevenção ao assédio moral e sexual no trabalho, alinhada à atualização da NR-05 (CIPA), que passou a tratar também da prevenção ao assédio.',
     conteudo_programatico:'<p>Capacitação sobre prevenção ao assédio e boas condutas no ambiente de trabalho.</p><ul><li>Definições de assédio moral e sexual</li><li>Canais de denúncia e fluxo de apuração</li><li>Papel de lideranças na prevenção</li><li>Construção de um ambiente de trabalho respeitoso</li></ul>' },
-  { nrs:null, categoria:'Compliance', nome:'Curso de Conscientização em LGPD', carga_horaria:2, validade_meses:12,
+  { nrs:null, categoria:'Compliance', tipo_curso:'unico', nome:'Curso de Conscientização em LGPD', carga_horaria:2, validade_meses:12,
     descricao:'Orientação sobre a Lei Geral de Proteção de Dados (LGPD) para colaboradores que lidam com dados pessoais. Não é norma de SST — item de compliance geral incluído por ser recorrente em contratos corporativos.',
     conteudo_programatico:'<p>Conscientização sobre a Lei Geral de Proteção de Dados (LGPD).</p><ul><li>Conceitos de dado pessoal e dado sensível</li><li>Bases legais para tratamento de dados</li><li>Boas práticas no dia a dia (e-mail, documentos, sistemas)</li><li>Como agir em caso de incidente de vazamento</li></ul>' },
-  { nrs:null, categoria:'Meio Ambiente', nome:'Curso de Meio Ambiente e Gestão de Resíduos', carga_horaria:4, validade_meses:12,
+  { nrs:null, categoria:'Meio Ambiente', tipo_curso:'unico', nome:'Curso de Meio Ambiente e Gestão de Resíduos', carga_horaria:4, validade_meses:12,
     descricao:'Orientação sobre gestão de resíduos e boas práticas ambientais no ambiente de trabalho.',
     conteudo_programatico:'<p>Orientação sobre meio ambiente e gestão de resíduos.</p><ul><li>Classificação de resíduos (comuns, recicláveis, perigosos)</li><li>Segregação, armazenagem e destinação correta</li><li>Boas práticas de consumo consciente de recursos</li><li>Responsabilidades legais básicas em gestão ambiental</li></ul>' },
 ];
@@ -4308,6 +4431,7 @@ async function importarCatalogoModelo(orgId) {
     validade_meses: m.validade_meses,
     categoria: m.categoria || null,
     nrs: m.nrs,
+    tipo_curso: m.tipo_curso || 'unico',
     descricao: m.descricao,
     conteudo_programatico: m.conteudo_programatico,
     org_id: orgId,
@@ -4316,7 +4440,32 @@ async function importarCatalogoModelo(orgId) {
   }));
   const {error} = await sb.from('catalogo').insert(linhas);
   if (error) throw error;
+  // Linka cursos de Reciclagem ao seu Inicial correspondente (curso_par no
+  // modelo é o nome do curso Inicial) — roda por último, depois que todas
+  // as linhas (Inicial e Reciclagem) já existem na tabela.
+  await _linkarCursosRelacionadosModelo(orgId, itensNovos);
   return linhas.length;
+}
+
+// Resolve curso_relacionado_id para os itens do modelo que têm `curso_par`
+// (nome do curso Inicial correspondente) — roda depois do insert porque
+// precisa dos ids reais gerados pelo banco. Seguro rodar de novo (idempotente):
+// só atualiza quando encontra os dois nomes e o link ainda não está setado.
+async function _linkarCursosRelacionadosModelo(orgId, itensComPar) {
+  const paresParaLinkar = itensComPar.filter(m => m.curso_par);
+  if (!paresParaLinkar.length) return;
+  const {data: todos, error} = await sb.from('catalogo').select('id,nome,curso_relacionado_id').eq('org_id', orgId);
+  if (error || !todos) return; // não bloqueia a importação por causa do link
+  const porNome = new Map(todos.map(c => [c.nome.trim().toLowerCase(), c]));
+  const updates = [];
+  paresParaLinkar.forEach(m => {
+    const filho = porNome.get(m.nome.trim().toLowerCase());
+    const pai   = porNome.get(m.curso_par.trim().toLowerCase());
+    if (filho && pai && filho.id !== pai.id && filho.curso_relacionado_id !== pai.id) {
+      updates.push(sb.from('catalogo').update({curso_relacionado_id: pai.id}).eq('id', filho.id));
+    }
+  });
+  if (updates.length) await Promise.all(updates);
 }
 
 // Acionado pelo botão "Carregar catálogo modelo" no estado vazio da
@@ -4642,7 +4791,7 @@ function _menuTurmaCard(btn, id) {
   _menuDropdown(btn, items);
 }
 
-async function abrirModalTurma(id=null) {
+async function abrirModalTurma(id=null, preSel=null) {
   _modalCurrentId = id;
   if (!_clientesCache.length) {
     const {data} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
@@ -4654,9 +4803,13 @@ async function abrirModalTurma(id=null) {
   }
   if (!_catalogoCache.length) { showToast('Cadastre o catálogo de treinamentos antes de criar turmas','error'); return; }
   const t = id ? _turmasCache.find(x=>x.id===id) : null;
+  // preSel permite abrir o modal já com cliente/curso escolhidos (ex.: ação
+  // "Agendar" a partir de uma pendência de Conformidade) sem precisar de uma turma existente.
+  const cliPreId = t?.cliente_id || preSel?.clienteId || null;
+  const catPreId = t?.catalogo_id || preSel?.catalogoId || null;
   const podeCriarCliente = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  const cliOpts = _clientesCache.map(c=>`<option value="${c.id}" ${t?.cliente_id===c.id?'selected':''}>${c.nome}</option>`).join('');
-  const catOpts = _catalogoCache.map(c=>`<option value="${c.id}" ${t?.catalogo_id===c.id?'selected':''}>${c.nome}</option>`).join('');
+  const cliOpts = _clientesCache.map(c=>`<option value="${c.id}" ${cliPreId===c.id?'selected':''}>${c.nome}</option>`).join('');
+  const catOpts = _catalogoCache.map(c=>`<option value="${c.id}" ${catPreId===c.id?'selected':''}>${c.nome}</option>`).join('');
   abrirModal(t?'Editar turma':'Nova turma', `
     <div class="field">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -6613,6 +6766,7 @@ async function renderRelatorios() {
     {data:sessoesRaw},
     {data:usuariosRaw},
     {data:participantesRaw},
+    confData,
   ] = await Promise.all([
     sb.from('turmas')
       .select('id,status,cliente_id,catalogo_id,created_at,clientes(id,nome),catalogo(nome,carga_horaria)')
@@ -6621,6 +6775,10 @@ async function renderRelatorios() {
     sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(id,nome)').eq('concluida', true),
     sb.from('usuarios').select('id,nome,perfil').eq('org_id', oi).eq('ativo', true),
     sb.from('turma_participantes').select('turma_id,colaborador_id'),
+    // Indicadores de conformidade/reciclagem só fazem sentido no plano Pro (mesma
+    // regra da tela Conformidade) — busca só quando o plano já dá acesso, para
+    // não gastar consulta à toa em quem ainda não tem a feature.
+    planoAtinge('pro') ? calcConformidade().catch(() => null) : Promise.resolve(null),
   ]);
 
   // Guardar globalmente para filtros e exportação
@@ -6633,6 +6791,7 @@ async function renderRelatorios() {
     usuarios: usuariosRaw||[],
     participantes: (participantesRaw||[]).filter(p=>turmaIdsOrg.has(p.turma_id)),
   };
+  window._relConfData = confData;
   window._relPeriodo = 6; // padrão: 6 meses
   window._relComparativo = false; // comparativo desligado por padrão
 
@@ -6879,6 +7038,40 @@ function _renderRelatorioView() {
         ${rankCatHtml}
       </div>
     </div>
+
+    ${(() => {
+      const cd = window._relConfData;
+      if (!planoAtinge('pro')) {
+        return `<div class="rel2-card" style="margin-top:12px;border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
+          <div class="rel2-card-title">Conformidade, vencimentos e reciclagens</div>
+          <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin:6px 0 10px">Veja aqui o índice de conformidade da organização, quantos certificados vencem em breve e quais reciclagens vale priorizar. Disponível no plano Pro.</div>
+          <button class="rel2-export-btn" onclick="modalUpgrade(&quot;Conformidade e Reciclagens&quot;,&quot;pro&quot;)" style="background:var(--amber);color:var(--navy);border:none">🔒 Ver planos</button>
+        </div>`;
+      }
+      if (!cd) return '';
+      const vencendo30 = cd.proximos.filter(x => x.diffDias <= 30 && x.status !== 'vencido').length;
+      const reciclagensSugeridas = cd.proximos.filter(x => x.ehReciclagem && x.sugestaoNome !== x.treinamentoNome).length;
+      const piores = cd.statusPorTreinamento.slice(0, 4);
+      return `<div class="rel2-card" style="margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div class="rel2-card-title" style="margin:0">Conformidade, vencimentos e reciclagens</div>
+          <button class="btn btn-outline btn-sm" style="font-size:11px" data-nav="conformidade">Ver detalhes completos →</button>
+        </div>
+        <div class="stats-grid" style="margin-top:12px;margin-bottom:4px">
+          <div class="stat-card accent"><div class="stat-label">Índice de conformidade</div><div class="stat-value" style="color:var(--green)">${cd.indice}%</div></div>
+          <div class="stat-card accent"><div class="stat-label">Vencidos</div><div class="stat-value" style="color:var(--red)">${cd.vencidos}</div></div>
+          <div class="stat-card accent"><div class="stat-label">Vencendo em 30d</div><div class="stat-value" style="color:var(--amber)">${vencendo30}</div></div>
+          <div class="stat-card accent"><div class="stat-label">Reciclagens a agendar</div><div class="stat-value" style="color:var(--navy)">${reciclagensSugeridas}</div></div>
+        </div>
+        ${piores.length ? `<div style="margin-top:10px">
+          <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Cursos com menor conformidade</div>
+          ${piores.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:12px">
+            <span style="color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome}</span>
+            <span style="font-weight:700;color:${p.pct<70?'var(--red)':p.pct<90?'var(--amber-h)':'var(--green)'};flex-shrink:0">${p.pct}%</span>
+          </div>`).join('')}
+        </div>` : ''}
+      </div>`;
+    })()}
 
     <div class="rel2-card" style="margin-top:12px">
       <div class="rel2-card-title">Performance instrutores — sessões concluídas</div>
