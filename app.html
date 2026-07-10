@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://brasilapi.com.br https://api.resend.com; frame-ancestors 'none';">a
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://brasilapi.com.br https://api.resend.com; frame-ancestors 'none';">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <meta name="theme-color" content="#1E2A4A">
@@ -4168,41 +4168,50 @@ async function duplicarCatalogo(id) {
 // detalhamento completo em NR_INFO).
 const CATALOGO_MODELO = [
   { nrs:['NR-01'], nome:'Curso NR-01 — Integração e Noções Gerais de SST', carga_horaria:8, validade_meses:12,
-    descricao:'Integração de segurança do trabalho e noções gerais sobre o Programa de Gerenciamento de Riscos (PGR), base das demais NRs. Carga horária e validade sugeridas — revise conforme a política interna do cliente.',
-    conteudo_programatico:'<p>Noções introdutórias de Segurança e Saúde no Trabalho e apresentação do Programa de Gerenciamento de Riscos (PGR).</p><ul><li>Conceitos gerais de SST e legislação aplicável</li><li>Estrutura do PGR e inventário de riscos ocupacionais</li><li>Direitos e deveres do trabalhador e do empregador</li><li>Uso de EPI e procedimentos em emergência</li></ul>' },
-  { nrs:['NR-05'], nome:'Curso NR-05 — CIPA (Comissão Interna de Prevenção de Acidentes e de Assédio)', carga_horaria:20, validade_meses:12,
-    descricao:'Capacitação de membros da CIPA para prevenção de acidentes de trabalho e de assédio. Carga horária varia conforme o Grau de Risco da empresa — confirme o valor exato antes de divulgar ao cliente.',
+    descricao:'Integração de segurança do trabalho e noções gerais sobre o Programa de Gerenciamento de Riscos (PGR), base das demais NRs. Carga horária e validade sugeridas — a NR-01 não fixa um número; revise conforme a política interna do cliente.',
+    conteudo_programatico:'<p>Noções introdutórias de Segurança e Saúde no Trabalho e apresentação do Programa de Gerenciamento de Riscos (PGR).</p><ul><li>Conceitos gerais de SST e legislação aplicável</li><li>Estrutura do PGR/GRO e inventário de riscos ocupacionais</li><li>Riscos psicossociais e seu lugar no PGR</li><li>Direitos e deveres do trabalhador e do empregador</li><li>Uso de EPI e procedimentos em emergência</li></ul>' },
+  { nrs:['NR-05'], nome:'Curso NR-05 — CIPA (Comissão Interna de Prevenção de Acidentes e de Assédio)', carga_horaria:20, validade_meses:24,
+    descricao:'Capacitação de membros da CIPA para prevenção de acidentes de trabalho e de assédio. A norma fixa carga horária por Grau de Risco do estabelecimento: 8h (grau 1), 12h (grau 2), 16h (grau 3) e 20h (grau 4) — ajuste conforme o grau de risco real do cliente antes de divulgar. Validade de 24 meses.',
     conteudo_programatico:'<p>Formação de membros da Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA).</p><ul><li>Estudo do ambiente, condições e organização do trabalho</li><li>Metodologia de investigação e análise de acidentes</li><li>Noções sobre prevenção e combate a incêndios</li><li>Prevenção e combate ao assédio no ambiente de trabalho</li><li>Relações humanas no trabalho e princípios gerais de higiene do trabalho</li></ul>' },
   { nrs:['NR-06'], nome:'Curso NR-06 — Uso Correto de EPI', carga_horaria:4, validade_meses:12,
     descricao:'Orientação sobre seleção, uso, guarda e conservação de Equipamentos de Proteção Individual. A norma não fixa carga horária — aplique sempre que houver admissão, troca de EPI ou de risco.',
     conteudo_programatico:'<p>Orientação prática sobre uso correto de Equipamento de Proteção Individual (EPI).</p><ul><li>Tipos de EPI e sua relação com os riscos do posto de trabalho</li><li>Forma correta de uso, higienização e guarda</li><li>Prazo de validade e critérios de substituição</li><li>Responsabilidades do empregador e do trabalhador</li></ul>' },
   { nrs:['NR-10'], nome:'Curso NR-10 — Segurança em Instalações e Serviços em Eletricidade (Básico)', carga_horaria:40, validade_meses:24,
-    descricao:'Curso básico para trabalhadores que atuam em instalações e serviços com eletricidade. Mínimo de 40h conforme a norma, com reciclagem periódica.',
-    conteudo_programatico:'<p>Curso básico de segurança em instalações e serviços com eletricidade.</p><ul><li>Riscos em instalações elétricas e medidas de controle</li><li>Normas técnicas, regulamentadoras e organizacionais</li><li>Equipamentos de proteção coletiva e individual</li><li>Procedimentos de trabalho seguro e rotinas de trabalho</li><li>Noções de primeiros socorros e técnicas de remoção de acidentados</li></ul>' },
+    descricao:'Curso básico para trabalhadores que atuam em instalações e serviços com eletricidade em baixa tensão. Mínimo de 40h conforme a norma. Reciclagem exigida a cada 2 anos ou em troca de função/empresa, retorno de afastamento superior a 3 meses, ou mudança significativa nas instalações/procedimentos.',
+    conteudo_programatico:'<p>Curso básico de segurança em instalações e serviços com eletricidade.</p><ul><li>Riscos em instalações elétricas e medidas de controle, com hierarquia de controle e desenergização como medida prioritária</li><li>Risco de choque elétrico, arco elétrico e queimaduras</li><li>Normas técnicas, regulamentadoras e organizacionais</li><li>Equipamentos de proteção coletiva e individual</li><li>Procedimentos de trabalho seguro e rotinas de trabalho</li><li>Noções de primeiros socorros e técnicas de remoção de acidentados</li></ul>' },
   { nrs:['NR-12'], nome:'Curso NR-12 — Segurança no Trabalho em Máquinas e Equipamentos', carga_horaria:8, validade_meses:12,
-    descricao:'Capacitação de operadores para trabalho seguro com máquinas e equipamentos. Carga horária de referência — normas específicas (ex.: injetoras, motosserras) podem ter exigência própria.',
-    conteudo_programatico:'<p>Capacitação para operação segura de máquinas e equipamentos.</p><ul><li>Riscos mecânicos e principais causas de acidentes</li><li>Dispositivos de segurança, proteções e intertravamentos</li><li>Procedimentos de operação, manutenção e limpeza seguros</li><li>Sinalização de segurança e procedimentos de bloqueio (LOTO)</li></ul>' },
+    descricao:'Capacitação de operadores para trabalho seguro com máquinas e equipamentos. A norma não fixa uma carga horária geral (fica a critério do empregador, dentro da jornada) — 8h é referência de mercado. Exceções com carga horária própria: operadores de injetoras e de motosserra têm mínimo de 8h por tipo de máquina, conforme anexos específicos da NR-12.',
+    conteudo_programatico:'<p>Capacitação para operação segura de máquinas e equipamentos.</p><ul><li>Riscos mecânicos e principais causas de acidentes</li><li>Dispositivos de segurança, proteções e intertravamentos</li><li>Como e por que as proteções devem ser usadas, e o que fazer se estiverem danificadas</li><li>Procedimentos de operação, manutenção e limpeza seguros</li><li>Sinalização de segurança e procedimentos de bloqueio e etiquetagem (LOTO)</li></ul>' },
   { nrs:['NR-17'], nome:'Curso NR-17 — Ergonomia', carga_horaria:8, validade_meses:12,
     descricao:'Treinamento introdutório sobre ergonomia no trabalho. A norma em si não exige um curso formal — o requisito central é a Análise Ergonômica Preliminar (AEP) de cada posto.',
     conteudo_programatico:'<p>Noções de ergonomia aplicadas ao ambiente de trabalho.</p><ul><li>Conceitos de ergonomia e adaptação do posto ao trabalhador</li><li>Posturas, mobiliário e organização do trabalho</li><li>Pausas, ritmo de trabalho e prevenção de LER/DORT</li><li>Ergonomia em escritório e em atividades remotas</li></ul>' },
-  { nrs:['NR-18'], nome:'Curso NR-18 — Segurança na Construção Civil (Inicial)', carga_horaria:6, validade_meses:24,
-    descricao:'Treinamento admissional para trabalhadores da construção civil — mínimo de 6h antes do início das atividades, com periódico bienal e retreinamento a cada nova fase da obra.',
-    conteudo_programatico:'<p>Treinamento admissional de segurança para trabalhadores da construção civil.</p><ul><li>Riscos do canteiro de obras e medidas de proteção coletiva</li><li>Uso de EPI específico da atividade</li><li>Trabalho em altura, andaimes e proteções periféricas</li><li>Ordem, arrumação e sinalização do canteiro</li></ul>' },
-  { nrs:['NR-20'], nome:'Curso NR-20 — Inflamáveis e Combustíveis (Básico)', carga_horaria:8, validade_meses:12,
-    descricao:'Treinamento básico para trabalhadores em áreas com inflamáveis e combustíveis. Carga horária e periodicidade variam conforme a classe da instalação — confirme com profissional habilitado.',
+  { nrs:['NR-18'], nome:'Curso NR-18 — Segurança na Construção Civil (Treinamento Inicial)', carga_horaria:6, validade_meses:24,
+    descricao:'Treinamento inicial (antigo "admissional") para trabalhadores da construção civil — mínimo de 6h, ministradas antes do início das atividades. Diferente do periódico: veja o item "NR-18 — Reciclagem/Periódico" para a capacitação de renovação, que tem carga horária própria.',
+    conteudo_programatico:'<p>Treinamento inicial de segurança para trabalhadores da construção civil.</p><ul><li>Condições e meio ambiente de trabalho, alinhado ao PGR do canteiro (NR-01)</li><li>Riscos inerentes à função e medidas de controle</li><li>Uso adequado de EPI</li><li>Equipamentos de Proteção Coletiva (EPC) existentes no canteiro</li><li>Ordem, arrumação e sinalização do canteiro</li></ul>' },
+  { nrs:['NR-18'], nome:'Curso NR-18 — Segurança na Construção Civil (Reciclagem/Periódico)', carga_horaria:4, validade_meses:24,
+    descricao:'Treinamento periódico de renovação, obrigatório a cada 2 anos — carga horária de 4h, conteúdo definido pelo empregador com base nos riscos atuais do canteiro. Não confundir com o treinamento inicial (6h, feito uma vez antes do início das atividades).',
+    conteudo_programatico:'<p>Reciclagem periódica de segurança para trabalhadores da construção civil.</p><ul><li>Atualização sobre riscos do canteiro e mudanças desde o último treinamento</li><li>Reforço do uso correto de EPI e EPC</li><li>Análise de acidentes e quase-acidentes ocorridos na obra</li><li>Novas fases da obra e riscos específicos associados</li></ul>' },
+  { nrs:['NR-20'], nome:'Curso NR-20 — Inflamáveis e Combustíveis (Básico)', carga_horaria:8, validade_meses:36,
+    descricao:'Treinamento básico para trabalhadores em áreas com inflamáveis e combustíveis. A norma escalona a carga horária por classe de instalação: 4h (classe I), 6h (classe II) e 8h (classe III) — usamos 8h como referência mais abrangente, ajuste conforme a classe real do cliente. Validade de 36 meses para o básico classe I; confirme a validade específica para classes II/III e para os níveis Intermediário e Avançado, que são capacitações à parte.',
     conteudo_programatico:'<p>Treinamento básico de segurança para atividades com líquidos combustíveis e inflamáveis.</p><ul><li>Classificação de áreas e produtos inflamáveis/combustíveis</li><li>Riscos de incêndio e explosão e medidas de controle</li><li>Procedimentos seguros de armazenamento e manuseio</li><li>Ações em caso de vazamento ou princípio de incêndio</li></ul>' },
   { nrs:['NR-23'], nome:'Curso NR-23 — Proteção Contra Incêndio (Noções Gerais)', carga_horaria:4, validade_meses:12,
     descricao:'Noções gerais de prevenção contra incêndio para todos os colaboradores — sinalização, saídas de emergência e uso básico de extintores. Para formação de brigadistas, use o curso "Brigada de Incêndio" (mais completo).',
     conteudo_programatico:'<p>Noções gerais de prevenção contra incêndio.</p><ul><li>Classes de incêndio e princípios de combustão</li><li>Sinalização e saídas de emergência</li><li>Uso básico de extintores portáteis</li><li>Procedimentos de abandono de área</li></ul>' },
-  { nrs:['NR-32'], nome:'Curso NR-32 — Segurança e Saúde no Trabalho em Serviços de Saúde', carga_horaria:20, validade_meses:12,
-    descricao:'Capacitação para trabalhadores de serviços de saúde, incluindo terceirizados no estabelecimento. Carga horária citada de forma inconsistente entre fontes — confirme com profissional de SST.',
+  { nrs:['NR-32'], nome:'Curso NR-32 — Segurança e Saúde no Trabalho em Serviços de Saúde (Inicial)', carga_horaria:16, validade_meses:12,
+    descricao:'Capacitação inicial para trabalhadores de serviços de saúde, incluindo terceirizados no estabelecimento — referência de mercado de 16h (funções de limpeza/conservação sem experiência prévia podem exigir até 40h). Reciclagem anual obrigatória: veja o item "NR-32 — Reciclagem Anual" (8h).',
     conteudo_programatico:'<p>Segurança do trabalho em ambientes de serviços de saúde.</p><ul><li>Riscos biológicos, químicos e de radiações ionizantes</li><li>Prevenção de acidentes com perfurocortantes</li><li>Gerenciamento de resíduos de serviços de saúde (RSS)</li><li>Uso de EPI específico da área da saúde</li></ul>' },
-  { nrs:['NR-33'], nome:'Curso NR-33 — Espaços Confinados (Trabalhador Autorizado e Vigia)', carga_horaria:16, validade_meses:12,
-    descricao:'Capacitação de trabalhador autorizado e vigia para espaços confinados — mínimo 16h conforme a norma. Reciclagem anual, mínimo 8h.',
+  { nrs:['NR-32'], nome:'Curso NR-32 — Reciclagem Anual', carga_horaria:8, validade_meses:12,
+    descricao:'Reciclagem anual obrigatória para quem já concluiu o treinamento inicial de NR-32 — mínimo de 8h. Também exigida em mudança de procedimentos/condições de trabalho, retorno de afastamento superior a 90 dias, mudança de empresa ou de máquina/equipamento.',
+    conteudo_programatico:'<p>Reciclagem anual de segurança em serviços de saúde.</p><ul><li>Atualização sobre riscos biológicos, químicos e ocupacionais do setor</li><li>Revisão de procedimentos após perfurocortantes e exposições</li><li>Mudanças em procedimentos, equipamentos ou na RSS desde o último treinamento</li><li>Reforço do uso correto de EPI</li></ul>' },
+  { nrs:['NR-33'], nome:'Curso NR-33 — Espaços Confinados (Trabalhador Autorizado e Vigia — Inicial)', carga_horaria:16, validade_meses:12,
+    descricao:'Capacitação inicial de trabalhador autorizado e vigia para espaços confinados — 16h conforme a norma, sendo no mínimo 50% de carga prática. Reciclagem anual obrigatória: veja o item "NR-33 — Reciclagem Anual" (8h).',
     conteudo_programatico:'<p>Capacitação para trabalho seguro em espaços confinados.</p><ul><li>Identificação e classificação de espaços confinados</li><li>Permissão de Entrada e Trabalho (PET)</li><li>Monitoramento de atmosfera e ventilação</li><li>Papel do vigia e procedimentos de resgate</li></ul>' },
+  { nrs:['NR-33'], nome:'Curso NR-33 — Espaços Confinados (Reciclagem Anual)', carga_horaria:8, validade_meses:12,
+    descricao:'Reciclagem anual obrigatória para trabalhador autorizado, vigia e supervisor de entrada — mínimo de 8h, também com no mínimo 50% de carga prática.',
+    conteudo_programatico:'<p>Reciclagem anual para trabalho seguro em espaços confinados.</p><ul><li>Revisão da Permissão de Entrada e Trabalho (PET)</li><li>Atualização de equipamentos de monitoramento e ventilação</li><li>Prática de resgate e uso de equipamentos de emergência</li><li>Análise de incidentes ocorridos desde o último treinamento</li></ul>' },
   { nrs:['NR-35'], nome:'Curso NR-35 — Trabalho em Altura', carga_horaria:8, validade_meses:24,
-    descricao:'Capacitação obrigatória para trabalho acima de 2m com risco de queda — mínimo 8h, com reciclagem bienal (também 8h).',
-    conteudo_programatico:'<p>Capacitação para trabalho seguro em altura.</p><ul><li>Normas e regulamentações sobre trabalho em altura</li><li>Análise de risco e condições impeditivas</li><li>Sistemas de proteção contra quedas e ancoragem</li><li>Procedimentos de emergência e resgate em altura</li></ul>' },
+    descricao:'Capacitação obrigatória para trabalho acima de 2m com risco de queda — mínimo 8h, com reciclagem bienal (também 8h, mesmo conteúdo do inicial). A partir de 2026, uso de talabarte com absorvedor de energia e uso seguro de escadas passam a integrar o conteúdo mínimo obrigatório.',
+    conteudo_programatico:'<p>Capacitação para trabalho seguro em altura.</p><ul><li>Normas e regulamentações sobre trabalho em altura</li><li>Análise de risco e condições impeditivas</li><li>Sistemas de proteção contra quedas e ancoragem</li><li>Uso de talabarte com absorvedor de energia</li><li>Uso seguro de escadas</li><li>Procedimentos de emergência e resgate em altura</li></ul>' },
 
   // ---- Ampliação solicitada por Alisson (jul/2026): mais NRs + temas recorrentes de SST ----
   { nrs:['NR-01'], nome:'Integração de Segurança do Trabalho', carga_horaria:4, validade_meses:12,
@@ -4215,14 +4224,14 @@ const CATALOGO_MODELO = [
     descricao:'Capacitação para movimentação, transporte e armazenagem segura de materiais. A norma não fixa carga horária nem periodicidade — 20h é referência de mercado; formalize a política de reciclagem no PGR.',
     conteudo_programatico:'<p>Capacitação para movimentação, transporte e armazenagem segura de materiais.</p><ul><li>Riscos de esmagamento, queda de carga e capotamento</li><li>Operação segura de equipamentos de movimentação</li><li>Empilhamento, armazenagem e capacidade de carga</li><li>Sinalização, isolamento de área e comunicação durante a operação</li></ul>' },
   { nrs:['NR-13'], nome:'Curso NR-13 — Caldeiras, Vasos de Pressão e Tubulações', carga_horaria:40, validade_meses:24,
-    descricao:'Capacitação de operadores de caldeiras, vasos de pressão e tubulações. A carga horária exigida varia conforme a categoria do equipamento — confirme a categoria específica do equipamento do cliente antes de fechar o treinamento.',
+    descricao:'Capacitação de operadores de caldeiras — mínimo 40h conforme a norma, mais prática profissional supervisionada de 80h (categoria A) ou 60h (categoria B). A NR-13 não fixa reciclagem periódica obrigatória: exige nova capacitação em caso de modificação da caldeira, acidente/incidente ou mudança de operação. A validade de 24 meses aqui é recomendação de mercado, não uma exigência legal direta — confirme a política com profissional habilitado.',
     conteudo_programatico:'<p>Capacitação para operação segura de caldeiras, vasos de pressão e tubulações.</p><ul><li>Riscos associados a equipamentos pressurizados</li><li>Dispositivos de segurança e controle</li><li>Procedimentos operacionais de partida, operação e parada</li><li>Ações em situações de emergência e vazamento</li></ul>' },
   { nrs:['NR-26'], nome:'Curso NR-26 — Sinalização de Segurança', carga_horaria:2, validade_meses:12,
     descricao:'Orientação sobre cores e sinalização de segurança no ambiente de trabalho, incluindo rótulos de produtos químicos. A norma não fixa carga horária — treinamento curto de conscientização.',
     conteudo_programatico:'<p>Orientação sobre sinalização de segurança do trabalho.</p><ul><li>Padrão de cores de segurança e seu significado</li><li>Sinalização de áreas de risco e rotas de fuga</li><li>Rotulagem de produtos químicos (FISPQ)</li><li>Sinalização de EPI obrigatório por área</li></ul>' },
-  { nrs:['NR-31'], nome:'Curso NR-31 — Segurança no Trabalho Rural', carga_horaria:20, validade_meses:12,
-    descricao:'Capacitação em segurança para atividades rurais, incluindo manuseio de agrotóxicos e máquinas agrícolas. A carga horária varia por atividade — aplicação de agrotóxicos exige mínimo de 20h teórico-práticas.',
-    conteudo_programatico:'<p>Capacitação em segurança do trabalho rural.</p><ul><li>Riscos do trabalho no campo e uso de máquinas agrícolas</li><li>Manuseio seguro de agrotóxicos e EPI específico</li><li>Ergonomia e organização do trabalho rural</li><li>Primeiros socorros e procedimentos de emergência no campo</li></ul>' },
+  { nrs:['NR-31'], nome:'Curso NR-31.7 — Segurança na Aplicação de Agrotóxicos', carga_horaria:20, validade_meses:12,
+    descricao:'Capacitação obrigatória para trabalhadores com exposição direta a agrotóxicos, conforme o subitem 31.7 da NR-31 — mínimo de 20h teórico-práticas, é exigência específica da norma (não apenas referência de mercado).',
+    conteudo_programatico:'<p>Capacitação em segurança na aplicação de agrotóxicos (NR-31.7).</p><ul><li>Estudo dos agrotóxicos, doenças e acidentes de trabalho relacionados</li><li>Formas de exposição direta e indireta e principais sinais de intoxicação</li><li>Leitura e interpretação de bula, rótulo e ficha de emergência</li><li>Aquisição, transporte, armazenamento, preparo e aplicação seguros</li><li>Equipamentos de Proteção Individual e Coletiva e procedimentos de manuseio</li></ul>' },
   { nrs:['NR-34'], nome:'Curso NR-34 — Segurança na Indústria Naval', carga_horaria:8, validade_meses:12,
     descricao:'Capacitação de segurança para atividades de construção e reparo naval. Carga horária de referência — a norma detalha exigências específicas por atividade (soldagem, trabalho a quente, espaço confinado); confirme o escopo com profissional de SST.',
     conteudo_programatico:'<p>Capacitação de segurança para atividades da indústria naval.</p><ul><li>Riscos específicos de estaleiros e reparo naval</li><li>Trabalho a quente, soldagem e espaços confinados no contexto naval</li><li>Sinalização e isolamento de áreas de risco</li><li>Procedimentos de emergência em ambiente portuário/estaleiro</li></ul>' },
@@ -8002,7 +8011,13 @@ function pdfSafe(v, maxLen) {
     .replace(/\u2026/g, '...')            // elipse
     .replace(/[\u2022\u25CF]/g, '-')      // marcador de lista (bullet)
     .replace(/\u00A0/g, ' ')              // espaço não separável
-    .replace(/[^\x20-\x7E]/g, '?')
+    // IMPORTANTE: preserva quebras de linha (\n). O filtro anterior [^\x20-\x7E]
+    // também apagava \n (não é um char imprimível ASCII) e o substituía por "?",
+    // destruindo a estrutura de parágrafos/itens de lista que htmlParaTextoPlano()
+    // monta antes de chegar aqui — era a causa raiz do Conteúdo Programático
+    // aparecer com "?" soltos e texto corrido no certificado.
+    .replace(/[^\x20-\x7E\n]/g, '?')
+    .replace(/[ \t]+\n/g, '\n')
     .trim()
     .slice(0, maxLen || 400);
 }
@@ -8037,6 +8052,66 @@ function htmlParaTextoPlano(html) {
   div.innerHTML = texto;
   texto = div.textContent || div.innerText || texto;
   return texto.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Extrai blocos estruturados (parágrafo / item de lista) do HTML de um campo rico
+// (Conteúdo Programático ou Descrição) para uso no certificado em PDF — em vez de
+// achatar tudo numa única string de texto corrido, preserva a distinção entre
+// parágrafo e item de lista para o desenho ter hierarquia visual real (marcador de
+// lista de verdade, espaçamento entre parágrafos), no lugar do texto corrido com
+// "- " literal que existia antes.
+function extrairBlocosConteudo(html) {
+  if (!html) return [];
+  if (!/<[a-z][\s\S]*>/i.test(html)) {
+    // Registro legado em texto puro — cada linha não vazia vira um parágrafo
+    return html.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(t => ({ tipo: 'p', texto: t }));
+  }
+  const limpo = sanitizarHtml(html);
+  const div = document.createElement('div');
+  div.innerHTML = limpo;
+  const blocos = [];
+  const nos = div.querySelectorAll('p, li, h1, h2, h3, blockquote');
+  if (nos.length === 0) {
+    const texto = (div.textContent || '').replace(/\s+/g, ' ').trim();
+    if (texto) blocos.push({ tipo: 'p', texto });
+    return blocos;
+  }
+  nos.forEach(no => {
+    if (no.tagName === 'P' && no.closest('li')) return; // evita duplicar <p> dentro de <li>
+    const texto = (no.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!texto) return;
+    blocos.push({ tipo: no.tagName === 'LI' ? 'li' : 'p', texto });
+  });
+  return blocos;
+}
+
+// Desenha os blocos do Conteúdo Programático (ou Descrição) numa coluna do PDF,
+// com marcador de lista real (círculo) para itens e espaçamento extra entre
+// parágrafos — layout de certificado profissional em vez de texto corrido.
+// Retorna a posição Y final e se o conteúdo foi cortado (para o aviso "continua no verso").
+function desenharBlocosConteudoPDF(doc, blocos, x, yInicial, largura, yMax, cores, opts) {
+  const o = Object.assign({ fontSize: 7, leading: 3.6, gapParagrafo: 1.8, indentLi: 3.4 }, opts || {});
+  let y = yInicial;
+  let truncado = false;
+  for (let i = 0; i < blocos.length; i++) {
+    const b = blocos[i];
+    const textoSafe = pdfSafe(b.texto, 600);
+    const larguraTexto = b.tipo === 'li' ? largura - o.indentLi : largura;
+    doc.setFontSize(o.fontSize); doc.setFont('helvetica', 'normal');
+    const linhas = doc.splitTextToSize(textoSafe, larguraTexto);
+    const alturaBloco = linhas.length * o.leading;
+    if (y + alturaBloco > yMax) { truncado = true; break; }
+    doc.setTextColor(...cores.texto);
+    if (b.tipo === 'li') {
+      doc.setFillColor(...cores.marcador);
+      doc.circle(x + 1, y - 1, 0.6, 'F');
+      linhas.forEach((l, li) => doc.text(l, x + o.indentLi, y + li * o.leading));
+    } else {
+      linhas.forEach((l, li) => doc.text(l, x, y + li * o.leading));
+    }
+    y += alturaBloco + o.gapParagrafo;
+  }
+  return { y, truncado };
 }
 
 // Carrega um valor (HTML novo ou texto puro legado) dentro de uma instância Quill
@@ -8379,7 +8454,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const ch        = t.catalogo?.carga_horaria || 0;
     const nomeT     = t.catalogo?.nome || 'Treinamento';
     const valMeses  = t.catalogo?.validade_meses || 12;
-    const cpText    = htmlParaTextoPlano(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
+    const cpBlocos  = extrairBlocosConteudo(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
     const nomeOrg   = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
 
     const dtObj = new Date(dataCert+'T12:00:00');
@@ -8579,16 +8654,12 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // Área CP — reserva espaço para assinatura (18mm no final)
     const p_cpMaxY = p_bot - 18;
     const p_cpLeading = 4.2;
-    if (cpText) {
-      // splitTextToSize garante word-wrap dentro de p_c2w-4
-      const p_lCP = doc.splitTextToSize(s(cpText,2000), p_c2w-4);
-      const p_maxLinhas = Math.floor((p_cpMaxY - p_y2) / p_cpLeading);
-      doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-      p_lCP.slice(0, p_maxLinhas).forEach((l,i) => {
-        doc.text(l, p_c2x, p_y2 + i*p_cpLeading);
-      });
-      // Indicador de continuação se houver mais conteúdo
-      if (p_lCP.length > p_maxLinhas) {
+    if (cpBlocos.length) {
+      const { truncado } = desenharBlocosConteudoPDF(
+        doc, cpBlocos, p_c2x, p_y2, p_c2w - 4, p_cpMaxY,
+        { texto: T2, marcador: AMBER }, { fontSize: 7, leading: p_cpLeading }
+      );
+      if (truncado) {
         doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
         doc.text('(continua no verso...)', p_c2x, p_cpMaxY);
       }
@@ -8713,7 +8784,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const ch            = t.catalogo?.carga_horaria || 0;
     const nomeT         = t.catalogo?.nome || 'Treinamento';
     const valMeses      = t.catalogo?.validade_meses || 12;
-    const cpText        = htmlParaTextoPlano(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
+    const cpBlocos      = extrairBlocosConteudo(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
     const nomeEmp       = t.clientes?.nome || 'empresa nao informada';
     const nomeOrg       = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
 
@@ -8908,14 +8979,12 @@ async function gerarCertificadoColetivo(turmaId) {
 
     const p_cpMaxY2 = p_bot - 4;
     const p_cpLeading2 = 4.2;
-    if (cpText) {
-      const p_lCP2 = doc.splitTextToSize(s(cpText,2000), p_c2w-4);
-      const p_maxLinhas2 = Math.floor((p_cpMaxY2 - p_y2) / p_cpLeading2);
-      doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-      p_lCP2.slice(0, p_maxLinhas2).forEach((l,i) => {
-        doc.text(l, p_c2x, p_y2 + i*p_cpLeading2);
-      });
-      if (p_lCP2.length > p_maxLinhas2) {
+    if (cpBlocos.length) {
+      const { truncado } = desenharBlocosConteudoPDF(
+        doc, cpBlocos, p_c2x, p_y2, p_c2w - 4, p_cpMaxY2,
+        { texto: T2, marcador: AMBER }, { fontSize: 7, leading: p_cpLeading2 }
+      );
+      if (truncado) {
         doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
         doc.text('(continua no verso...)', p_c2x, p_cpMaxY2);
       }
