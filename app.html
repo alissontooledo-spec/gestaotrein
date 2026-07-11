@@ -7794,7 +7794,7 @@ async function renderConta() {
     try {
       let previewUrl = '';
       if (u.assinatura_path) {
-        const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(u.assinatura_path, 300);
+        const {data:urlData} = await sb.storage.from('assinaturas-instrutor').createSignedUrl(u.assinatura_path, 300);
         previewUrl = urlData?.signedUrl || '';
       }
       assinHtml = _htmlCardAssinaturaInstrutor(previewUrl);
@@ -7939,8 +7939,8 @@ async function uploadAssinaturaInstrutor(inputEl) {
       reader.readAsDataURL(file);
     });
 
-    const path = `instrutores/${usuarioAtual.id}.png`;
-    const {error:upErr} = await sb.storage.from('assinaturas').upload(path, blobPng, {upsert:true, contentType:'image/png'});
+    const path = `${usuarioAtual.id}.png`;
+    const {error:upErr} = await sb.storage.from('assinaturas-instrutor').upload(path, blobPng, {upsert:true, contentType:'image/png'});
     if (upErr) throw upErr;
 
     const {error:dbErr} = await sb.from('usuarios').update({assinatura_path: path}).eq('id', usuarioAtual.id);
@@ -7960,7 +7960,7 @@ async function removerAssinaturaInstrutor() {
   showLoading('Removendo assinatura...');
   try {
     const path = usuarioAtual.assinatura_path;
-    if (path) await sb.storage.from('assinaturas').remove([path]);
+    if (path) await sb.storage.from('assinaturas-instrutor').remove([path]);
     const {error} = await sb.from('usuarios').update({assinatura_path:null}).eq('id', usuarioAtual.id);
     if (error) throw error;
     usuarioAtual.assinatura_path = null;
@@ -8384,7 +8384,7 @@ function carregarImagemComoDataURL(url) {
 async function carregarAssinaturaInstrutorPDF(path) {
   if (!path) return null;
   try {
-    const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(path, 60);
+    const {data:urlData} = await sb.storage.from('assinaturas-instrutor').createSignedUrl(path, 60);
     if (!urlData?.signedUrl) return null;
     return await carregarImagemComoDataURL(urlData.signedUrl);
   } catch(e) { return null; }
