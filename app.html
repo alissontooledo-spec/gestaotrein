@@ -1526,7 +1526,7 @@ async function entrarNoApp() {
   _sessaoIniciar(); // iniciar monitoramento de inatividade
   // Lê hash da URL para restaurar a página ao fazer login ou recarregar
   const paginaHash = location.hash.replace('#','').trim();
-  const paginaInicial = (paginaHash && TITULOS[paginaHash]) ? paginaHash : 'home';
+  const paginaInicial = (paginaHash && TITULOS[paginaHash] && _perfilTemAcesso(paginaHash)) ? paginaHash : 'home';
   await irPara(paginaInicial);
 }
 
@@ -1557,6 +1557,19 @@ const NAV_BOTTOM = {
   comercial:['home','turmas','relatorios','clientes','conformidade','conta'],
   instrutor:['home','agenda','historico','conta'],
 };
+
+// Permite navegar para 'pagina' apenas se ela existir no menu do perfil
+// atual. Usado pelo roteador central (irPara), pela restauração de hash no
+// login/reload e pelo listener de popstate — assim um perfil sem acesso a
+// uma tela (ex.: Instrutor não tem "Turmas") não consegue chegar nela nem
+// digitando o hash na URL, nem com o botão Voltar do navegador, nem
+// clicando em "Voltar" dentro de uma tela de detalhe.
+function _perfilTemAcesso(pagina) {
+  if (pagina === 'home') return true;
+  const perfil = usuarioAtual?.perfil;
+  const itens = NAV[perfil] || [];
+  return itens.some(i => i.id === pagina);
+}
 
 function configurarNavegacao() {
   const perfil = usuarioAtual.perfil;
@@ -1594,6 +1607,10 @@ function marcarNavAtivo(id) {
 const TITULOS = {home:'Início',orgs:'Organizações',financeiro:'Financeiro',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
 async function irPara(pagina, params={}) {
+  // Bloqueia navegação para telas fora do menu do perfil atual (ver
+  // _perfilTemAcesso acima) — redireciona para o Início em vez de renderizar
+  // uma tela sem permissão.
+  if (!_perfilTemAcesso(pagina)) pagina = 'home';
   paginaAtual = pagina;
   marcarNavAtivo(pagina);
   fecharSidebar();
@@ -2532,7 +2549,13 @@ async function renderHomeInstrutor() {
     .map(s=>({...s, turma:tMap[s.turma_id]||null}))
     .filter(s=>s.turma && s.turma.status !== 'cancelada');
 
-  const pendentes = sessoesValidas.filter(s=>!s.concluida).sort((a,b)=>a.data.localeCompare(b.data));
+  // Pendentes = sessões não concluídas de turmas que TAMBÉM não estão
+  // concluídas. Sem essa segunda condição, uma turma já finalizada (status
+  // 'concluida') aparecia como "atrasada" só porque o flag individual
+  // sessoes.concluida de uma sessão antiga nunca foi marcado manualmente —
+  // a turma como um todo já terminou, então nenhuma sessão dela deve mais
+  // contar como pendente/atrasada.
+  const pendentes = sessoesValidas.filter(s=>!s.concluida && s.turma.status !== 'concluida').sort((a,b)=>a.data.localeCompare(b.data));
   const aulasHoje  = pendentes.filter(s=>s.data===hoje);
   const atrasadas  = pendentes.filter(s=>s.data<hoje);
   const futuras    = pendentes.filter(s=>s.data>hoje);
@@ -2621,31 +2644,12 @@ async function renderHomeInstrutor() {
       </div>`;
   }
 
-  // ── Aulas do dia (se houver mais de uma, ou pra reforçar quando não há "próximo" destacando outra coisa) ──
-  const htmlAulasHoje = aulasHoje.length ? `
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Aulas do dia (${aulasHoje.length})</div></div>
-      <div class="card">${aulasHoje.map(s=>_linhaSessao(s,'#F59E0B','☀️','<span class="badge badge-amber">Hoje</span>')).join('')}</div>
-    </div>` : '';
-
   // ── Treinamentos atrasados ──
   const htmlAtrasadas = atrasadas.length ? `
     <div class="home-section">
       <div class="section-header"><div class="section-title" style="color:var(--red-text)">⚠️ Treinamentos atrasados (${atrasadas.length})</div></div>
       <div class="card" style="border:1px solid var(--red)">${atrasadas.map(s=>_linhaSessao(s,'#DC2626','⚠️','<span class="badge badge-red">Atrasado</span>')).join('')}</div>
     </div>` : '';
-
-  // ── Próximos agendamentos (futuros, excluindo o que já aparece em "Próximo
-  // treinamento" para não duplicar o mesmo item nas duas seções) ──
-  const listaProximos = (proximo && futuras[0] === proximo) ? futuras.slice(1,6) : futuras.slice(0,6);
-  const htmlProximosAgendamentos = `
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Próximos agendamentos</div><span class="section-link" data-nav="agenda">Ver agenda →</span></div>
-      <div class="card">${listaProximos.length===0
-        ? '<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum outro agendamento</div></div>'
-        : listaProximos.map(s=>_linhaSessao(s,'#2563EB','📋','<span class="badge badge-gray">Agendado</span>')).join('')}
-      </div>
-    </div>`;
 
   // ── Pendências (documentos incompletos) ──
   const htmlPendencias = pendenciasDocs.length ? `
@@ -2687,8 +2691,6 @@ async function renderHomeInstrutor() {
     ${htmlIndicadores}
     ${htmlProximo}
     ${htmlAtrasadas}
-    ${htmlAulasHoje}
-    ${htmlProximosAgendamentos}
     ${htmlPendencias}
     ${htmlAtalhos}
   `);
@@ -5602,6 +5604,44 @@ async function renderAgenda() {
     turmasAgrupadas[s.turma_id].sessoes.push(s);
   });
 
+  // Aulas de hoje e próximos agendamentos — antes duplicados na tela
+  // Início, agora moram só aqui na Agenda (Início fica com indicadores +
+  // ações; Agenda fica com calendário + o que vem a seguir).
+  const _hojeAgenda = dataLocalISO();
+  const sessoesValidasAgenda = (sessoes||[])
+    .map(s=>({...s, turma:turmasMap[s.turma_id]||null}))
+    .filter(s=>s.turma);
+  const pendentesAgenda = sessoesValidasAgenda
+    .filter(s=>!s.concluida && s.turma.status !== 'concluida')
+    .sort((a,b)=>a.data.localeCompare(b.data));
+  const aulasHojeAgenda = pendentesAgenda.filter(s=>s.data===_hojeAgenda);
+  const proximosAgenda  = pendentesAgenda.filter(s=>s.data>_hojeAgenda).slice(0,6);
+
+  const _linhaSessaoAgenda = (s, corIcone, icone, badge) => `
+    <div class="list-item" data-action="verTurma" data-id="${s.turma_id}" style="cursor:pointer">
+      <div class="li-icon" style="background:${corIcone}1a;color:${corIcone}">${icone}</div>
+      <div class="li-info">
+        <div class="li-title">${s.turma?.catalogo?.nome||'Treinamento'}</div>
+        <div class="li-sub">${s.turma?.clientes?.nome||'—'} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
+      </div>
+      ${badge}
+    </div>`;
+
+  const htmlAulasHojeAgenda = aulasHojeAgenda.length ? `
+    <div class="home-section">
+      <div class="section-header"><div class="section-title">Aulas de hoje (${aulasHojeAgenda.length})</div></div>
+      <div class="card">${aulasHojeAgenda.map(s=>_linhaSessaoAgenda(s,'#F59E0B','☀️','<span class="badge badge-amber">Hoje</span>')).join('')}</div>
+    </div>` : '';
+
+  const htmlProximosAgenda = `
+    <div class="home-section">
+      <div class="section-header"><div class="section-title">Próximos agendamentos</div></div>
+      <div class="card">${proximosAgenda.length===0
+        ? '<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum outro agendamento</div></div>'
+        : proximosAgenda.map(s=>_linhaSessaoAgenda(s,'#2563EB','📋','<span class="badge badge-gray">Agendado</span>')).join('')}
+      </div>
+    </div>`;
+
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
   fabOcultar();
 
@@ -5649,7 +5689,13 @@ async function renderAgenda() {
           <div id="agendaCalListaBody"></div>
         </div>
       </div>
-    </div>`);
+    </div>
+
+    <div style="margin-top:20px">
+      ${htmlAulasHojeAgenda}
+      ${htmlProximosAgenda}
+    </div>
+  `);
 
   _agendaRenderCalendario();
 }
@@ -8414,7 +8460,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 window.addEventListener('popstate', async (e) => {
   if (!usuarioAtual) return;
   const pagina = (e.state?.pagina) || location.hash.replace('#','').trim() || 'home';
-  if (TITULOS[pagina] && pagina !== paginaAtual) {
+  if (TITULOS[pagina] && _perfilTemAcesso(pagina) && pagina !== paginaAtual) {
     paginaAtual = pagina;
     marcarNavAtivo(pagina);
     document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
