@@ -76,6 +76,12 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 
 /* ── Sidebar ── */
 .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--navy);display:flex;flex-direction:column;z-index:100;transition:transform .25s}
+/* Modo Suporte: quando a tarja está visível, .screen e .sidebar (os únicos
+   elementos position:fixed que tocam o topo) recuam para não ficar por
+   baixo dela. A altura real da tarja é medida em JS (varia com quebra de
+   linha em telas estreitas) e aplicada via --suporte-h. */
+body.modo-suporte-ativo .screen{top:var(--suporte-h,34px)}
+body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .sidebar-logo{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.07)}
 .sidebar-logo-row{display:flex;align-items:center;gap:10px}
 .sidebar-logo-icon{width:34px;height:34px;background:var(--amber);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -782,13 +788,11 @@ async function encerrarModoSuporte(silencioso = false) {
   _suporteAcoes   = [];
   window._suporteProvedorState = null;
 
-  // Remover banner e restaurar posição do header
+  // Remover banner e devolver .screen/.sidebar para top:0
   const banner = document.getElementById('_suporteBanner');
   if (banner) banner.remove();
-  const mh = document.querySelector('.main-header');
-  if (mh) mh.style.top = '';
-  const mbh = document.querySelector('.mobile-header');
-  if (mbh) mbh.style.top = '';
+  document.body.classList.remove('modo-suporte-ativo');
+  document.documentElement.style.removeProperty('--suporte-h');
 
   if (silencioso) return;
 
@@ -804,14 +808,23 @@ function _suporteMostrarBanner() {
 
   const banner = document.createElement('div');
   banner.id = '_suporteBanner';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:8000;background:#D97706;color:#fff;font-size:12px;font-weight:600;padding:6px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2)';
-  banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px">🔧</span><span>MODO SUPORTE — ' + _suporteOrgNome + '</span></div><button onclick="encerrarModoSuporte(false)" style="background:rgba(0,0,0,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:5px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✕ Encerrar suporte</button>';
+  // padding-top soma a safe-area (notch/status bar) em vez de ficar embaixo
+  // dela; padding geral menor que antes para ficar mais discreta.
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:8000;background:#D97706;color:#fff;font-size:11px;font-weight:600;padding:5px 14px;padding-top:calc(5px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+  banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:13px;flex-shrink:0">🔧</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">MODO SUPORTE — ' + _suporteOrgNome + '</span></div><button onclick="encerrarModoSuporte(false)" style="background:rgba(0,0,0,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:5px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">✕ Encerrar suporte</button>';
   document.body.appendChild(banner);
-  // Empurrar main-header e mobile-header para baixo para não sobrepor o banner
-  const mh = document.querySelector('.main-header');
-  if (mh) mh.style.top = '30px';
-  const mbh = document.querySelector('.mobile-header');
-  if (mbh) mbh.style.top = '30px';
+
+  // .screen e .sidebar são os únicos elementos position:fixed que tocam o
+  // topo da tela — são eles que precisam recuar, não .main-header/
+  // .mobile-header (que não são fixed e por isso "top" neles nunca teve
+  // efeito nenhum — essa era a causa da tarja sobrepor o conteúdo). Mede a
+  // altura real (varia se o nome da organização quebra linha em telas
+  // estreitas) e aplica via CSS var, para .screen/.sidebar recuarem exatamente
+  // o necessário, sem sobreposição e sem espaço em branco sobrando.
+  requestAnimationFrame(() => {
+    document.documentElement.style.setProperty('--suporte-h', banner.offsetHeight + 'px');
+    document.body.classList.add('modo-suporte-ativo');
+  });
 }
 
 function _suporteRegistrarAcao(pagina) {
@@ -5821,15 +5834,20 @@ async function renderHistorico() {
 }
 
 function filtrarHistorico() {
-  const cli = document.getElementById('filtHistCli')?.value||'';
-  const cat = document.getElementById('filtHistCat')?.value||'';
+  // IMPORTANTE: setConteudo() escreve o mesmo HTML em mainBody E mobileBody
+  // (ver comentário de _getElVisible). document.getElementById sempre pega
+  // o primeiro do DOM (o de desktop), que fica invisível/parado no mobile —
+  // por isso os filtros e o botão "Limpar" pareciam não fazer nada no
+  // celular: liam sempre o <select> escondido, nunca o que o usuário via.
+  const cli = _getElVisible('filtHistCli')?.value||'';
+  const cat = _getElVisible('filtHistCat')?.value||'';
   const lista = window._historicoLista||[];
   const filtrada = lista.filter(g=>{
     const nomeC = g.turma.clientes?.nome||'';
     const nomeT = g.turma.catalogo?.nome||'';
     return (!cli || nomeC===cli) && (!cat || nomeT===cat);
   });
-  const el = document.getElementById('listaHistorico');
+  const el = _getElVisible('listaHistorico');
   if (!el) return;
   if (!filtrada.length) {
     el.innerHTML = `<div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado</div><div class="empty-sub">Tente outros filtros.</div></div>`;
@@ -5859,8 +5877,10 @@ function filtrarHistorico() {
 }
 
 function limparFiltrosHistorico() {
-  const sc = document.getElementById('filtHistCli');
-  const st = document.getElementById('filtHistCat');
+  // Mesma correção: precisa limpar o <select> visível (mobile ou desktop),
+  // não sempre o primeiro do DOM.
+  const sc = _getElVisible('filtHistCli');
+  const st = _getElVisible('filtHistCat');
   if (sc) sc.value='';
   if (st) st.value='';
   filtrarHistorico();
