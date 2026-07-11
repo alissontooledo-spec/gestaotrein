@@ -2506,45 +2506,192 @@ async function renderHomeComercial() {
 }
 
 async function renderHomeInstrutor() {
-  // Buscar sessoes pendentes do instrutor (apenas turmas ativas)
+  const hoje = dataLocalISO();
+
+  // Todas as sessões do instrutor (não só pendentes — precisamos das
+  // concluídas recentes para "Horas no mês" e para checar pendências de
+  // documentos das turmas concluídas)
   const {data:sessoes} = await sb
     .from('sessoes')
-    .select('id,turma_id,data,hora_inicio,local,concluida')
+    .select('id,turma_id,data,hora_inicio,hora_fim,local,concluida')
     .eq('instrutor_id',usuarioAtual.id)
-    .eq('concluida',false)
-    .order('data',{ascending:true})
-    .limit(10);
+    .order('data',{ascending:true});
 
-  // Buscar turmas vinculadas filtrando apenas agendadas e em_andamento
   const tIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
   let tMap = {};
   if (tIds.length) {
     const {data:tData} = await sb
       .from('turmas')
       .select('id,status,clientes(nome),catalogo(nome,carga_horaria)')
-      .in('id',tIds)
-      .in('status',['agendada','em_andamento']);
+      .in('id',tIds);
     (tData||[]).forEach(t=>{ tMap[t.id]=t; });
   }
-  // Filtrar apenas sessões de turmas ativas
-  const sessoesHome = (sessoes||[])
-    .map(s=>({...s,turmas:tMap[s.turma_id]||null}))
-    .filter(s=>s.turmas !== null)
-    .slice(0,5);
-  const total = sessoesHome.length;
+
+  // Sessões válidas: só de turmas que ainda existem e não foram canceladas
+  const sessoesValidas = (sessoes||[])
+    .map(s=>({...s, turma:tMap[s.turma_id]||null}))
+    .filter(s=>s.turma && s.turma.status !== 'cancelada');
+
+  const pendentes = sessoesValidas.filter(s=>!s.concluida).sort((a,b)=>a.data.localeCompare(b.data));
+  const aulasHoje  = pendentes.filter(s=>s.data===hoje);
+  const atrasadas  = pendentes.filter(s=>s.data<hoje);
+  const futuras    = pendentes.filter(s=>s.data>hoje);
+  const proximo    = aulasHoje[0] || futuras[0] || null;
+
+  // ── Indicadores resumidos ──
+  const turmasAtivas = Object.values(tMap).filter(t=>t.status==='agendada'||t.status==='em_andamento').length;
+  const mesAtual = hoje.slice(0,7);
+  const turmaIdsConcluidasMes = new Set(
+    sessoesValidas.filter(s=>s.concluida && s.data?.startsWith(mesAtual)).map(s=>s.turma_id)
+  );
+  const horasMes = [...turmaIdsConcluidasMes].reduce((acc,id)=>acc+(tMap[id]?.catalogo?.carga_horaria||0),0);
+
+  // ── Pendências: turmas concluídas nos últimos 60 dias com documentos
+  // incompletos (lista de presença, certificado coletivo ou individuais) ──
+  const dataUltimaSessaoPorTurma = {};
+  sessoesValidas.forEach(s=>{
+    if (!s.turma || s.turma.status!=='concluida') return;
+    const atual = dataUltimaSessaoPorTurma[s.turma_id];
+    if (!atual || s.data > atual) dataUltimaSessaoPorTurma[s.turma_id] = s.data;
+  });
+  const limite60d = new Date(); limite60d.setDate(limite60d.getDate()-60);
+  const limite60dStr = dataLocalISO(limite60d);
+  const idsConcluidasRecentes = Object.keys(dataUltimaSessaoPorTurma).filter(id => dataUltimaSessaoPorTurma[id] >= limite60dStr);
+
+  let pendenciasDocs = [];
+  if (idsConcluidasRecentes.length) {
+    const [{data:docs}, {data:partsData}] = await Promise.all([
+      sb.from('documentos').select('turma_id,tipo,colaborador_id').in('turma_id', idsConcluidasRecentes),
+      sb.from('turma_participantes').select('turma_id').in('turma_id', idsConcluidasRecentes),
+    ]);
+    const partsCountPorTurma = {};
+    (partsData||[]).forEach(p=>{ partsCountPorTurma[p.turma_id]=(partsCountPorTurma[p.turma_id]||0)+1; });
+    const docsPorTurma = {};
+    (docs||[]).forEach(d=>{
+      if (!docsPorTurma[d.turma_id]) docsPorTurma[d.turma_id] = {lista:false,coletivo:false,individuais:new Set()};
+      if (d.tipo==='lista_presenca') docsPorTurma[d.turma_id].lista = true;
+      else if (d.tipo==='certificado_coletivo') docsPorTurma[d.turma_id].coletivo = true;
+      else if (d.tipo==='certificado_individual') docsPorTurma[d.turma_id].individuais.add(d.colaborador_id);
+    });
+    pendenciasDocs = idsConcluidasRecentes.filter(id => {
+      const dp = docsPorTurma[id] || {lista:false,coletivo:false,individuais:new Set()};
+      const totalPart = partsCountPorTurma[id]||0;
+      return !dp.lista || !dp.coletivo || dp.individuais.size < totalPart;
+    }).map(id => tMap[id]).filter(Boolean);
+  }
+
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Instrutor</div>`);
-  setConteudo(`
-    <div class="stats-grid">
-      <div class="stat-card navy"><div class="stat-label">Agendamentos</div><div class="stat-value">${total}</div><div class="stat-sub">Pendentes</div></div>
-    </div>
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Próximos agendamentos</div><span class="section-link" data-nav="agenda">Ver todos</span></div>
-      <div class="card">${total===0
-        ?'<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento</div></div>'
-        :sessoesHome.map(s=>`<div class="list-item" data-action="verTurma" data-id="${s.turma_id||''}" style="cursor:pointer"><div class="li-icon" style="background:var(--blue-l);color:var(--blue-h)">📋</div><div class="li-info"><div class="li-title">${s.turmas?.catalogo?.nome||'Treinamento'}</div><div class="li-sub">${s.turmas?.clientes?.nome||'—'} · ${formatarData(s.data)}</div></div><span class="badge badge-gray">Agendado</span></div>`).join('')}
+
+  // ── Helper: linha compacta de sessão (reaproveitada em vários blocos) ──
+  const _linhaSessao = (s, corIcone, icone, badge) => `
+    <div class="list-item" data-action="verTurma" data-id="${s.turma_id}" style="cursor:pointer">
+      <div class="li-icon" style="background:${corIcone}1a;color:${corIcone}">${icone}</div>
+      <div class="li-info">
+        <div class="li-title">${s.turma?.catalogo?.nome||'Treinamento'}</div>
+        <div class="li-sub">${s.turma?.clientes?.nome||'—'} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
       </div>
-    </div>
-    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair</button>`);
+      ${badge}
+    </div>`;
+
+  // ── Próximo treinamento (card destaque) ──
+  let htmlProximo = '';
+  if (proximo) {
+    const st = proximo.turma?.status||'agendada';
+    const ehHoje = proximo.data === hoje;
+    let btnAcao = '';
+    if (ehHoje && st === 'agendada') {
+      btnAcao = `<button class="btn btn-navy" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Iniciar treinamento</button>`;
+    } else if (ehHoje && st === 'em_andamento') {
+      btnAcao = `<button class="btn" style="width:100%;margin-top:12px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Continuar treinamento</button>`;
+    }
+    htmlProximo = `
+      <div class="home-section">
+        <div class="section-header"><div class="section-title">Próximo treinamento</div></div>
+        <div class="card" style="border:2px solid var(--navy);cursor:pointer" data-action="verTurma" data-id="${proximo.turma_id}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div style="min-width:0">
+              <div style="font-size:16px;font-weight:700;color:var(--text-1)">${proximo.turma?.catalogo?.nome||'Treinamento'}</div>
+              <div style="font-size:13px;color:var(--text-2);margin-top:2px">${proximo.turma?.clientes?.nome||'—'}</div>
+            </div>
+            <span class="badge ${ehHoje?'badge-amber':'badge-gray'}" style="flex-shrink:0">${ehHoje?'Hoje':formatarData(proximo.data)}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-3);margin-top:8px">${proximo.hora_inicio?'⏰ '+proximo.hora_inicio.slice(0,5)+(proximo.hora_fim?' – '+proximo.hora_fim.slice(0,5):''):''}${proximo.local?'  ·  📍 '+proximo.local:''}</div>
+          ${btnAcao}
+        </div>
+      </div>`;
+  }
+
+  // ── Aulas do dia (se houver mais de uma, ou pra reforçar quando não há "próximo" destacando outra coisa) ──
+  const htmlAulasHoje = aulasHoje.length ? `
+    <div class="home-section">
+      <div class="section-header"><div class="section-title">Aulas do dia (${aulasHoje.length})</div></div>
+      <div class="card">${aulasHoje.map(s=>_linhaSessao(s,'#F59E0B','☀️','<span class="badge badge-amber">Hoje</span>')).join('')}</div>
+    </div>` : '';
+
+  // ── Treinamentos atrasados ──
+  const htmlAtrasadas = atrasadas.length ? `
+    <div class="home-section">
+      <div class="section-header"><div class="section-title" style="color:var(--red-text)">⚠️ Treinamentos atrasados (${atrasadas.length})</div></div>
+      <div class="card" style="border:1px solid var(--red)">${atrasadas.map(s=>_linhaSessao(s,'#DC2626','⚠️','<span class="badge badge-red">Atrasado</span>')).join('')}</div>
+    </div>` : '';
+
+  // ── Próximos agendamentos (futuros, excluindo o que já aparece em "Próximo
+  // treinamento" para não duplicar o mesmo item nas duas seções) ──
+  const listaProximos = (proximo && futuras[0] === proximo) ? futuras.slice(1,6) : futuras.slice(0,6);
+  const htmlProximosAgendamentos = `
+    <div class="home-section">
+      <div class="section-header"><div class="section-title">Próximos agendamentos</div><span class="section-link" data-nav="agenda">Ver agenda →</span></div>
+      <div class="card">${listaProximos.length===0
+        ? '<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum outro agendamento</div></div>'
+        : listaProximos.map(s=>_linhaSessao(s,'#2563EB','📋','<span class="badge badge-gray">Agendado</span>')).join('')}
+      </div>
+    </div>`;
+
+  // ── Pendências (documentos incompletos) ──
+  const htmlPendencias = pendenciasDocs.length ? `
+    <div class="home-section">
+      <div class="section-header"><div class="section-title">Pendências — documentos</div></div>
+      <div class="card">${pendenciasDocs.map(t=>`
+        <div class="list-item" data-action="abrirDocumentos" data-id="${t.id}" style="cursor:pointer">
+          <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
+          <div class="li-info">
+            <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
+            <div class="li-sub">${t.clientes?.nome||'—'} · documentos incompletos</div>
+          </div>
+          <span class="badge badge-amber">Gerar</span>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // ── Indicadores resumidos ──
+  const htmlIndicadores = `
+    <div class="stats-grid">
+      <div class="stat-card navy"><div class="stat-label">Turmas ativas</div><div class="stat-value">${turmasAtivas}</div><div class="stat-sub">Agendadas/andamento</div></div>
+      <div class="stat-card accent"><div class="stat-label">Aulas hoje</div><div class="stat-value">${aulasHoje.length}</div><div class="stat-sub">Hoje</div></div>
+      <div class="stat-card accent"><div class="stat-label">Atrasados</div><div class="stat-value">${atrasadas.length}</div><div class="stat-sub">${atrasadas.length?'Atenção':'Em dia'}</div></div>
+      <div class="stat-card accent"><div class="stat-label">Horas no mês</div><div class="stat-value">${horasMes}</div><div class="stat-sub">Ministradas</div></div>
+    </div>`;
+
+  // ── Atalhos rápidos ──
+  const htmlAtalhos = `
+    <div class="home-section">
+      <div class="section-header"><div class="section-title">Atalhos rápidos</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" data-nav="agenda" style="flex:1;min-width:100px">📅 Agenda</button>
+        <button class="btn btn-outline btn-sm" data-nav="historico" style="flex:1;min-width:100px">🕐 Histórico</button>
+        <button class="btn btn-outline btn-sm" data-nav="conta" style="flex:1;min-width:100px">👤 Minha conta</button>
+      </div>
+    </div>`;
+
+  setConteudo(`
+    ${htmlIndicadores}
+    ${htmlProximo}
+    ${htmlAtrasadas}
+    ${htmlAulasHoje}
+    ${htmlProximosAgendamentos}
+    ${htmlPendencias}
+    ${htmlAtalhos}
+  `);
 }
 
 // ============================================================
@@ -5473,60 +5620,13 @@ async function renderAgenda() {
   window._agendaHoje = hoje;
   window._agendaSL = SL; window._agendaSB = SB;
 
-  const renderGrupo = g => {
-    const t  = g.turma;
-    const st = t.status||'agendada';
-    const totalS    = g.sessoes.length;
-    const concluidosS = g.sessoes.filter(s=>s.concluida).length;
-    const sessaoHoje    = g.sessoes.find(s => s.data === hoje && !s.concluida);
-    const proximaSessao = g.sessoes.find(s => s.data >= hoje && !s.concluida);
-    const datasHtml = g.sessoes.map(s => {
-      const isConcluida = s.concluida;
-      const isHoje = s.data === hoje;
-      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px">${isConcluida?'✅':'📅'}</span>
-        <div style="flex:1">
-          <span style="font-size:13px;font-weight:${isHoje?'600':'400'};color:${isHoje?'var(--blue)':'var(--text-1)'}">${formatarData(s.data)}</span>
-          ${s.hora_inicio?`<span style="font-size:12px;color:var(--text-3)"> · ${s.hora_inicio.slice(0,5)}${s.hora_fim?' – '+s.hora_fim.slice(0,5):''}</span>`:''}
-          ${isHoje?`<span style="font-size:10px;font-weight:700;color:var(--blue);margin-left:6px">HOJE</span>`:''}
-        </div>
-        <span style="font-size:11px;color:${isConcluida?'var(--green)':'var(--text-3)'}">${isConcluida?'Concluído':'Pendente'}</span>
-      </div>`;
-    }).join('');
-    let btnAcao = '';
-    if (sessaoHoje && st === 'agendada') {
-      btnAcao = `<button class="btn btn-navy" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Iniciar treinamento de hoje</button>`;
-    } else if (sessaoHoje && st === 'em_andamento') {
-      btnAcao = `<button class="btn" style="width:100%;margin-top:12px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${t.id}" data-sessao="${sessaoHoje.id}">▶ Continuar treinamento de hoje</button>`;
-    } else if (!sessaoHoje && st === 'em_andamento' && proximaSessao) {
-      btnAcao = `<div style="margin-top:10px;font-size:12px;color:var(--text-3);text-align:center">Próxima data: ${formatarData(proximaSessao.data)}</div>`;
-    } else if (st === 'concluida') {
-      btnAcao = `<button class="btn btn-outline" style="width:100%;margin-top:12px" data-action="abrirDocumentos" data-id="${t.id}">📄 Ver documentos</button>`;
-    }
-    return `<div class="card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:2px">${t.catalogo?.nome||'Treinamento'}</div>
-          <div style="font-size:13px;color:var(--text-2)">${t.clientes?.nome||'—'}</div>
-        </div>
-        <span class="badge ${SB[st]}" style="flex-shrink:0;margin-left:8px">${SL[st]}</span>
-      </div>
-      <div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">
-        Datas — ${concluidosS} de ${totalS} concluída(s)
-      </div>
-      ${datasHtml}
-      ${btnAcao}
-    </div>`;
-  };
-
-  window._agendaRenderGrupo = renderGrupo;
-
-  const grupos = Object.values(turmasAgrupadas);
-  const pendentes  = grupos.filter(g => g.turma.status !== 'concluida');
-  const concluidas = grupos.filter(g => g.turma.status === 'concluida');
-
+  // Agenda agora é responsável só pelo calendário (a lista de turmas
+  // pendentes/concluídas com ações de iniciar/continuar/ver documentos foi
+  // consolidada no Dashboard do Início, para não duplicar a mesma
+  // informação em duas telas). A lista compacta de sessões do dia/mês
+  // (agendaCalLista) continua aqui, é parte do próprio calendário.
   setConteudo(`
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);margin-bottom:16px;overflow:hidden">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden">
       <div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
         <button onclick="_agendaNavMes(-1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">‹</button>
         <div id="agendaCalMes" style="font-size:14px;font-weight:600;color:#fff"></div>
@@ -5548,20 +5648,6 @@ async function renderAgenda() {
           <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px" id="agendaCalListaHeader">Sessões do mês</div>
           <div id="agendaCalListaBody"></div>
         </div>
-      </div>
-    </div>
-    <div id="agendaListaFiltrada">
-      <div class="home-section">
-        <div class="section-header"><div class="section-title">Pendentes (${pendentes.length})</div></div>
-        ${pendentes.length===0
-          ?'<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum agendamento pendente</div></div></div>'
-          :pendentes.map(renderGrupo).join('')}
-      </div>
-      <div class="home-section">
-        <div class="section-header"><div class="section-title">Concluídos (${concluidas.length})</div></div>
-        ${concluidas.length===0
-          ?'<div class="card"><div class="empty"><div class="empty-icon">✓</div><div class="empty-title">Nenhum concluído ainda</div></div></div>'
-          :concluidas.map(renderGrupo).join('')}
       </div>
     </div>`);
 
@@ -5694,34 +5780,12 @@ function _agendaNavMes(delta) {
 }
 
 function _agendaFiltrarData(dataStr) {
-  // Atualizar seleção no calendário
+  // Agenda agora só cuida do calendário — selecionar um dia filtra apenas a
+  // lista compacta já embutida nele (agendaCalLista), que _agendaRenderCalendario
+  // já atualiza sozinha via _agendaAtualizarLista. Não existe mais lista
+  // separada de turmas abaixo do calendário (isso foi para o Início).
   window._agendaDataSel = window._agendaDataSel === dataStr ? null : dataStr;
   _agendaRenderCalendario();
-
-  // Também filtrar a lista principal de turmas abaixo do calendário
-  const turmasAgrupadas = window._agendaTurmasAgrupadas;
-  const renderGrupo     = window._agendaRenderGrupo;
-  const el = _getElVisible('agendaListaFiltrada');
-  if (!el) return;
-
-  if (!window._agendaDataSel) {
-    // Deselecionar — mostrar todos
-    renderAgenda(); return;
-  }
-
-  const grupos = Object.values(turmasAgrupadas).filter(g =>
-    g.sessoes.some(s => s.data === window._agendaDataSel)
-  );
-  if (!grupos.length) {
-    el.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">📅</div>
-      <div class="empty-title">Nenhum agendamento em ${window._agendaDataSel.split('-').reverse().join('/')}</div></div></div>
-      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%" onclick="_agendaFiltrarData('${window._agendaDataSel}')">Ver todos</button>`;
-    return;
-  }
-  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-size:13px;font-weight:600;color:var(--navy,#1E2A4A)">${window._agendaDataSel.split('-').reverse().join('/')} — ${grupos.length} turma(s)</div>
-    <button class="btn btn-outline btn-sm" onclick="renderAgenda()">Ver todos</button>
-  </div>` + grupos.map(renderGrupo).join('');
 }
 
 // ============================================================
