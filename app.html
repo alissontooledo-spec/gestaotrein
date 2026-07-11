@@ -1258,6 +1258,29 @@ function escapeHtml(v) {
     .replace(/'/g,'&#39;');
 }
 
+// Copia um texto simples (ex.: protocolo da turma) para a área de
+// transferência, com fallback para navegadores/WebViews sem suporte à
+// Clipboard API.
+function copiarTexto(texto) {
+  if (!texto) return;
+  const ok = () => showToast('Copiado: ' + texto, 'success', 2000);
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(texto).then(ok).catch(() => _copiarTextoFallback(texto, ok));
+  } else {
+    _copiarTextoFallback(texto, ok);
+  }
+}
+function _copiarTextoFallback(texto, ok) {
+  try {
+    const el = document.createElement('textarea');
+    el.value = texto; el.style.position = 'fixed'; el.style.opacity = '0';
+    document.body.appendChild(el); el.focus(); el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    ok();
+  } catch(e) { showToast('Não foi possível copiar automaticamente.', 'error'); }
+}
+
 // S1 — Substituição do confirm() nativo por modal customizado (funciona em mobile/PWA)
 function confirmarAcao(mensagem, tituloBotao, danger) {
   return new Promise(resolve => {
@@ -4718,7 +4741,10 @@ async function verTurma(id) {
         <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
         <div style="flex:1;min-width:0">
           <div style="font-size:18px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
-          <div style="font-size:13px;color:var(--text-2)">${t.protocolo||''}</div>
+          ${t.protocolo?`<div style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:6px">
+            <span>${t.protocolo}</span>
+            <button class="btn btn-ghost btn-sm" style="padding:2px 6px" title="Copiar protocolo" onclick="copiarTexto('${t.protocolo}')">📋</button>
+          </div>`:''}
         </div>
         <span class="badge ${SB[st]}" style="flex-shrink:0">${SL[st]}</span>
       </div>
@@ -7732,25 +7758,40 @@ async function renderConta() {
   setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Minha conta</div>`);
   fabOcultar();
 
-  let certHtml = '';
+  let secaoAssinatura = '';
   if (u.perfil === 'instrutor') {
+    let certHtml = '', assinHtml = '';
     try {
       const {data:cert} = await sb.from('certificados_digitais').select('*').eq('usuario_id', u.id).maybeSingle();
       certHtml = _htmlCardCertificadoDigital(cert);
     } catch(e) { console.warn('Não foi possível carregar certificado digital:', e.message); }
+    try {
+      let previewUrl = '';
+      if (u.assinatura_path) {
+        const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(u.assinatura_path, 300);
+        previewUrl = urlData?.signedUrl || '';
+      }
+      assinHtml = _htmlCardAssinaturaInstrutor(previewUrl);
+    } catch(e) { console.warn('Não foi possível carregar assinatura digitalizada:', e.message); }
+
+    secaoAssinatura = `
+      <div style="font-size:13px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin:24px 0 12px">Assinatura eletrônica dos documentos</div>
+      ${assinHtml}
+      ${certHtml}`;
   }
 
   setConteudo(`
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-        <div style="width:56px;height:56px;border-radius:50%;background:${corPerfil(u.perfil)};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0">${iniciais(u.nome)}</div>
-        <div>
-          <div style="font-size:18px;font-weight:700">${u.nome}</div>
-          <div style="font-size:13px;color:var(--text-2);margin-top:2px">${u.email||'—'}</div>
+        <div style="width:60px;height:60px;border-radius:50%;background:${corPerfil(u.perfil)};display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0">${iniciais(u.nome)}</div>
+        <div style="min-width:0">
+          <div style="font-size:18px;font-weight:700;color:var(--text-1)">${u.nome}</div>
+          <div style="font-size:13px;color:var(--text-2);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${u.email||'—'}</div>
           <span class="badge badge-blue" style="margin-top:6px">${labelPerfil(u.perfil)}</span>
         </div>
       </div>
       <div class="divider"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Dados pessoais</div>
       <div class="field"><label>Nome completo</label><input type="text" id="editNome" value="${u.nome}"></div>
       <div class="field">
         <label>E-mail</label>
@@ -7759,8 +7800,9 @@ async function renderConta() {
       </div>
       <button class="btn btn-navy" onclick="salvarConta()" style="width:100%">Salvar alterações</button>
     </div>
+
     <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Segurança</div>
+      <div class="card-title">🔒 Segurança</div>
       <div id="formAlterarSenha" style="display:none;margin-bottom:16px">
         <div class="field"><label>Senha atual</label><input type="password" id="senhaAtual" placeholder="Digite sua senha atual"></div>
         <div class="field"><label>Nova senha</label><input type="password" id="senhaNova" placeholder="Mínimo 6 caracteres"></div>
@@ -7770,10 +7812,110 @@ async function renderConta() {
           <button class="btn btn-outline" onclick="cancelarAlterarSenha()">Cancelar</button>
         </div>
       </div>
-      <button class="btn btn-outline" id="btnAlterarSenha" onclick="mostrarFormSenha()" style="width:100%;margin-bottom:12px">🔒 Alterar senha</button>
+      <button class="btn btn-outline" id="btnAlterarSenha" onclick="mostrarFormSenha()" style="width:100%;margin-bottom:12px">🔑 Alterar senha</button>
       <button class="btn btn-danger" style="width:100%" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
     </div>
-    ${certHtml}`);
+    ${secaoAssinatura}`);
+}
+
+// Card de upload da assinatura digitalizada (imagem) do instrutor —
+// alternativa simples ao certificado digital A1. Quando cadastrada, é usada
+// automaticamente nos certificados individual, coletivo e na ficha de
+// presença, sem precisar de mais nenhuma acao do instrutor.
+function _htmlCardAssinaturaInstrutor(previewUrl) {
+  if (previewUrl) {
+    return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">✍️ Assinatura digitalizada</div>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
+        Usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir.
+      </p>
+      <div style="display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px">
+        <img src="${previewUrl}" alt="Assinatura" style="height:38px;max-width:140px;object-fit:contain;background:#fff;border-radius:4px;padding:2px">
+        <div style="font-size:12px;color:var(--green);font-weight:600">✓ Cadastrada</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <label class="btn btn-outline" style="flex:1;text-align:center;cursor:pointer;margin:0">
+          ↻ Trocar imagem
+          <input type="file" accept="image/png,image/jpeg" style="display:none" onchange="uploadAssinaturaInstrutor(this)">
+        </label>
+        <button class="btn btn-danger" style="flex:1" onclick="removerAssinaturaInstrutor()">Remover</button>
+      </div>
+    </div>`;
+  }
+  return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">✍️ Assinatura digitalizada</div>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
+        Alternativa simples ao certificado digital A1: envie uma foto ou digitalização da sua assinatura em papel. Ela passa a ser usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir — sem precisar de certificado digital.
+      </p>
+      <label class="btn btn-navy" style="width:100%;text-align:center;cursor:pointer;display:block;margin:0">
+        📷 Enviar imagem da assinatura
+        <input type="file" accept="image/png,image/jpeg" style="display:none" onchange="uploadAssinaturaInstrutor(this)">
+      </label>
+      <div style="font-size:11px;color:var(--text-3);margin-top:8px">PNG ou JPG, fundo claro, até 2MB.</div>
+    </div>`;
+}
+
+// Recebe o <input type=file>, converte a imagem para PNG (garante
+// compatibilidade com o jsPDF independente do formato original) e envia
+// para o Storage; grava o caminho em usuarios.assinatura_path.
+async function uploadAssinaturaInstrutor(inputEl) {
+  const file = inputEl.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('Selecione um arquivo de imagem (PNG ou JPG).','error'); inputEl.value=''; return; }
+  if (file.size > 2*1024*1024) { showToast('A imagem deve ter no máximo 2MB.','error'); inputEl.value=''; return; }
+
+  showLoading('Enviando assinatura...');
+  try {
+    const dataUrl = await new Promise((resolve,reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          c.getContext('2d').drawImage(img,0,0);
+          resolve(c.toDataURL('image/png'));
+        };
+        img.onerror = () => reject(new Error('Não foi possível ler a imagem selecionada.'));
+        img.src = reader.result;
+      };
+      reader.onerror = () => reject(new Error('Não foi possível ler o arquivo selecionado.'));
+      reader.readAsDataURL(file);
+    });
+    const blobPng = await (await fetch(dataUrl)).blob();
+
+    const path = `instrutores/${usuarioAtual.id}.png`;
+    const {error:upErr} = await sb.storage.from('assinaturas').upload(path, blobPng, {upsert:true, contentType:'image/png'});
+    if (upErr) throw upErr;
+
+    const {error:dbErr} = await sb.from('usuarios').update({assinatura_path: path}).eq('id', usuarioAtual.id);
+    if (dbErr) throw dbErr;
+
+    usuarioAtual.assinatura_path = path;
+    showToast('Assinatura cadastrada com sucesso!','success');
+    await renderConta();
+  } catch(e) {
+    showToast(e.message||'Erro ao enviar assinatura','error');
+  } finally { hideLoading(); inputEl.value=''; }
+}
+
+async function removerAssinaturaInstrutor() {
+  const ok = await confirmarAcao('Deseja remover sua assinatura digitalizada? Os próximos documentos voltarão a usar a assinatura convencional (nome + linha).', 'Remover assinatura', true);
+  if (!ok) return;
+  showLoading('Removendo assinatura...');
+  try {
+    const path = usuarioAtual.assinatura_path;
+    if (path) await sb.storage.from('assinaturas').remove([path]);
+    const {error} = await sb.from('usuarios').update({assinatura_path:null}).eq('id', usuarioAtual.id);
+    if (error) throw error;
+    usuarioAtual.assinatura_path = null;
+    showToast('Assinatura removida.','success');
+    await renderConta();
+  } catch(e) {
+    showToast(e.message||'Erro ao remover assinatura','error');
+  } finally { hideLoading(); }
 }
 
 function mostrarFormSenha() {
@@ -8179,6 +8321,37 @@ function carregarImagemComoDataURL(url) {
   });
 }
 
+// Carrega a assinatura digitalizada do instrutor (cadastrada em Minha Conta)
+// como Data URL pronta para uso no jsPDF. Retorna null se o instrutor nao
+// tiver assinatura cadastrada ou se o arquivo nao puder ser lido -- nesses
+// casos os documentos continuam exibindo a assinatura convencional (nome +
+// linha), exatamente como antes.
+async function carregarAssinaturaInstrutorPDF(path) {
+  if (!path) return null;
+  try {
+    const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(path, 60);
+    if (!urlData?.signedUrl) return null;
+    return await carregarImagemComoDataURL(urlData.signedUrl);
+  } catch(e) { return null; }
+}
+
+// Desenha a assinatura digitalizada do instrutor no espaco em branco que ja
+// existia acima da linha de assinatura (nao desloca nenhum outro elemento).
+// Sobre fundo escuro (rodape navy) desenha uma placa clara atras da imagem
+// para nao perder legibilidade.
+function desenharAssinaturaImagemPDF(doc, imgData, cx, lineY, sobreFundoEscuro) {
+  if (!imgData) return;
+  try {
+    const w = 26, h = 8;
+    const x = cx - w/2, y = lineY - h - 1;
+    if (sobreFundoEscuro) {
+      doc.setFillColor(255,255,255);
+      doc.roundedRect(x-2, y-1, w+4, h+2, 1, 1, 'F');
+    }
+    doc.addImage(imgData, 'PNG', x, y, w, h);
+  } catch(e) {}
+}
+
 function fmtDataExtenso(iso) {
   if (!iso) return '-';
   const [y,m,d] = iso.split('-');
@@ -8451,7 +8624,7 @@ async function gerarListaPresenca(turmaId) {
   showLoading('Gerando ficha de presença...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -8476,6 +8649,8 @@ async function gerarListaPresenca(turmaId) {
     const local = pdfSafe(ag?.local||t.local||'-');
     const protocolo = t.protocolo||turmaId.slice(0,12).toUpperCase();
     const nomeOrg = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
+    // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
+    const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
 
     // ── Borda dupla externa ──
     doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
@@ -8574,7 +8749,7 @@ async function gerarListaPresenca(turmaId) {
       const pr = presMap[p.colaborador_id];
       const rowH = 14;
 
-      if (y + rowH > H - mg - 24) {
+      if (y + rowH > H - mg - 42) {
         // Nova página com mesmo visual
         doc.addPage();
         // Bordas
@@ -8617,6 +8792,20 @@ async function gerarListaPresenca(turmaId) {
 
     // ── Rodapé ──
     const fy = H-mg-16;
+
+    // Assinatura do instrutor — faixa nova, inteiramente acima do rodapé
+    // existente (nao desloca nem sobrepõe nenhum elemento já existente)
+    const sigLineY = fy - 8;
+    if (imgAssinaturaInstrutor) {
+      doc.addImage(imgAssinaturaInstrutor, 'PNG', W/2-13, fy-17, 26, 8);
+    }
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
+    doc.line(W/2-38, sigLineY, W/2+38, sigLineY);
+    doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
+    doc.text(instrutor, W/2, sigLineY+4, {align:'center'});
+    doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+    doc.text('Instrutor Responsavel', W/2, sigLineY+7.5, {align:'center'});
+
     doc.setFillColor(...NAVY);
     doc.rect(mg, fy, W-mg*2, 14, 'F');
     doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
@@ -8642,7 +8831,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade)),organizacoes(nome)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -8662,6 +8851,8 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const valMeses  = t.catalogo?.validade_meses || 12;
     const cpBlocos  = extrairBlocosConteudo(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
     const nomeOrg   = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
+    // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
+    const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
@@ -8718,6 +8909,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
       // Assinatura do instrutor centralizada
       doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
       doc.line(W/2-55, ry+12, W/2+55, ry+12);
+      desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, ry+12, true);
       doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
       doc.text(s(nomeInstrutor,40), W/2, ry+17, {align:'center'});
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
@@ -8975,7 +9167,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -8993,6 +9185,8 @@ async function gerarCertificadoColetivo(turmaId) {
     const cpBlocos      = extrairBlocosConteudo(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
     const nomeEmp       = t.clientes?.nome || 'empresa nao informada';
     const nomeOrg       = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
+    // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
+    const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
@@ -9095,6 +9289,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFillColor(...NAVY);  doc.rect(0,fy+2,W,28,'F');
     doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
     doc.line(W/2-55,fy+12,W/2+55,fy+12);
+    desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, fy+12, true);
     doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
     doc.text(s(instrutor,40), W/2, fy+17, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
