@@ -2022,8 +2022,10 @@ async function verOrgProvedor(orgId) {
   const planoValor= { starter:'R$ 197/mês', pro:'R$ 397/mês', enterprise:'Sob consulta' }[plano] || 'R$ 197/mês';
   const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
 
+  if (!_orgsCache.some(o=>o.id===orgId)) _orgsCache = [..._orgsCache, orgData];
+
   _usuariosOrgAtual = usrsData;
-  _usuariosOrgFiltrado = usrsData;
+  _usuariosOrgFiltrado = usrsData.filter(u=>u.ativo); // padrão: só usuários ativos (item 4)
   _paginaUsuariosOrg = 1;
 
   setConteudo(`
@@ -2071,31 +2073,33 @@ async function verOrgProvedor(orgId) {
       </div>
     </div>
 
-    <!-- Ações — em posição natural, logo após o cabeçalho, sem flutuar durante a rolagem -->
+    <!-- Ações — todas concentradas aqui na tela de detalhes (item 3) -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
-      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
+      <button class="btn btn-outline" onclick="abrirModalOrg('${orgId}')">✎ Editar organização</button>
       <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
+      <button class="btn btn-outline" onclick="carregarCatalogoModeloOrgUI('${orgId}')">📚 Carregar catálogo modelo</button>
+      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
       <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
         ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
       </button>
     </div>
 
     <!-- Usuários — largura total (sem coluna lateral, o plano já está no cabeçalho) -->
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.length})</div>
-    ${usrsData.length > 5 ? `
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.filter(u=>u.ativo).length} ativos de ${usrsData.length})</div>
+    ${(usrsData.length > 5 || usrsData.some(u=>!u.ativo)) ? `
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input type="search" id="buscaUsuariosOrg" placeholder="Buscar por nome ou perfil..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="_filtrarUsuariosOrg()">
-      <select id="filtroStatusUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
+      ${usrsData.length > 5 ? `<input type="search" id="buscaUsuariosOrg" placeholder="Buscar por nome ou perfil..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="_filtrarUsuariosOrg()">` : ''}
+      ${usrsData.some(u=>!u.ativo) ? `<select id="filtroStatusUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
+        <option value="ativo" selected>Ativos</option>
         <option value="">Todos</option>
-        <option value="ativo">Ativos</option>
         <option value="inativo">Inativos</option>
-      </select>
-      <select id="filtroPerfilUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
+      </select>` : ''}
+      ${usrsData.length > 5 ? `<select id="filtroPerfilUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
         <option value="">Todos os perfis</option>
         <option value="administrador">Administrador</option>
         <option value="comercial">Comercial</option>
         <option value="instrutor">Instrutor</option>
-      </select>
+      </select>` : ''}
     </div>` : ''}
     <div class="card" style="padding:0" id="listaUsuariosOrg">${_renderUsuariosOrgLista()}</div>
   `);
@@ -2122,9 +2126,12 @@ function _renderUsuariosOrgLista() {
   });
 }
 function _filtrarUsuariosOrg() {
-  const f = (document.getElementById('buscaUsuariosOrg')?.value || '').toLowerCase().trim();
-  const perfil = document.getElementById('filtroPerfilUsuarioOrg')?.value || '';
-  const status = document.getElementById('filtroStatusUsuarioOrg')?.value || '';
+  const f = (_getElVisible('buscaUsuariosOrg')?.value || '').toLowerCase().trim();
+  const perfil = _getElVisible('filtroPerfilUsuarioOrg')?.value || '';
+  // Quando não existe o select de status (lista pequena sem nenhum usuário
+  // inativo), não há o que filtrar — mostra todos, que já são só ativos.
+  const statusEl = _getElVisible('filtroStatusUsuarioOrg');
+  const status = statusEl ? statusEl.value : 'ativo';
   let r = _usuariosOrgAtual;
   if (status === 'ativo')   r = r.filter(u => u.ativo);
   if (status === 'inativo') r = r.filter(u => !u.ativo);
@@ -3023,7 +3030,6 @@ function _htmlListaOrgs(orgs) {
         ${_badgeTrial(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
         ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">${ICONS.support}</button>` : ''}
-        <button class="btn btn-ghost btn-sm" style="padding:6px" data-action="menuOrg" data-id="${o.id}">${ICONS.dots}</button>
       </div>
     </div>`;
   }).join('');
@@ -3106,7 +3112,11 @@ function abrirModalOrg(id=null) {
         <div class="field" style="margin:0"><label>Cor primária</label><input type="color" id="mOrgCorPrimaria" value="${org?.cor_primaria||'#1E2A4A'}" style="width:100%;height:40px;padding:2px;border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer"></div>
         <div class="field" style="margin:0"><label>URL da logo</label><input type="url" id="mOrgLogoUrl" value="${org?.logo_url||''}" placeholder="https://..."></div>
       </div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Aplica-se apenas quando o plano é Enterprise. Suba a logo em qualquer serviço de hospedagem de imagens e cole o link aqui.</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px;line-height:1.6">
+        Disponível apenas para organizações com plano Enterprise. Faça upload da logomarca em um serviço de hospedagem de imagens e cole o link público abaixo.<br>
+        <strong>Requisitos:</strong> formatos PNG, JPG/JPEG ou SVG · até 2 MB · dimensão recomendada 512×512px · preferencialmente fundo transparente (PNG).<br>
+        Serviços gratuitos sugeridos: <a href="https://imgbb.com" target="_blank" rel="noopener">ImgBB</a> ou <a href="https://postimages.org" target="_blank" rel="noopener">Postimages</a>.
+      </div>
     </div>
     ${!org ? `
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
