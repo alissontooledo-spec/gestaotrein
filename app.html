@@ -7909,6 +7909,28 @@ function _htmlCardAssinaturaInstrutor(previewUrl) {
 // Recebe o <input type=file>, converte a imagem para PNG (garante
 // compatibilidade com o jsPDF independente do formato original) e envia
 // para o Storage; grava o caminho em usuarios.assinatura_path.
+// Torna transparentes os pixels claros (fundo de papel) de uma assinatura
+// digitalizada, preservando a tinta escura. Usa uma faixa de transicao
+// suave (200-235 de luminancia) para nao serrilhar as bordas antialiased
+// do traço. Pixels ja transparentes (PNG com alpha) nao sao afetados.
+function _removerFundoClaroCanvas(ctx, w, h) {
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  const LIMIAR_TRANSPARENTE = 235;
+  const LIMIAR_OPACO        = 195;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i+3] === 0) continue;
+    const lum = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+    if (lum >= LIMIAR_TRANSPARENTE) {
+      d[i+3] = 0;
+    } else if (lum > LIMIAR_OPACO) {
+      const t = (LIMIAR_TRANSPARENTE - lum) / (LIMIAR_TRANSPARENTE - LIMIAR_OPACO);
+      d[i+3] = Math.round(d[i+3] * t);
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
 async function uploadAssinaturaInstrutor(inputEl) {
   const file = inputEl.files?.[0];
   if (!file) return;
@@ -7929,7 +7951,14 @@ async function uploadAssinaturaInstrutor(inputEl) {
         img.onload = () => {
           const c = document.createElement('canvas');
           c.width = img.naturalWidth; c.height = img.naturalHeight;
-          c.getContext('2d').drawImage(img,0,0);
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img,0,0);
+          // Remove automaticamente o fundo claro (papel branco) da assinatura,
+          // deixando só a tinta visível — assim ela aparece "aplicada
+          // diretamente" sobre o certificado, sem caixa branca ao redor,
+          // mesmo sobre fundos escuros (rodapé navy). Se a imagem já tiver
+          // fundo transparente (PNG), isso não altera nada.
+          _removerFundoClaroCanvas(ctx, c.width, c.height);
           c.toBlob(blob => blob ? resolve(blob) : reject(new Error('Não foi possível processar a imagem selecionada.')), 'image/png');
         };
         img.onerror = () => reject(new Error('Não foi possível ler a imagem selecionada.'));
@@ -8381,29 +8410,40 @@ function carregarImagemComoDataURL(url) {
 // tiver assinatura cadastrada ou se o arquivo nao puder ser lido -- nesses
 // casos os documentos continuam exibindo a assinatura convencional (nome +
 // linha), exatamente como antes.
+// Carrega a assinatura do instrutor E suas dimensoes naturais (para poder
+// desenhar sem distorcer depois). Retorna {dataUrl,w,h} ou null.
 async function carregarAssinaturaInstrutorPDF(path) {
   if (!path) return null;
   try {
     const {data:urlData} = await sb.storage.from('assinaturas-instrutor').createSignedUrl(path, 60);
     if (!urlData?.signedUrl) return null;
-    return await carregarImagemComoDataURL(urlData.signedUrl);
+    const dataUrl = await carregarImagemComoDataURL(urlData.signedUrl);
+    if (!dataUrl) return null;
+    const dim = await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve({w: img.naturalWidth||1, h: img.naturalHeight||1});
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+    if (!dim) return null;
+    return { dataUrl, w: dim.w, h: dim.h };
   } catch(e) { return null; }
 }
 
-// Desenha a assinatura digitalizada do instrutor no espaco em branco que ja
-// existia acima da linha de assinatura (nao desloca nenhum outro elemento).
-// Sobre fundo escuro (rodape navy) desenha uma placa clara atras da imagem
-// para nao perder legibilidade.
-function desenharAssinaturaImagemPDF(doc, imgData, cx, lineY, sobreFundoEscuro) {
-  if (!imgData) return;
+// Desenha a assinatura digitalizada do instrutor no espaco que ja existia
+// acima da linha de assinatura (nao desloca nenhum outro elemento).
+// Preserva a proporcao original (nunca distorce): a imagem e encaixada
+// dentro da caixa maxW x maxH mantendo o aspect ratio. Como o upload em
+// Minha Conta ja remove o fundo claro da imagem, nao e mais necessario
+// desenhar nenhuma placa atras dela.
+function desenharAssinaturaImagemPDF(doc, assinatura, cx, lineY, maxW, maxH) {
+  if (!assinatura || !assinatura.dataUrl) return;
   try {
-    const w = 26, h = 8;
+    const ratio = assinatura.w / assinatura.h;
+    let w = maxW, h = maxW / ratio;
+    if (h > maxH) { h = maxH; w = maxH * ratio; }
     const x = cx - w/2, y = lineY - h - 1;
-    if (sobreFundoEscuro) {
-      doc.setFillColor(255,255,255);
-      doc.roundedRect(x-2, y-1, w+4, h+2, 1, 1, 'F');
-    }
-    doc.addImage(imgData, 'PNG', x, y, w, h);
+    doc.addImage(assinatura.dataUrl, 'PNG', x, y, w, h);
   } catch(e) {}
 }
 
@@ -8851,9 +8891,7 @@ async function gerarListaPresenca(turmaId) {
     // Assinatura do instrutor — faixa nova, inteiramente acima do rodapé
     // existente (nao desloca nem sobrepõe nenhum elemento já existente)
     const sigLineY = fy - 8;
-    if (imgAssinaturaInstrutor) {
-      doc.addImage(imgAssinaturaInstrutor, 'PNG', W/2-13, fy-17, 26, 8);
-    }
+    desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, sigLineY, 26, 8);
     doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
     doc.line(W/2-38, sigLineY, W/2+38, sigLineY);
     doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
@@ -8964,7 +9002,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
       // Assinatura do instrutor centralizada
       doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
       doc.line(W/2-55, ry+12, W/2+55, ry+12);
-      desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, ry+12, true);
+      desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, ry+12, 28, 9);
       doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
       doc.text(s(nomeInstrutor,40), W/2, ry+17, {align:'center'});
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
@@ -9104,8 +9142,9 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.setDrawColor(...AMBER); doc.setLineWidth(0.6);
     doc.line(p_c2x, p_y2, p_c2x+36, p_y2); p_y2+=5;
 
-    // Área CP — reserva espaço para assinatura (18mm no final)
-    const p_cpMaxY = p_bot - 18;
+    // Área CP — reserva espaço para assinatura (22mm no final: 8mm para a
+    // imagem da assinatura + 14mm para linha/nome/credencial, nunca sobrepõe)
+    const p_cpMaxY = p_bot - 22;
     const p_cpLeading = 4.2;
     if (cpBlocos.length) {
       const { truncado } = desenharBlocosConteudoPDF(
@@ -9125,6 +9164,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const p_sigY = p_bot - 12;
     doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
     doc.line(p_c2x + p_c2w*0.08, p_sigY, p_c2x + p_c2w*0.92, p_sigY);
+    desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, p_c2x+p_c2w/2, p_sigY, 24, 7);
     doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
     doc.text(s(instrutor,32), p_c2x+p_c2w/2, p_sigY+5, {align:'center'});
     if (instCredencial) {
@@ -9344,7 +9384,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFillColor(...NAVY);  doc.rect(0,fy+2,W,28,'F');
     doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
     doc.line(W/2-55,fy+12,W/2+55,fy+12);
-    desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, fy+12, true);
+    desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, fy+12, 28, 9);
     doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
     doc.text(s(instrutor,40), W/2, fy+17, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
@@ -9413,6 +9453,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const p_sigYc = p_bot - 12;
     doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
     doc.line(p_c1x + p_c1w*0.08, p_sigYc, p_c1x + p_c1w*0.92, p_sigYc);
+    desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, p_c1x+p_c1w/2, p_sigYc, 26, 9);
     doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
     doc.text(s(instrutor,28), p_c1x+p_c1w/2, p_sigYc+5, {align:'center'});
     if (instCredencial) {
