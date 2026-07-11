@@ -2562,7 +2562,6 @@ async function renderHomeInstrutor() {
   const proximo    = aulasHoje[0] || futuras[0] || null;
 
   // ── Indicadores resumidos ──
-  const turmasAtivas = Object.values(tMap).filter(t=>t.status==='agendada'||t.status==='em_andamento').length;
   const mesAtual = hoje.slice(0,7);
   const turmaIdsConcluidasMes = new Set(
     sessoesValidas.filter(s=>s.concluida && s.data?.startsWith(mesAtual)).map(s=>s.turma_id)
@@ -2583,9 +2582,10 @@ async function renderHomeInstrutor() {
 
   let pendenciasDocs = [];
   if (idsConcluidasRecentes.length) {
-    const [{data:docs}, {data:partsData}] = await Promise.all([
+    const [{data:docs}, {data:partsData}, {data:envios}] = await Promise.all([
       sb.from('documentos').select('turma_id,tipo,colaborador_id').in('turma_id', idsConcluidasRecentes),
       sb.from('turma_participantes').select('turma_id').in('turma_id', idsConcluidasRecentes),
+      sb.from('envios_email').select('turma_id,status').in('turma_id', idsConcluidasRecentes),
     ]);
     const partsCountPorTurma = {};
     (partsData||[]).forEach(p=>{ partsCountPorTurma[p.turma_id]=(partsCountPorTurma[p.turma_id]||0)+1; });
@@ -2596,11 +2596,22 @@ async function renderHomeInstrutor() {
       else if (d.tipo==='certificado_coletivo') docsPorTurma[d.turma_id].coletivo = true;
       else if (d.tipo==='certificado_individual') docsPorTurma[d.turma_id].individuais.add(d.colaborador_id);
     });
-    pendenciasDocs = idsConcluidasRecentes.filter(id => {
+    const enviadoPorTurma = {};
+    (envios||[]).forEach(e=>{ enviadoPorTurma[e.turma_id] = e.status === 'enviado'; });
+
+    // Duas causas possíveis de pendência: (1) documentos ainda incompletos
+    // (falta gerar lista/certificado coletivo/algum certificado individual),
+    // ou (2) documentos 100% gerados mas a turma nunca foi enviada por
+    // e-mail ao cliente (tabela envios_email, 1 registro por turma).
+    pendenciasDocs = idsConcluidasRecentes.map(id => {
       const dp = docsPorTurma[id] || {lista:false,coletivo:false,individuais:new Set()};
       const totalPart = partsCountPorTurma[id]||0;
-      return !dp.lista || !dp.coletivo || dp.individuais.size < totalPart;
-    }).map(id => tMap[id]).filter(Boolean);
+      const incompletos   = !dp.lista || !dp.coletivo || dp.individuais.size < totalPart;
+      const temDocumento   = dp.lista || dp.coletivo || dp.individuais.size > 0;
+      const naoEnviado     = !incompletos && temDocumento && !enviadoPorTurma[id];
+      if (!incompletos && !naoEnviado) return null;
+      return { turma: tMap[id], motivo: incompletos ? 'gerar' : 'enviar' };
+    }).filter(Boolean);
   }
 
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Instrutor</div>`);
@@ -2651,40 +2662,33 @@ async function renderHomeInstrutor() {
       <div class="card" style="border:1px solid var(--red)">${atrasadas.map(s=>_linhaSessao(s,'#DC2626','⚠️','<span class="badge badge-red">Atrasado</span>')).join('')}</div>
     </div>` : '';
 
-  // ── Pendências (documentos incompletos) ──
+  // ── Pendências (documentos incompletos ou gerados mas não enviados) ──
   const htmlPendencias = pendenciasDocs.length ? `
     <div class="home-section">
-      <div class="section-header"><div class="section-title">Pendências — documentos</div></div>
-      <div class="card">${pendenciasDocs.map(t=>`
+      <div class="section-header"><div class="section-title">Documentos pendentes</div></div>
+      <div class="card">${pendenciasDocs.map(({turma:t, motivo})=>`
         <div class="list-item" data-action="abrirDocumentos" data-id="${t.id}" style="cursor:pointer">
           <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
           <div class="li-info">
             <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
-            <div class="li-sub">${t.clientes?.nome||'—'} · documentos incompletos</div>
+            <div class="li-sub">${t.clientes?.nome||'—'} · ${motivo==='gerar'?'documentos incompletos':'gerado, falta enviar por e-mail'}</div>
           </div>
-          <span class="badge badge-amber">Gerar</span>
+          <span class="badge badge-amber">${motivo==='gerar'?'Gerar':'Enviar'}</span>
         </div>`).join('')}
       </div>
     </div>` : '';
 
-  // ── Indicadores resumidos ──
+  // ── Indicadores resumidos — Turmas concluídas conta pelo mesmo critério
+  // que o Financeiro/Relatórios usa para "performance do instrutor" (sessão
+  // própria concluída no mês, sem exigir status geral da turma), pra não
+  // repetir a divergência 6x18 encontrada entre o Histórico do Instrutor e
+  // os Relatórios do Administrador. ──
   const htmlIndicadores = `
     <div class="stats-grid">
-      <div class="stat-card navy"><div class="stat-label">Turmas ativas</div><div class="stat-value">${turmasAtivas}</div><div class="stat-sub">Agendadas/andamento</div></div>
-      <div class="stat-card accent"><div class="stat-label">Aulas hoje</div><div class="stat-value">${aulasHoje.length}</div><div class="stat-sub">Hoje</div></div>
-      <div class="stat-card accent"><div class="stat-label">Atrasados</div><div class="stat-value">${atrasadas.length}</div><div class="stat-sub">${atrasadas.length?'Atenção':'Em dia'}</div></div>
+      <div class="stat-card navy"><div class="stat-label">Aulas hoje</div><div class="stat-value">${aulasHoje.length}</div><div class="stat-sub">Hoje</div></div>
+      <div class="stat-card accent"><div class="stat-label">Documentos pendentes</div><div class="stat-value">${pendenciasDocs.length}</div><div class="stat-sub">${pendenciasDocs.length?'Requer ação':'Em dia'}</div></div>
+      <div class="stat-card accent"><div class="stat-label">Turmas concluídas</div><div class="stat-value">${turmaIdsConcluidasMes.size}</div><div class="stat-sub">No mês</div></div>
       <div class="stat-card accent"><div class="stat-label">Horas no mês</div><div class="stat-value">${horasMes}</div><div class="stat-sub">Ministradas</div></div>
-    </div>`;
-
-  // ── Atalhos rápidos ──
-  const htmlAtalhos = `
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Atalhos rápidos</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" data-nav="agenda" style="flex:1;min-width:100px">📅 Agenda</button>
-        <button class="btn btn-outline btn-sm" data-nav="historico" style="flex:1;min-width:100px">🕐 Histórico</button>
-        <button class="btn btn-outline btn-sm" data-nav="conta" style="flex:1;min-width:100px">👤 Minha conta</button>
-      </div>
     </div>`;
 
   setConteudo(`
@@ -2692,7 +2696,6 @@ async function renderHomeInstrutor() {
     ${htmlProximo}
     ${htmlAtrasadas}
     ${htmlPendencias}
-    ${htmlAtalhos}
   `);
 }
 
