@@ -843,6 +843,19 @@ function formatarData(iso) {
   const [y,m,d] = iso.split('-');
   return `${d}/${m}/${y}`;
 }
+// Retorna a data de hoje (ou de um Date informado) no formato YYYY-MM-DD usando
+// o fuso horario LOCAL do dispositivo, nao UTC. Bug corrigido: usar
+// new Date().toISOString().split('T')[0] pega o dia em UTC, que ja e o dia
+// seguinte entre ~21h e 23h59 no horario de Brasilia (UTC-3) -- isso fazia
+// "hoje" virar "amanha" a noite (ex.: certificado emitido as 22h aparecia
+// com a data do dia seguinte).
+function dataLocalISO(d) {
+  d = d || new Date();
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
 function formatarDataHora(iso) {
   if (!iso) return '-';
   return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -2238,7 +2251,7 @@ async function renderHomeAdmin() {
   }).join('');
 
   // Próximas sessões (hoje em diante, sem instrutor ou pendentes)
-  const hojeStr = hoje.toISOString().split('T')[0];
+  const hojeStr = dataLocalISO(hoje);
   const proxSessoes = sesAll
     .filter(s=>s.data>=hojeStr && !s.concluida)
     .slice(0,3);
@@ -2257,7 +2270,7 @@ async function renderHomeAdmin() {
   const semInstrutor = sesAll.filter(s =>
     !s.concluida &&
     s.data >= hojeStr &&
-    s.data <= proximas7d.toISOString().split('T')[0] &&
+    s.data <= dataLocalISO(proximas7d) &&
     !s.instrutor_id
   );
   if (semInstrutor.length > 0) {
@@ -5362,7 +5375,7 @@ async function renderAgenda() {
 
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = dataLocalISO();
 
   // Calendário — datas com sessões
   const datasComSessao = new Set((sessoes||[]).map(s=>s.data).filter(Boolean));
@@ -5770,7 +5783,7 @@ function filtrarHistorico() {
     el.innerHTML = `<div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado</div><div class="empty-sub">Tente outros filtros.</div></div>`;
     return;
   }
-  const hoje = window._agendaHoje||new Date().toISOString().split('T')[0];
+  const hoje = window._agendaHoje||dataLocalISO();
   el.innerHTML = filtrada.map(g=>{
     const t    = g.turma;
     const nomeT = t.catalogo?.nome||'Treinamento';
@@ -6124,7 +6137,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
   showLoading('Carregando execução...');
   try {
     let t, presencas, evidencias, sessaoAtiva, deCache = false;
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = dataLocalISO();
 
     try {
       if (!navigator.onLine) throw new Error('__offline__');
@@ -8762,7 +8775,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.text(`Cod: ${codigoShort}`, W-41, H-7, {align:'center'});
 
     doc.setFontSize(6.5); doc.setTextColor(...T3);
-    doc.text(`Certificado No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
+    doc.text(`Certificado No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(dataLocalISO())}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
     // ════════════════════════════════════════════════════════
     // PÁGINA 2 - CONTRACAPA INDIVIDUAL — Layout B1 v2
@@ -8776,7 +8789,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
     desenharLogoOrg(doc, nomeOrg, 14, 6, 50, 16);
     doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-14, 17, {align:'right'});
+    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(dataLocalISO())}`, W-14, 17, {align:'right'});
 
     // ── Geometria: 3 colunas proporcionais ──
     // W=297, margens=14, gaps=6, total_content=257
@@ -9094,7 +9107,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFontSize(6); doc.setTextColor(...T3);
     doc.text(`Cod: ${codigoShort}`, W-41, fy+24, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(`No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
+    doc.text(`No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(dataLocalISO())}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
 
     // ════════════════════════════════════════════════════════
     // PÁGINA 2 - CONTRACAPA COLETIVO — Layout B1 v2
@@ -9108,7 +9121,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
     desenharLogoOrg(doc, nomeOrg, 14, 6, 50, 16);
     doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(new Date().toISOString().split('T')[0])}`, W-14, 17, {align:'right'});
+    doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(dataLocalISO())}`, W-14, 17, {align:'right'});
 
     // ── Geometria idêntica ao individual ──
     const p_mg=14, p_gap=6, p_top=30, p_bot=H-26;
