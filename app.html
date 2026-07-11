@@ -4548,6 +4548,8 @@ async function renderTurmas(abaInicial) {
   const nCo = _turmasCache.filter(t=>t.status==='concluida').length;
   const nCa = _turmasCache.filter(t=>t.status==='cancelada').length;
   const abaAtiva = abaInicial || (nAn>0?'em_andamento':nAg>0?'agendada':'concluida');
+  window._turmasAbaAtual = abaAtiva;
+  window._turmasBuscaAtual = '';
   setConteudo(`
     <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
       <div class="turmas-tabs" id="turmasTabsEl">
@@ -4558,7 +4560,22 @@ async function renderTurmas(abaInicial) {
       </div>
       ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.plus} Nova turma</button>`:''}
     </div>
+    <div style="margin-bottom:14px;position:relative;max-width:360px">
+      <input type="text" id="turmasBuscaInput" placeholder="Buscar por curso, empresa ou protocolo (TRN-...)"
+        oninput="buscarTurmas(this.value)"
+        style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit">
+      <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3)">🔍</span>
+    </div>
     <div id="turmasGridEl">${_htmlTurmasGrid(_turmasCache, abaAtiva, podeCriar)}</div>`);
+}
+
+// Busca textual (nome do curso, empresa cliente ou protocolo TRN-...) que
+// combina com a aba de status ativa. Mantém as duas seleções em memória
+// para que trocar de aba não perca o texto buscado, e vice-versa.
+function buscarTurmas(valor) {
+  window._turmasBuscaAtual = (valor||'').trim();
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  _setElBoth('turmasGridEl', _htmlTurmasGrid(_turmasCache, window._turmasAbaAtual, podeCriar));
 }
 
 function _turmaTabHtml(status, label, count, abaAtiva) {
@@ -4568,6 +4585,7 @@ function _turmaTabHtml(status, label, count, abaAtiva) {
 }
 
 function trocarAbaTurmas(status) {
+  window._turmasAbaAtual = status;
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   document.querySelectorAll('.turmas-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll(`.turmas-tab`).forEach(t=>{ if(t.textContent.trim().startsWith(status==='em_andamento'?'Em and':status==='agendada'?'Agend':status==='concluida'?'Conc':'Cancel')) t.classList.add('active'); });
@@ -4580,16 +4598,24 @@ function trocarAbaTurmas(status) {
 function _htmlTurmasGrid(lista, status, podeCriar) {
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const DOT_COLOR = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626'};
-  const filtrada = lista.filter(t=>t.status===status);
+  const busca = (window._turmasBuscaAtual||'').toLowerCase();
+  let filtrada = lista.filter(t=>t.status===status);
+  if (busca) {
+    filtrada = filtrada.filter(t =>
+      (t.catalogo?.nome||'').toLowerCase().includes(busca) ||
+      (t.clientes?.nome||'').toLowerCase().includes(busca) ||
+      (t.protocolo||'').toLowerCase().includes(busca)
+    );
+  }
   const dotColor = DOT_COLOR[status]||'#94A3B8';
   const sectionLabel = filtrada.length===0
-    ? `Nenhuma turma ${SL[status]?.toLowerCase()||''}`
+    ? (busca ? 'Nenhuma turma encontrada' : `Nenhuma turma ${SL[status]?.toLowerCase()||''}`)
     : `${filtrada.length} turma${filtrada.length!==1?'s':''} ${SL[status]?.toLowerCase()||''}`;
 
   const cardsHtml = filtrada.length===0
     ? `<div class="turmas-empty-tab">
         <div style="font-size:32px;margin-bottom:4px">📋</div>
-        <div style="font-size:14px;font-weight:500;color:var(--text-2)">Nenhuma turma ${SL[status]?.toLowerCase()||''}</div>
+        <div style="font-size:14px;font-weight:500;color:var(--text-2)">${busca ? 'Nenhuma turma encontrada para '+'"'+escapeHtml(window._turmasBuscaAtual)+'"' : 'Nenhuma turma '+(SL[status]?.toLowerCase()||'')}</div>
       </div>`
     : `<div class="turmas-grid">${filtrada.map(t=>_htmlTurmaCard(t)).join('')}${podeCriar&&(status==='agendada'||status==='em_andamento')?`
       <div class="turma-card-nova" onclick="abrirModalTurma()" title="Nova turma">
@@ -7780,30 +7806,35 @@ async function renderConta() {
       ${certHtml}`;
   }
 
+  const corP = corPerfil(u.perfil);
   setConteudo(`
     <div class="card" style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-        <div style="width:60px;height:60px;border-radius:50%;background:${corPerfil(u.perfil)};display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0">${iniciais(u.nome)}</div>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+        <div style="width:64px;height:64px;border-radius:50%;background:${corP};display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px ${corP}22">${iniciais(u.nome)}</div>
         <div style="min-width:0">
           <div style="font-size:18px;font-weight:700;color:var(--text-1)">${u.nome}</div>
           <div style="font-size:13px;color:var(--text-2);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${u.email||'—'}</div>
-          <span class="badge badge-blue" style="margin-top:6px">${labelPerfil(u.perfil)}</span>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <span class="badge badge-blue">${labelPerfil(u.perfil)}</span>
+            <span class="badge ${u.ativo!==false?'badge-green':'badge-red'}">${u.ativo!==false?'● Conta ativa':'○ Conta inativa'}</span>
+          </div>
         </div>
       </div>
       <div class="divider"></div>
       <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Dados pessoais</div>
-      <div class="field"><label>Nome completo</label><input type="text" id="editNome" value="${u.nome}"></div>
+      <div class="field"><label>Nome completo</label><input type="text" id="editNome" value="${escapeHtml(u.nome)}"></div>
       <div class="field">
         <label>E-mail</label>
-        <input type="email" id="editEmail" value="${u.email||''}" readonly style="background:var(--gray-50);color:var(--text-3);cursor:not-allowed">
+        <input type="email" id="editEmail" value="${escapeHtml(u.email||'')}" readonly style="background:var(--gray-50);color:var(--text-3);cursor:not-allowed">
         <div style="font-size:11px;color:var(--text-3);margin-top:4px">O e-mail não pode ser alterado pois é o identificador do usuário.</div>
       </div>
       <button class="btn btn-navy" onclick="salvarConta()" style="width:100%">Salvar alterações</button>
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="card-title">🔒 Segurança</div>
-      <div id="formAlterarSenha" style="display:none;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px">Segurança</div>
+
+      <div id="formAlterarSenha" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px">
         <div class="field"><label>Senha atual</label><input type="password" id="senhaAtual" placeholder="Digite sua senha atual"></div>
         <div class="field"><label>Nova senha</label><input type="password" id="senhaNova" placeholder="Mínimo 6 caracteres"></div>
         <div class="field"><label>Confirmar nova senha</label><input type="password" id="senhaConfirm" placeholder="Repita a nova senha"></div>
@@ -7812,8 +7843,24 @@ async function renderConta() {
           <button class="btn btn-outline" onclick="cancelarAlterarSenha()">Cancelar</button>
         </div>
       </div>
-      <button class="btn btn-outline" id="btnAlterarSenha" onclick="mostrarFormSenha()" style="width:100%;margin-bottom:12px">🔑 Alterar senha</button>
-      <button class="btn btn-danger" style="width:100%" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
+
+      <div id="linhaAlterarSenha" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="mostrarFormSenha()">
+        <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔑</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Alterar senha</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:1px">Defina uma nova senha de acesso</div>
+        </div>
+        <button class="btn btn-outline btn-sm" id="btnAlterarSenha" onclick="event.stopPropagation();mostrarFormSenha()">Alterar</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 0 0">
+        <div style="width:36px;height:36px;border-radius:10px;background:var(--red-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🚪</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Sair do sistema</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:1px">Encerra sua sessão neste dispositivo</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="fazerLogout()">Sair</button>
+      </div>
     </div>
     ${secaoAssinatura}`);
 }
@@ -7868,7 +7915,12 @@ async function uploadAssinaturaInstrutor(inputEl) {
 
   showLoading('Enviando assinatura...');
   try {
-    const dataUrl = await new Promise((resolve,reject) => {
+    // Importante: gerar o Blob via canvas.toBlob(), NUNCA via fetch(dataUrl).
+    // fetch() num data: URL é bloqueado pelo CSP (connect-src não inclui o
+    // esquema "data:"), o que causava exatamente o erro "Failed to fetch"
+    // reportado no upload. canvas.toBlob() não faz nenhuma requisição de
+    // rede, então não é afetado pelo CSP.
+    const blobPng = await new Promise((resolve,reject) => {
       const reader = new FileReader();
       reader.onload = () => {
         const img = new Image();
@@ -7876,7 +7928,7 @@ async function uploadAssinaturaInstrutor(inputEl) {
           const c = document.createElement('canvas');
           c.width = img.naturalWidth; c.height = img.naturalHeight;
           c.getContext('2d').drawImage(img,0,0);
-          resolve(c.toDataURL('image/png'));
+          c.toBlob(blob => blob ? resolve(blob) : reject(new Error('Não foi possível processar a imagem selecionada.')), 'image/png');
         };
         img.onerror = () => reject(new Error('Não foi possível ler a imagem selecionada.'));
         img.src = reader.result;
@@ -7884,7 +7936,6 @@ async function uploadAssinaturaInstrutor(inputEl) {
       reader.onerror = () => reject(new Error('Não foi possível ler o arquivo selecionado.'));
       reader.readAsDataURL(file);
     });
-    const blobPng = await (await fetch(dataUrl)).blob();
 
     const path = `instrutores/${usuarioAtual.id}.png`;
     const {error:upErr} = await sb.storage.from('assinaturas').upload(path, blobPng, {upsert:true, contentType:'image/png'});
@@ -7920,12 +7971,14 @@ async function removerAssinaturaInstrutor() {
 
 function mostrarFormSenha() {
   document.getElementById('formAlterarSenha').style.display = 'block';
-  document.getElementById('btnAlterarSenha').style.display  = 'none';
+  const linha = document.getElementById('linhaAlterarSenha');
+  if (linha) linha.style.display = 'none';
 }
 
 function cancelarAlterarSenha() {
   document.getElementById('formAlterarSenha').style.display = 'none';
-  document.getElementById('btnAlterarSenha').style.display  = 'block';
+  const linha = document.getElementById('linhaAlterarSenha');
+  if (linha) linha.style.display = 'flex';
   document.getElementById('senhaAtual').value  = '';
   document.getElementById('senhaNova').value   = '';
   document.getElementById('senhaConfirm').value = '';
