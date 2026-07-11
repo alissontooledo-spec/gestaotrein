@@ -9342,74 +9342,129 @@ async function renderDocumentosTurma(turmaId) {
     const docsMap = {};
     (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')] = d; });
 
-    // Verificar se todos os documentos necessários foram gerados
     const temLista     = !!docsMap['lista_presenca'];
     const temColetivo  = !!docsMap['certificado_coletivo'];
-    const temTodosInd  = participantes.length > 0 && participantes.every(p => !!docsMap['certificado_individual'+p.colaborador_id]);
-    const podosEnviar  = temLista && temColetivo && temTodosInd && emailCliente;
+    const totalInd      = participantes.length;
+    const geradosIndArr = participantes.filter(p => !!docsMap['certificado_individual'+p.colaborador_id]);
+    const geradosInd    = geradosIndArr.length;
+    const temTodosInd   = totalInd > 0 && geradosInd === totalInd;
+
+    const totalDocs   = 2 + totalInd;
+    const geradosDocs = (temLista?1:0) + (temColetivo?1:0) + geradosInd;
+    const todosDocsGerados = geradosDocs === totalDocs;
 
     // Status de envio anterior
     const {data:envio} = await sb.from('envios_email').select('*').eq('turma_id', turmaId).maybeSingle();
 
-    const htmlParticipantes = participantes.length===0
-      ? `<div class="empty" style="padding:16px"><div class="empty-title">Nenhum participante</div></div>`
+    // ---- Trilha de progresso (3 etapas: agendamentos → documentos → envio) ----
+    const _step = (estado, label, sub) => {
+      // estado: 'ok' | 'atencao' | 'aguardando'
+      const cor = estado==='ok' ? {bg:'var(--green-l)',fg:'var(--green)',bd:'var(--green)'}
+                : estado==='atencao' ? {bg:'var(--amber-l)',fg:'var(--amber-text)',bd:'var(--amber)'}
+                : {bg:'var(--bg-2,#f1f5f9)',fg:'var(--text-3)',bd:'var(--border)'};
+      const icone = estado==='ok' ? '✓' : (estado==='atencao' ? '!' : '');
+      return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+          <div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:${cor.bg};color:${cor.fg};border:2px solid ${cor.bd}">${icone}</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-1);line-height:1.2">${label}</div>
+          <div style="font-size:11px;color:var(--text-3);line-height:1.2">${sub}</div>
+        </div>`;
+    };
+    const _linha = ok => `<div style="flex:0 0 20px;height:2px;background:${ok?'var(--green)':'var(--border)'};margin-top:14px"></div>`;
+
+    const estadoAgendamentos = todosConcluidos ? 'ok' : 'atencao';
+    const estadoDocumentos   = todosDocsGerados ? 'ok' : (todosConcluidos ? 'atencao' : 'aguardando');
+    const estadoEnvio        = envio ? 'ok' : (todosDocsGerados && emailCliente ? 'atencao' : 'aguardando');
+
+    const htmlTrilha = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:flex-start">
+          ${_step(estadoAgendamentos, 'Agendamentos', totalAg ? `${concluidosAg}/${totalAg} concluídos` : 'sem sessões')}
+          ${_linha(todosConcluidos)}
+          ${_step(estadoDocumentos, 'Documentos', `${geradosDocs}/${totalDocs} gerados`)}
+          ${_linha(todosDocsGerados)}
+          ${_step(estadoEnvio, 'Envio', envio ? 'enviado ao cliente' : (emailCliente ? 'pendente' : 'sem e-mail'))}
+        </div>
+      </div>`;
+
+    // ---- Card unificado de documentos ----
+    const _linhaDoc = (icone, titulo, subtitulo, pronto, onclick, corIcone='var(--blue-l)') => `
+      <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--border)">
+        <div style="width:36px;height:36px;border-radius:10px;background:${corIcone};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icone}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">${titulo}</div>
+          <div style="font-size:11px;margin-top:2px;color:${pronto?'var(--green)':'var(--text-3)'}">${subtitulo}</div>
+        </div>
+        <button class="btn ${pronto?'btn-outline':'btn-navy'} btn-sm" onclick="${onclick}" style="flex-shrink:0">${pronto?'↻ Refazer':'⬇ Gerar'}</button>
+      </div>`;
+
+    const htmlIndividuaisSub = totalInd === 0
+      ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0 0 48px">Nenhum participante nesta turma.</div>`
       : participantes.map(p => {
           const col = p.colaboradores||{};
           const jaGerado = docsMap['certificado_individual'+p.colaborador_id];
-          const subInfo = jaGerado
-            ? `<div class="li-sub" style="color:var(--green)">✓ Gerado em ${formatarDataHora(jaGerado.gerado_em)}</div>`
-            : `<div class="li-sub">Aguardando geração</div>`;
-          return `<div class="list-item" style="padding:12px 0">
-              <div class="li-icon" style="background:var(--blue-l);color:var(--blue);font-size:11px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">${iniciais(col.nome||'?')}</div>
-              <div class="li-info"><div class="li-title">${col.nome||'-'}</div>${subInfo}</div>
-              <button class="btn btn-navy btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">⬇ PDF</button>
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 8px 48px">
+              <div style="width:26px;height:26px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
+              <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${col.nome||'-'}</div>
+              <span style="font-size:11px;color:${jaGerado?'var(--green)':'var(--text-3)'};margin-right:4px">${jaGerado?'✓ gerado':'pendente'}</span>
+              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">${jaGerado?'↻':'⬇'} PDF</button>
             </div>`;
-        }).join('') + (participantes.length > 0
-          ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"><button class="btn btn-outline" style="width:100%" onclick="gerarTodosCertificados('${turmaId}')">⬇ Gerar todos os certificados individuais</button></div>`
-          : '');
+        }).join('');
 
-    // Bloco de status dos agendamentos
-    const htmlAgendamentos = totalAg === 0 ? '' : `
-      <div class="card" style="margin-bottom:16px;border-color:${todosConcluidos?'var(--green)':'#fde68a'}">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:${todosConcluidos?'0':'10px'}">
-          <div style="font-size:20px">${todosConcluidos?'✅':'⏳'}</div>
-          <div>
-            <div style="font-size:14px;font-weight:600;color:var(--text-1)">${todosConcluidos?'Todos os agendamentos concluídos':'Agendamentos pendentes'}</div>
-            <div style="font-size:12px;color:var(--text-2)">${concluidosAg} de ${totalAg} concluído(s)</div>
-          </div>
+    const htmlDocumentos = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+          <div style="font-size:15px;font-weight:600;color:var(--text-1)">📄 Documentos da turma</div>
+          <span class="badge ${todosDocsGerados?'badge-green':'badge-amber'}">${geradosDocs}/${totalDocs}</span>
         </div>
-        ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">
-          O envio automático só ocorrerá após todos os agendamentos serem marcados como concluídos.
-        </div>` : ''}
+        ${_linhaDoc('📋','Lista de Presença','Consolidada por todos os agendamentos', temLista,
+            `gerarListaPresenca('${turmaId}')`)}
+        ${_linhaDoc('🏢','Certificado Coletivo', `Para a empresa · ${totalInd} participante(s)`, temColetivo,
+            `gerarCertificadoColetivo('${turmaId}')`)}
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 0 ${totalInd?'4px':'0'} 0;${totalInd?'border-bottom:1px solid var(--border)':''}">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎓</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--text-1)">Certificados Individuais</div>
+            <div style="font-size:11px;margin-top:2px;color:${temTodosInd?'var(--green)':'var(--text-3)'}">${geradosInd}/${totalInd} gerados</div>
+          </div>
+          ${totalInd>0 ? `<button class="btn btn-outline btn-sm" onclick="gerarTodosCertificados('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}'))" style="flex-shrink:0">⬇ Gerar todos</button>` : ''}
+        </div>
+        ${htmlIndividuaisSub}
       </div>`;
 
-    // Bloco de envio
+    // ---- Card único de envio por e-mail (substitui os dois cards antigos) ----
+    let htmlEnvioConteudo;
+    if (!planoAtinge('pro')) {
+      htmlEnvioConteudo = `
+        <div style="display:flex;align-items:center;gap:10px;background:var(--amber-l);border:1px solid var(--amber);padding:12px;border-radius:var(--r-md)">
+          <span style="font-size:20px">🔒</span>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--amber-text)">Disponível no plano Pro</div>
+            <div style="font-size:12px;color:var(--amber-text);margin-top:2px">Faça upgrade para gerar e enviar documentos automaticamente por e-mail.</div>
+          </div>
+        </div>
+        <button class="btn btn-amber" style="width:100%;margin-top:10px" onclick="modalUpgrade('Envio automático de documentos','pro')">Ver planos</button>`;
+    } else if (!emailCliente) {
+      htmlEnvioConteudo = `<div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">
+          ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail do cliente para habilitar o envio.
+        </div>`;
+    } else {
+      const destHtml = `<div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Destinatário: <strong>${emailCliente}</strong></div>`;
+      if (!todosConcluidos) {
+        htmlEnvioConteudo = destHtml + `<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">⏳ Aguardando conclusão de todos os agendamentos.</div>`;
+      } else {
+        const btnLabel = envio ? '📦 Regenerar e reenviar documentos' : '📦 Gerar tudo e enviar por e-mail';
+        const ultimoEnvio = envio ? `<div style="font-size:11px;color:var(--green);margin-top:8px;text-align:center">✓ Último envio: ${formatarDataHora(envio.enviado_em)}</div>` : '';
+        htmlEnvioConteudo = destHtml + `<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail('${turmaId}')">${btnLabel}</button>` + ultimoEnvio;
+      }
+    }
+
     const htmlEnvio = `
-      <div class="card" style="margin-bottom:16px;${planoAtinge('pro')&&todosConcluidos&&emailCliente?'border-color:var(--blue)':''}" id="cardEnvio">
-        <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:8px">✉️ Envio automático</div>
-        ${!planoAtinge('pro') ? `
-          <div style="display:flex;align-items:center;gap:10px;background:var(--amber-l);border:1px solid var(--amber);padding:12px;border-radius:var(--r-md)">
-            <span style="font-size:20px">🔒</span>
-            <div>
-              <div style="font-size:13px;font-weight:600;color:var(--amber-text)">Disponível no plano Pro</div>
-              <div style="font-size:12px;color:var(--amber-text);margin-top:2px">Faça upgrade para enviar documentos automaticamente por e-mail.</div>
-            </div>
-          </div>
-          <button class="btn btn-amber" style="width:100%;margin-top:10px" onclick="modalUpgrade('Envio automático de documentos','pro')">Ver planos</button>
-        ` : !emailCliente ? `
-          <div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">
-            ⚠️ A empresa cliente não possui e-mail cadastrado. Cadastre o e-mail do cliente para habilitar o envio.
-          </div>` : `
-          <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">
-            Destinatário: <strong>${emailCliente}</strong>
-          </div>
-          ${envio ? `<div style="font-size:12px;color:var(--green);margin-bottom:12px">✓ Enviado em ${formatarDataHora(envio.enviado_em)}</div>` : ''}
-          ${!todosConcluidos ? `<div style="font-size:12px;color:var(--amber)">Aguardando conclusão de todos os agendamentos.</div>` :
-            !podosEnviar ? `<div style="font-size:12px;color:var(--text-3)">Gere todos os documentos acima para habilitar o envio.</div>` :
-            `<button class="btn btn-navy" style="width:100%" onclick="enviarDocumentosPorEmail('${turmaId}')">
-              ✉️ ${envio ? 'Reenviar documentos' : 'Enviar documentos por e-mail'}
-            </button>`
-          }`}
+      <div class="card" style="border:2px solid ${planoAtinge('pro') && todosConcluidos && emailCliente ? 'var(--navy)' : 'var(--border)'};background:rgba(30,42,74,.03)">
+        <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px">✉️ Envio para o cliente</div>
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
+          Gera automaticamente os documentos pendentes e envia tudo por e-mail para a empresa cliente em uma única ação.
+        </div>
+        ${htmlEnvioConteudo}
       </div>`;
 
     const html = `
@@ -9422,66 +9477,14 @@ async function renderDocumentosTurma(turmaId) {
         <span class="badge badge-green">Concluída</span>
       </div>
 
-      ${htmlAgendamentos}
-      ${htmlEnvio}
-
-      <!-- Lista de Presença -->
-      <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:var(--text-1)">📋 Lista de Presença</div>
-            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Consolidada por todos os agendamentos</div>
-          </div>
-          <button class="btn btn-navy btn-sm" onclick="gerarListaPresenca('${turmaId}')">⬇ Gerar PDF</button>
-        </div>
-        ${temLista ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['lista_presenca'].gerado_em)}</div>` : ''}
-      </div>
-
-      <!-- Certificado Coletivo -->
-      <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:var(--text-1)">🏢 Certificado Coletivo</div>
-            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Para a empresa - ${participantes.length} participante(s)</div>
-          </div>
-          <button class="btn btn-navy btn-sm" onclick="gerarCertificadoColetivo('${turmaId}')">⬇ Gerar PDF</button>
-        </div>
-        ${temColetivo ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Gerado em ${formatarDataHora(docsMap['certificado_coletivo'].gerado_em)}</div>` : ''}
-      </div>
-
-      <!-- Certificados Individuais -->
-      <div class="card" style="margin-bottom:16px">
-        <div style="font-size:15px;font-weight:600;color:var(--text-1);margin-bottom:12px">🎓 Certificados Individuais</div>
-        ${htmlParticipantes}
-      </div>
-
-      <!-- Bloco 2: Gerar tudo e enviar -->
-      <div class="card" style="border:2px solid ${planoAtinge('pro')?'var(--navy)':'var(--amber)'};background:rgba(30,42,74,.03)">
-        <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px">📦 Gerar tudo e enviar por e-mail</div>
-        <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
-          Gera automaticamente todos os documentos pendentes e envia por e-mail para a empresa cliente em uma única ação.
-        </div>
-        ${!planoAtinge('pro') ? `
-          <div style="display:flex;align-items:center;gap:10px;background:var(--amber-l);border:1px solid var(--amber);padding:12px;border-radius:var(--r-md);margin-bottom:10px">
-            <span style="font-size:20px">🔒</span>
-            <div style="font-size:13px;font-weight:600;color:var(--amber-text)">Disponível no plano Pro</div>
-          </div>
-          <button class="btn btn-amber" style="width:100%" onclick="modalUpgrade('Envio automático de documentos','pro')">Ver planos</button>
-        ` : (()=>{
-          if (!emailCliente) return '<div style="font-size:13px;color:var(--red);background:var(--red-l);padding:10px 12px;border-radius:var(--r-md)">&#9888; A empresa cliente não possui e-mail cadastrado.</div>';
-          const destHtml = '<div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Destinatário: <strong>' + emailCliente + '</strong></div>';
-          if (!todosConcluidos) return destHtml + '<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">&#9203; Aguardando conclusão de todos os agendamentos.</div>';
-          const btnLabel = envio ? 'Regenerar e reenviar documentos' : 'Gerar todos e enviar por e-mail';
-          const ultimoEnvio = envio ? '<div style="font-size:11px;color:var(--green);margin-top:8px;text-align:center">&#10003; Último envio: ' + formatarDataHora(envio.enviado_em) + '</div>' : '';
-          return destHtml + '<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail(\'' + turmaId + '\')">&#128230; ' + btnLabel + '</button>' + ultimoEnvio;
-        })()}
-      </div>`;
+      ${htmlTrilha}
+      ${htmlDocumentos}
+      ${htmlEnvio}`;
 
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Documentos</div><div class="mh-name">${nomeT}</div>`);
   } finally { hideLoading(); }
 }
-
 // ============================================================
 // ENVIO DE DOCUMENTOS POR E-MAIL
 // ============================================================
@@ -9605,7 +9608,27 @@ async function enviarDocumentosPorEmail(turmaId) {
     };
 
     const resp = await sb.functions.invoke('enviar-documentos', {body: payload});
-    if (resp.error) throw new Error(resp.error.message || 'Erro na Edge Function');
+    if (resp.error) {
+      // O supabase-js só traz uma mensagem genérica em resp.error.message quando a
+      // Edge Function responde com status != 2xx ("Edge Function returned a non-2xx
+      // status code"). O corpo real do erro fica em resp.error.context (um Response) —
+      // sem extrair isso é impossível saber o motivo real (chave do Resend ausente,
+      // domínio de envio não verificado, payload inválido, etc).
+      let detalhe = resp.error.message || 'Erro na Edge Function';
+      try {
+        const ctx = resp.error.context;
+        if (ctx && typeof ctx.clone === 'function') {
+          const corpoJson = await ctx.clone().json().catch(() => null);
+          if (corpoJson) detalhe = corpoJson.error || corpoJson.message || corpoJson.erro || JSON.stringify(corpoJson);
+          else {
+            const corpoTxt = await ctx.clone().text().catch(() => null);
+            if (corpoTxt) detalhe = corpoTxt;
+          }
+        }
+      } catch(_) {}
+      console.error('Falha na Edge Function enviar-documentos:', detalhe, resp.error);
+      throw new Error(detalhe);
+    }
 
     const {data: envioExistente} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
     if (envioExistente) {
