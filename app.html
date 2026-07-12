@@ -2163,6 +2163,7 @@ function _alterarPorPaginaUsuariosOrg(v) {
 }
 
 async function ativarOrg(orgId) {
+  if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode ativar organizações','error'); return; }
   const { error } = await sb.from('organizacoes').update({ ativo: true }).eq('id', orgId);
   if (error) { showToast(error.message, 'error'); return; }
   showToast('Organização ativada!', 'success');
@@ -2170,6 +2171,7 @@ async function ativarOrg(orgId) {
 }
 
 async function desativarOrg(orgId) {
+  if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode desativar organizações','error'); return; }
   const ok = await confirmarAcao('Deseja desativar esta organização? Os usuários não conseguirão acessar o sistema.', 'Desativar', true);
   if (!ok) return;
   const { error } = await sb.from('organizacoes').update({ ativo: false }).eq('id', orgId);
@@ -3236,6 +3238,7 @@ function _atualizarPreviewLogoOrg(url) {
 }
 
 async function removerLogoOrganizacao(orgId) {
+  if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode remover a logomarca da organização','error'); return; }
   const ok = await confirmarAcao('Remover a logomarca desta organização?','Remover',true);
   if (!ok) return;
   try {
@@ -3287,6 +3290,7 @@ async function salvarOrg() {
 }
 
 async function toggleOrg(id) {
+  if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode ativar/desativar organizações','error'); return; }
   const org = _orgsCache.find(o=>o.id===id);
   if (!org) return;
   const ok = await confirmarAcao(`Deseja ${org.ativo?'desativar':'ativar'} esta organização?`, org.ativo?'Desativar':'Ativar', org.ativo);
@@ -3685,6 +3689,7 @@ async function salvarCliente() {
 }
 
 async function toggleCliente(id) {
+  if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { showToast('Você não tem permissão para alterar clientes','error'); return; }
   const c = _clientesCache.find(x=>x.id===id);
   if (!c) return;
   const ok = await confirmarAcao(`Deseja ${c.ativo?'desativar':'ativar'} este cliente?`, c.ativo?'Desativar':'Ativar', c.ativo);
@@ -4080,7 +4085,7 @@ function _htmlListaCatalogo(lista, maxUso, podeMgr) {
       : t.tipo_curso === 'reciclagem' ? `<span class="badge badge-amber" style="font-size:10px">Reciclagem</span>` : '';
     return `
     <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${isArq?.6:1}" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-      <div style="width:44px;height:44px;border-radius:var(--r-md);background:${!isArq&&t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'};color:${!isArq&&t.ativo?'var(--navy)':'var(--text-3)'};font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${t.carga_horaria}h</div>
+      <div style="width:44px;height:44px;border-radius:var(--r-md);background:${t.carga_horaria?(!isArq&&t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'):'var(--amber-l)'};color:${t.carga_horaria?(!isArq&&t.ativo?'var(--navy)':'var(--text-3)'):'var(--amber-text)'};font-size:${t.carga_horaria?12:9}px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2" title="${t.carga_horaria?'':'Carga horária não cadastrada'}">${t.carga_horaria?t.carga_horaria+'h':'⚠️'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:600;color:${isArq?'var(--text-3)':'var(--navy)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${escapeHtml(t.nome)} ${tipoBadgeEl}</div>
         <div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
@@ -4118,7 +4123,7 @@ function verCatalogo(id) {
 
     <div style="background:var(--navy);border-radius:var(--r-xl);padding:20px;margin-bottom:14px">
       <div style="display:flex;align-items:flex-start;gap:14px">
-        <div style="width:52px;height:52px;border-radius:var(--r-lg);background:rgba(245,158,11,.2);color:var(--amber);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.carga_horaria}h</div>
+        <div style="width:52px;height:52px;border-radius:var(--r-lg);background:rgba(245,158,11,.2);color:var(--amber);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="${t.carga_horaria?'':'Carga horária não cadastrada'}">${t.carga_horaria?t.carga_horaria+'h':'⚠️'}</div>
         <div style="flex:1;min-width:0">
           ${nrMatch ? `<div style="font-size:11px;font-weight:700;color:var(--amber);letter-spacing:.06em;margin-bottom:4px">NR-${nrMatch[1]}</div>` : ""}
           <div style="font-size:17px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:6px">${escapeHtml(t.nome)}</div>
@@ -4128,7 +4133,7 @@ function verCatalogo(id) {
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px">
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
           <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Carga horária</div>
-          <div style="font-size:16px;font-weight:700;color:#fff">${t.carga_horaria}h</div>
+          <div style="font-size:16px;font-weight:700;color:${t.carga_horaria?'#fff':'var(--amber)'}">${t.carga_horaria?t.carga_horaria+'h':'⚠️ não cadastrada'}</div>
         </div>
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
           <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Validade</div>
@@ -4466,6 +4471,7 @@ function menuCatalogo(btn, id) {
 }
 
 async function arquivarCatalogo(id) {
+  if (usuarioAtual.perfil !== 'administrador') { showToast('Apenas administradores podem arquivar treinamentos','error'); return; }
   const t = _catalogoCache.find(x=>x.id===id);
   if (!t) return;
   const usoMap = window._catalogoUsoMap || {};
@@ -4497,6 +4503,7 @@ async function arquivarCatalogo(id) {
 }
 
 async function desarquivarCatalogo(id) {
+  if (usuarioAtual.perfil !== 'administrador') { showToast('Apenas administradores podem restaurar treinamentos','error'); return; }
   const t = _catalogoCache.find(x=>x.id===id);
   if (!t) return;
   const {error} = await sb.from('catalogo').update({arquivado:false, ativo:true}).eq('id',id);
@@ -5497,6 +5504,7 @@ function menuAgendamento(btn, agId, turmaId) {
 }
 
 async function excluirAgendamento(agId, turmaId) {
+  if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { showToast('Você não tem permissão para excluir agendamentos','error'); return; }
   const ok = await confirmarAcao('Deseja excluir este agendamento?', 'Excluir', true);
   if (!ok) return;
   const {error} = await sb.from('sessoes').delete().eq('id',agId);
@@ -5507,6 +5515,7 @@ async function excluirAgendamento(agId, turmaId) {
 
 // ---- Participantes ----
 async function removerParticipante(presencaId, turmaId) {
+  if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { showToast('Você não tem permissão para remover participantes','error'); return; }
   const ok = await confirmarAcao('Deseja remover este participante da turma?', 'Remover', true);
   if (!ok) return;
   const {error} = await sb.from('turma_participantes').delete().eq('id',presencaId);
@@ -8153,6 +8162,7 @@ function verUsuarioEquipe(id) {
 }
 
 async function toggleUsuarioEquipe(id) {
+  if (usuarioAtual.perfil !== 'administrador') { showToast('Apenas administradores podem ativar/desativar usuários','error'); return; }
   // Busca o usuário fresco por id em vez de receber ativo/nome via HTML —
   // evita texto livre embutido em onclick (ver nota acima).
   const {data:u, error:errU} = await sb.from('usuarios').select('nome,ativo').eq('id',id).single();
@@ -9177,6 +9187,7 @@ async function gerarListaPresenca(turmaId) {
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
+    if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — a ficha de presença ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
 
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
@@ -9384,6 +9395,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
+    if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
 
     const {data:col} = await sb.from('colaboradores').select('*').eq('id',colaboradorId).eq('org_id',usuarioAtual.org_id).single();
     if (!col) throw new Error('Colaborador nao encontrado');
@@ -9737,6 +9749,7 @@ async function gerarCertificadoColetivo(turmaId) {
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome)')
       .eq('id', turmaId).single();
     if (error) throw error;
+    if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
 
     const ag            = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
     const dataCert      = ag?.data || t.created_at?.split('T')[0];
@@ -10421,6 +10434,15 @@ async function enviarDocumentosPorEmail(turmaId) {
     }
 
     if (arquivos.length === 0) throw new Error('Não foi possível baixar nenhum documento do Storage.');
+
+    // Resend recusa e-mails acima de 40MB (contando o Base64 dos anexos).
+    // Deixa uma margem de segurança pro corpo do e-mail e overhead do payload.
+    const LIMITE_ANEXOS_BYTES = 35 * 1024 * 1024;
+    const tamanhoTotalBytes = arquivos.reduce((soma, a) => soma + (a.conteudo_b64?.length || 0), 0);
+    if (tamanhoTotalBytes > LIMITE_ANEXOS_BYTES) {
+      const totalMB = (tamanhoTotalBytes / (1024*1024)).toFixed(1);
+      throw new Error(`Os documentos desta turma somam ${totalMB}MB em anexos — acima do limite de 40MB do provedor de e-mail, o envio seria recusado. Baixe os PDFs manualmente na tela de Documentos da turma (botão de cada um) e envie ao cliente por fora do sistema, em mais de um e-mail se necessário.`);
+    }
 
     const ag = (t.sessoes||[]).sort((a,b) => a.data > b.data ? 1 : -1);
 
