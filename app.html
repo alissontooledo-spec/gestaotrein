@@ -10204,7 +10204,11 @@ async function renderDocumentosTurma(turmaId) {
       } else {
         const btnLabel = envio ? '📦 Regenerar e reenviar documentos' : '📦 Gerar tudo e enviar por e-mail';
         const ultimoEnvio = envio ? `<div style="font-size:11px;color:var(--green);margin-top:8px;text-align:center">✓ Último envio: ${formatarDataHora(envio.enviado_em)}</div>` : '';
-        htmlEnvioConteudo = destHtml + `<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail('${turmaId}')">${btnLabel}</button>` + ultimoEnvio;
+        // Recuperação manual: só aparece quando ainda não há registro de envio —
+        // cobre o caso do e-mail ter sido entregue mas o status não ter sido
+        // salvo (ver marcarEnvioComoConcluido). Some assim que envio existir.
+        const marcarManual = !envio ? `<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;font-size:11px;color:var(--text-3)" onclick="marcarEnvioComoConcluido('${turmaId}','${(emailCliente||'').replace(/'/g,"")}')">Já enviei esse e-mail e o status não atualizou? Marcar como enviado</button>` : '';
+        htmlEnvioConteudo = destHtml + `<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail('${turmaId}')">${btnLabel}</button>` + ultimoEnvio + marcarManual;
       }
     }
 
@@ -10288,6 +10292,57 @@ async function gerarTudoEnviarEmail(turmaId) {
   } finally {
     hideLoading();
   }
+}
+
+// Grava (ou atualiza) o registro de envio em envios_email. Isolada numa
+// função própria para ser reaproveitada pelo fluxo automático (com retry em
+// enviarDocumentosPorEmail) e pelo botão manual "Marcar como enviado"
+// (marcarEnvioComoConcluido) — mesma lógica, sem duplicar código. Retorna o
+// objeto de erro do Supabase (ou null se deu certo).
+async function _registrarEnvioEmail(turmaId, emailDestino) {
+  const {data: envioExistente, error: selErr} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
+  if (selErr) return selErr;
+  if (envioExistente) {
+    const {error} = await sb.from('envios_email').update({
+      email_destino: emailDestino||'',
+      enviado_em:    new Date().toISOString(),
+      status:        'enviado',
+    }).eq('id', envioExistente.id);
+    return error;
+  }
+  const {error} = await sb.from('envios_email').insert({
+    turma_id:      turmaId,
+    org_id:        usuarioAtual.org_id,
+    email_destino: emailDestino||'',
+    enviado_em:    new Date().toISOString(),
+    status:        'enviado',
+  });
+  return error;
+}
+
+// Recuperação manual: marca a turma como "enviada" sem passar pela Edge
+// Function (não reenvia e-mail nenhum). Existe para os casos em que o
+// e-mail já foi entregue ao cliente (confirmado pelo próprio usuário, ou
+// enviado manualmente por fora do sistema) mas o registro de status no
+// banco não foi salvo — evita ficar preso em "Envio Pendente" para sempre
+// sem depender de suporte técnico ou acesso direto ao Supabase.
+async function marcarEnvioComoConcluido(turmaId, emailDestino) {
+  const confirmado = await confirmarAcao(
+    'Confirma que os documentos desta turma já foram enviados ao cliente (por este sistema ou manualmente)? Isso NÃO envia nenhum e-mail novo — só atualiza o status da turma para "enviado".',
+    'Marcar como enviado', false
+  );
+  if (!confirmado) return;
+  showLoading('Atualizando status...');
+  try {
+    const erro = await _registrarEnvioEmail(turmaId, emailDestino||'');
+    if (erro) {
+      console.error('Falha ao marcar envio como concluído manualmente:', erro);
+      showToast(`Não foi possível atualizar o status (${erro.message||erro.code||'erro desconhecido'}). Tente novamente ou verifique as permissões da tabela envios_email no Supabase.`, 'error');
+      return;
+    }
+    showToast('Status atualizado — turma marcada como enviada.', 'success');
+    await renderDocumentosTurma(turmaId);
+  } finally { hideLoading(); }
 }
 
 async function enviarDocumentosPorEmail(turmaId) {
@@ -10380,35 +10435,24 @@ async function enviarDocumentosPorEmail(turmaId) {
       throw new Error(detalhe);
     }
 
-    const {data: envioExistente, error: envioSelectErr} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
-    let envioRegistroErr = envioSelectErr || null;
-    if (!envioRegistroErr) {
-      if (envioExistente) {
-        const {error} = await sb.from('envios_email').update({
-          email_destino: t.clientes?.email||'',
-          enviado_em:    new Date().toISOString(),
-          status:        'enviado',
-        }).eq('id', envioExistente.id);
-        envioRegistroErr = error;
-      } else {
-        const {error} = await sb.from('envios_email').insert({
-          turma_id:      turmaId,
-          org_id:        usuarioAtual.org_id,
-          email_destino: t.clientes?.email||'',
-          enviado_em:    new Date().toISOString(),
-          status:        'enviado',
-        });
-        envioRegistroErr = error;
-      }
+    let envioRegistroErr = await _registrarEnvioEmail(turmaId, t.clientes?.email||'');
+    if (envioRegistroErr) {
+      // Pode ser falha transitória (rede, CSP, etc.) — tenta mais uma vez
+      // antes de incomodar o usuário, já que o e-mail em si já foi enviado.
+      console.warn('Falha ao registrar envios_email, tentando novamente em 1.5s:', envioRegistroErr);
+      await new Promise(r => setTimeout(r, 1500));
+      envioRegistroErr = await _registrarEnvioEmail(turmaId, t.clientes?.email||'');
     }
 
     if (envioRegistroErr) {
       // O e-mail já foi enviado com sucesso (ver chamada à Edge Function
-      // acima) — só o registro de controle de status falhou. Avisamos em vez
-      // de mostrar "sucesso" e deixar a turma presa em "pendente" sem
-      // explicação nenhuma.
-      console.error('E-mail enviado, mas falha ao registrar em envios_email:', envioRegistroErr);
-      showToast('E-mail enviado, mas houve um problema ao atualizar o status. Avise o suporte se a turma continuar aparecendo como pendente.', 'error');
+      // acima) — só o registro de controle de status falhou, mesmo depois de
+      // 2 tentativas. Mostra o motivo técnico real (não "avise o suporte" —
+      // quem administra o sistema é o próprio usuário) e deixa claro para
+      // NÃO reenviar (evita duplicar e-mail ao cliente); o botão "Marcar
+      // como enviado" na tela de documentos resolve sem precisar reenviar.
+      console.error('E-mail enviado, mas falha ao registrar em envios_email (2 tentativas):', envioRegistroErr);
+      showToast(`E-mail enviado ao cliente com sucesso. O status desta turma não pôde ser salvo agora (${envioRegistroErr.message||envioRegistroErr.code||'erro desconhecido'}). Não reenvie — use "Marcar como enviado" na tela de documentos.`, 'error');
     } else {
       showToast('Documentos enviados com sucesso!', 'success');
     }
