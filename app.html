@@ -161,6 +161,23 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .li-title{font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .li-sub{font-size:12px;color:var(--text-2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* ── Conformidade — grade de empresas (nível 1) e lista+painel (nível 2/3) ── */
+.conf-empresa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:1024px){.conf-empresa-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.conf-empresa-grid{grid-template-columns:1fr}}
+.conf-empresa-card{cursor:pointer;transition:border-color .15s}
+.conf-empresa-card:hover{border-color:var(--navy-3)}
+.conf-nivel2-body{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.conf-nivel2-body{grid-template-columns:1fr}}
+.conf-lista-colabs{max-height:640px;overflow-y:auto}
+.conf-colab-item{display:flex;border-bottom:1px solid var(--border);cursor:pointer}
+.conf-colab-item:last-child{border-bottom:none}
+.conf-colab-item:hover{background:var(--gray-50)}
+.conf-colab-item.selected{background:var(--blue-l)}
+.conf-colab-bar{width:4px;flex-shrink:0}
+.conf-colab-main{padding:11px 14px;flex:1;min-width:0}
+
+
 /* ── Badges / Pills ── */
 .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;letter-spacing:.05px}
 .badge-blue{background:var(--blue-l);color:var(--blue-text)}
@@ -4395,31 +4412,108 @@ async function renderConformidade() {
   }
 
   window._confAba = window._confAba || 'ativas';
+  window._confNivel = window._confNivel || 'empresas'; // 'empresas' | 'detalhe'
   window._confData = await calcConformidade();
+  // Mapa com TODOS os itens (ativos + tratados), não só os visíveis no
+  // filtro atual — outras telas (ex.: salvarTurma, ao agendar reciclagem)
+  // consultam window._confPorId[origemConfId] bem depois deste render.
+  window._confPorId = Object.fromEntries([...window._confData.todosAtivos, ...window._confData.tratados].map(x => [x.id, x]));
   _confRenderTudo();
 }
 
-// Monta a tela inteira (cards, oportunidades, filtros e o container vazio da
-// lista) a partir dos dados já calculados — não faz nenhuma consulta ao
-// banco, por isso pode ser chamada de novo ao trocar de aba sem recarregar
-// tudo.
+// Base de itens da aba atual: "ativas" usa d.proximos (pendências dentro
+// da janela de alerta, a mesma base já usada pelos cards do topo, pra
+// nunca divergir), "tratadas" usa d.tratados. Serve tanto para agrupar por
+// empresa (nível 1) quanto para listar os colaboradores de uma empresa
+// (nível 2).
+function _confBaseAtual() {
+  const d = window._confData;
+  if (!d) return [];
+  return window._confAba === 'ativas' ? d.proximos : d.tratados;
+}
+
+function _confItensDaEmpresa(chave) {
+  return _confBaseAtual().filter(x => (x.cliente_id || x.empresa) === chave);
+}
+
+// Agrupa a base atual por empresa e calcula os indicadores dos cards do
+// nível 1: vencidos, vencendo em breve (urgente+atenção+planejar),
+// colaboradores pendentes e um nível de criticidade simples.
+function _confAgruparPorEmpresa() {
+  const mapa = {};
+  _confBaseAtual().forEach(x => {
+    const chave = x.cliente_id || x.empresa;
+    if (!mapa[chave]) mapa[chave] = { chave, nome: x.empresa, vencidos:0, urgentes:0, atencao:0, planejar:0, colaboradores:new Set(), itens:[] };
+    const g = mapa[chave];
+    g.itens.push(x);
+    g.colaboradores.add(x.colaborador_id);
+    if (x.status === 'vencido') g.vencidos++;
+    else if (x.status === 'urgente') g.urgentes++;
+    else if (x.status === 'atencao') g.atencao++;
+    else if (x.status === 'planejar') g.planejar++;
+  });
+  return Object.values(mapa).map(g => {
+    const vencendoProximos = g.urgentes + g.atencao + g.planejar;
+    let criticidade = 'baixa';
+    if (g.vencidos > 0) criticidade = 'alta';
+    else if (g.urgentes > 0 || g.atencao > 0) criticidade = 'media';
+    return { chave: g.chave, nome: g.nome, vencidos: g.vencidos, vencendoProximos, totalPendentes: g.colaboradores.size, totalItens: g.itens.length, criticidade };
+  }).sort((a,b) => (b.vencidos - a.vencidos) || (b.vencendoProximos - a.vencendoProximos) || a.nome.localeCompare(b.nome));
+}
+
+// Dispatcher central da tela: decide se mostra a lista de empresas (nível
+// 1) ou a lista de colaboradores + painel de detalhe de uma empresa já
+// selecionada (nível 2/3) — sem refazer nenhuma consulta ao banco, tudo a
+// partir de window._confData já carregado.
 function _confRenderTudo() {
   const d = window._confData;
   if (!d) return;
-  const aba = window._confAba || 'ativas';
-  const vencendoEmBreve = d.proximos.filter(x => x.diffDias <= JANELA_CONFORMIDADE_DIAS && x.status !== 'vencido').length;
+  window._confAba = window._confAba || 'ativas';
+  window._confNivel = window._confNivel || 'empresas';
 
-  const baseFiltros = [...d.todosAtivos, ...d.tratados];
-  const empresasOpts = [...new Map(baseFiltros.map(x => [x.cliente_id||x.empresa, x.empresa])).entries()]
-    .sort((a,b) => a[1].localeCompare(b[1]))
-    .map(([val,nome]) => `<option value="${val}">${escapeHtml(nome)}</option>`).join('');
-  const treinamentosOpts = [...new Set(baseFiltros.map(x => x.treinamentoNome))]
-    .sort((a,b) => a.localeCompare(b))
-    .map(nome => `<option value="${escapeHtml(nome)}">${escapeHtml(nome)}</option>`).join('');
-  const statusOptsHtml = (aba === 'ativas'
-    ? [['vencido','Vencido'],['urgente','Urgente'],['atencao','Atenção'],['planejar','Planejar']]
-    : Object.entries(STATUS_EXCECAO_LABEL)
-  ).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  if (window._confNivel === 'detalhe' && window._confEmpresaChave) {
+    const itens = _confItensDaEmpresa(window._confEmpresaChave);
+    if (itens.length) { _confRenderNivel2(window._confEmpresaChave, itens); return; }
+    // Não sobrou nenhuma pendência desta empresa nesta aba (ex.: acabou de
+    // tratar a última) — volta pro nível 1 automaticamente.
+    window._confNivel = 'empresas';
+    window._confEmpresaChave = null;
+    window._confColabSelecionadoId = null;
+  }
+  _confRenderNivel1();
+}
+
+function _confMudarAba(aba) {
+  window._confAba = aba;
+  window._confColabSelecionadoId = null; // pode não existir na outra aba
+  _confRenderTudo();
+}
+
+function _confAbrirEmpresa(chave) {
+  window._confNivel = 'detalhe';
+  window._confEmpresaChave = chave;
+  window._confColabSelecionadoId = null;
+  _confRenderTudo();
+}
+
+function _confVoltarEmpresas() {
+  window._confNivel = 'empresas';
+  window._confEmpresaChave = null;
+  window._confColabSelecionadoId = null;
+  _confRenderTudo();
+}
+
+// ── Nível 1 — lista de empresas com pendências ──
+function _confRenderNivel1() {
+  const d = window._confData;
+  const aba = window._confAba;
+  const vencendoEmBreve = d.proximos.filter(x => x.diffDias <= JANELA_CONFORMIDADE_DIAS && x.status !== 'vencido').length;
+  const busca = (_getElVisible('buscaConfEmpresa')?.value || '').toLowerCase().trim();
+  const empresas = _confAgruparPorEmpresa();
+  const empresasFiltradas = busca ? empresas.filter(e => e.nome.toLowerCase().includes(busca)) : empresas;
+
+  const critLabel = {alta:'Alta criticidade', media:'Média criticidade', baixa:'Baixa criticidade'};
+  const critBadge = {alta:'badge-red', media:'badge-amber', baixa:'badge-blue'};
 
   setConteudo(`
     <div class="stats-grid" style="margin-bottom:16px">
@@ -4445,178 +4539,209 @@ function _confRenderTudo() {
       </div>
     </div>
 
-    ${d.oportunidadesPorEmpresa.length ? `
-    <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
-      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--navy)">Oportunidades de venda — reciclagem e renovação por empresa</div>
-      <div style="font-size:11px;color:var(--text-3);padding:8px 16px 0">Empresas com mais colaboradores vencendo ou vencidos nos próximos ${JANELA_CONFORMIDADE_DIAS} dias — priorize o contato por aqui.</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:480px">
-          <thead><tr style="background:var(--surface)">
-            <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Empresa</th>
-            <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Colaboradores afetados</th>
-            <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Pendências</th>
-            <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Já vencidas</th>
-          </tr></thead>
-          <tbody>
-            ${d.oportunidadesPorEmpresa.slice(0,10).map(o => `
-              <tr style="border-top:1px solid var(--border)">
-                <td style="padding:9px 16px;color:var(--navy);font-weight:500">${escapeHtml(o.nome)}</td>
-                <td style="padding:9px 12px;color:var(--text-1)">${o.colaboradores}</td>
-                <td style="padding:9px 12px;color:var(--text-1)">${o.pendentes}</td>
-                <td style="padding:9px 16px;color:${o.vencidos>0?'var(--red)':'var(--text-3)'};font-weight:${o.vencidos>0?'600':'400'}">${o.vencidos}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>` : ''}
-
-    <div style="display:flex;gap:8px;margin-bottom:10px">
+    <div style="display:flex;gap:8px;margin-bottom:14px">
       <button class="btn btn-sm ${aba==='ativas'?'btn-navy':'btn-outline'}" onclick="_confMudarAba('ativas')">Pendências ativas (${d.proximos.length})</button>
       <button class="btn btn-sm ${aba==='tratadas'?'btn-navy':'btn-outline'}" onclick="_confMudarAba('tratadas')">Tratadas (${d.tratados.length})</button>
     </div>
 
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-      <input type="search" id="buscaConf" placeholder="Buscar colaborador ou treinamento..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="_confAplicarFiltrosERenderLista()">
-      <select id="filtroConfEmpresa" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confAplicarFiltrosERenderLista()">
-        <option value="">Todas as empresas</option>${empresasOpts}
-      </select>
-      <select id="filtroConfTreinamento" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confAplicarFiltrosERenderLista()">
-        <option value="">Todos os treinamentos</option>${treinamentosOpts}
-      </select>
-      <select id="filtroConfStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confAplicarFiltrosERenderLista()">
-        <option value="">Todos os status</option>${statusOptsHtml}
-      </select>
-      ${aba === 'ativas' ? `
-      <select id="filtroConfPeriodo" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confAplicarFiltrosERenderLista()">
-        <option value="vencidos">Vencidos</option>
-        <option value="${JANELA_CONFORMIDADE_DIAS}" selected>Vencendo em ${JANELA_CONFORMIDADE_DIAS} dias</option>
-        <option value="90">Vencendo em 90 dias</option>
-        <option value="todos">Todos</option>
-      </select>` : ''}
-      <select id="filtroConfAgrupar" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confAplicarFiltrosERenderLista()">
-        <option value="">Sem agrupamento</option>
-        <option value="empresa">Agrupar por empresa</option>
-        <option value="treinamento">Agrupar por treinamento</option>
-        <option value="vencimento">Agrupar por data de vencimento</option>
-      </select>
-    </div>
+    <input type="search" id="buscaConfEmpresa" placeholder="Buscar empresa..." value="${escapeHtml(busca)}" style="width:100%;max-width:360px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1);margin-bottom:14px" oninput="_confRenderTudo()">
 
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--navy)">${aba==='ativas'?'Vencimentos próximos e pendências':'Pendências tratadas'}</div>
-      <div id="listaConformidade" style="overflow-x:auto"></div>
-    </div>
+    ${!empresasFiltradas.length ? `
+      <div class="empty" style="padding:32px"><div class="empty-icon">✅</div><div class="empty-title">${aba==='ativas'?'Nenhuma pendência':'Nenhuma pendência tratada'}</div><div class="empty-sub">${aba==='ativas'?`Não há certificados vencidos ou vencendo nos próximos ${JANELA_CONFORMIDADE_DIAS} dias em nenhuma empresa.`:'Pendências marcadas como dispensadas, não aplicáveis, colaborador desligado etc. aparecem aqui.'}</div></div>
+    ` : `
+    <div class="conf-empresa-grid">
+      ${empresasFiltradas.map(e => `
+        <div class="card conf-empresa-card" data-action="confAbrirEmpresa" data-id="${escapeHtml(e.chave)}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px">
+            <span style="font-size:14.5px;font-weight:700;color:var(--text-1)">${escapeHtml(e.nome)}</span>
+            ${aba==='ativas'
+              ? `<span class="badge ${critBadge[e.criticidade]}" style="flex-shrink:0">${critLabel[e.criticidade]}</span>`
+              : `<span class="badge badge-gray" style="flex-shrink:0">${e.totalItens} tratada${e.totalItens!==1?'s':''}</span>`}
+          </div>
+          ${aba==='ativas' ? `
+          <div style="display:flex;gap:16px;padding-top:10px;border-top:1px solid var(--border)">
+            <div><div style="font-size:17px;font-weight:700;line-height:1.1;color:${e.vencidos>0?'var(--red)':'var(--text-3)'}">${e.vencidos}</div><div style="font-size:10.5px;color:var(--text-3);margin-top:2px">vencido${e.vencidos!==1?'s':''}</div></div>
+            <div><div style="font-size:17px;font-weight:700;line-height:1.1;color:${e.vencendoProximos>0?'var(--amber-h)':'var(--text-3)'}">${e.vencendoProximos}</div><div style="font-size:10.5px;color:var(--text-3);margin-top:2px">vencendo em breve</div></div>
+            <div><div style="font-size:17px;font-weight:700;line-height:1.1;color:var(--text-1)">${e.totalPendentes}</div><div style="font-size:10.5px;color:var(--text-3);margin-top:2px">colaborador${e.totalPendentes!==1?'es':''}</div></div>
+          </div>` : ''}
+          <div style="margin-top:10px;font-size:12px;color:var(--text-2)">Ver colaboradores &rarr;</div>
+        </div>
+      `).join('')}
+    </div>`}
 
     <p style="font-size:11px;color:var(--text-3);line-height:1.6;margin-top:14px">
-      O índice de conformidade representa o percentual de treinamentos já realizados que permanecem dentro da validade, excluindo pendências marcadas como tratadas (renovação dispensada, colaborador desligado, etc.). Como não existe uma matriz de obrigatoriedade por colaborador, o índice considera apenas treinamentos realizados ao menos uma vez — não treinamentos obrigatórios ainda não realizados. Quando o curso vencendo tem uma Reciclagem cadastrada, a coluna "Sugestão" na tabela abaixo já aponta o curso certo para agendar.
+      O índice de conformidade representa o percentual de treinamentos já realizados que permanecem dentro da validade, excluindo pendências marcadas como tratadas (renovação dispensada, colaborador desligado, etc.). Selecione uma empresa para ver e tratar as pendências dos colaboradores dela.
     </p>
   `);
-  _confAplicarFiltrosERenderLista();
 }
 
-function _confMudarAba(aba) {
-  window._confAba = aba;
-  _confRenderTudo();
+// ── Nível 2/3 — colaboradores de uma empresa (lista) + painel de detalhe
+// do colaborador selecionado, lado a lado. Trocar de colaborador não
+// refaz a consulta nem redesenha a lista inteira — só troca o painel
+// (ver _confSelecionarColab) — pensado pra tratar vários casos em
+// sequência sem perder tempo recarregando a tela toda vez.
+function _confRenderNivel2(chave, itensEmpresa) {
+  const aba = window._confAba;
+  const nomeEmpresa = itensEmpresa[0]?.empresa || '—';
+  const busca = (_getElVisible('buscaConfColab')?.value || '').toLowerCase().trim();
+  const statusFiltro = _getElVisible('filtroConfColabStatus')?.value || '';
+
+  let itens = [...itensEmpresa].sort((a,b) => a.diffDias - b.diffDias);
+  if (busca) itens = itens.filter(x => x.colaboradorNome.toLowerCase().includes(busca) || x.treinamentoNome.toLowerCase().includes(busca));
+  if (statusFiltro) itens = itens.filter(x => aba==='ativas' ? x.status===statusFiltro : x.statusExcecao===statusFiltro);
+
+  const selecionadoId = itens.some(x => x.id === window._confColabSelecionadoId) ? window._confColabSelecionadoId : (itens[0]?.id || null);
+  window._confColabSelecionadoId = selecionadoId;
+
+  const vencidosEmpresa = itensEmpresa.filter(x=>x.status==='vencido').length;
+  const proximosEmpresa = itensEmpresa.length - vencidosEmpresa;
+
+  const statusOpts = (aba==='ativas'
+    ? [['vencido','Vencido'],['urgente','Urgente'],['atencao','Atenção'],['planejar','Planejar']]
+    : Object.entries(STATUS_EXCECAO_LABEL)
+  ).map(([v,l]) => `<option value="${v}" ${statusFiltro===v?'selected':''}>${l}</option>`).join('');
+
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px">
+      <button class="btn btn-ghost btn-sm" style="padding:4px 8px" onclick="_confVoltarEmpresas()">${ICONS.back} Empresas</button>
+      <span style="color:var(--text-3)">/</span>
+      <b style="color:var(--navy)">${escapeHtml(nomeEmpresa)}</b>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--navy)">${escapeHtml(nomeEmpresa)}</div>
+        <div style="font-size:12.5px;color:var(--text-2);margin-top:2px">${itensEmpresa.length} pendência${itensEmpresa.length!==1?'s':''}${aba==='ativas'?` · ${vencidosEmpresa} vencida${vencidosEmpresa!==1?'s':''} · ${proximosEmpresa} vencendo em breve`:''}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm ${aba==='ativas'?'btn-navy':'btn-outline'}" onclick="_confMudarAba('ativas')">Ativas</button>
+        <button class="btn btn-sm ${aba==='tratadas'?'btn-navy':'btn-outline'}" onclick="_confMudarAba('tratadas')">Tratadas</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <input type="search" id="buscaConfColab" value="${escapeHtml(busca)}" placeholder="Buscar colaborador ou treinamento..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="_confRenderNivel2Atual()">
+      <select id="filtroConfColabStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confRenderNivel2Atual()">
+        <option value="">Todos os status</option>${statusOpts}
+      </select>
+    </div>
+
+    <div class="conf-nivel2-body">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="conf-lista-colabs" id="listaColabsConf">
+          ${_htmlListaColabsConf(itens, selecionadoId, aba)}
+        </div>
+      </div>
+      <div class="card" id="painelDetalheConf">
+        ${selecionadoId ? _htmlPainelDetalheConf(window._confPorId[selecionadoId], aba) : `<div class="empty" style="padding:32px"><div class="empty-icon">✅</div><div class="empty-title">Nada por aqui</div><div class="empty-sub">Nenhuma pendência de ${escapeHtml(nomeEmpresa)} bate com o filtro atual.</div></div>`}
+      </div>
+    </div>
+  `);
 }
 
-// Lê os controles de filtro/agrupamento atuais, aplica sobre a base certa
-// (ativas dentro do período escolhido, ou tratadas) e renderiza a tabela —
-// sem refazer a consulta ao banco, só reprocessa o que já está em memória.
-function _confAplicarFiltrosERenderLista() {
-  const d = window._confData;
-  if (!d) return;
-  const aba = window._confAba || 'ativas';
-  const busca       = (_getElVisible('buscaConf')?.value||'').toLowerCase().trim();
-  const empresa      = _getElVisible('filtroConfEmpresa')?.value || '';
-  const treinamento  = _getElVisible('filtroConfTreinamento')?.value || '';
-  const status       = _getElVisible('filtroConfStatus')?.value || '';
-  const periodo      = _getElVisible('filtroConfPeriodo')?.value || String(JANELA_CONFORMIDADE_DIAS);
-  const agrupar      = _getElVisible('filtroConfAgrupar')?.value || '';
-
-  let base = aba === 'ativas' ? d.todosAtivos : d.tratados;
-
-  if (aba === 'ativas') {
-    if (periodo === 'vencidos') base = base.filter(x => x.status === 'vencido');
-    else if (periodo !== 'todos') {
-      const dias = parseInt(periodo, 10);
-      base = base.filter(x => x.status === 'vencido' || x.diffDias <= dias);
-    }
-  }
-  if (empresa)     base = base.filter(x => (x.cliente_id||x.empresa) === empresa);
-  if (treinamento) base = base.filter(x => x.treinamentoNome === treinamento);
-  if (status)      base = base.filter(x => aba === 'ativas' ? x.status === status : x.statusExcecao === status);
-  if (busca)        base = base.filter(x => x.colaboradorNome.toLowerCase().includes(busca) || x.treinamentoNome.toLowerCase().includes(busca));
-
-  base = [...base].sort((a,b) => a.diffDias - b.diffDias);
-  window._confPorId = Object.fromEntries(base.map(x => [x.id, x]));
-
-  _setElBoth('listaConformidade', _htmlListaConformidade(base, agrupar, aba === 'tratadas'));
+// Reaplica busca/status dentro da empresa já aberta (chamado pelos
+// campos de filtro do nível 2) — sem sair da tela nem refazer consulta.
+function _confRenderNivel2Atual() {
+  if (window._confNivel !== 'detalhe' || !window._confEmpresaChave) return;
+  _confRenderNivel2(window._confEmpresaChave, _confItensDaEmpresa(window._confEmpresaChave));
 }
 
-// Sem agrupamento, renderiza uma tabela só; com agrupamento, quebra em
-// seções por empresa/treinamento/data de vencimento — mas a ordenação por
-// urgência (mais crítico primeiro) é preservada dentro de cada seção, já
-// que a lista recebida já chega ordenada por diffDias.
-function _htmlListaConformidade(lista, agrupar='', tratada=false) {
-  if (!lista.length) return `<div class="empty" style="padding:32px"><div class="empty-icon">✅</div><div class="empty-title">${tratada?'Nenhuma pendência tratada':'Nenhuma pendência'}</div><div class="empty-sub">${tratada?'Pendências marcadas como dispensadas, não aplicáveis, colaborador desligado etc. aparecem aqui.':'Não há certificados vencidos ou vencendo no período/filtro selecionado.'}</div></div>`;
-  if (!agrupar) return _confTabela(lista, tratada);
-  const grupos = {};
-  const ordemChaves = [];
-  lista.forEach(x => {
-    let chave, label;
-    if (agrupar === 'empresa') { chave = x.cliente_id||x.empresa; label = x.empresa; }
-    else if (agrupar === 'treinamento') { chave = x.treinamentoNome; label = x.treinamentoNome; }
-    else { chave = x.data_vencimento; label = formatarData(x.data_vencimento); }
-    if (!grupos[chave]) { grupos[chave] = {label, itens:[]}; ordemChaves.push(chave); }
-    grupos[chave].itens.push(x);
-  });
-  return ordemChaves.map(k => `
-    <div style="padding:8px 16px;background:var(--gray-50);font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;border-top:1px solid var(--border)">${escapeHtml(grupos[k].label)} <span style="font-weight:400;color:var(--text-3);text-transform:none">(${grupos[k].itens.length})</span></div>
-    ${_confTabela(grupos[k].itens, tratada)}
-  `).join('');
+// Troca o colaborador selecionado sem redesenhar a lista inteira — só
+// destaca o item clicado e atualiza o painel de detalhe ao lado.
+function _confSelecionarColab(id, itemEl) {
+  window._confColabSelecionadoId = id;
+  const lista = itemEl.closest('.conf-lista-colabs');
+  if (lista) lista.querySelectorAll('.conf-colab-item').forEach(it => it.classList.remove('selected'));
+  itemEl.classList.add('selected');
+  const x = window._confPorId[id];
+  _setElBoth('painelDetalheConf', x ? _htmlPainelDetalheConf(x, window._confAba) : '');
 }
 
-function _confTabela(lista, tratada) {
+function _htmlListaColabsConf(itens, selecionadoId, aba) {
+  if (!itens.length) return `<div class="empty" style="padding:24px"><div class="empty-icon">✅</div><div class="empty-title">Nada por aqui</div><div class="empty-sub">Nenhuma pendência bate com o filtro atual.</div></div>`;
+  const barCor  = {vencido:'var(--red)', urgente:'var(--red)', atencao:'var(--amber)', planejar:'var(--blue)'};
   const badgeCls = {vencido:'badge-red', urgente:'badge-red', atencao:'badge-amber', planejar:'badge-blue'};
   const badgeLbl = {vencido:'Vencido', urgente:'Urgente', atencao:'Atenção', planejar:'Planejar'};
+  return itens.map(x => {
+    const vencTxt = x.status === 'vencido'
+      ? `venceu há ${Math.abs(x.diffDias)} dia${Math.abs(x.diffDias)!==1?'s':''}`
+      : `vence em ${x.diffDias} dia${x.diffDias!==1?'s':''}`;
+    const badge = aba==='ativas'
+      ? `<span class="badge ${badgeCls[x.status]||'badge-gray'}">${badgeLbl[x.status]||x.status}</span>`
+      : `<span class="badge badge-gray">${STATUS_EXCECAO_LABEL[x.statusExcecao]||x.statusExcecao}</span>`;
+    return `<div class="conf-colab-item${x.id===selecionadoId?' selected':''}" onclick="_confSelecionarColab('${x.id}', this)">
+      <div class="conf-colab-bar" style="background:${aba==='ativas'?(barCor[x.status]||'var(--gray-300)'):'var(--gray-300)'}"></div>
+      <div class="conf-colab-main">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px">
+          <span style="font-size:13.5px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(x.colaboradorNome)}</span>
+          ${badge}
+        </div>
+        <div class="li-sub" style="margin-top:0">${escapeHtml(x.treinamentoNome)}</div>
+        ${aba==='ativas' ? `<div style="font-size:11.5px;font-weight:600;color:${x.status==='vencido'?'var(--red)':'var(--text-2)'};margin-top:2px">${vencTxt}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Painel de detalhe do colaborador selecionado (nível 3) — mesmas
+// informações e ações já usadas na versão anterior da tela (Agendar,
+// Adicionar em turma existente, marcar/reabrir status), só reorganizadas
+// num layout de painel em vez de linha de tabela.
+function _htmlPainelDetalheConf(x, aba) {
+  if (!x) return '';
   const podeGerenciar = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  return `<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px">
-    <thead><tr style="background:var(--surface)">
-      <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Colaborador</th>
-      <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Treinamento</th>
-      <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Empresa</th>
-      <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Vence em</th>
-      <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">Status</th>
-      <th style="text-align:left;padding:8px 16px;font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase">${tratada?'Motivo':'Sugestão'}</th>
-      <th style="padding:8px 12px"></th>
-    </tr></thead>
-    <tbody>
-      ${lista.map(x => {
-        const vencTxt = x.status === 'vencido'
-          ? `vencido há ${Math.abs(x.diffDias)} dia${Math.abs(x.diffDias)!==1?'s':''}`
-          : `${x.diffDias} dia${x.diffDias!==1?'s':''}`;
-        const sugestaoDiferente = x.sugestaoNome && x.sugestaoNome !== x.treinamentoNome;
-        const sugestaoTxt = sugestaoDiferente ? `${x.ehReciclagem?'Reciclagem: ':''}${x.sugestaoNome}` : (x.ehReciclagem ? 'Repetir esta reciclagem' : 'Repetir este curso');
-        const colStatus = tratada
-          ? `<span class="badge badge-gray" style="font-size:11px">${STATUS_EXCECAO_LABEL[x.statusExcecao]||x.statusExcecao}</span>`
-          : `<span class="badge ${badgeCls[x.status]||'badge-gray'}" style="font-size:11px">${badgeLbl[x.status]||x.status}</span>`;
-        const colUltima = tratada
-          ? `<span style="font-size:12px;color:var(--text-2)">${x.motivoExcecao?escapeHtml(x.motivoExcecao):'—'}</span>`
-          : (podeGerenciar && x.sugestaoId ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:5px 10px" data-action="agendarReciclagem" data-id="${x.id}" title="${escapeHtml(sugestaoTxt)}">${ICONS.plus} Agendar</button>` : `<span style="font-size:11px;color:var(--text-3)">${escapeHtml(sugestaoTxt)}</span>`);
-        const colAcoes = podeGerenciar
-          ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:14px" data-action="menuConformidade" data-id="${x.id}" title="Mais ações">⋯</button>`
-          : '';
-        return `<tr style="border-top:1px solid var(--border)">
-          <td style="padding:9px 16px;color:var(--navy);font-weight:500">${escapeHtml(x.colaboradorNome)}</td>
-          <td style="padding:9px 12px;color:var(--text-1)">${escapeHtml(x.treinamentoNome)}</td>
-          <td style="padding:9px 12px;color:var(--text-2)">${escapeHtml(x.empresa)}</td>
-          <td style="padding:9px 12px;color:${x.status==='vencido'?'var(--red)':'var(--navy)'};font-weight:${x.status==='vencido'?'600':'400'}">${vencTxt}</td>
-          <td style="padding:9px 16px">${colStatus}</td>
-          <td style="padding:9px 16px">${colUltima}</td>
-          <td style="padding:9px 12px;text-align:right">${colAcoes}</td>
-        </tr>`;
-      }).join('')}
-    </tbody>
-  </table>`;
+  const tratada = aba === 'tratadas';
+  const iniciais = (x.colaboradorNome||'?').split(' ').filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase();
+
+  let alertaHtml, badgeTopo;
+  if (tratada) {
+    badgeTopo = `<span class="badge badge-gray">${STATUS_EXCECAO_LABEL[x.statusExcecao]||x.statusExcecao}</span>`;
+    alertaHtml = `<div style="background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 14px;font-size:13px;color:var(--text-2);margin-bottom:18px">${x.motivoExcecao ? escapeHtml(x.motivoExcecao) : 'Pendência marcada como tratada — não conta mais no índice de conformidade.'}</div>`;
+  } else {
+    const badgeCls = {vencido:'badge-red', urgente:'badge-red', atencao:'badge-amber', planejar:'badge-blue'};
+    const badgeLbl = {vencido:'Vencido', urgente:'Urgente', atencao:'Atenção', planejar:'Planejar'};
+    const vencTxt = x.status === 'vencido' ? `há ${Math.abs(x.diffDias)} dia${Math.abs(x.diffDias)!==1?'s':''}` : `em ${x.diffDias} dia${x.diffDias!==1?'s':''}`;
+    badgeTopo = `<span class="badge ${badgeCls[x.status]||'badge-gray'}">${badgeLbl[x.status]||x.status} ${vencTxt}</span>`;
+    const alertaCfg = {
+      vencido:  ['var(--red-l)','var(--red-text)','Colaborador está com o certificado vencido — regularize o quanto antes.'],
+      urgente:  ['var(--red-l)','var(--red-text)','Vence em poucos dias — priorize o agendamento.'],
+      atencao:  ['var(--amber-l)','var(--amber-text)','Dentro do prazo, mas já vale agendar a reciclagem.'],
+      planejar: ['var(--blue-l)','var(--blue-text)','Ainda dentro da janela de planejamento — sem urgência.'],
+    };
+    const [bg,cor,msg] = alertaCfg[x.status] || alertaCfg.planejar;
+    alertaHtml = `<div style="background:${bg};color:${cor};border-radius:var(--r-md);padding:11px 14px;font-size:13px;margin-bottom:18px;line-height:1.45">${msg}</div>`;
+  }
+
+  const acoesHtml = !podeGerenciar ? '' : (tratada
+    ? `<button class="btn btn-outline" data-action="reabrirPendencia" data-id="${x.id}" style="width:100%;justify-content:center">Reabrir pendência</button>`
+    : `<div style="display:flex;flex-direction:column;gap:10px">
+        ${x.sugestaoId ? `<button class="btn btn-amber" data-action="agendarReciclagem" data-id="${x.id}" style="justify-content:center">${ICONS.plus} Criar nova turma</button>
+        <button class="btn btn-outline" data-action="adicionarEmTurmaExistente" data-id="${x.id}" style="justify-content:center">Adicionar em turma existente</button>` : ''}
+        <button class="btn btn-ghost" data-action="menuConfStatus" data-id="${x.id}" style="justify-content:center">Marcar status manualmente ▾</button>
+      </div>`);
+
+  return `
+    <div style="padding:24px">
+      <div style="display:flex;gap:14px;align-items:center;margin-bottom:16px">
+        <div style="width:44px;height:44px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${escapeHtml(iniciais||'?')}</div>
+        <div style="min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:16px;font-weight:700;color:var(--text-1)">${escapeHtml(x.colaboradorNome)}</span>
+            ${badgeTopo}
+          </div>
+          <div style="font-size:12.5px;color:var(--text-2);margin-top:2px">${escapeHtml(x.empresa)}</div>
+        </div>
+      </div>
+      ${alertaHtml}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:20px">
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Treinamento</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${escapeHtml(x.treinamentoNome)}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Empresa</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${escapeHtml(x.empresa)}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Vencimento</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${formatarData(x.data_vencimento)}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Situação</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${tratada ? 'Fora do índice de conformidade' : (x.status==='vencido' ? 'Vencido' : 'Dentro do prazo de alerta')}</div></div>
+      </div>
+      ${podeGerenciar ? `<div class="li-sub" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;font-weight:700;color:var(--text-3)">Ações rápidas</div>` : ''}
+      ${acoesHtml}
+    </div>
+  `;
 }
 
 // Abre "Nova turma" já com cliente e curso sugerido pré-selecionados, a
@@ -4629,28 +4754,19 @@ function agendarReciclagem(id) {
   abrirModalTurma(null, { clienteId: x.cliente_id, catalogoId: x.sugestaoId, travar: true, origemConfId: id });
 }
 
-// Cada status possível já aparece como item direto no menu — sem passar
-// por uma tela intermediária de "escolha o status num dropdown". Menos
-// cliques, que era justamente o ponto fraco do desenho anterior.
-function menuConformidade(btn, id) {
+// Lista os status possíveis direto no menu — cada item já abre o modal de
+// encerramento com o status pré-selecionado (economiza um passo). As ações
+// de "Criar nova turma"/"Adicionar em turma existente" não entram aqui
+// porque no painel de detalhe elas já aparecem como botões dedicados.
+function _confMenuStatus(btn, id) {
   const x = (window._confPorId||{})[id];
   if (!x) return;
-  const tratada = !!x.statusExcecao;
-  if (tratada) {
-    _menuDropdown(btn, [{action:'reabrirPendencia', id, label:'Reabrir pendência'}]);
-    return;
-  }
   const itensStatus = Object.entries(STATUS_EXCECAO_LABEL)
     // "Renovação agendada" é setada automaticamente pelas ações de Agendar/
     // Adicionar em turma existente — não faz sentido oferecer como escolha manual aqui.
     .filter(([v]) => v !== 'renovacao_agendada')
     .map(([v,l]) => ({action:'encerrarPendenciaRapido', id, extra:v, label:l}));
-  _menuDropdown(btn, [
-    ...(x.sugestaoId ? [{action:'agendarReciclagem', id, label:'Criar nova turma'}] : []),
-    {action:'adicionarEmTurmaExistente', id, label:'Adicionar em turma existente'},
-    '---',
-    ...itensStatus,
-  ]);
+  _menuDropdown(btn, itensStatus);
 }
 
 // Encerra uma pendência sem apagar o registro — tira do índice de
@@ -9152,8 +9268,10 @@ document.addEventListener('click', function(e) {
     case 'cadastroRapidoColab':   abrirCadastroRapidoColab(); break;
     case 'mostrarPartOutrasEmpresas': mostrarPartOutrasEmpresas(); break;
     // Conformidade
+    case 'confAbrirEmpresa':         _confAbrirEmpresa(id); break;
+    case 'confVoltarEmpresas':       _confVoltarEmpresas(); break;
     case 'agendarReciclagem':        agendarReciclagem(id); break;
-    case 'menuConformidade':         menuConformidade(el,id); break;
+    case 'menuConfStatus':           _confMenuStatus(el,id); break;
     case 'encerrarPendencia':        document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalEncerrarPendencia(id); break;
     case 'encerrarPendenciaRapido':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalEncerrarPendencia(id, extra); break;
     case 'reabrirPendencia':         document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); reabrirPendencia(id); break;
