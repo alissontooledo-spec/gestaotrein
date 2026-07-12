@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1E2A4A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Toledo LAabs">
+<meta name="apple-mobile-web-app-title" content="Toledo Labs">
 <title>Toledo Labs — Treinamentos</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
@@ -5982,12 +5982,17 @@ async function renderHistorico() {
   setMobileHeader(`<div class="mh-greeting">Instrutor</div><div class="mh-name">Histórico</div>`);
   fabOcultar();
 
-  // Buscar todas as sessões concluídas deste instrutor
+  // Buscar todas as sessões deste instrutor — a filtragem por "concluído"
+  // de verdade acontece abaixo, por turma.status='concluida' (turmasMap),
+  // não pelo flag de cada sessão isolada. Uma turma pode ser marcada
+  // concluída sem que cada sessão tenha o flag `concluida` atualizado
+  // (ex.: finalização feita por outra via que não a tela padrão do
+  // instrutor) — exigir os dois deixava turmas concluídas de fora do
+  // histórico.
   const {data:sessoes, error:erS} = await sb
     .from('sessoes')
     .select('id,turma_id,data,hora_inicio,hora_fim,local,concluida')
     .eq('instrutor_id', usuarioAtual.id)
-    .eq('concluida', true)
     .order('data', {ascending:false});
   if (erS) throw erS;
 
