@@ -700,9 +700,15 @@ let _suporteOrgNome   = null;  // nome da org para exibição
 let _suporteLogId     = null;  // id do registro em logs_acesso
 let _suporteAcoes     = [];    // páginas visitadas durante o suporte
 
-async function iniciarModoSuporte(orgId, orgNome) {
+async function iniciarModoSuporte(orgId) {
+  // Busca os dados da organização antes de qualquer coisa — evita precisar
+  // receber o nome como argumento vindo de um atributo onclick (texto
+  // livre em onclick é risco de injeção de JS: um nome com aspas quebraria
+  // o atributo/string, mesmo com escapeHtml, que só protege contexto HTML,
+  // não contexto de string JS dentro de um atributo).
+  const { data: orgPrev } = await sb.from('organizacoes').select('nome').eq('id', orgId).single();
   const ok = await confirmarAcao(
-    `Você está prestes a acessar "${orgNome}" em modo suporte. Todas as ações serão registradas em log de auditoria.`,
+    `Você está prestes a acessar "${escapeHtml(orgPrev?.nome || 'esta organização')}" em modo suporte. Todas as ações serão registradas em log de auditoria.`,
     'Acessar',
     false
   );
@@ -735,7 +741,7 @@ async function iniciarModoSuporte(orgId, orgNome) {
     // Assumir identidade de administrador da org
     usuarioAtual.perfil     = 'administrador';
     usuarioAtual.org_id     = orgId;
-    usuarioAtual.orgNome    = org?.nome  || orgNome;
+    usuarioAtual.orgNome    = org?.nome  || orgPrev?.nome || 'Organização';
     usuarioAtual.orgPlano   = org?.plano || 'starter';
     // Sem isso, os PDFs gerados em Modo Suporte caem sempre no nome em texto
     // (a logo é lida só de usuarioAtual.orgLogoUrl — ver carregarLogoOrgPDF)
@@ -744,7 +750,7 @@ async function iniciarModoSuporte(orgId, orgNome) {
     // Ativar flags de suporte
     _suporteAtivo   = true;
     _suporteOrgId   = orgId;
-    _suporteOrgNome = org?.nome || orgNome;
+    _suporteOrgNome = org?.nome || orgPrev?.nome || 'Organização';
     _suporteLogId   = log.id;
     _suporteAcoes   = [];
 
@@ -1152,7 +1158,7 @@ function _htmlGrauRisco(cnae) {
 function verDetalheNR(nr) {
   const info = NR_INFO[nr];
   if (!info) return;
-  abrirModal(`${nr} — ${info.nome}`, `
+  abrirModal(`${nr} — ${escapeHtml(info.nome)}`, `
     <div style="font-size:13px;color:var(--text-2);line-height:1.5;margin-bottom:14px">${info.resumo}</div>
     <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Treinamento / capacitação</div>
     <div style="font-size:13px;color:var(--navy);line-height:1.5;margin-bottom:14px">${info.treinamento}</div>
@@ -1693,9 +1699,9 @@ async function renderHomeProvedor() {
   const orgsSemAdmin  = orgsAll.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
 
   const alertas = [
-    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${o.nome}`, orgId:o.id })),
-    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${o.nome}`, orgId:o.id })),
-    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${o.nome}`, orgId:o.id })),
+    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id })),
+    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id })),
+    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id })),
   ];
 
   const htmlAlertas = alertas.length ? `
@@ -1756,13 +1762,13 @@ async function renderHomeProvedor() {
   });
   // Fallback (só entra em jogo se a migração de auditoria ainda não tiver sido aplicada)
   const eventosFallback = eventosAud.length ? [] : [
-    ...orgsAll.slice(0,4).map(o => ({ data:o.created_at, texto:`Organização criada: <strong>${o.nome}</strong>`, icone:'🏢' })),
-    ...usrsAll.filter(u=>u.created_at).sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,4).map(u => ({ data:u.created_at, texto:`Usuário criado: <strong>${u.nome||'—'}</strong>`, icone:'👤' })),
+    ...orgsAll.slice(0,4).map(o => ({ data:o.created_at, texto:`Organização criada: <strong>${escapeHtml(o.nome)}</strong>`, icone:'🏢' })),
+    ...usrsAll.filter(u=>u.created_at).sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,4).map(u => ({ data:u.created_at, texto:`Usuário criado: <strong>${escapeHtml(u.nome||'—')}</strong>`, icone:'👤' })),
   ];
   const eventos = [
     ...eventosAud,
     ...eventosFallback,
-    ...acessosAll.map(a => ({ data:a.created_at, texto:`Acesso de suporte: <strong>${a.organizacoes?.nome||'—'}</strong>${a.encerrado_em?'':' <span style="color:var(--amber-h)">(em andamento)</span>'}`, icone:'🔧' })),
+    ...acessosAll.map(a => ({ data:a.created_at, texto:`Acesso de suporte: <strong>${escapeHtml(a.organizacoes?.nome||'—')}</strong>${a.encerrado_em?'':' <span style="color:var(--amber-h)">(em andamento)</span>'}`, icone:'🔧' })),
   ].sort((a,b) => b.data > a.data ? 1 : -1).slice(0,6);
 
   const htmlFeed = eventos.length ? eventos.map(e => `
@@ -1780,13 +1786,13 @@ async function renderHomeProvedor() {
       <div onclick="verOrgProvedor('${o.id}')" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer">
         <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
           <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_badgePlano(o.plano, o.ativo)}
-        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">${ICONS.support}</button>` : ''}
+        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support}</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -2043,9 +2049,9 @@ async function verOrgProvedor(orgId) {
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
         <div style="width:48px;height:48px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(orgData.nome||'')}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:17px;font-weight:700;color:#fff">${orgData.nome||'—'}</div>
+          <div style="font-size:17px;font-weight:700;color:#fff">${escapeHtml(orgData.nome||'—')}</div>
           ${orgData.cnpj ? `<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">CNPJ: ${orgData.cnpj}</div>` : ''}
-          ${orgData.email ? `<div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:1px">${orgData.email}</div>` : ''}
+          ${orgData.email ? `<div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:1px">${escapeHtml(orgData.email)}</div>` : ''}
         </div>
         <span class="badge ${orgData.ativo?'badge-green':'badge-gray'}">${orgData.ativo?'Ativa':'Inativa'}</span>
       </div>
@@ -2083,7 +2089,7 @@ async function verOrgProvedor(orgId) {
       <button class="btn btn-outline" onclick="abrirModalOrg('${orgId}')">✎ Editar organização</button>
       <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
       <button class="btn btn-outline" onclick="carregarCatalogoModeloOrgUI('${orgId}')">📚 Carregar catálogo modelo</button>
-      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}','${orgData.nome?.replace(/'/g,'')||''}')">🔧 Acessar como administrador</button>` : ''}
+      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}')">🔧 Acessar como administrador</button>` : ''}
       <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
         ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
       </button>
@@ -2116,7 +2122,7 @@ function _htmlListaUsuariosOrg(lista) {
         <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border)">
           <div style="width:36px;height:36px;border-radius:50%;background:rgba(30,42,74,.1);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--navy)">${u.nome}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--navy)">${escapeHtml(u.nome)}</div>
             <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${labelPerfil(u.perfil)}</div>
           </div>
           <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
@@ -2453,7 +2459,7 @@ async function renderHomeAdmin() {
         <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px">
           ${confResumo.statusPorTreinamento.slice(0,5).map(s => `
             <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:11px;color:var(--text-2);width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.nome}">${s.nome}</span>
+              <span style="font-size:11px;color:var(--text-2);width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(s.nome)}">${escapeHtml(s.nome)}</span>
               <div style="flex:1;height:6px;background:var(--gray-100);border-radius:3px"><div style="width:${s.pct}%;height:6px;background:${s.pct>=90?'var(--green)':s.pct>=70?'var(--amber)':'var(--red)'};border-radius:3px"></div></div>
               <span style="font-size:11px;color:var(--text-3);width:30px;text-align:right">${s.pct}%</span>
             </div>`).join('')}
@@ -2487,7 +2493,7 @@ async function renderHomeAdmin() {
             return `<div class="home-list-item">
               <div class="home-list-dot" style="background:var(--amber)"></div>
               <div class="home-list-info">
-                <div class="home-list-name">${t?.catalogo?.nome||'Treinamento'}</div>
+                <div class="home-list-name">${escapeHtml(t?.catalogo?.nome||'Treinamento')}</div>
                 <div class="home-list-sub">${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
               </div>
             </div>`;
@@ -2498,8 +2504,8 @@ async function renderHomeAdmin() {
         ${recentes.map(t=>`<div class="home-list-item">
           <div class="home-list-dot" style="background:${t.status==='concluida'?'var(--green)':t.status==='em_andamento'?'var(--navy)':'var(--amber)'}"></div>
           <div class="home-list-info">
-            <div class="home-list-name">${t.catalogo?.nome||'Turma'}</div>
-            <div class="home-list-sub">${t.clientes?.nome||'—'}</div>
+            <div class="home-list-name">${escapeHtml(t.catalogo?.nome||'Turma')}</div>
+            <div class="home-list-sub">${escapeHtml(t.clientes?.nome||'—')}</div>
           </div>
           <span class="badge ${t.status==='concluida'?'badge-green':t.status==='em_andamento'?'badge-blue':'badge-gray'}" style="flex-shrink:0;font-size:9px">${t.status==='concluida'?'Concluída':t.status==='em_andamento'?'Ativa':'Agendada'}</span>
         </div>`).join('')}
@@ -2633,8 +2639,8 @@ async function renderHomeInstrutor() {
     <div class="list-item" data-action="verTurma" data-id="${s.turma_id}" style="cursor:pointer">
       <div class="li-icon" style="background:${corIcone}1a;color:${corIcone}">${icone}</div>
       <div class="li-info">
-        <div class="li-title">${s.turma?.catalogo?.nome||'Treinamento'}</div>
-        <div class="li-sub">${s.turma?.clientes?.nome||'—'} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
+        <div class="li-title">${escapeHtml(s.turma?.catalogo?.nome||'Treinamento')}</div>
+        <div class="li-sub">${escapeHtml(s.turma?.clientes?.nome||'—')} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
       </div>
       ${badge}
     </div>`;
@@ -2656,8 +2662,8 @@ async function renderHomeInstrutor() {
         <div class="card" style="border:2px solid var(--navy);cursor:pointer" data-action="verTurma" data-id="${proximo.turma_id}">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
             <div style="min-width:0">
-              <div style="font-size:16px;font-weight:700;color:var(--text-1)">${proximo.turma?.catalogo?.nome||'Treinamento'}</div>
-              <div style="font-size:13px;color:var(--text-2);margin-top:2px">${proximo.turma?.clientes?.nome||'—'}</div>
+              <div style="font-size:16px;font-weight:700;color:var(--text-1)">${escapeHtml(proximo.turma?.catalogo?.nome||'Treinamento')}</div>
+              <div style="font-size:13px;color:var(--text-2);margin-top:2px">${escapeHtml(proximo.turma?.clientes?.nome||'—')}</div>
             </div>
             <span class="badge ${ehHoje?'badge-amber':'badge-gray'}" style="flex-shrink:0">${ehHoje?'Hoje':formatarData(proximo.data)}</span>
           </div>
@@ -2682,8 +2688,8 @@ async function renderHomeInstrutor() {
         <div class="list-item" data-action="abrirDocumentos" data-id="${t.id}" style="cursor:pointer">
           <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
           <div class="li-info">
-            <div class="li-title">${t.catalogo?.nome||'Treinamento'}</div>
-            <div class="li-sub">${t.clientes?.nome||'—'} · ${motivo==='gerar'?'documentos incompletos':'gerado, falta enviar por e-mail'}</div>
+            <div class="li-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+            <div class="li-sub">${escapeHtml(t.clientes?.nome||'—')} · ${motivo==='gerar'?'documentos incompletos':'gerado, falta enviar por e-mail'}</div>
           </div>
           <span class="badge badge-amber">${motivo==='gerar'?'Gerar':'Enviar'}</span>
         </div>`).join('')}
@@ -2800,7 +2806,7 @@ async function renderFinanceiroProvedor() {
   const htmlVencimentos = vencimentos.length ? vencimentos.map(v => `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
       <span class="badge ${v.dias<0?'badge-gray':v.dias<=3?'':'badge-blue'}" style="${v.dias>=0&&v.dias<=3?'background:var(--amber-l);color:var(--amber-text)':''}">${v.tipo}</span>
-      <span style="font-size:13px;color:var(--text-1);flex:1">${v.nome}</span>
+      <span style="font-size:13px;color:var(--text-1);flex:1">${escapeHtml(v.nome)}</span>
       <span style="font-size:12px;color:${v.dias<0?'var(--red-text)':'var(--text-3)'};font-weight:600">${v.dias<0?`Venceu há ${Math.abs(v.dias)}d`:v.dias===0?'Vence hoje':`Vence em ${v.dias}d`}</span>
     </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Nenhum vencimento ou atraso nos últimos/próximos 30 dias.</div>';
 
@@ -2812,7 +2818,7 @@ async function renderFinanceiroProvedor() {
   const _labelPlano = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
   const htmlRanking = ranking.length ? ranking.map(r => `
     <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);min-width:0">
-      <span style="font-size:13px;color:var(--text-1);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nome}</span>
+      <span style="font-size:13px;color:var(--text-1);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.nome)}</span>
       <span style="font-size:11px;color:var(--text-3);flex-shrink:0">${_labelPlano[r.plano]}</span>
       <span style="font-size:13px;color:var(--navy);font-weight:700;min-width:70px;text-align:right;flex-shrink:0">${r.valor>0?`R$${r.valor}`:'—'}</span>
     </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Sem organizações pagantes ainda.</div>';
@@ -2922,9 +2928,9 @@ function _renderOrgsLista(orgs) {
   const trialVencido  = orgs.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
   const semAdmin       = orgs.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
   const alertas = [
-    ...trialVencido.map(o => `🔴 Trial vencido: <strong>${o.nome}</strong>`),
-    ...trialVencendo.map(o => `⚠️ Trial vence em ${diasAte(o.trial_fim)}d: <strong>${o.nome}</strong>`),
-    ...semAdmin.map(o => `⚠️ Sem administrador ativo: <strong>${o.nome}</strong>`),
+    ...trialVencido.map(o => `🔴 Trial vencido: <strong>${escapeHtml(o.nome)}</strong>`),
+    ...trialVencendo.map(o => `⚠️ Trial vence em ${diasAte(o.trial_fim)}d: <strong>${escapeHtml(o.nome)}</strong>`),
+    ...semAdmin.map(o => `⚠️ Sem administrador ativo: <strong>${escapeHtml(o.nome)}</strong>`),
   ];
 
   setConteudo(`
@@ -3027,14 +3033,14 @@ function _htmlListaOrgs(orgs) {
       <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer" onclick="verOrgProvedor('${o.id}')">
         <div style="width:40px;height:40px;border-radius:var(--r-md);background:${o.ativo?'var(--blue-l)':'var(--gray-100)'};color:${o.ativo?'var(--blue-h)':'var(--gray-500)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
           <div style="font-size:12px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${totalU} usuário${totalU!==1?'s':''} · ${o.cnpj?`CNPJ ${o.cnpj}`:(o.email||'Sem e-mail')}</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_badgeTrial(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
-        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}','${(o.nome||'').replace(/'/g,"\\'")}')" style="padding:6px">${ICONS.support}</button>` : ''}
+        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support}</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -3096,14 +3102,14 @@ function abrirModalOrg(id=null) {
   const org = id ? _orgsCache.find(o=>o.id===id) : null;
   const planoAtual = org?.plano || 'starter';
   abrirModal(org?'Editar organização':'Nova organização', `
-    <div class="field"><label>Nome *</label><input type="text" id="mOrgNome" value="${org?.nome||''}" placeholder="Ex.: Consultoria SST Brasil"></div>
+    <div class="field"><label>Nome *</label><input type="text" id="mOrgNome" value="${escapeHtml(org?.nome||'')}" placeholder="Ex.: Consultoria SST Brasil"></div>
     ${_cnpjRow('mOrgCnpj', org?.cnpj||'', 'mOrgNome', 'mOrgCidade', 'mOrgUf', 'mOrgEmail')}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mOrgCidade" value="${org?.cidade||''}" placeholder="São Paulo"></div>
+      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mOrgCidade" value="${escapeHtml(org?.cidade||'')}" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mOrgUf" value="${org?.uf||''}" placeholder="SP" maxlength="2" style="text-transform:uppercase"></div>
     </div>
-    <div class="field"><label>E-mail</label><input type="email" id="mOrgEmail" value="${org?.email||''}" placeholder="contato@consultoria.com.br"></div>
-    <div class="field"><label>Telefone</label><input type="tel" id="mOrgTel" value="${org?.telefone||''}" placeholder="(11) 99999-9999"></div>
+    <div class="field"><label>E-mail</label><input type="email" id="mOrgEmail" value="${escapeHtml(org?.email||'')}" placeholder="contato@consultoria.com.br"></div>
+    <div class="field"><label>Telefone</label><input type="tel" id="mOrgTel" value="${escapeHtml(org?.telefone||'')}" placeholder="(11) 99999-9999"></div>
     <div class="field"><label>Plano contratado *</label>
       <select id="mOrgPlano" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="starter" ${planoAtual==='starter'?'selected':''}>Starter — R$ 197/mês</option>
@@ -3306,9 +3312,9 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
   const campoSenha = u ? '' : `
     <div class="field"><label>Senha provisória *</label><input type="password" id="mUsrSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O usuário poderá alterar após o primeiro acesso.</div></div>`;
 
-  abrirModal(u ? `Editar usuário — ${u.nome}` : `Novo usuário — ${org?.nome||''}`, `
-    <div class="field"><label>Nome completo *</label><input type="text" id="mUsrNome" value="${u?.nome||''}" placeholder="Nome do usuário"></div>
-    <div class="field"><label>E-mail *</label><input type="email" id="mUsrEmail" value="${u?.email||''}" placeholder="email@exemplo.com.br" ${u?'disabled style="background:var(--gray-50);color:var(--text-3)"':''}></div>
+  abrirModal(u ? `Editar usuário — ${escapeHtml(u.nome)}` : `Novo usuário — ${escapeHtml(org?.nome||'')}`, `
+    <div class="field"><label>Nome completo *</label><input type="text" id="mUsrNome" value="${escapeHtml(u?.nome||'')}" placeholder="Nome do usuário"></div>
+    <div class="field"><label>E-mail *</label><input type="email" id="mUsrEmail" value="${escapeHtml(u?.email||'')}" placeholder="email@exemplo.com.br" ${u?'disabled style="background:var(--gray-50);color:var(--text-3)"':''}></div>
     ${u ? '<div style="font-size:11px;color:var(--text-3);margin:-8px 0 12px">O e-mail não pode ser alterado aqui. Para trocar, inative este usuário e crie um novo.</div>' : ''}
     ${campoSenha}
     <div class="field"><label>Perfil *</label>
@@ -3453,8 +3459,8 @@ function _htmlListaClientes(lista) {
     <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verCliente" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
       <div style="width:40px;height:40px;border-radius:10px;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.3px">${iniciais(c.nome)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
-        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${c.cidade}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${escapeHtml(c.cidade)}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
@@ -3477,7 +3483,7 @@ function verCliente(id) {
   const linhaLogradouro = [c.logradouro, c.numero].filter(Boolean).map(escapeHtml).join(', ');
   const complementoTxt = c.complemento ? ` — ${escapeHtml(c.complemento)}` : '';
   const enderecoLinha1 = linhaLogradouro + complementoTxt;
-  const enderecoLinha2 = [c.bairro, (c.cidade?`${c.cidade}${c.uf?'/'+c.uf:''}`:null), c.cep?`CEP ${c.cep}`:null].filter(Boolean).map(escapeHtml).join(' · ');
+  const enderecoLinha2 = [c.bairro, (c.cidade?`${escapeHtml(c.cidade)}${c.uf?'/'+c.uf:''}`:null), c.cep?`CEP ${c.cep}`:null].filter(Boolean).map(escapeHtml).join(' · ');
   const temEndereco = !!(enderecoLinha1 || enderecoLinha2);
 
   const linhasCadastro = [
@@ -3503,7 +3509,7 @@ function verCliente(id) {
       <div style="display:flex;align-items:center;gap:14px;min-width:0">
         <div style="width:52px;height:52px;border-radius:12px;background:rgba(245,158,11,.2);color:var(--amber);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.5px">${iniciais(c.nome)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
           <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
             <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${c.ativo?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${c.ativo?'#6EE7B7':'#94A3B8'};border:1px solid ${c.ativo?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${c.ativo?'Ativo':'Inativo'}</span>
             ${_htmlBadgeSituacao(c.situacao_cadastral)}
@@ -3612,7 +3618,7 @@ function abrirModalCliente(id=null) {
   _modalCurrentId = id;
   const c = id ? _clientesCache.find(x=>x.id===id) : null;
   abrirModal(c?'Editar cliente':'Novo cliente', `
-    <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${c?.nome||''}" placeholder="Razão social"></div>
+    <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${escapeHtml(c?.nome||'')}" placeholder="Razão social"></div>
     ${_cnpjRow('mCliCnpj', c?.cnpj||'', 'mCliNome', 'mCliCidade', 'mCliUf', 'mCliEmail', 'mCliCnae', 'mCli')}
     <input type="hidden" id="mCliCnae" value="${c?.cnae||''}">
     <input type="hidden" id="mCliCnaeDesc" value="${escapeHtml(c?.cnae_descricao||'')}">
@@ -3628,17 +3634,17 @@ function abrirModalCliente(id=null) {
       <div class="field" style="margin:0"><label>CEP</label><input type="text" id="mCliCep" value="${c?.cep||''}" placeholder="88350-000"></div>
       <div class="field" style="margin:0"><label>Número</label><input type="text" id="mCliNumero" value="${c?.numero||''}" placeholder="123"></div>
     </div>
-    <div class="field"><label>Logradouro</label><input type="text" id="mCliLogradouro" value="${c?.logradouro||''}" placeholder="Rua, Avenida..."></div>
+    <div class="field"><label>Logradouro</label><input type="text" id="mCliLogradouro" value="${escapeHtml(c?.logradouro||'')}" placeholder="Rua, Avenida..."></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Complemento</label><input type="text" id="mCliComplemento" value="${c?.complemento||''}" placeholder="Sala, bloco..."></div>
-      <div class="field" style="margin:0"><label>Bairro</label><input type="text" id="mCliBairro" value="${c?.bairro||''}" placeholder="Centro"></div>
+      <div class="field" style="margin:0"><label>Complemento</label><input type="text" id="mCliComplemento" value="${escapeHtml(c?.complemento||'')}" placeholder="Sala, bloco..."></div>
+      <div class="field" style="margin:0"><label>Bairro</label><input type="text" id="mCliBairro" value="${escapeHtml(c?.bairro||'')}" placeholder="Centro"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${c?.cidade||''}" placeholder="São Paulo"></div>
+      <div class="field" style="margin:0"><label>Cidade</label><input type="text" id="mCliCidade" value="${escapeHtml(c?.cidade||'')}" placeholder="São Paulo"></div>
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
     </div>
-    <div class="field"><label>E-mail</label><input type="email" id="mCliEmail" value="${c?.email||''}" placeholder="contato@empresa.com.br"></div>
-    <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
+    <div class="field"><label>E-mail</label><input type="email" id="mCliEmail" value="${escapeHtml(c?.email||'')}" placeholder="contato@empresa.com.br"></div>
+    <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${escapeHtml(c?.telefone||'')}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCliente()">${c?'Salvar':'Cadastrar'}</button>`);
   if (c?.cnae) _atualizarSugestaoNR(c.cnae, c.cnae_descricao||'', c.cnaes_secundarios||[]);
@@ -3761,7 +3767,7 @@ function previewImportacaoClientes(e) {
          <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto">
            ${_dadosImportacaoClientes.slice(0,5).map(r =>
              `<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px">
-               <span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nome}</span>
+               <span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.nome)}</span>
                <span style="color:var(--text-3)">${r.cnpj||''}</span>
              </div>`).join('')}
            ${_dadosImportacaoClientes.length > 5 ? `<div style="padding:7px 12px;font-size:12px;color:var(--text-3)">+ ${_dadosImportacaoClientes.length-5} mais...</div>` : ''}
@@ -3850,7 +3856,7 @@ function _htmlListaColabs(lista) {
     <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verColab" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
       <div style="width:40px;height:40px;border-radius:50%;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
         <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cpf?`CPF ${c.cpf}`:null,c.cargo||null].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
       </div>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3878,8 +3884,8 @@ function verColab(id) {
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:52px;height:52px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
-          ${c.cargo?`<div style="font-size:13px;color:rgba(255,255,255,.55);margin-top:3px">${c.cargo}</div>`:''}
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
+          ${c.cargo?`<div style="font-size:13px;color:rgba(255,255,255,.55);margin-top:3px">${escapeHtml(c.cargo)}</div>`:''}
         </div>
       </div>
     </div>
@@ -3911,11 +3917,11 @@ function abrirModalColab(id=null) {
   _modalCurrentId = id;
   const c = id ? _colabsCache.find(x=>x.id===id) : null;
   abrirModal(c?'Editar colaborador':'Novo colaborador', `
-    <div class="field"><label>Nome completo *</label><input type="text" id="mColNome" value="${c?.nome||''}" placeholder="Nome completo"></div>
+    <div class="field"><label>Nome completo *</label><input type="text" id="mColNome" value="${escapeHtml(c?.nome||'')}" placeholder="Nome completo"></div>
     <div class="field"><label>CPF</label><input type="text" id="mColCpf" value="${c?.cpf||''}" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>
-    <div class="field"><label>Cargo</label><input type="text" id="mColCargo" value="${c?.cargo||''}" placeholder="Ex.: Operador, Eletricista..."></div>
-    <div class="field"><label>E-mail</label><input type="email" id="mColEmail" value="${c?.email||''}" placeholder="colaborador@empresa.com.br"></div>
-    <div class="field"><label>Telefone</label><input type="tel" id="mColTel" value="${c?.telefone||''}" placeholder="(47) 99999-9999"></div>`,
+    <div class="field"><label>Cargo</label><input type="text" id="mColCargo" value="${escapeHtml(c?.cargo||'')}" placeholder="Ex.: Operador, Eletricista..."></div>
+    <div class="field"><label>E-mail</label><input type="email" id="mColEmail" value="${escapeHtml(c?.email||'')}" placeholder="colaborador@empresa.com.br"></div>
+    <div class="field"><label>Telefone</label><input type="tel" id="mColTel" value="${escapeHtml(c?.telefone||'')}" placeholder="(47) 99999-9999"></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarColab()">${c?'Salvar':'Cadastrar'}</button>`);
 }
@@ -4076,7 +4082,7 @@ function _htmlListaCatalogo(lista, maxUso, podeMgr) {
     <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${isArq?.6:1}" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
       <div style="width:44px;height:44px;border-radius:var(--r-md);background:${!isArq&&t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'};color:${!isArq&&t.ativo?'var(--navy)':'var(--text-3)'};font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${t.carga_horaria}h</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:${isArq?'var(--text-3)':'var(--navy)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${t.nome} ${tipoBadgeEl}</div>
+        <div style="font-size:14px;font-weight:600;color:${isArq?'var(--text-3)':'var(--navy)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${escapeHtml(t.nome)} ${tipoBadgeEl}</div>
         <div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
           <span>Val. ${t.validade_meses}m</span>
           ${t.categoria ? `<span>· ${t.categoria}</span>` : ''}
@@ -4115,7 +4121,7 @@ function verCatalogo(id) {
         <div style="width:52px;height:52px;border-radius:var(--r-lg);background:rgba(245,158,11,.2);color:var(--amber);font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${t.carga_horaria}h</div>
         <div style="flex:1;min-width:0">
           ${nrMatch ? `<div style="font-size:11px;font-weight:700;color:var(--amber);letter-spacing:.06em;margin-bottom:4px">NR-${nrMatch[1]}</div>` : ""}
-          <div style="font-size:17px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:6px">${t.nome}</div>
+          <div style="font-size:17px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:6px">${escapeHtml(t.nome)}</div>
           <span class="badge ${isArq?"badge-gray":t.ativo?"badge-green":"badge-gray"}">${isArq?"Arquivado":t.ativo?"Ativo":"Inativo"}</span>
         </div>
       </div>
@@ -4359,7 +4365,7 @@ async function renderConformidade() {
           <tbody>
             ${d.oportunidadesPorEmpresa.slice(0,10).map(o => `
               <tr style="border-top:1px solid var(--border)">
-                <td style="padding:9px 16px;color:var(--navy);font-weight:500">${o.nome}</td>
+                <td style="padding:9px 16px;color:var(--navy);font-weight:500">${escapeHtml(o.nome)}</td>
                 <td style="padding:9px 12px;color:var(--text-1)">${o.colaboradores}</td>
                 <td style="padding:9px 12px;color:var(--text-1)">${o.pendentes}</td>
                 <td style="padding:9px 16px;color:${o.vencidos>0?'var(--red)':'var(--text-3)'};font-weight:${o.vencidos>0?'600':'400'}">${o.vencidos}</td>
@@ -4473,7 +4479,7 @@ async function arquivarCatalogo(id) {
       <div style="text-align:center;padding:8px 0">
         <div style="font-size:36px;margin-bottom:12px">📦</div>
         <p style="font-size:14px;color:var(--text-2);line-height:1.6">
-          <strong>${t.nome}</strong> será removido do fluxo de novas turmas.<br>
+          <strong>${escapeHtml(t.nome)}</strong> será removido do fluxo de novas turmas.<br>
           O histórico de turmas e certificados é preservado.
         </p>
       </div>`,
@@ -4486,7 +4492,7 @@ async function arquivarCatalogo(id) {
   if (!confirmado) return;
   const {error} = await sb.from('catalogo').update({arquivado:true, ativo:false}).eq('id',id);
   if (error) { showToast(error.message,'error'); return; }
-  showToast(`"${t.nome}" arquivado.`, 'success');
+  showToast(`"${escapeHtml(t.nome)}" arquivado.`, 'success');
   await renderCatalogo();
 }
 
@@ -4495,7 +4501,7 @@ async function desarquivarCatalogo(id) {
   if (!t) return;
   const {error} = await sb.from('catalogo').update({arquivado:false, ativo:true}).eq('id',id);
   if (error) { showToast(error.message,'error'); return; }
-  showToast(`"${t.nome}" restaurado.`, 'success');
+  showToast(`"${escapeHtml(t.nome)}" restaurado.`, 'success');
   await renderCatalogo();
 }
 
@@ -4504,7 +4510,7 @@ function abrirModalCatalogo(id=null) {
   const t = id ? _catalogoCache.find(x=>x.id===id) : null;
   const nrsAtuais = (Array.isArray(t?.nrs) ? t.nrs : []).map(n=>String(n).replace(/\D/g,'')).filter(Boolean).join(', ');
   abrirModal(t?'Editar treinamento':'Novo treinamento', `
-    <div class="field"><label>Nome *</label><input type="text" id="mCatNome" value="${t?.nome||''}" placeholder="Ex: NR-35 Trabalho em Altura"></div>
+    <div class="field"><label>Nome *</label><input type="text" id="mCatNome" value="${escapeHtml(t?.nome||'')}" placeholder="Ex: NR-35 Trabalho em Altura"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field" style="margin:0"><label>Carga horária (h) *</label><input type="number" id="mCatCH" value="${t?.carga_horaria||''}" min="1" placeholder="8"></div>
       <div class="field" style="margin:0"><label>Validade (meses) *</label><input type="number" id="mCatValidade" value="${t?.validade_meses||''}" min="1" placeholder="12"></div>
@@ -4523,7 +4529,7 @@ function abrirModalCatalogo(id=null) {
       <label>Curso Inicial correspondente *</label>
       <select id="mCatRelacionado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="">Selecione o curso inicial...</option>
-        ${_catalogoCache.filter(c => c.id !== id && c.tipo_curso !== 'reciclagem').map(c => `<option value="${c.id}" ${t?.curso_relacionado_id===c.id?'selected':''}>${c.nome}</option>`).join('')}
+        ${_catalogoCache.filter(c => c.id !== id && c.tipo_curso !== 'reciclagem').map(c => `<option value="${c.id}" ${t?.curso_relacionado_id===c.id?'selected':''}>${escapeHtml(c.nome)}</option>`).join('')}
       </select>
     </div>
     <div class="field"><label>Descrição</label>
@@ -4607,7 +4613,7 @@ async function duplicarCatalogo(id) {
       arquivado: false,
     });
     if (error) throw error;
-    showToast(`"${t.nome}" duplicado.`,'success');
+    showToast(`"${escapeHtml(t.nome)}" duplicado.`,'success');
     await renderCatalogo();
   } catch(e) { showToast(e.message||'Erro ao duplicar','error'); }
 }
@@ -4825,11 +4831,11 @@ async function carregarCatalogoModeloUI() {
 async function carregarCatalogoModeloOrgUI(orgId) {
   document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove());
   const org = _orgsCache.find(o=>o.id===orgId);
-  const ok = await confirmarAcao(`Carregar o catálogo modelo para "${org?.nome||'esta organização'}"? Adiciona os treinamentos do modelo que essa organização ainda não tem — sem duplicar os que já existem.`, 'Carregar catálogo modelo', false);
+  const ok = await confirmarAcao(`Carregar o catálogo modelo para "${escapeHtml(org?.nome||'esta organização')}"? Adiciona os treinamentos do modelo que essa organização ainda não tem — sem duplicar os que já existem.`, 'Carregar catálogo modelo', false);
   if (!ok) return;
   try {
     const n = await importarCatalogoModelo(orgId);
-    showToast(n > 0 ? `${n} treinamento${n!==1?'s':''} adicionado${n!==1?'s':''} ao catálogo de ${org?.nome||'organização'}.` : 'Essa organização já tem todos os treinamentos do modelo.', 'success');
+    showToast(n > 0 ? `${n} treinamento${n!==1?'s':''} adicionado${n!==1?'s':''} ao catálogo de ${escapeHtml(org?.nome||'organização')}.` : 'Essa organização já tem todos os treinamentos do modelo.', 'success');
   } catch(e) { showToast(e.message||'Erro ao carregar catálogo modelo','error'); }
 }
 
@@ -4972,10 +4978,10 @@ function _htmlTurmaCard(t) {
   const dataRef = _turmaDataRef(t);
   return `<div class="turma-card" data-action="verTurma" data-id="${t.id}">
     ${nrTag}
-    <div class="turma-card-title">${t.catalogo?.nome||'Treinamento'}</div>
+    <div class="turma-card-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
     <div class="turma-card-meta">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M3 21l1.9-5.7a8.5 8.5 0 113.8 3.8z"/></svg>
-      <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.clientes?.nome||'—'}</span>
+      <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.clientes?.nome||'—')}</span>
     </div>
     ${dataRef?`<div class="turma-card-meta" style="margin-top:2px">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -5080,7 +5086,7 @@ async function verTurma(id) {
           <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
             <div style="width:32px;height:32px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(p.colaboradores?.nome||'?')}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.colaboradores?.nome||''}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.colaboradores?.nome||'')}</div>
               <div style="font-size:11px;color:var(--text-3)">${p.empresa_vinculo||p.colaboradores?.empresa||''}${p.cargo_vinculo?' · '+p.cargo_vinculo:''}</div>
             </div>
           </div>`).join('')}
@@ -5105,9 +5111,9 @@ async function verTurma(id) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Cliente</div><div style="font-size:14px;font-weight:500">${nomeC}</div></div>
           <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Carga Horária</div><div style="font-size:14px;font-weight:500">${t.catalogo?.carga_horaria||'-'}h</div></div>
-          <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500">${t.local||'-'}</div></div>
+          <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500">${escapeHtml(t.local||'-')}</div></div>
         </div>
-        ${t.observacoes?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Observações</div><div style="font-size:13px;color:var(--text-2)">${t.observacoes}</div></div>`:''}
+        ${t.observacoes?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Observações</div><div style="font-size:13px;color:var(--text-2)">${escapeHtml(t.observacoes)}</div></div>`:''}
         ${podeMgr&&st==='agendada'?`<div style="margin-top:14px;display:flex;gap:8px">
           <button class="btn btn-navy btn-sm" data-action="editarTurma" data-id="${id}">Editar</button>
           <button class="btn btn-outline btn-sm" data-action="cancelarTurma" data-id="${id}">Cancelar turma</button>
@@ -5147,7 +5153,7 @@ async function verTurma(id) {
           <div class="list-item" style="padding:10px 0">
             <div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:12px;font-weight:700;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">${iniciais(p.colaboradores?.nome||'?')}</div>
             <div class="li-info">
-              <div class="li-title">${p.colaboradores?.nome||''}</div>
+              <div class="li-title">${escapeHtml(p.colaboradores?.nome||'')}</div>
               <div class="li-sub">${p.empresa_vinculo||''}${p.cargo_vinculo?' · '+p.cargo_vinculo:''}</div>
             </div>
             ${podeEditar?`<button class="btn btn-ghost btn-sm" style="padding:4px;color:var(--red)" data-action="removerParticipante" data-id="${p.id}" data-turma="${id}" title="Remover participante">✕</button>`:''}
@@ -5196,8 +5202,8 @@ async function abrirModalTurma(id=null, preSel=null) {
   const cliPreId = t?.cliente_id || preSel?.clienteId || null;
   const catPreId = t?.catalogo_id || preSel?.catalogoId || null;
   const podeCriarCliente = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  const cliOpts = _clientesCache.map(c=>`<option value="${c.id}" ${cliPreId===c.id?'selected':''}>${c.nome}</option>`).join('');
-  const catOpts = _catalogoCache.map(c=>`<option value="${c.id}" ${catPreId===c.id?'selected':''}>${c.nome}</option>`).join('');
+  const cliOpts = _clientesCache.map(c=>`<option value="${c.id}" ${cliPreId===c.id?'selected':''}>${escapeHtml(c.nome)}</option>`).join('');
+  const catOpts = _catalogoCache.map(c=>`<option value="${c.id}" ${catPreId===c.id?'selected':''}>${escapeHtml(c.nome)}</option>`).join('');
   abrirModal(t?'Editar turma':'Nova turma', `
     <div class="field">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -5213,7 +5219,7 @@ async function abrirModalTurma(id=null, preSel=null) {
         <option value="">Selecione o treinamento...</option>${catOpts}
       </select></div>
     <div class="field"><label>Observações</label>
-      <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${t?.observacoes||''}</textarea></div>`,
+      <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.observacoes||'')}</textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
 }
@@ -5423,7 +5429,7 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
   }
 
     const instOpts = instrutores.map(i =>
-    `<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${i.nome}</option>`
+    `<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${escapeHtml(i.nome)}</option>`
   ).join('');
 
   abrirModal(ag?'Editar agendamento':'Novo agendamento', `
@@ -5445,7 +5451,7 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
         <option value="hibrido" ${ag?.modalidade==='hibrido'?'selected':''}>Híbrido</option>
       </select></div>
     <div class="field"><label>Local (opcional)</label>
-      <input type="text" id="mAgLocal" value="${ag?.local||''}" placeholder="Ex.: Sala de treinamento..."></div>`,
+      <input type="text" id="mAgLocal" value="${escapeHtml(ag?.local||'')}" placeholder="Ex.: Sala de treinamento..."></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarAgendamento()">
        ${ag?'Salvar':'Adicionar agendamento'}
@@ -5533,7 +5539,7 @@ function _htmlPartModal(lista) {
     <div class="list-item" style="padding:10px 12px;cursor:pointer" data-action="selecionarPart" data-col="${c.id}">
       <div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:11px;font-weight:700;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">${iniciais(c.nome)}</div>
       <div class="li-info">
-        <div class="li-title">${c.nome}</div>
+        <div class="li-title">${escapeHtml(c.nome)}</div>
         <div class="li-sub">${c.cpf?'CPF '+c.cpf:'Sem CPF'}${c.cargo?' · '+c.cargo:''}</div>
       </div>
     </div>`).join('');
@@ -5557,7 +5563,7 @@ async function selecionarParticipante(colId) {
       empresa_vinculo:cli?.nome||null, cargo_vinculo:col?.cargo||null
     });
     if (error) throw error;
-    showToast(`${col?.nome||'Participante'} adicionado!`,'success');
+    showToast(`${escapeHtml(col?.nome||'Participante')} adicionado!`,'success');
     fecharModal();
     await verTurma(turmaId);
   } catch(e) {
@@ -5676,7 +5682,7 @@ function previewImportacao(e) {
          <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto">
            ${_dadosImportacao.slice(0,5).map((r,i) =>
              `<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px">
-               <span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nome}</span>
+               <span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.nome)}</span>
                <span style="color:var(--text-3)">${r.cpf||''}</span>
              </div>`).join('')}
            ${_dadosImportacao.length > 5 ? `<div style="padding:7px 12px;font-size:12px;color:var(--text-3)">+ ${_dadosImportacao.length-5} mais...</div>` : ''}
@@ -5762,8 +5768,8 @@ async function renderAgenda() {
     <div class="list-item" data-action="verTurma" data-id="${s.turma_id}" style="cursor:pointer">
       <div class="li-icon" style="background:${corIcone}1a;color:${corIcone}">${icone}</div>
       <div class="li-info">
-        <div class="li-title">${s.turma?.catalogo?.nome||'Treinamento'}</div>
-        <div class="li-sub">${s.turma?.clientes?.nome||'—'} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
+        <div class="li-title">${escapeHtml(s.turma?.catalogo?.nome||'Treinamento')}</div>
+        <div class="li-sub">${escapeHtml(s.turma?.clientes?.nome||'—')} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
       </div>
       ${badge}
     </div>`;
@@ -5946,7 +5952,7 @@ function _agendaAtualizarLista(dataFiltro) {
     const dataFmt = s.data ? s.data.split('-').reverse().join('/') : '';
     return `<div style="padding:8px 10px;background:${ehHoje?'rgba(245,158,11,.08)':'var(--gray-50,#F8FAFC)'};border:1px solid ${ehHoje?'rgba(245,158,11,.3)':'var(--border)'};border-radius:8px;margin-bottom:6px">
       ${ehHoje?`<div style="font-size:9px;font-weight:700;color:#F59E0B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Hoje</div>`:''}
-      <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${turma.catalogo?.nome||'Treinamento'}</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${escapeHtml(turma.catalogo?.nome||'Treinamento')}</div>
       <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span>${dataFmt}${hora?' - '+hora:''}</span>
         <span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:500;background:${stBg[st]};color:${stColor[st]}">${stLabel[st]||st}</span>
@@ -6187,8 +6193,8 @@ async function verHistoricoTurma(turmaId) {
           return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
             <div style="width:30px;height:30px;border-radius:50%;background:rgba(30,42,74,.08);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:500;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${col.nome||'—'}</div>
-              ${col.cargo?`<div style="font-size:11px;color:var(--text-3)">${col.cargo}</div>`:''}
+              <div style="font-size:13px;font-weight:500;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(col.nome||'—')}</div>
+              ${col.cargo?`<div style="font-size:11px;color:var(--text-3)">${escapeHtml(col.cargo)}</div>`:''}
             </div>
             <span style="font-size:11px;color:var(--green);font-weight:600">✓ Presente</span>
           </div>`;
@@ -6236,7 +6242,7 @@ async function verHistoricoTurma(turmaId) {
       ${t.observacoes?`
       <div class="card">
         <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Observações</div>
-        <div style="font-size:13px;color:var(--text-1);line-height:1.6">${t.observacoes}</div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6">${escapeHtml(t.observacoes)}</div>
       </div>`:''}
       <div class="detail-actions">
         <button class="btn btn-navy" data-action="abrirDocumentos" data-id="${turmaId}">📄 Ver certificados e documentos</button>
@@ -6621,7 +6627,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         </div>
         <div class="card">
           <div class="card-title">Anotações do instrutor</div>
-          <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${t.anotacoes_instrutor||''}</textarea>
+          <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${escapeHtml(t.anotacoes_instrutor||'')}</textarea>
           <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
             <button class="btn btn-navy btn-sm" id="btnSalvarAnotacoes" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
             <button class="btn btn-outline btn-sm" id="btnEditarAnotacoes" style="display:none" onclick="editarAnotacoes()">✏ Editar</button>
@@ -6723,7 +6729,7 @@ function _htmlListaPresencas(participantes) {
           ${pendente?'⏳':assinou?'✓':iniciais(col.nome||'?')}
         </div>
         <div class="li-info">
-          <div class="li-title">${col.nome||'—'}</div>
+          <div class="li-title">${escapeHtml(col.nome||'—')}</div>
           <div class="li-sub">${p.cargo_vinculo||col.cargo||''}${pendente?' · Aguardando conexão':presen&&presen.assinatura_path?' · Assinado':presen&&presen.presente&&!presen.assinatura_path?' · Presente':''}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
@@ -6731,7 +6737,7 @@ function _htmlListaPresencas(participantes) {
             ?`<span class="badge" style="background:var(--amber-l);color:var(--amber-text)" title="Guardado localmente — será enviado quando a internet voltar">⏳ Pendente</span>`
             :assinou
             ?`<span class="badge badge-green">✓ Assinou</span>`
-            :`<button class="btn btn-navy btn-sm" data-action="abrirAssinatura" data-col="${p.colaborador_id}" data-nome="${col.nome||''}">Assinar</button>`
+            :`<button class="btn btn-navy btn-sm" data-action="abrirAssinatura" data-col="${p.colaborador_id}" data-nome="${escapeHtml(col.nome||'')}">Assinar</button>`
           }
         </div>
       </div>`;
@@ -7351,7 +7357,7 @@ function _renderRelatorioView() {
     return `
     <button class="rel2-cli-btn" onclick="relVerCliente('${id}')">
       <div style="flex:1;min-width:0">
-        <div class="rel2-cli-name">${v.nome}</div>
+        <div class="rel2-cli-name">${escapeHtml(v.nome)}</div>
         <div class="rel2-cli-meta">${v.turmas} turma${v.turmas!==1?'s':''} · ${v.pessoas} participante${v.pessoas!==1?'s':''} · ${v.horas}h</div>
       </div>
       ${deltaEl}
@@ -7481,7 +7487,7 @@ function _renderRelatorioView() {
         ${piores.length ? `<div style="margin-top:10px">
           <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Cursos com menor conformidade</div>
           ${piores.map(p => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:12px">
-            <span style="color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome}</span>
+            <span style="color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.nome)}</span>
             <span style="font-weight:700;color:${p.pct<70?'var(--red)':p.pct<90?'var(--amber-h)':'var(--green)'};flex-shrink:0">${p.pct}%</span>
           </div>`).join('')}
         </div>` : ''}
@@ -8000,8 +8006,8 @@ async function renderEquipe() {
       <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
         <div style="width:40px;height:40px;border-radius:50%;background:${st.bg};color:${st.cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
-          <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email||'Sem e-mail'}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
+          <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'Sem e-mail')}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <span class="badge ${st.badge}" style="text-transform:capitalize">${labelPerfil(u.perfil)}</span>
@@ -8046,7 +8052,7 @@ async function renderEquipe() {
               <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;opacity:.65;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
                 <div style="width:36px;height:36px;border-radius:50%;background:var(--gray-100);color:var(--text-3);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
                   <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${labelPerfil(u.perfil)}</div>
                 </div>
                 <span class="badge badge-gray">Inativo</span>
@@ -8113,7 +8119,7 @@ function verUsuarioEquipe(id) {
         <div style="display:flex;align-items:center;gap:14px">
           <div style="width:52px;height:52px;border-radius:50%;background:${st.bg};color:${st.cor};font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.nome}</div>
+            <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
             <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
               <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(245,158,11,.18);color:var(--amber);border:1px solid rgba(245,158,11,.3);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
               <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${u.ativo?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${u.ativo?'#6EE7B7':'#94A3B8'};border:1px solid ${u.ativo?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${u.ativo?'Ativo':'Inativo'}</span>
@@ -8126,7 +8132,7 @@ function verUsuarioEquipe(id) {
         <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Informações da conta</div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:13px;color:var(--text-2)">E-mail</span>
-          <span style="font-size:13px;font-weight:500;color:var(--navy)">${u.email||'—'}</span>
+          <span style="font-size:13px;font-weight:500;color:var(--navy)">${escapeHtml(u.email||'—')}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0${(u.conselho_classe||u.especialidade)?';border-bottom:1px solid var(--border)':''}">
           <span style="font-size:13px;color:var(--text-2)">Perfil de acesso</span>
@@ -8139,22 +8145,26 @@ function verUsuarioEquipe(id) {
       ${podeMgr && u.id !== usuarioAtual.id ? `
       <div class="detail-actions">
         <button class="btn btn-navy" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}','${u.id}')">${ICONS.plus} Editar usuário</button>
-        <button class="btn btn-outline" onclick="toggleUsuarioEquipe('${u.id}','${u.ativo}','${u.nome}')">${u.ativo?'Inativar':'Reativar'}</button>
+        <button class="btn btn-outline" data-action="toggleUsuarioEquipe" data-id="${u.id}">${u.ativo?'Inativar':'Reativar'}</button>
       </div>`:''}
       </div>
     `);
   });
 }
 
-async function toggleUsuarioEquipe(id, ativoStr, nome) {
-  const ativo = ativoStr === 'true';
-  const okUsuario = await confirmarAcao(`Deseja ${ativo?'desativar':'reativar'} ${nome}?`, ativo?'Desativar':'Reativar', ativo);
+async function toggleUsuarioEquipe(id) {
+  // Busca o usuário fresco por id em vez de receber ativo/nome via HTML —
+  // evita texto livre embutido em onclick (ver nota acima).
+  const {data:u, error:errU} = await sb.from('usuarios').select('nome,ativo').eq('id',id).single();
+  if (errU || !u) { showToast('Usuário não encontrado','error'); return; }
+  const ativo = u.ativo;
+  const okUsuario = await confirmarAcao(`Deseja ${ativo?'desativar':'reativar'} ${escapeHtml(u.nome)}?`, ativo?'Desativar':'Reativar', ativo);
   if (!okUsuario) return;
   showLoading();
   const {error} = await sb.from('usuarios').update({ativo:!ativo}).eq('id',id);
   hideLoading();
   if (error) { showToast(error.message,'error'); return; }
-  showToast(`${nome} ${ativo?'desativado':'reativado'}!`, ativo?'info':'success');
+  showToast(`${escapeHtml(u.nome)} ${ativo?'desativado':'reativado'}!`, ativo?'info':'success');
   await renderEquipe();
 }
 
@@ -8194,8 +8204,8 @@ async function renderConta() {
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
         <div style="width:64px;height:64px;border-radius:50%;background:${corP};display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px ${corP}22">${iniciais(u.nome)}</div>
         <div style="min-width:0">
-          <div style="font-size:18px;font-weight:700;color:var(--text-1)">${u.nome}</div>
-          <div style="font-size:13px;color:var(--text-2);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${u.email||'—'}</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text-1)">${escapeHtml(u.nome)}</div>
+          <div style="font-size:13px;color:var(--text-2);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'—')}</div>
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
             <span class="badge badge-blue">${labelPerfil(u.perfil)}</span>
             <span class="badge ${u.ativo!==false?'badge-green':'badge-red'}">${u.ativo!==false?'● Conta ativa':'○ Conta inativa'}</span>
@@ -8648,6 +8658,7 @@ document.addEventListener('click', function(e) {
     case 'desarquivarCatalogo':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); desarquivarCatalogo(id); break;
     // Equipe
     case 'verUsuarioEquipe': verUsuarioEquipe(id); break;
+    case 'toggleUsuarioEquipe': toggleUsuarioEquipe(id); break;
     // Turmas
     case 'menuTurmaCard':         _menuTurmaCard(el,id); break;
     case 'excluirTurma':          document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalExcluirTurma(id); break;
@@ -10169,7 +10180,7 @@ async function renderDocumentosTurma(turmaId) {
           const jaGerado = docsMap['certificado_individual'+p.colaborador_id];
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 8px 48px">
               <div style="width:26px;height:26px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
-              <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${col.nome||'-'}</div>
+              <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${escapeHtml(col.nome||'-')}</div>
               <span style="font-size:11px;color:${jaGerado?'var(--green)':'var(--text-3)'};margin-right:4px">${jaGerado?'✓ gerado':'pendente'}</span>
               <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">${jaGerado?'↻':'⬇'} PDF</button>
             </div>`;
@@ -10289,7 +10300,7 @@ async function gerarTudoEnviarEmail(turmaId) {
     // Gerar certificados individuais pendentes
     for (const p of participantes) {
       if (!docsMap['certificado_individual'+p.colaborador_id]) {
-        showLoading(`Gerando certificado de ${p.colaboradores?.nome||'participante'}...`);
+        showLoading(`Gerando certificado de ${escapeHtml(p.colaboradores?.nome||'participante')}...`);
         await gerarCertificadoIndividual(turmaId, p.colaborador_id);
       }
     }
