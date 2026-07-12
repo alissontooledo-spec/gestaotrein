@@ -3590,7 +3590,7 @@ async function _carregarOportunidadesComerciais(clienteId, todasNrs) {
 function filtrarClientes(q) {
   const f = q.toLowerCase().trim();
   const r = f ? _clientesCache.filter(c=>c.nome.toLowerCase().includes(f)||(c.cnpj||'').includes(f)) : _clientesCache;
-  document.getElementById('listaClientes').innerHTML = _htmlListaClientes(r);
+  _setElBoth('listaClientes', _htmlListaClientes(r));
 }
 
 function menuCliente(btn, id) {
@@ -3790,9 +3790,24 @@ async function executarImportacaoClientes() {
 // ============================================================
 // COLABORADORES
 // ============================================================
+// Busca TODOS os colaboradores da organização em páginas de 1000
+// (evita o limite fixo antigo de 500, que cortava dados sem avisar
+// em organizações maiores).
+async function _fetchTodosColaboradores(orgId, selectCols) {
+  let todos = [];
+  let from = 0;
+  const pageSize = 1000;
+  while (true) {
+    const { data, error } = await sb.from('colaboradores').select(selectCols).eq('org_id', orgId).order('nome').range(from, from + pageSize - 1);
+    if (error) throw error;
+    todos = todos.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return todos;
+}
 async function renderColaboradores() {
-  const {data,error} = await sb.from('colaboradores').select('*').eq('org_id',usuarioAtual.org_id).order('nome').limit(500);
-  if (error) throw error;
+  const data = await _fetchTodosColaboradores(usuarioAtual.org_id, '*');
   _colabsCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Colaboradores</div>`);
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
@@ -3884,7 +3899,7 @@ function verColab(id) {
 function filtrarColabs(q) {
   const f = q.toLowerCase().trim();
   const r = f ? _colabsCache.filter(c=>c.nome.toLowerCase().includes(f)||(c.cpf||'').includes(f)) : _colabsCache;
-  document.getElementById('listaColabs').innerHTML = _htmlListaColabs(r);
+  _setElBoth('listaColabs', _htmlListaColabs(r));
 }
 
 function abrirModalColab(id=null) {
@@ -3989,13 +4004,13 @@ async function renderCatalogo() {
 
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
       <input type="search" id="buscaCatalogo" placeholder="Buscar por nome ou NR..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarCatalogo(this.value)">
-      <select id="filtroCatStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(document.getElementById('buscaCatalogo').value)">
+      <select id="filtroCatStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(_getElVisible('buscaCatalogo')?.value||'')">
         <option value="">Todos os ativos</option>
         <option value="em_uso">Em uso</option>
         <option value="sem_uso">Sem uso</option>
         <option value="arquivado">Arquivados</option>
       </select>
-      <select id="filtroCatTipo" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(document.getElementById('buscaCatalogo').value)">
+      <select id="filtroCatTipo" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(_getElVisible('buscaCatalogo')?.value||'')">
         <option value="">Inicial/Reciclagem/Único</option>
         <option value="unico">Único</option>
         <option value="inicial">Inicial</option>
@@ -4145,8 +4160,8 @@ function verCatalogo(id) {
 
 function filtrarCatalogo(q) {
   const f   = (q || '').toLowerCase().trim();
-  const st  = document.getElementById('filtroCatStatus')?.value || '';
-  const tp  = document.getElementById('filtroCatTipo')?.value || '';
+  const st  = _getElVisible('filtroCatStatus')?.value || '';
+  const tp  = _getElVisible('filtroCatTipo')?.value || '';
   const usoMap = window._catalogoUsoMap || {};
   let r = _catalogoCache;
   if (st === 'arquivado') {
@@ -4351,7 +4366,7 @@ async function renderConformidade() {
 
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
       <input type="search" id="buscaConf" placeholder="Buscar colaborador ou treinamento..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarConformidade(this.value)">
-      <select id="filtroConfStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarConformidade(document.getElementById('buscaConf').value)">
+      <select id="filtroConfStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarConformidade(_getElVisible('buscaConf')?.value||'')">
         <option value="">Todos</option>
         <option value="vencido">Vencido</option>
         <option value="urgente">Urgente</option>
@@ -4417,14 +4432,13 @@ function agendarReciclagem(i) {
 
 function filtrarConformidade(q) {
   const f  = (q||'').toLowerCase().trim();
-  const st = document.getElementById('filtroConfStatus')?.value || '';
+  const st = _getElVisible('filtroConfStatus')?.value || '';
   const d  = window._confData;
   if (!d) return;
   let r = d.proximos;
   if (st) r = r.filter(x => x.status === st);
   if (f) r = r.filter(x => x.colaboradorNome.toLowerCase().includes(f) || x.treinamentoNome.toLowerCase().includes(f));
-  const el = document.getElementById('listaConformidade');
-  if (el) el.innerHTML = _htmlListaConformidade(r);
+  _setElBoth('listaConformidade', _htmlListaConformidade(r));
 }
 
 function menuCatalogo(btn, id) {
@@ -5493,7 +5507,7 @@ async function removerParticipante(presencaId, turmaId) {
 async function abrirModalAddParticipante(turmaId, clienteId) {
   _modalCurrentId = turmaId;
   window._partCliId = clienteId;
-  const {data:todos}        = await sb.from('colaboradores').select('id,nome,cpf,cargo').eq('org_id',usuarioAtual.org_id).order('nome').limit(500);
+  const todos = await _fetchTodosColaboradores(usuarioAtual.org_id, 'id,nome,cpf,cargo');
   const {data:jaAdicionados}= await sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId);
   const jaIds = new Set((jaAdicionados||[]).map(x=>x.colaborador_id));
   window._partDisp = (todos||[]).filter(c=>!jaIds.has(c.id));
