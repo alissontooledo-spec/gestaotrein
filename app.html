@@ -3970,10 +3970,16 @@ async function salvarColab() {
   const dados = {nome, cliente_id:document.getElementById('mColCliente')?.value||null, cpf:document.getElementById('mColCpf')?.value.trim()||null, cargo:document.getElementById('mColCargo')?.value.trim()||null, email:document.getElementById('mColEmail')?.value.trim()||null, telefone:document.getElementById('mColTel')?.value.trim()||null};
   try {
     setBtnModalLoading(true);
-    const {error} = _modalCurrentId
-      ? await sb.from('colaboradores').update(dados).eq('id',_modalCurrentId).eq('org_id',usuarioAtual.org_id)
-      : await sb.from('colaboradores').insert({...dados, org_id:usuarioAtual.org_id});
+    // .select('id') depois do update/insert é o que permite conferir se a
+    // gravação realmente afetou alguma linha — sem isso, um update que casa
+    // 0 linhas (RLS, id errado, coluna que ainda não existe porque a
+    // migration não rodou etc.) volta sem "error" nenhum e o app mostraria
+    // sucesso mesmo sem ter gravado nada.
+    const {data:salvo, error} = _modalCurrentId
+      ? await sb.from('colaboradores').update(dados).eq('id',_modalCurrentId).eq('org_id',usuarioAtual.org_id).select('id')
+      : await sb.from('colaboradores').insert({...dados, org_id:usuarioAtual.org_id}).select('id');
     if (error) throw error;
+    if (!salvo || !salvo.length) throw new Error('Nada foi gravado — confira se o colaborador ainda existe (nenhuma linha foi afetada).');
     fecharModal(); showToast(_modalCurrentId?'Colaborador atualizado!':'Colaborador cadastrado!','success');
     await renderColaboradores();
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
@@ -4482,13 +4488,10 @@ function _confRenderTudo() {
       </select>
       ${aba === 'ativas' ? `
       <select id="filtroConfPeriodo" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confAplicarFiltrosERenderLista()">
-        <option value="7">Até 7 dias</option>
-        <option value="15">Até 15 dias</option>
-        <option value="${JANELA_CONFORMIDADE_DIAS}" selected>Até ${JANELA_CONFORMIDADE_DIAS} dias</option>
-        <option value="60">Até 60 dias</option>
-        <option value="90">Até 90 dias</option>
-        <option value="vencidos">Só vencidos</option>
-        <option value="todos">Todos os prazos</option>
+        <option value="vencidos">Vencidos</option>
+        <option value="${JANELA_CONFORMIDADE_DIAS}" selected>Vencendo em ${JANELA_CONFORMIDADE_DIAS} dias</option>
+        <option value="90">Vencendo em 90 dias</option>
+        <option value="todos">Todos</option>
       </select>` : ''}
       <select id="filtroConfAgrupar" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_confAplicarFiltrosERenderLista()">
         <option value="">Sem agrupamento</option>
@@ -4623,32 +4626,49 @@ function _confTabela(lista, tratada) {
 function agendarReciclagem(id) {
   const x = (window._confPorId || {})[id];
   if (!x || !x.sugestaoId) return;
-  abrirModalTurma(null, { clienteId: x.cliente_id, catalogoId: x.sugestaoId, travar: true });
+  abrirModalTurma(null, { clienteId: x.cliente_id, catalogoId: x.sugestaoId, travar: true, origemConfId: id });
 }
 
+// Cada status possível já aparece como item direto no menu — sem passar
+// por uma tela intermediária de "escolha o status num dropdown". Menos
+// cliques, que era justamente o ponto fraco do desenho anterior.
 function menuConformidade(btn, id) {
   const x = (window._confPorId||{})[id];
   if (!x) return;
   const tratada = !!x.statusExcecao;
-  _menuDropdown(btn, tratada ? [
-    {action:'reabrirPendencia', id, label:'Reabrir pendência'},
-  ] : [
-    {action:'encerrarPendencia', id, label:'Marcar status...'},
+  if (tratada) {
+    _menuDropdown(btn, [{action:'reabrirPendencia', id, label:'Reabrir pendência'}]);
+    return;
+  }
+  const itensStatus = Object.entries(STATUS_EXCECAO_LABEL)
+    // "Renovação agendada" é setada automaticamente pelas ações de Agendar/
+    // Adicionar em turma existente — não faz sentido oferecer como escolha manual aqui.
+    .filter(([v]) => v !== 'renovacao_agendada')
+    .map(([v,l]) => ({action:'encerrarPendenciaRapido', id, extra:v, label:l}));
+  _menuDropdown(btn, [
+    ...(x.sugestaoId ? [{action:'agendarReciclagem', id, label:'Criar nova turma'}] : []),
+    {action:'adicionarEmTurmaExistente', id, label:'Adicionar em turma existente'},
+    '---',
+    ...itensStatus,
   ]);
 }
 
 // Encerra uma pendência sem apagar o registro — tira do índice de
 // conformidade e da lista de pendências ativas, mas preserva o histórico
-// (conformidade_excecoes_historico) para auditoria.
-function abrirModalEncerrarPendencia(id) {
+// (conformidade_excecoes_historico) para auditoria. statusPre vem
+// preenchido quando o usuário já clicou no status certo no menu — ainda dá
+// pra trocar aqui, mas evita um clique extra no caminho comum.
+function abrirModalEncerrarPendencia(id, statusPre=null) {
   const x = (window._confPorId||{})[id];
   if (!x) return;
-  const opts = Object.entries(STATUS_EXCECAO_LABEL).map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  const opts = Object.entries(STATUS_EXCECAO_LABEL)
+    .filter(([v]) => v !== 'renovacao_agendada')
+    .map(([v,l])=>`<option value="${v}" ${v===statusPre?'selected':''}>${l}</option>`).join('');
   abrirModal('Encerrar pendência', `
     <div style="font-size:13px;color:var(--text-2);margin-bottom:14px">${escapeHtml(x.colaboradorNome)} — ${escapeHtml(x.treinamentoNome)} (${escapeHtml(x.empresa)})</div>
     <div class="field"><label>Status *</label>
       <select id="mConfStatus" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="">Selecione...</option>${opts}
+        <option value="" ${!statusPre?'selected':''}>Selecione...</option>${opts}
       </select></div>
     <div class="field"><label>Observação (opcional)</label>
       <textarea id="mConfMotivo" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Ex.: cliente confirmou que não vai renovar este ano"></textarea></div>`,
@@ -4664,11 +4684,12 @@ async function confirmarEncerrarPendencia(id) {
   if (!x || !status) { showToast('Selecione um status','error'); return; }
   try {
     setBtnModalLoading(true);
-    const {error} = await sb.from('conformidade_status').update({
+    const {data:salvo, error} = await sb.from('conformidade_status').update({
       status_excecao: status, motivo_excecao: motivo,
       excecao_definida_por: usuarioAtual.id, excecao_definida_em: new Date().toISOString(),
-    }).eq('id', id);
+    }).eq('id', id).select('id');
     if (error) throw error;
+    if (!salvo || !salvo.length) throw new Error('Nada foi gravado — a pendência pode ter sido alterada por outra pessoa. Atualize a tela e tente de novo.');
     await sb.from('conformidade_excecoes_historico').insert({
       org_id: usuarioAtual.org_id, colaborador_id: x.colaborador_id, catalogo_id: x.catalogo_id,
       data_vencimento: x.data_vencimento, status_excecao: status, motivo_excecao: motivo, definido_por: usuarioAtual.id,
@@ -4685,15 +4706,90 @@ async function reabrirPendencia(id) {
   const ok = await confirmarAcao('Reabrir esta pendência? Ela volta a contar como ativa nos indicadores de conformidade.', 'Reabrir', false);
   if (!ok) return;
   try {
-    const {error} = await sb.from('conformidade_status').update({
-      status_excecao: null, motivo_excecao: null, excecao_definida_por: usuarioAtual.id, excecao_definida_em: new Date().toISOString(),
-    }).eq('id', id);
+    const {data:salvo, error} = await sb.from('conformidade_status').update({
+      status_excecao: null, motivo_excecao: null, turma_vinculada_id: null,
+      excecao_definida_por: usuarioAtual.id, excecao_definida_em: new Date().toISOString(),
+    }).eq('id', id).select('id');
     if (error) throw error;
+    if (!salvo || !salvo.length) throw new Error('Nada foi gravado — a pendência pode ter sido alterada por outra pessoa. Atualize a tela e tente de novo.');
     await sb.from('conformidade_excecoes_historico').insert({
       org_id: usuarioAtual.org_id, colaborador_id: x.colaborador_id, catalogo_id: x.catalogo_id,
       data_vencimento: x.data_vencimento, status_excecao: null, motivo_excecao: null, definido_por: usuarioAtual.id,
     });
     showToast('Pendência reaberta!','success');
+    await renderConformidade();
+  } catch(e) { showToast(e.message||'Erro','error'); }
+}
+
+// "Adicionar em turma existente" — evita criar uma turma individual nova
+// quando já existe uma turma aberta do mesmo curso para a mesma empresa;
+// só entra o colaborador nela e resolve a pendência do mesmo jeito que o
+// "Agendar" resolve.
+async function abrirModalAdicionarEmTurmaExistente(id) {
+  const x = (window._confPorId||{})[id];
+  if (!x || !x.sugestaoId) { showToast('Não há sugestão de treinamento para esta pendência','error'); return; }
+  showLoading('Buscando turmas em aberto...');
+  try {
+    const {data:turmas, error} = await sb.from('turmas')
+      .select('id,status,sessoes(data),turma_participantes(colaborador_id)')
+      .eq('org_id', usuarioAtual.org_id)
+      .eq('cliente_id', x.cliente_id)
+      .eq('catalogo_id', x.sugestaoId)
+      .in('status', ['agendada','em_andamento']);
+    if (error) throw error;
+    hideLoading();
+    const disponiveis = (turmas||[]).filter(t => !(t.turma_participantes||[]).some(p=>p.colaborador_id===x.colaborador_id));
+    window._confAddTurmaOrigemId = id;
+    if (!disponiveis.length) {
+      abrirModal('Adicionar em turma existente', `
+        <div class="empty" style="padding:24px"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma turma em aberto</div><div class="empty-sub">Não há turmas agendadas ou em andamento de ${escapeHtml(x.sugestaoNome)} para ${escapeHtml(x.empresa)}.</div></div>`,
+        `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
+         <button class="btn btn-navy" data-action="agendarReciclagem" data-id="${id}" onclick="fecharModal()">Criar nova turma</button>`);
+      return;
+    }
+    abrirModal('Adicionar em turma existente', `
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">${escapeHtml(x.colaboradorNome)} — ${escapeHtml(x.sugestaoNome)}</div>
+      <div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
+        ${disponiveis.map(t => {
+          const datas = (t.sessoes||[]).map(s=>s.data).filter(Boolean).sort();
+          const dataTxt = datas.length ? formatarData(datas[0]) : 'sem data definida';
+          return `<div class="list-item" style="padding:10px 12px;cursor:pointer" data-action="confirmarAdicionarEmTurma" data-id="${t.id}">
+            <div class="li-info"><div class="li-title">Turma de ${dataTxt}</div><div class="li-sub">${t.status==='em_andamento'?'Em andamento':'Agendada'} · ${(t.turma_participantes||[]).length} participante(s)</div></div>
+          </div>`;
+        }).join('')}
+      </div>`,
+      `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`);
+  } catch(e) { hideLoading(); showToast(e.message||'Erro ao buscar turmas','error'); }
+}
+
+async function confirmarAdicionarEmTurma(turmaId) {
+  const origemId = window._confAddTurmaOrigemId;
+  const x = (window._confPorId||{})[origemId];
+  if (!x) return;
+  try {
+    const {data:col} = await sb.from('colaboradores').select('nome,cargo').eq('id',x.colaborador_id).eq('org_id',usuarioAtual.org_id).single();
+    const {data:cli} = x.cliente_id ? await sb.from('clientes').select('nome').eq('id',x.cliente_id).single() : {data:null};
+    const {error} = await sb.from('turma_participantes').insert({
+      turma_id:turmaId, colaborador_id:x.colaborador_id, org_id:usuarioAtual.org_id,
+      empresa_vinculo:cli?.nome||null, cargo_vinculo:col?.cargo||null,
+    });
+    if (error && error.code !== '23505') throw error; // já estar na turma não impede resolver a pendência
+    const {data:salvo, error:errConf} = await sb.from('conformidade_status').update({
+      status_excecao: 'renovacao_agendada',
+      motivo_excecao: 'Colaborador adicionado a uma turma já existente.',
+      turma_vinculada_id: turmaId,
+      excecao_definida_por: usuarioAtual.id,
+      excecao_definida_em: new Date().toISOString(),
+    }).eq('id', origemId).select('id');
+    if (errConf) throw errConf;
+    if (!salvo || !salvo.length) throw new Error('Participante adicionado, mas não consegui atualizar a pendência — atualize a tela e confira.');
+    await sb.from('conformidade_excecoes_historico').insert({
+      org_id: usuarioAtual.org_id, colaborador_id: x.colaborador_id, catalogo_id: x.catalogo_id,
+      data_vencimento: x.data_vencimento, status_excecao: 'renovacao_agendada',
+      motivo_excecao: 'Colaborador adicionado a uma turma já existente.', definido_por: usuarioAtual.id,
+    });
+    fecharModal();
+    showToast('Colaborador adicionado à turma!','success');
     await renderConformidade();
   } catch(e) { showToast(e.message||'Erro','error'); }
 }
@@ -5441,6 +5537,11 @@ function _menuTurmaCard(btn, id) {
 
 async function abrirModalTurma(id=null, preSel=null) {
   _modalCurrentId = id;
+  // Guardado para salvarTurma() saber, ao criar a turma, que ela nasceu de
+  // uma pendência de Conformidade específica e precisa marcar essa
+  // pendência como "renovação agendada" (corrige o bug de o item continuar
+  // aparecendo como "Planejar" depois de agendado).
+  window._turmaOrigemConfId = (preSel && preSel.travar) ? (preSel.origemConfId||null) : null;
   if (!_clientesCache.length) {
     const {data} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = data||[];
@@ -5568,12 +5669,40 @@ async function salvarTurma() {
   if (!cli) { showToast('Selecione o cliente','error'); return; }
   if (!cat) { showToast('Selecione o treinamento','error'); return; }
   const dados = {cliente_id:cli, catalogo_id:cat, observacoes:document.getElementById('mTurObs')?.value.trim()||null};
+  const origemConfId = window._turmaOrigemConfId; // capturado antes de fecharModal() poder zerar estado
   try {
     setBtnModalLoading(true);
-    const {error} = _modalCurrentId
-      ? await sb.from('turmas').update(dados).eq('id',_modalCurrentId)
-      : await sb.from('turmas').insert({...dados,org_id:usuarioAtual.org_id,status:'agendada',criado_por:usuarioAtual.id});
+    const {data:salva, error} = _modalCurrentId
+      ? await sb.from('turmas').update(dados).eq('id',_modalCurrentId).select('id')
+      : await sb.from('turmas').insert({...dados,org_id:usuarioAtual.org_id,status:'agendada',criado_por:usuarioAtual.id}).select('id');
     if (error) throw error;
+    if (!salva || !salva.length) throw new Error('Nada foi gravado — nenhuma linha foi afetada.');
+    // Turma criada a partir de uma pendência de Conformidade (botão
+    // "Agendar"): marca a pendência de origem como "renovação agendada" e
+    // guarda a turma vinculada, para ela parar de aparecer como pendência
+    // ativa. Sem isso, o item ficava preso mostrando "Planejar" pra
+    // sempre, mesmo já tendo sido agendado.
+    if (!_modalCurrentId && origemConfId) {
+      try {
+        await sb.from('conformidade_status').update({
+          status_excecao: 'renovacao_agendada',
+          motivo_excecao: 'Turma agendada automaticamente ao clicar em "Agendar" na pendência.',
+          turma_vinculada_id: salva[0].id,
+          excecao_definida_por: usuarioAtual.id,
+          excecao_definida_em: new Date().toISOString(),
+        }).eq('id', origemConfId);
+        await sb.from('conformidade_excecoes_historico').insert({
+          org_id: usuarioAtual.org_id,
+          colaborador_id: window._confPorId?.[origemConfId]?.colaborador_id,
+          catalogo_id: window._confPorId?.[origemConfId]?.catalogo_id,
+          data_vencimento: window._confPorId?.[origemConfId]?.data_vencimento,
+          status_excecao: 'renovacao_agendada',
+          motivo_excecao: 'Turma agendada automaticamente ao clicar em "Agendar" na pendência.',
+          definido_por: usuarioAtual.id,
+        });
+      } catch(e2) { console.warn('Não foi possível vincular a pendência à turma criada:', e2.message); }
+    }
+    window._turmaOrigemConfId = null;
     fecharModal(); showToast(_modalCurrentId?'Turma atualizada!':'Turma criada!','success');
     await renderTurmas();
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
@@ -7438,6 +7567,14 @@ async function _atualizarConformidadeTurma(turmaId, sessoesTurma) {
       data_conclusao: dataConclusao,
       data_vencimento: dataVencimento,
       atualizado_em: new Date().toISOString(),
+      // Concluir o treinamento de novo é a resolução definitiva de
+      // qualquer pendência anterior — limpa status de exceção/vínculo de
+      // turma que porventura tivessem ficado presos de um ciclo passado
+      // (ex.: tinha sido marcado "renovação agendada" e agora, de fato,
+      // terminou).
+      status_excecao: null,
+      motivo_excecao: null,
+      turma_vinculada_id: null,
     }));
     const {error} = await sb.from('conformidade_status')
       .upsert(registros, {onConflict:'org_id,colaborador_id,catalogo_id'});
@@ -9015,10 +9152,13 @@ document.addEventListener('click', function(e) {
     case 'cadastroRapidoColab':   abrirCadastroRapidoColab(); break;
     case 'mostrarPartOutrasEmpresas': mostrarPartOutrasEmpresas(); break;
     // Conformidade
-    case 'agendarReciclagem':    agendarReciclagem(id); break;
-    case 'menuConformidade':     menuConformidade(el,id); break;
-    case 'encerrarPendencia':    document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalEncerrarPendencia(id); break;
-    case 'reabrirPendencia':     document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); reabrirPendencia(id); break;
+    case 'agendarReciclagem':        agendarReciclagem(id); break;
+    case 'menuConformidade':         menuConformidade(el,id); break;
+    case 'encerrarPendencia':        document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalEncerrarPendencia(id); break;
+    case 'encerrarPendenciaRapido':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalEncerrarPendencia(id, extra); break;
+    case 'reabrirPendencia':         document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); reabrirPendencia(id); break;
+    case 'adicionarEmTurmaExistente': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalAdicionarEmTurmaExistente(id); break;
+    case 'confirmarAdicionarEmTurma': confirmarAdicionarEmTurma(id); break;
   }
 });
 
