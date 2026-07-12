@@ -7417,22 +7417,19 @@ function _renderRelatorioView() {
 
     ${(() => {
       const pend = window._relRaw.pendencias || [];
-      return `<div class="rel2-card" style="margin-top:12px${pend.length ? ';border:1px solid var(--red)' : ''}">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-          <div class="rel2-card-title" style="margin:0">Documentos pendentes${pend.length ? ` <span style="font-size:11px;font-weight:700;color:var(--red-text);background:var(--red-l);padding:2px 8px;border-radius:10px;margin-left:6px;text-transform:none;letter-spacing:0">${pend.length}</span>` : ''}</div>
+      const nEmpresas = new Set(pend.map(p => p.turma.clientes?.nome||'—')).size;
+      const clicavel = pend.length > 0;
+      return `<div class="rel2-card" style="margin-top:12px${pend.length ? ';border:1px solid var(--red);cursor:pointer' : ''}"${clicavel ? ' onclick="renderDocumentosPendentesLista()"' : ''}>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;min-width:0">
+            <div style="width:40px;height:40px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:${pend.length?'var(--red-l)':'var(--green-l)'}">${pend.length?'📄':'✅'}</div>
+            <div style="min-width:0">
+              <div class="rel2-card-title" style="margin:0">Documentos pendentes</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">${pend.length ? `${pend.length} turma${pend.length!==1?'s':''} · ${nEmpresas} empresa${nEmpresas!==1?'s':''}` : 'Nenhuma pendência — tudo em dia'}</div>
+            </div>
+          </div>
+          ${clicavel ? `<span style="font-size:12px;font-weight:600;color:var(--navy);white-space:nowrap;flex-shrink:0">Ver detalhes →</span>` : ''}
         </div>
-        ${!pend.length
-          ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhuma pendência — toda a documentação das turmas concluídas está em dia.</div>`
-          : pend.slice(0,10).map(p => `
-            <div class="list-item" data-action="abrirDocumentos" data-id="${p.turma.id}" style="cursor:pointer">
-              <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
-              <div class="li-info">
-                <div class="li-title">${escapeHtml(p.turma.catalogo?.nome||'Treinamento')}</div>
-                <div class="li-sub">${escapeHtml(p.turma.clientes?.nome||'—')} · ${escapeHtml(p.instrutores)}</div>
-              </div>
-              <span class="badge badge-amber">${p.motivo==='gerar'?'Gerar':'Enviar'}</span>
-            </div>`).join('') + (pend.length > 10 ? `<div style="font-size:11px;color:var(--text-3);padding:8px 0;text-align:center">+${pend.length-10} outra${pend.length-10!==1?'s':''} turma${pend.length-10!==1?'s':''} com pendência</div>` : '')
-        }
       </div>`;
     })()}
 
@@ -7614,6 +7611,37 @@ function irParaTurmasFiltradas(status) {
   });
 }
 
+// Tela de detalhe do card "Documentos pendentes" dos Relatórios — reaproveita
+// window._relRaw.pendencias (já calculado por renderRelatorios) para não
+// refazer nenhuma consulta. Só existe para dar zoom na lista completa sem
+// precisar mostrá-la sempre aberta na tela principal de Relatórios.
+function renderDocumentosPendentesLista() {
+  const pend = window._relRaw?.pendencias || [];
+  setMobileHeader(`<div class="mh-greeting">Relatórios</div><div class="mh-name">Documentos pendentes</div>`);
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="relatorios">${ICONS.back} Voltar</button>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:18px;font-weight:700;color:var(--text-1)">Documentos pendentes</div>
+        <div style="font-size:13px;color:var(--text-2)">${pend.length} turma${pend.length!==1?'s':''} com pendência</div>
+      </div>
+    </div>
+    <div class="card" style="padding:0">
+      ${!pend.length
+        ? `<div class="empty" style="padding:32px"><div class="empty-icon">✅</div><div class="empty-title">Nenhuma pendência</div><div class="empty-sub">Toda a documentação das turmas concluídas está em dia.</div></div>`
+        : pend.map(p => `
+          <div class="list-item" data-action="abrirDocumentos" data-id="${p.turma.id}" style="cursor:pointer">
+            <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
+            <div class="li-info">
+              <div class="li-title">${escapeHtml(p.turma.catalogo?.nome||'Treinamento')}</div>
+              <div class="li-sub">${escapeHtml(p.turma.clientes?.nome||'—')} · ${escapeHtml(p.instrutores)}</div>
+            </div>
+            <span class="badge badge-amber">${p.motivo==='gerar'?'Gerar':'Enviar'}</span>
+          </div>`).join('')
+      }
+    </div>`);
+}
+
 function exportarRelatorioCSV() {
   const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
@@ -7642,7 +7670,7 @@ function exportarRelatorioCSV() {
   showToast('CSV exportado com sucesso!', 'success');
 }
 
-function exportarRelatorioExecutivoPDF() {
+async function exportarRelatorioExecutivoPDF() {
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Executivo em PDF', 'pro'); return; }
   showToast('Gerando PDF Executivo...', 'info');
   const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
@@ -7718,6 +7746,7 @@ function exportarRelatorioExecutivoPDF() {
   const dadosSessoes = mesesLabel.map(m => sesAll.filter(s => { const d = new Date(s.data||''); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; }).length);
   const dadosPart    = mesesLabel.map(m => { const ids = new Set(tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; }).map(t=>t.id)); return new Set(partAll.filter(p=>ids.has(p.turma_id)).map(p=>p.colaborador_id)).size; });
 
+  const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
   // ══════════════════════════════════════════
@@ -7727,7 +7756,7 @@ function exportarRelatorioExecutivoPDF() {
   // Header navy
   doc.setFillColor(...NAVY); doc.rect(0, 0, W, 40, 'F');
   doc.setFillColor(...AMBER); doc.rect(0, 40, W, 2.5, 'F');
-  desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 10, 48, 15);
+  desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 10, 48, 15, undefined, imgLogoOrg);
   doc.setFontSize(13); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
   doc.text('RELATORIO EXECUTIVO DE TREINAMENTOS', W-14, 20, {align:'right'});
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
@@ -8773,6 +8802,52 @@ async function carregarAssinaturaInstrutorPDF(path) {
   } catch(e) { return null; }
 }
 
+// Carrega a logomarca da organização (Organização > Editar > Logo, plano
+// Enterprise) como Data URL pronta para uso no jsPDF, com as dimensões
+// naturais para não distorcer a proporção ao desenhar. Retorna null se a
+// organização não tiver logo cadastrada ou a imagem não puder ser lida —
+// nesses casos os documentos continuam exibindo o nome da organização em
+// texto (ver desenharLogoOrg), exatamente como antes.
+async function carregarLogoOrgPDF(logoUrl) {
+  if (!logoUrl) return null;
+  try {
+    const dataUrl = await carregarImagemComoDataURL(logoUrl);
+    if (!dataUrl) return null;
+    const dim = await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve({w: img.naturalWidth||1, h: img.naturalHeight||1});
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+    if (!dim) return null;
+    return { dataUrl, w: dim.w, h: dim.h };
+  } catch(e) { return null; }
+}
+
+// Carrega a assinatura digital do aluno, capturada na tela de execução da
+// aula (mesma assinatura usada na Lista de Presença — tabela `presencas`,
+// bucket `assinaturas`). Retorna null se o aluno não assinou digitalmente
+// nessa turma; nesse caso o certificado individual mostra só a linha e o
+// nome do aluno, sem imagem de assinatura.
+async function carregarAssinaturaAlunoPDF(turmaId, colaboradorId) {
+  try {
+    const {data:pr} = await sb.from('presencas').select('assinatura_path').eq('turma_id', turmaId).eq('colaborador_id', colaboradorId).maybeSingle();
+    if (!pr?.assinatura_path) return null;
+    const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(pr.assinatura_path, 60);
+    if (!urlData?.signedUrl) return null;
+    const dataUrl = await carregarImagemComoDataURL(urlData.signedUrl);
+    if (!dataUrl) return null;
+    const dim = await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve({w: img.naturalWidth||1, h: img.naturalHeight||1});
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+    if (!dim) return null;
+    return { dataUrl, w: dim.w, h: dim.h };
+  } catch(e) { return null; }
+}
+
 // Desenha a assinatura digitalizada do instrutor no espaco que ja existia
 // acima da linha de assinatura (nao desloca nenhum outro elemento).
 // Preserva a proporcao original (nunca distorce): a imagem e encaixada
@@ -8802,7 +8877,16 @@ function fmtDataExtenso(iso) {
 // Desenha o nome da organização como identificação visual no lugar de uma logo —
 // usado enquanto não há upload de logo próprio por organização (evita o bug de
 // toda organização exibir a logo fixa de uma só, ex: AvanteSeg, nos documentos).
-function desenharLogoOrg(doc, nomeOrg, x, y, w, h, cor) {
+function desenharLogoOrg(doc, nomeOrg, x, y, w, h, cor, logoImg) {
+  if (logoImg && logoImg.dataUrl) {
+    try {
+      const ratio = logoImg.w / logoImg.h;
+      let dw = w, dh = w / ratio;
+      if (dh > h) { dh = h; dw = h * ratio; }
+      doc.addImage(logoImg.dataUrl, 'PNG', x, y + (h - dh) / 2, dw, dh);
+      return;
+    } catch(e) { /* imagem inválida — cai para o texto abaixo */ }
+  }
   const corTexto = cor || [255,255,255];
   let fontSize = Math.min(h*1.3, 15);
   doc.setFont('helvetica','bold');
@@ -9089,6 +9173,8 @@ async function gerarListaPresenca(turmaId) {
     const nomeOrg = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
     // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
     const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
+    // Logomarca da organização (plano Enterprise), se houver
+    const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
 
     // ── Borda dupla externa ──
     doc.setDrawColor(...NAVY); doc.setLineWidth(1.2);
@@ -9117,7 +9203,7 @@ async function gerarListaPresenca(turmaId) {
     doc.rect(mg, mg+30, W-mg*2, 1.5, 'F');
 
     // Logo no header
-    desenharLogoOrg(doc, t.organizacoes?.nome, mg+4, mg+5, 46, 14);
+    desenharLogoOrg(doc, t.organizacoes?.nome, mg+4, mg+5, 46, 14, undefined, imgLogoOrg);
 
     // Badge "Ficha de Presença" no header
     doc.setFillColor(...AMBERLT);
@@ -9289,6 +9375,10 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nomeOrg   = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
     // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
     const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
+    // Logomarca da organização (plano Enterprise), se houver
+    const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
+    // Assinatura digital do aluno, capturada na execução da aula, se houver
+    const imgAssinaturaAluno = await carregarAssinaturaAlunoPDF(turmaId, colaboradorId);
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
@@ -9324,11 +9414,13 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const cabecalhoNavy = (doc, titulo, subtitulo) => {
       doc.setFillColor(...NAVY); doc.rect(0,0,W,52,'F');
       doc.setFillColor(...AMBER); doc.rect(0,52,W,3,'F');
-      desenharLogoOrg(doc, nomeOrg, 16, 12, 58, 18);
-      doc.setFontSize(7.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(s(titulo), W/2, 16, {align:'center'});
-      doc.setFontSize(6.5); doc.setTextColor(...LGRAY);
-      doc.text(s(subtitulo), W/2, 22, {align:'center'});
+      desenharLogoOrg(doc, nomeOrg, 16, 12, 58, 18, undefined, imgLogoOrg);
+      doc.setFontSize(15); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+      doc.text(s(titulo), W/2, 21, {align:'center'});
+      if (subtitulo) {
+        doc.setFontSize(6.5); doc.setTextColor(...LGRAY); doc.setFont('helvetica','normal');
+        doc.text(s(subtitulo), W/2, 27, {align:'center'});
+      }
       if (nrNum) {
         doc.setFillColor(...AMBER); doc.circle(W-30,22,16,'F');
         doc.setFontSize(7.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
@@ -9338,18 +9430,27 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     };
 
     // ── Helper: rodapé navy (Modelo B) ──
-    const rodapeNavy = (doc, nomeInstrutor) => {
+    const rodapeNavy = (doc, nomeInstrutor, nomeAluno, imgAluno) => {
       const ry = H-30;
       doc.setFillColor(...AMBER); doc.rect(0,ry,W,2,'F');
       doc.setFillColor(...NAVY); doc.rect(0,ry+2,W,28,'F');
-      // Assinatura do instrutor centralizada
+      // Duas assinaturas lado a lado: Instrutor (esquerda) e Aluno (direita)
+      const cxI = W/2-55, cxA = W/2+55;
       doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
-      doc.line(W/2-55, ry+12, W/2+55, ry+12);
-      desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, W/2, ry+12, 28, 9);
+      doc.line(cxI-32, ry+12, cxI+32, ry+12);
+      desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, cxI, ry+12, 26, 8);
       doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-      doc.text(s(nomeInstrutor,40), W/2, ry+17, {align:'center'});
+      doc.text(s(nomeInstrutor,32), cxI, ry+17, {align:'center'});
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text('Instrutor Responsavel', W/2, ry+22, {align:'center'});
+      doc.text('Instrutor Responsavel', cxI, ry+22, {align:'center'});
+
+      doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
+      doc.line(cxA-32, ry+12, cxA+32, ry+12);
+      desenharAssinaturaImagemPDF(doc, imgAluno, cxA, ry+12, 26, 8);
+      doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+      doc.text(s(nomeAluno,32), cxA, ry+17, {align:'center'});
+      doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text('Aluno', cxA, ry+22, {align:'center'});
     };
 
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
@@ -9358,7 +9459,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // PÁGINA 1 - CAPA (Modelo B)
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
-    cabecalhoNavy(doc, 'CERTIFICADO DE CONCLUSAO', nomeOrg);
+    cabecalhoNavy(doc, 'CERTIFICADO DE CONCLUSAO');
 
     // Área central
     let cy = 66;
@@ -9397,7 +9498,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.text(s(infoLinha,200), W/2, cy, {align:'center'});
 
     // Rodapé com assinaturas + QR
-    rodapeNavy(doc, instrutor);
+    rodapeNavy(doc, instrutor, s(col.nome,32), imgAssinaturaAluno);
     if (qrData) doc.addImage(qrData,'PNG', W-50, H-28, 18, 18);
     doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text(`Cod: ${codigoShort}`, W-41, H-7, {align:'center'});
@@ -9415,7 +9516,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // ── Cabeçalho navy (28mm) ──
     doc.setFillColor(...NAVY); doc.rect(0,0,W,28,'F');
     doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
-    desenharLogoOrg(doc, nomeOrg, 14, 6, 50, 16);
+    desenharLogoOrg(doc, nomeOrg, 14, 6, 50, 16, undefined, imgLogoOrg);
     doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(dataLocalISO())}`, W-14, 17, {align:'right'});
 
@@ -9625,6 +9726,8 @@ async function gerarCertificadoColetivo(turmaId) {
     const nomeOrg       = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
     // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
     const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
+    // Logomarca da organização (plano Enterprise), se houver
+    const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
@@ -9663,7 +9766,7 @@ async function gerarCertificadoColetivo(turmaId) {
     // Faixa navy topo
     doc.setFillColor(...NAVY); doc.rect(0,0,W,52,'F');
     doc.setFillColor(...AMBER); doc.rect(0,52,W,3,'F');
-    desenharLogoOrg(doc, nomeOrg, 16, 12, 58, 18);
+    desenharLogoOrg(doc, nomeOrg, 16, 12, 58, 18, undefined, imgLogoOrg);
     doc.setFontSize(7.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text('CERTIFICADO COLETIVO DE CONCLUSAO', W/2, 16, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...LGRAY);
@@ -9752,7 +9855,7 @@ async function gerarCertificadoColetivo(turmaId) {
     // ── Cabeçalho navy (28mm) ──
     doc.setFillColor(...NAVY); doc.rect(0,0,W,28,'F');
     doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
-    desenharLogoOrg(doc, nomeOrg, 14, 6, 50, 16);
+    desenharLogoOrg(doc, nomeOrg, 14, 6, 50, 16, undefined, imgLogoOrg);
     doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text(`Protocolo: ${codigoShort}  |  Emitido em: ${fmtDataExtensoPDF(dataLocalISO())}`, W-14, 17, {align:'right'});
 
@@ -9912,7 +10015,7 @@ async function gerarCertificadoColetivo(turmaId) {
       // Mini-cabeçalho navy
       doc.setFillColor(...NAVY); doc.rect(0,0,W,28,'F');
       doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
-      desenharLogoOrg(doc, nomeOrg, 16, 5, 44, 14);
+      desenharLogoOrg(doc, nomeOrg, 16, 5, 44, 14, undefined, imgLogoOrg);
       doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
       doc.text(`${s(nomeT,60)}  |  ${s(nomeEmp,30)}  |  ${fmtDataExtensoPDF(dataCert)}`, W-16, 11, {align:'right'});
       doc.text(`Pagina ${pg+3}  |  Cod: ${codigoShort}`, W-16, 18, {align:'right'});
@@ -10277,24 +10380,38 @@ async function enviarDocumentosPorEmail(turmaId) {
       throw new Error(detalhe);
     }
 
-    const {data: envioExistente} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
-    if (envioExistente) {
-      await sb.from('envios_email').update({
-        email_destino: t.clientes?.email||'',
-        enviado_em:    new Date().toISOString(),
-        status:        'enviado',
-      }).eq('id', envioExistente.id);
-    } else {
-      await sb.from('envios_email').insert({
-        turma_id:      turmaId,
-        org_id:        usuarioAtual.org_id,
-        email_destino: t.clientes?.email||'',
-        enviado_em:    new Date().toISOString(),
-        status:        'enviado',
-      });
+    const {data: envioExistente, error: envioSelectErr} = await sb.from('envios_email').select('id').eq('turma_id', turmaId).maybeSingle();
+    let envioRegistroErr = envioSelectErr || null;
+    if (!envioRegistroErr) {
+      if (envioExistente) {
+        const {error} = await sb.from('envios_email').update({
+          email_destino: t.clientes?.email||'',
+          enviado_em:    new Date().toISOString(),
+          status:        'enviado',
+        }).eq('id', envioExistente.id);
+        envioRegistroErr = error;
+      } else {
+        const {error} = await sb.from('envios_email').insert({
+          turma_id:      turmaId,
+          org_id:        usuarioAtual.org_id,
+          email_destino: t.clientes?.email||'',
+          enviado_em:    new Date().toISOString(),
+          status:        'enviado',
+        });
+        envioRegistroErr = error;
+      }
     }
 
-    showToast('Documentos enviados com sucesso!', 'success');
+    if (envioRegistroErr) {
+      // O e-mail já foi enviado com sucesso (ver chamada à Edge Function
+      // acima) — só o registro de controle de status falhou. Avisamos em vez
+      // de mostrar "sucesso" e deixar a turma presa em "pendente" sem
+      // explicação nenhuma.
+      console.error('E-mail enviado, mas falha ao registrar em envios_email:', envioRegistroErr);
+      showToast('E-mail enviado, mas houve um problema ao atualizar o status. Avise o suporte se a turma continuar aparecendo como pendente.', 'error');
+    } else {
+      showToast('Documentos enviados com sucesso!', 'success');
+    }
     await renderDocumentosTurma(turmaId);
   } catch(e) {
     console.error(e);
@@ -10361,7 +10478,7 @@ function _buildKpiGrid({tAtivas,tConcluidas,tConcluidasAnt,partUnicos,partUnicos
   </div>`;
 }
 
-function exportarRelatorioComparativoPDF() {
+async function exportarRelatorioComparativoPDF() {
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Comparativo em PDF', 'pro'); return; }
   const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
@@ -10378,6 +10495,7 @@ function exportarRelatorioComparativoPDF() {
   const T2 = [71,85,105], T3 = [148,163,184], BORD = [220,228,240], GRAY = [244,246,250];
   const GREEN = [5,150,105], RED = [220,38,38];
 
+  const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const s = v => pdfSafe(v);
   const periodoAtual  = `${new Date(corteAtual).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})} – Agora`;
@@ -10386,7 +10504,7 @@ function exportarRelatorioComparativoPDF() {
   // Header
   doc.setFillColor(...NAVY); doc.rect(0,0,W,36,'F');
   doc.setFillColor(...AMBER); doc.rect(0,36,W,2,'F');
-  desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 8, 50, 16);
+  desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 8, 50, 16, undefined, imgLogoOrg);
   doc.setFontSize(12); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
   doc.text('RELATORIO COMPARATIVO', W-14, 18, {align:'right'});
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
