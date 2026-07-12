@@ -3108,15 +3108,32 @@ function abrirModalOrg(id=null) {
     </div>
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Personalização visual <span style="font-weight:400;text-transform:none">(benefício Enterprise)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="field" style="margin:0"><label>Cor primária</label><input type="color" id="mOrgCorPrimaria" value="${org?.cor_primaria||'#1E2A4A'}" style="width:100%;height:40px;padding:2px;border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer"></div>
-        <div class="field" style="margin:0"><label>URL da logo</label><input type="url" id="mOrgLogoUrl" value="${org?.logo_url||''}" placeholder="https://..."></div>
+
+      <div class="field" style="margin:0 0 4px"><label>Cor de destaque na interface</label><input type="color" id="mOrgCorPrimaria" value="${org?.cor_primaria||'#1E2A4A'}" style="width:100%;height:40px;padding:2px;border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer"></div>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:14px;line-height:1.5">Aplica essa cor à interface do sistema para os usuários dessa organização (menu lateral, botões). <strong>Não altera</strong> certificados, listas de presença nem outros documentos em PDF — esses usam sempre as cores padrão do Toledo Labs.</div>
+
+      <label style="font-size:13px;font-weight:600;color:var(--text-1);display:block;margin-bottom:6px">Logomarca</label>
+      ${org ? `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div id="mOrgLogoPreviewWrap" style="width:64px;height:64px;border-radius:var(--r-md);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:var(--gray-50)">
+          ${org?.logo_url ? `<img id="mOrgLogoPreview" src="${org.logo_url}" style="max-width:100%;max-height:100%;object-fit:contain">` : `<span id="mOrgLogoPreview" style="font-size:9px;color:var(--text-3)">Sem logo</span>`}
+        </div>
+        <div style="flex:1;min-width:0">
+          <input type="file" id="mOrgLogoFile" accept="image/png,image/jpeg" style="display:none" onchange="uploadLogoOrganizacao(this,'${org.id}')">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('mOrgLogoFile').click()">Enviar arquivo</button>
+            ${org?.logo_url ? `<button type="button" class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="removerLogoOrganizacao('${org.id}')">Remover</button>` : ''}
+          </div>
+          <div id="mOrgLogoStatus" style="font-size:11px;color:var(--text-3);margin-top:5px">PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise</div>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px;line-height:1.6">
-        Disponível apenas para organizações com plano Enterprise. Faça upload da logomarca em um serviço de hospedagem de imagens e cole o link público abaixo.<br>
-        <strong>Requisitos:</strong> formatos PNG, JPG/JPEG ou SVG · até 2 MB · dimensão recomendada 512×512px · preferencialmente fundo transparente (PNG).<br>
-        Serviços gratuitos sugeridos: <a href="https://imgbb.com" target="_blank" rel="noopener">ImgBB</a> ou <a href="https://postimages.org" target="_blank" rel="noopener">Postimages</a>.
-      </div>
+      <input type="hidden" id="mOrgLogoUrl" value="${org?.logo_url||''}">
+      <details style="margin-top:2px">
+        <summary style="font-size:11px;color:var(--text-3);cursor:pointer">Prefere hospedar a logo externamente (link de outro serviço)?</summary>
+        <input type="url" id="mOrgLogoUrlManual" value="${org?.logo_url||''}" placeholder="https://..." style="width:100%;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-family:inherit" onchange="_atualizarPreviewLogoOrg(this.value.trim())">
+      </details>
+      ` : `<div style="font-size:12px;color:var(--text-3);padding:10px;background:var(--gray-50);border-radius:var(--r-md)">Salve a organização primeiro — depois, em "Editar organização", você poderá enviar a logomarca.</div>
+      <input type="hidden" id="mOrgLogoUrl" value="">`}
     </div>
     ${!org ? `
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
@@ -3127,6 +3144,98 @@ function abrirModalOrg(id=null) {
     </div>` : ''}`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarOrg()">${org?'Salvar':'Cadastrar'}</button>`);
+}
+
+async function uploadLogoOrganizacao(inputEl, orgId) {
+  const arquivo = inputEl.files?.[0];
+  if (!arquivo) return;
+
+  // A logo só é de fato usada quando o plano é Enterprise (mesma regra já
+  // aplicada em salvarOrg) — checamos o valor ATUAL do select, já que o
+  // upload salva direto no banco, sem passar pelo botão "Salvar" do modal.
+  const planoSelecionado = document.getElementById('mOrgPlano')?.value || 'starter';
+  if (planoSelecionado !== 'enterprise') {
+    showToast('A logomarca só é aplicada em organizações no plano Enterprise. Selecione o plano Enterprise antes de enviar.', 'error');
+    inputEl.value = '';
+    return;
+  }
+  if (!['image/png','image/jpeg'].includes(arquivo.type)) { showToast('Envie um arquivo PNG ou JPG.','error'); inputEl.value=''; return; }
+  if (arquivo.size > 2*1024*1024) { showToast('Arquivo muito grande (máx. 2MB).','error'); inputEl.value=''; return; }
+
+  const statusEl = document.getElementById('mOrgLogoStatus');
+  if (statusEl) statusEl.textContent = 'Enviando...';
+
+  try {
+    const dataUrl = await new Promise((res,rej)=>{
+      const reader = new FileReader();
+      reader.onload  = ()=>res(reader.result);
+      reader.onerror = rej;
+      reader.readAsDataURL(arquivo);
+    });
+    const img = new Image();
+    await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=dataUrl; });
+
+    // Redimensiona (mantendo proporção) só se exceder o teto — evita arquivos
+    // gigantes no Storage sem forçar recorte quadrado, já que logos reais
+    // raramente são quadradas.
+    const MAX_DIM = 1000;
+    let w = img.naturalWidth, h = img.naturalHeight;
+    if (w > MAX_DIM || h > MAX_DIM) {
+      const escala = Math.min(MAX_DIM/w, MAX_DIM/h);
+      w = Math.round(w*escala); h = Math.round(h*escala);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    const blob = await new Promise(res=>canvas.toBlob(res,'image/png'));
+
+    const path = `${orgId}.png`;
+    const { error: upErr } = await sb.storage.from('logos-organizacao').upload(path, blob, { upsert:true, contentType:'image/png' });
+    if (upErr) throw upErr;
+
+    const { data: pub } = sb.storage.from('logos-organizacao').getPublicUrl(path);
+    // ?v= evita que o navegador/CDN sirva uma versão antiga em cache depois de reenviar.
+    const urlFinal = `${pub.publicUrl}?v=${Date.now()}`;
+
+    const { error: dbErr } = await sb.from('organizacoes').update({ logo_url: urlFinal }).eq('id', orgId);
+    if (dbErr) throw dbErr;
+
+    document.getElementById('mOrgLogoUrl').value = urlFinal;
+    _atualizarPreviewLogoOrg(urlFinal);
+    const orgCache = _orgsCache.find(o=>o.id===orgId);
+    if (orgCache) orgCache.logo_url = urlFinal;
+    if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise';
+    showToast('Logomarca enviada!','success');
+  } catch(e) {
+    showToast(e.message||'Erro ao enviar logomarca','error');
+    if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise';
+  } finally {
+    inputEl.value = '';
+  }
+}
+
+function _atualizarPreviewLogoOrg(url) {
+  const urlEl = document.getElementById('mOrgLogoUrl');
+  if (urlEl) urlEl.value = url;
+  const wrap = document.getElementById('mOrgLogoPreviewWrap');
+  if (!wrap) return;
+  wrap.innerHTML = url
+    ? `<img id="mOrgLogoPreview" src="${url}" style="max-width:100%;max-height:100%;object-fit:contain">`
+    : `<span id="mOrgLogoPreview" style="font-size:9px;color:var(--text-3)">Sem logo</span>`;
+}
+
+async function removerLogoOrganizacao(orgId) {
+  const ok = await confirmarAcao('Remover a logomarca desta organização?','Remover',true);
+  if (!ok) return;
+  try {
+    await sb.storage.from('logos-organizacao').remove([`${orgId}.png`]);
+    const { error } = await sb.from('organizacoes').update({ logo_url: null }).eq('id', orgId);
+    if (error) throw error;
+    const orgCache = _orgsCache.find(o=>o.id===orgId);
+    if (orgCache) orgCache.logo_url = null;
+    showToast('Logomarca removida.','success');
+    abrirModalOrg(orgId); // reabre o modal para refletir o estado sem logo
+  } catch(e) { showToast(e.message||'Erro ao remover logomarca','error'); }
 }
 
 async function salvarOrg() {
@@ -6994,6 +7103,8 @@ async function renderRelatorios() {
     {data:sessoesRaw},
     {data:usuariosRaw},
     {data:participantesRaw},
+    {data:documentosRaw},
+    {data:enviosRaw},
     confData,
   ] = await Promise.all([
     sb.from('turmas')
@@ -7003,6 +7114,8 @@ async function renderRelatorios() {
     sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(id,nome)').eq('concluida', true),
     sb.from('usuarios').select('id,nome,perfil').eq('org_id', oi).eq('ativo', true),
     sb.from('turma_participantes').select('turma_id,colaborador_id'),
+    sb.from('documentos').select('turma_id,tipo,colaborador_id').eq('org_id', oi),
+    sb.from('envios_email').select('turma_id,status').eq('org_id', oi),
     // Indicadores de conformidade/reciclagem só fazem sentido no plano Pro (mesma
     // regra da tela Conformidade) — busca só quando o plano já dá acesso, para
     // não gastar consulta à toa em quem ainda não tem a feature.
@@ -7011,13 +7124,45 @@ async function renderRelatorios() {
 
   // Guardar globalmente para filtros e exportação
   const turmaIdsOrg = new Set((turmasRaw||[]).map(t=>t.id));
+  const sessoesOrg = (sessoesRaw||[]).filter(s=>turmaIdsOrg.has(s.turma_id));
   window._relRaw = {
     turmas: turmasRaw||[],
     clientes: clientesRaw||[],
     // sessoes não tem org_id — isolar via turma_id pertencente às turmas já filtradas por org acima
-    sessoes: (sessoesRaw||[]).filter(s=>turmaIdsOrg.has(s.turma_id)),
+    sessoes: sessoesOrg,
     usuarios: usuariosRaw||[],
     participantes: (participantesRaw||[]).filter(p=>turmaIdsOrg.has(p.turma_id)),
+    // ── Documentos pendentes — visão da organização inteira, não só de um
+    // instrutor (mesma lógica usada no Início do Instrutor: documentos
+    // incompletos OU gerados mas nunca enviados por e-mail) ──
+    pendencias: (() => {
+      const partsCountPorTurma = {};
+      (participantesRaw||[]).forEach(p=>{ partsCountPorTurma[p.turma_id]=(partsCountPorTurma[p.turma_id]||0)+1; });
+      const docsPorTurma = {};
+      (documentosRaw||[]).forEach(d=>{
+        if (!docsPorTurma[d.turma_id]) docsPorTurma[d.turma_id] = {lista:false,coletivo:false,individuais:new Set()};
+        if (d.tipo==='lista_presenca') docsPorTurma[d.turma_id].lista = true;
+        else if (d.tipo==='certificado_coletivo') docsPorTurma[d.turma_id].coletivo = true;
+        else if (d.tipo==='certificado_individual') docsPorTurma[d.turma_id].individuais.add(d.colaborador_id);
+      });
+      const enviadoPorTurma = {};
+      (enviosRaw||[]).forEach(e=>{ enviadoPorTurma[e.turma_id] = e.status === 'enviado'; });
+      const instrutoresPorTurma = {};
+      sessoesOrg.forEach(s=>{
+        if (!s.usuarios?.nome) return;
+        if (!instrutoresPorTurma[s.turma_id]) instrutoresPorTurma[s.turma_id] = new Set();
+        instrutoresPorTurma[s.turma_id].add(s.usuarios.nome);
+      });
+      return (turmasRaw||[]).filter(t=>t.status==='concluida').map(t => {
+        const dp = docsPorTurma[t.id] || {lista:false,coletivo:false,individuais:new Set()};
+        const totalPart = partsCountPorTurma[t.id]||0;
+        const incompletos = !dp.lista || !dp.coletivo || dp.individuais.size < totalPart;
+        const temDocumento = dp.lista || dp.coletivo || dp.individuais.size > 0;
+        const naoEnviado   = !incompletos && temDocumento && !enviadoPorTurma[t.id];
+        if (!incompletos && !naoEnviado) return null;
+        return { turma: t, motivo: incompletos ? 'gerar' : 'enviar', instrutores: [...(instrutoresPorTurma[t.id]||[])].join(', ') || '—' };
+      }).filter(Boolean);
+    })(),
   };
   window._relConfData = confData;
   window._relPeriodo = 6; // padrão: 6 meses
@@ -7255,6 +7400,27 @@ function _renderRelatorioView() {
         </svg>
       </div>
     </div>
+
+    ${(() => {
+      const pend = window._relRaw.pendencias || [];
+      return `<div class="rel2-card" style="margin-top:12px${pend.length ? ';border:1px solid var(--red)' : ''}">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+          <div class="rel2-card-title" style="margin:0">Documentos pendentes${pend.length ? ` <span style="font-size:11px;font-weight:700;color:var(--red-text);background:var(--red-l);padding:2px 8px;border-radius:10px;margin-left:6px;text-transform:none;letter-spacing:0">${pend.length}</span>` : ''}</div>
+        </div>
+        ${!pend.length
+          ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhuma pendência — toda a documentação das turmas concluídas está em dia.</div>`
+          : pend.slice(0,10).map(p => `
+            <div class="list-item" data-action="abrirDocumentos" data-id="${p.turma.id}" style="cursor:pointer">
+              <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
+              <div class="li-info">
+                <div class="li-title">${escapeHtml(p.turma.catalogo?.nome||'Treinamento')}</div>
+                <div class="li-sub">${escapeHtml(p.turma.clientes?.nome||'—')} · ${escapeHtml(p.instrutores)}</div>
+              </div>
+              <span class="badge badge-amber">${p.motivo==='gerar'?'Gerar':'Enviar'}</span>
+            </div>`).join('') + (pend.length > 10 ? `<div style="font-size:11px;color:var(--text-3);padding:8px 0;text-align:center">+${pend.length-10} outra${pend.length-10!==1?'s':''} turma${pend.length-10!==1?'s':''} com pendência</div>` : '')
+        }
+      </div>`;
+    })()}
 
     <div class="rel2-rankings">
       <div class="rel2-card" style="margin-bottom:0">
