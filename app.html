@@ -720,22 +720,26 @@ async function iniciarModoSuporte(orgId, orgNome) {
 
     // Salvar estado do Provedor
     window._suporteProvedorState = {
-      perfil:   usuarioAtual.perfil,
-      org_id:   usuarioAtual.org_id,
-      orgNome:  usuarioAtual.orgNome,
-      orgPlano: usuarioAtual.orgPlano,
+      perfil:      usuarioAtual.perfil,
+      org_id:      usuarioAtual.org_id,
+      orgNome:     usuarioAtual.orgNome,
+      orgPlano:    usuarioAtual.orgPlano,
+      orgLogoUrl:  usuarioAtual.orgLogoUrl,
     };
 
     // Buscar dados da org para simular o perfil de administrador
     const { data: org } = await sb.from('organizacoes')
-      .select('nome,plano,ativo')
+      .select('nome,plano,ativo,logo_url')
       .eq('id', orgId).single();
 
     // Assumir identidade de administrador da org
-    usuarioAtual.perfil   = 'administrador';
-    usuarioAtual.org_id   = orgId;
-    usuarioAtual.orgNome  = org?.nome  || orgNome;
-    usuarioAtual.orgPlano = org?.plano || 'starter';
+    usuarioAtual.perfil     = 'administrador';
+    usuarioAtual.org_id     = orgId;
+    usuarioAtual.orgNome    = org?.nome  || orgNome;
+    usuarioAtual.orgPlano   = org?.plano || 'starter';
+    // Sem isso, os PDFs gerados em Modo Suporte caem sempre no nome em texto
+    // (a logo é lida só de usuarioAtual.orgLogoUrl — ver carregarLogoOrgPDF)
+    usuarioAtual.orgLogoUrl = org?.logo_url || null;
 
     // Ativar flags de suporte
     _suporteAtivo   = true;
@@ -775,10 +779,11 @@ async function encerrarModoSuporte(silencioso = false) {
 
   // Restaurar estado do Provedor
   const estado = window._suporteProvedorState || {};
-  usuarioAtual.perfil   = 'provedor';
-  usuarioAtual.org_id   = estado.org_id   || null;
-  usuarioAtual.orgNome  = estado.orgNome  || null;
-  usuarioAtual.orgPlano = estado.orgPlano || null;
+  usuarioAtual.perfil     = 'provedor';
+  usuarioAtual.org_id     = estado.org_id     || null;
+  usuarioAtual.orgNome    = estado.orgNome    || null;
+  usuarioAtual.orgPlano   = estado.orgPlano   || null;
+  usuarioAtual.orgLogoUrl = estado.orgLogoUrl || null;
 
   // Limpar flags
   _suporteAtivo   = false;
@@ -9767,10 +9772,8 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFillColor(...NAVY); doc.rect(0,0,W,52,'F');
     doc.setFillColor(...AMBER); doc.rect(0,52,W,3,'F');
     desenharLogoOrg(doc, nomeOrg, 16, 12, 58, 18, undefined, imgLogoOrg);
-    doc.setFontSize(7.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('CERTIFICADO COLETIVO DE CONCLUSAO', W/2, 16, {align:'center'});
-    doc.setFontSize(6.5); doc.setTextColor(...LGRAY);
-    doc.text(nomeOrg, W/2, 22, {align:'center'});
+    doc.setFontSize(15); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('CERTIFICADO COLETIVO DE CONCLUSAO', W/2, 21, {align:'center'});
     // Medalha NR
     if (nrNum) {
       doc.setFillColor(...AMBER); doc.circle(W-30,22,16,'F');
