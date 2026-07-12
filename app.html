@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1E2A4A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Toledo Labs">
+<meta name="apple-mobile-web-app-title" content="Toledo LAabs">
 <title>Toledo Labs — Treinamentos</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
@@ -8888,7 +8888,14 @@ function desenharLogoOrg(doc, nomeOrg, x, y, w, h, cor, logoImg) {
       const ratio = logoImg.w / logoImg.h;
       let dw = w, dh = w / ratio;
       if (dh > h) { dh = h; dw = h * ratio; }
-      doc.addImage(logoImg.dataUrl, 'PNG', x, y + (h - dh) / 2, dw, dh);
+      const dx = x, dy = y + (h - dh) / 2;
+      // Cartão branco atrás da logo — sem isso, logos com cores escuras
+      // (comum: navy, preto) ficam "camufladas" no cabeçalho navy do
+      // documento. Funciona para qualquer paleta de logo.
+      const pad = Math.min(dw, dh) * 0.14;
+      doc.setFillColor(255,255,255);
+      doc.roundedRect(dx - pad, dy - pad, dw + pad*2, dh + pad*2, 1.2, 1.2, 'F');
+      doc.addImage(logoImg.dataUrl, 'PNG', dx, dy, dw, dh);
       return;
     } catch(e) { /* imagem inválida — cai para o texto abaixo */ }
   }
