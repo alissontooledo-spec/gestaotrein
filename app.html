@@ -4684,23 +4684,28 @@ function _htmlListaColabsConf(itens, selecionadoId, aba) {
 
 // Painel de detalhe do colaborador selecionado (nível 3) — mesmas
 // informações e ações já usadas na versão anterior da tela (Agendar,
-// Adicionar em turma existente, marcar/reabrir status), só reorganizadas
-// num layout de painel em vez de linha de tabela.
+// Adicionar em turma existente, atualizar/reabrir pendência), reorganizadas
+// num layout de painel. O bloco "Atualizar Pendência" fica sempre visível
+// (não atrás de um menu) e embutido no próprio painel — sem modal — para
+// bater com o padrão aprovado (status atual, novo status, observação
+// obrigatória e ações de confirmar/cancelar juntos, num só card).
 function _htmlPainelDetalheConf(x, aba) {
   if (!x) return '';
   const podeGerenciar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   const tratada = aba === 'tratadas';
   const iniciais = (x.colaboradorNome||'?').split(' ').filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase();
 
-  let alertaHtml, badgeTopo;
+  let alertaHtml, badgeTopo, statusAtualTxt;
   if (tratada) {
-    badgeTopo = `<span class="badge badge-gray">${STATUS_EXCECAO_LABEL[x.statusExcecao]||x.statusExcecao}</span>`;
+    statusAtualTxt = STATUS_EXCECAO_LABEL[x.statusExcecao] || x.statusExcecao;
+    badgeTopo = `<span class="badge badge-gray">${statusAtualTxt}</span>`;
     alertaHtml = `<div style="background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 14px;font-size:13px;color:var(--text-2);margin-bottom:18px">${x.motivoExcecao ? escapeHtml(x.motivoExcecao) : 'Pendência marcada como tratada — não conta mais no índice de conformidade.'}</div>`;
   } else {
     const badgeCls = {vencido:'badge-red', urgente:'badge-red', atencao:'badge-amber', planejar:'badge-blue'};
     const badgeLbl = {vencido:'Vencido', urgente:'Urgente', atencao:'Atenção', planejar:'Planejar'};
     const vencTxt = x.status === 'vencido' ? `há ${Math.abs(x.diffDias)} dia${Math.abs(x.diffDias)!==1?'s':''}` : `em ${x.diffDias} dia${x.diffDias!==1?'s':''}`;
-    badgeTopo = `<span class="badge ${badgeCls[x.status]||'badge-gray'}">${badgeLbl[x.status]||x.status} ${vencTxt}</span>`;
+    statusAtualTxt = `${badgeLbl[x.status]||x.status} ${vencTxt}`;
+    badgeTopo = `<span class="badge ${badgeCls[x.status]||'badge-gray'}">${statusAtualTxt}</span>`;
     const alertaCfg = {
       vencido:  ['var(--red-l)','var(--red-text)','Colaborador está com o certificado vencido — regularize o quanto antes.'],
       urgente:  ['var(--red-l)','var(--red-text)','Vence em poucos dias — priorize o agendamento.'],
@@ -4711,12 +4716,39 @@ function _htmlPainelDetalheConf(x, aba) {
     alertaHtml = `<div style="background:${bg};color:${cor};border-radius:var(--r-md);padding:11px 14px;font-size:13px;margin-bottom:18px;line-height:1.45">${msg}</div>`;
   }
 
+  const statusOpts = Object.entries(STATUS_EXCECAO_LABEL)
+    // "Renovação agendada" é setada automaticamente pelas ações de Agendar/
+    // Adicionar em turma existente — não faz sentido oferecer como escolha manual aqui.
+    .filter(([v]) => v !== 'renovacao_agendada')
+    .map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+
   const acoesHtml = !podeGerenciar ? '' : (tratada
     ? `<button class="btn btn-outline" data-action="reabrirPendencia" data-id="${x.id}" style="width:100%;justify-content:center">Reabrir pendência</button>`
-    : `<div style="display:flex;flex-direction:column;gap:10px">
+    : `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
         ${x.sugestaoId ? `<button class="btn btn-amber" data-action="agendarReciclagem" data-id="${x.id}" style="justify-content:center">${ICONS.plus} Criar nova turma</button>
         <button class="btn btn-outline" data-action="adicionarEmTurmaExistente" data-id="${x.id}" style="justify-content:center">Adicionar em turma existente</button>` : ''}
-        <button class="btn btn-ghost" data-action="menuConfStatus" data-id="${x.id}" style="justify-content:center">Marcar status manualmente ▾</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;color:var(--text-3);font-size:11px;margin:2px 0 14px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>ou<div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+      <div class="li-sub" style="margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;font-weight:700;color:var(--text-3)">Atualizar Pendência</div>
+      <div style="background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;font-size:12.5px">
+          <span style="color:var(--text-2)">Status atual</span>
+          <span style="font-weight:600;color:var(--text-1)">${escapeHtml(statusAtualTxt)}</span>
+        </div>
+        <div class="field" style="margin-bottom:10px"><label style="font-size:12px">Novo status *</label>
+          <select id="confNovoStatus" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13.5px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+            <option value="">Selecione...</option>${statusOpts}
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:12px"><label style="font-size:12px">Observação / justificativa *</label>
+          <textarea id="confObsStatus" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13.5px;font-family:inherit;resize:vertical;outline:none" placeholder="Obrigatório — registre o motivo da alteração (usado em auditorias e no histórico)."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline btn-sm" data-action="confCancelarStatus" data-id="${x.id}">Cancelar</button>
+          <button class="btn btn-navy btn-sm" data-action="confSalvarStatus" data-id="${x.id}">Confirmar</button>
+        </div>
       </div>`);
 
   return `
@@ -4738,7 +4770,7 @@ function _htmlPainelDetalheConf(x, aba) {
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Vencimento</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${formatarData(x.data_vencimento)}</div></div>
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Situação</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${tratada ? 'Fora do índice de conformidade' : (x.status==='vencido' ? 'Vencido' : 'Dentro do prazo de alerta')}</div></div>
       </div>
-      ${podeGerenciar ? `<div class="li-sub" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;font-weight:700;color:var(--text-3)">Ações rápidas</div>` : ''}
+      ${podeGerenciar && !tratada ? `<div class="li-sub" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;font-weight:700;color:var(--text-3)">Ações rápidas</div>` : ''}
       ${acoesHtml}
     </div>
   `;
@@ -4754,52 +4786,29 @@ function agendarReciclagem(id) {
   abrirModalTurma(null, { clienteId: x.cliente_id, catalogoId: x.sugestaoId, travar: true, origemConfId: id });
 }
 
-// Lista os status possíveis direto no menu — cada item já abre o modal de
-// encerramento com o status pré-selecionado (economiza um passo). As ações
-// de "Criar nova turma"/"Adicionar em turma existente" não entram aqui
-// porque no painel de detalhe elas já aparecem como botões dedicados.
-function _confMenuStatus(btn, id) {
+// Descarta o que foi digitado no formulário "Atualizar Pendência" — como
+// não há modal pra fechar, "cancelar" é simplesmente redesenhar o painel do
+// mesmo colaborador do zero (campos voltam em branco).
+function _confCancelarStatus(id) {
   const x = (window._confPorId||{})[id];
-  if (!x) return;
-  const itensStatus = Object.entries(STATUS_EXCECAO_LABEL)
-    // "Renovação agendada" é setada automaticamente pelas ações de Agendar/
-    // Adicionar em turma existente — não faz sentido oferecer como escolha manual aqui.
-    .filter(([v]) => v !== 'renovacao_agendada')
-    .map(([v,l]) => ({action:'encerrarPendenciaRapido', id, extra:v, label:l}));
-  _menuDropdown(btn, itensStatus);
+  _setElBoth('painelDetalheConf', x ? _htmlPainelDetalheConf(x, window._confAba) : '');
 }
 
-// Encerra uma pendência sem apagar o registro — tira do índice de
-// conformidade e da lista de pendências ativas, mas preserva o histórico
-// (conformidade_excecoes_historico) para auditoria. statusPre vem
-// preenchido quando o usuário já clicou no status certo no menu — ainda dá
-// pra trocar aqui, mas evita um clique extra no caminho comum.
-function abrirModalEncerrarPendencia(id, statusPre=null) {
-  const x = (window._confPorId||{})[id];
-  if (!x) return;
-  const opts = Object.entries(STATUS_EXCECAO_LABEL)
-    .filter(([v]) => v !== 'renovacao_agendada')
-    .map(([v,l])=>`<option value="${v}" ${v===statusPre?'selected':''}>${l}</option>`).join('');
-  abrirModal('Encerrar pendência', `
-    <div style="font-size:13px;color:var(--text-2);margin-bottom:14px">${escapeHtml(x.colaboradorNome)} — ${escapeHtml(x.treinamentoNome)} (${escapeHtml(x.empresa)})</div>
-    <div class="field"><label>Status *</label>
-      <select id="mConfStatus" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="" ${!statusPre?'selected':''}>Selecione...</option>${opts}
-      </select></div>
-    <div class="field"><label>Observação (opcional)</label>
-      <textarea id="mConfMotivo" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Ex.: cliente confirmou que não vai renovar este ano"></textarea></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="confirmarEncerrarPendencia('${id}')">Salvar</button>`);
-}
-
-async function confirmarEncerrarPendencia(id) {
+// Grava a mudança de status manual direto do painel (sem modal). Observação
+// é obrigatória — é o que sustenta auditoria, rastreabilidade e relatórios
+// (o mesmo texto vai para conformidade_status.motivo_excecao e para o
+// histórico em conformidade_excecoes_historico).
+async function _confSalvarStatus(id, btn) {
   if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { showToast('Você não tem permissão para esta ação','error'); return; }
   const x = (window._confPorId||{})[id];
-  const status = document.getElementById('mConfStatus')?.value;
-  const motivo = document.getElementById('mConfMotivo')?.value.trim()||null;
-  if (!x || !status) { showToast('Selecione um status','error'); return; }
+  if (!x) return;
+  const status = _getElVisible('confNovoStatus')?.value || '';
+  const motivo = (_getElVisible('confObsStatus')?.value || '').trim();
+  if (!status) { showToast('Selecione o novo status.','error'); return; }
+  if (!motivo) { showToast('A observação é obrigatória — descreva o motivo da alteração.','error'); return; }
+  const rotuloOriginal = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
-    setBtnModalLoading(true);
     const {data:salvo, error} = await sb.from('conformidade_status').update({
       status_excecao: status, motivo_excecao: motivo,
       excecao_definida_por: usuarioAtual.id, excecao_definida_em: new Date().toISOString(),
@@ -4810,9 +4819,12 @@ async function confirmarEncerrarPendencia(id) {
       org_id: usuarioAtual.org_id, colaborador_id: x.colaborador_id, catalogo_id: x.catalogo_id,
       data_vencimento: x.data_vencimento, status_excecao: status, motivo_excecao: motivo, definido_por: usuarioAtual.id,
     });
-    fecharModal(); showToast('Pendência atualizada!','success');
+    showToast('Pendência atualizada!','success');
     await renderConformidade();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = rotuloOriginal; }
+    showToast(e.message||'Erro ao salvar','error');
+  }
 }
 
 async function reabrirPendencia(id) {
@@ -9271,9 +9283,8 @@ document.addEventListener('click', function(e) {
     case 'confAbrirEmpresa':         _confAbrirEmpresa(id); break;
     case 'confVoltarEmpresas':       _confVoltarEmpresas(); break;
     case 'agendarReciclagem':        agendarReciclagem(id); break;
-    case 'menuConfStatus':           _confMenuStatus(el,id); break;
-    case 'encerrarPendencia':        document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalEncerrarPendencia(id); break;
-    case 'encerrarPendenciaRapido':  document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalEncerrarPendencia(id, extra); break;
+    case 'confSalvarStatus':         _confSalvarStatus(id, el); break;
+    case 'confCancelarStatus':       _confCancelarStatus(id); break;
     case 'reabrirPendencia':         document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); reabrirPendencia(id); break;
     case 'adicionarEmTurmaExistente': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalAdicionarEmTurmaExistente(id); break;
     case 'confirmarAdicionarEmTurma': confirmarAdicionarEmTurma(id); break;
@@ -11287,3 +11298,4 @@ async function exportarRelatorioComparativoPDF() {
 </script>
 </body>
 </html>
+                                                                                                                                         
