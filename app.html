@@ -4599,6 +4599,12 @@ async function salvarCatalogo() {
       ? await sb.from('catalogo').update(dados).eq('id',_modalCurrentId)
       : await sb.from('catalogo').insert({...dados, org_id:usuarioAtual.org_id, ativo:true, arquivado:false});
     if (error) throw error;
+    // Editar a validade de um curso não recalculava, sozinho, o vencimento
+    // de turmas já concluídas com esse curso — ficavam com a data antiga
+    // "congelada" (calculada no momento da conclusão), então mudar a
+    // validade só valia para conclusões futuras. Isso confundia os
+    // indicadores de Conformidade logo depois de uma correção no catálogo.
+    if (_modalCurrentId) { try { await _recalcularVencimentosCatalogo(_modalCurrentId, validade); } catch(e) {} }
     fecharModal(); showToast(_modalCurrentId?'Treinamento atualizado!':'Treinamento cadastrado!','success');
     await renderCatalogo();
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
@@ -6412,10 +6418,23 @@ async function _enviarAnotacoes(reg) {
 // sessões da turma já estiverem concluídas, marca a turma como concluída e
 // atualiza o cache de conformidade.
 async function _enviarFinalizarSessao(reg) {
-  const {error:errSessao} = await sb.from('sessoes').update({concluida:true}).eq('id', reg.sessaoId);
+  // .select('id') depois do update é o que permite conferir se a gravação
+  // realmente afetou alguma linha — o Supabase NÃO trata "0 linhas
+  // atualizadas" como erro, então sem essa checagem o código seguia adiante
+  // como se a sessão tivesse sido finalizada mesmo quando não foi (bug real
+  // encontrado em produção: turma marcada como concluída e conformidade
+  // gravada com a sessão continuando concluida=false no banco).
+  const {data:sessaoAtualizada, error:errSessao} = await sb.from('sessoes')
+    .update({concluida:true}).eq('id', reg.sessaoId).select('id');
   if (errSessao) throw errSessao;
+  if (!sessaoAtualizada || !sessaoAtualizada.length) {
+    throw new Error('Não foi possível marcar a sessão como concluída (nenhum registro encontrado). Tente novamente ou avise o suporte.');
+  }
   const {data:todasSessoes} = await sb.from('sessoes').select('id,concluida,data').eq('turma_id', reg.turmaId);
-  const todasConcluidas = (todasSessoes||[]).length > 0 && (todasSessoes||[]).every(s => s.concluida || s.id === reg.sessaoId);
+  // Só considera "todas concluídas" com base no estado real do banco —
+  // antes havia um "ou é a sessão que acabamos de tentar finalizar" que
+  // mascarava exatamente essa falha silenciosa.
+  const todasConcluidas = (todasSessoes||[]).length > 0 && (todasSessoes||[]).every(s => s.concluida);
   if (todasConcluidas) {
     const {error:errTurma} = await sb.from('turmas').update({status:'concluida'}).eq('id', reg.turmaId);
     if (errTurma) throw errTurma;
@@ -7086,6 +7105,32 @@ async function finalizarTurma(turmaId) {
       showToast(e.message||'Erro ao finalizar','error');
     }
   } finally { hideLoading(); }
+}
+
+// Quando a validade (meses) de um curso do catálogo é editada, recalcula o
+// vencimento das linhas de conformidade JÁ GRAVADAS para esse curso —
+// mantendo a data de conclusão original de cada colaborador, só ajustando
+// quantos meses depois ela vence. Sem isso, editar o catálogo só valia
+// para turmas concluídas dali pra frente, e o vencimento de quem já tinha
+// concluído ficava "congelado" com a validade antiga.
+async function _recalcularVencimentosCatalogo(catalogoId, validadeMeses) {
+  try {
+    if (!catalogoId || !validadeMeses) return;
+    const {data: linhas} = await sb.from('conformidade_status')
+      .select('id,data_conclusao').eq('catalogo_id', catalogoId);
+    if (!linhas || !linhas.length) return;
+    for (const l of linhas) {
+      if (!l.data_conclusao) continue;
+      const dtVenc = new Date(l.data_conclusao+'T12:00:00');
+      dtVenc.setMonth(dtVenc.getMonth()+validadeMeses);
+      const dataVencimento = dtVenc.toISOString().split('T')[0];
+      await sb.from('conformidade_status')
+        .update({data_vencimento: dataVencimento, atualizado_em: new Date().toISOString()})
+        .eq('id', l.id);
+    }
+  } catch(e) {
+    console.warn('Recálculo de vencimentos do catálogo falhou:', e.message);
+  }
 }
 
 // Atualiza a tabela conformidade_status (cache) quando uma turma é concluída.
