@@ -1552,10 +1552,25 @@ async function entrarNoApp() {
   showScreen('screenApp');
   configurarNavegacao();
   _sessaoIniciar(); // iniciar monitoramento de inatividade
-  // Lê hash da URL para restaurar a página ao fazer login ou recarregar
-  const paginaHash = location.hash.replace('#','').trim();
+  // Lê hash da URL para restaurar a página ao fazer login ou recarregar —
+  // usa _hashPagina() (ignora querystring) pra reconhecer links profundos
+  // como #conformidade?empresa=X&colaborador=Y como sendo da tela
+  // "conformidade". irPara() normaliza o hash pro formato "limpo" assim
+  // que roda, então a querystring original é guardada aqui antes disso,
+  // pra renderConformidade() poder restaurar empresa/colaborador depois.
+  const paginaHash = _hashPagina();
   const paginaInicial = (paginaHash && TITULOS[paginaHash] && _perfilTemAcesso(paginaHash)) ? paginaHash : 'home';
+  window._hashInicialQuery = (paginaInicial === paginaHash && location.hash.includes('?'))
+    ? location.hash.slice(location.hash.indexOf('?'))
+    : null;
   await irPara(paginaInicial);
+}
+
+// Extrai só o identificador da página do hash da URL, ignorando qualquer
+// querystring de sub-estado (ex.: "#conformidade?empresa=X" → "conformidade").
+// Usado em todo lugar que precisa comparar o hash com as chaves de TITULOS.
+function _hashPagina() {
+  return location.hash.replace('#','').split('?')[0].trim();
 }
 
 async function fazerLogout() {
@@ -4394,7 +4409,15 @@ async function calcConformidade() {
   return {total, vencidos, conformes, indice, colaboradoresTreinados, statusPorTreinamento, proximos, oportunidadesPorEmpresa, todosAtivos: lista, tratados};
 }
 
-async function renderConformidade() {
+// manterEstado=true é usado nos refrescos disparados por uma ação dentro
+// da própria tela (salvar status, reabrir pendência, adicionar em turma
+// existente) — nesses casos o estado de navegação (empresa/colaborador
+// selecionados) já está certo em memória e na URL, então não faz sentido
+// reler a URL de novo; só recarrega os dados e redesenha. Sem o parâmetro
+// (entrada "de fora" — clique no menu, login, recarregar página, Voltar/
+// Avançar do navegador vindo de outra tela), o estado é sempre reconstruído
+// a partir da URL, pra bater com o link que a pessoa realmente abriu.
+async function renderConformidade(manterEstado = false) {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Conformidade</div>`);
   fabOcultar();
 
@@ -4411,13 +4434,24 @@ async function renderConformidade() {
     return;
   }
 
-  window._confAba = window._confAba || 'ativas';
-  window._confNivel = window._confNivel || 'empresas'; // 'empresas' | 'detalhe'
   window._confData = await calcConformidade();
   // Mapa com TODOS os itens (ativos + tratados), não só os visíveis no
   // filtro atual — outras telas (ex.: salvarTurma, ao agendar reciclagem)
   // consultam window._confPorId[origemConfId] bem depois deste render.
   window._confPorId = Object.fromEntries([...window._confData.todosAtivos, ...window._confData.tratados].map(x => [x.id, x]));
+
+  if (manterEstado) {
+    window._confAba   = window._confAba   || 'ativas';
+    window._confNivel = window._confNivel || 'empresas';
+  } else {
+    // window._hashInicialQuery é preenchido só uma vez, no boot do app
+    // (entrarNoApp), porque irPara() normaliza o hash pro formato "limpo"
+    // antes deste render rodar — sem isso, a querystring do link original
+    // já teria sido perdida quando chegamos aqui.
+    const hashParaSincronizar = window._hashInicialQuery ? ('#conformidade' + window._hashInicialQuery) : null;
+    window._hashInicialQuery = null;
+    _confSincronizarComHash(hashParaSincronizar);
+  }
   _confRenderTudo();
 }
 
@@ -4434,6 +4468,59 @@ function _confBaseAtual() {
 
 function _confItensDaEmpresa(chave) {
   return _confBaseAtual().filter(x => (x.cliente_id || x.empresa) === chave);
+}
+
+// ── Roteamento: reflete empresa/colaborador selecionados na URL
+// (#conformidade?empresa=X&colaborador=Y), pra permitir link direto,
+// recarregar a página sem perder o lugar, e usar Voltar/Avançar do
+// navegador. Não envolve nenhuma consulta ao banco — só sincroniza
+// window._conf* com o hash e vice-versa. ──
+
+function _confMontarHash(empresaChave, colabId) {
+  const params = new URLSearchParams();
+  if (empresaChave) params.set('empresa', empresaChave);
+  if (colabId)      params.set('colaborador', colabId);
+  const qs = params.toString();
+  return '#conformidade' + (qs ? '?' + qs : '');
+}
+
+// Lê empresa/colaborador do hash informado (ou da URL atual, se nenhum for
+// passado) e ajusta window._conf* pra bater com o que a URL descreve.
+// Tenta achar a empresa tanto em "ativas" quanto em "tratadas" — um link
+// pode ter sido salvo apontando pra qualquer uma das duas. Se a empresa/
+// pendência não existir mais (ex.: link antigo de algo já resolvido), volta
+// pra lista de empresas com um aviso, em vez de deixar a tela em branco.
+function _confSincronizarComHash(hashOverride) {
+  const hash = hashOverride || location.hash;
+  const qIdx = hash.indexOf('?');
+  const zerarEstado = () => {
+    window._confAba = window._confAba || 'ativas';
+    window._confNivel = 'empresas';
+    window._confEmpresaChave = null;
+    window._confColabSelecionadoId = null;
+  };
+  if (qIdx === -1 || !window._confData) { zerarEstado(); return; }
+
+  const params = new URLSearchParams(hash.slice(qIdx + 1));
+  const empresaParam = params.get('empresa');
+  const colabParam = params.get('colaborador');
+  if (!empresaParam) { zerarEstado(); return; }
+
+  const abaEncontrada = ['ativas', 'tratadas'].find(aba => {
+    const base = aba === 'ativas' ? window._confData.proximos : window._confData.tratados;
+    return base.some(x => (x.cliente_id || x.empresa) === empresaParam);
+  });
+  if (!abaEncontrada) {
+    zerarEstado();
+    showToast('O link apontava para uma empresa ou pendência que não existe mais nessa lista.', 'info');
+    return;
+  }
+
+  window._confAba = abaEncontrada;
+  window._confNivel = 'detalhe';
+  window._confEmpresaChave = empresaParam;
+  const base = abaEncontrada === 'ativas' ? window._confData.proximos : window._confData.tratados;
+  window._confColabSelecionadoId = (colabParam && base.some(x => x.id === colabParam)) ? colabParam : null;
 }
 
 // Agrupa a base atual por empresa e calcula os indicadores dos cards do
@@ -4486,6 +4573,14 @@ function _confRenderTudo() {
 function _confMudarAba(aba) {
   window._confAba = aba;
   window._confColabSelecionadoId = null; // pode não existir na outra aba
+  // Trocar de aba estando dentro de uma empresa muda o que a URL descreve
+  // (mesma empresa, mas agora dentro de "tratadas"/"ativas") — substitui a
+  // entrada atual do histórico em vez de empilhar uma nova, já que não é
+  // uma navegação "de verdade" entre telas.
+  if (window._confNivel === 'detalhe' && window._confEmpresaChave) {
+    const novoHash = _confMontarHash(window._confEmpresaChave, null);
+    if (location.hash !== novoHash) history.replaceState({pagina:'conformidade'}, '', novoHash);
+  }
   _confRenderTudo();
 }
 
@@ -4493,6 +4588,11 @@ function _confAbrirEmpresa(chave) {
   window._confNivel = 'detalhe';
   window._confEmpresaChave = chave;
   window._confColabSelecionadoId = null;
+  // Entrar numa empresa é uma navegação "de verdade" dentro da tela —
+  // empilha no histórico, pra o botão Voltar do navegador levar de volta
+  // pra lista de empresas.
+  const novoHash = _confMontarHash(chave, null);
+  if (location.hash !== novoHash) history.pushState({pagina:'conformidade'}, '', novoHash);
   _confRenderTudo();
 }
 
@@ -4500,6 +4600,8 @@ function _confVoltarEmpresas() {
   window._confNivel = 'empresas';
   window._confEmpresaChave = null;
   window._confColabSelecionadoId = null;
+  const novoHash = '#conformidade';
+  if (location.hash !== novoHash) history.pushState({pagina:'conformidade'}, '', novoHash);
   _confRenderTudo();
 }
 
@@ -4654,6 +4756,12 @@ function _confSelecionarColab(id, itemEl) {
   itemEl.classList.add('selected');
   const x = window._confPorId[id];
   _setElBoth('painelDetalheConf', x ? _htmlPainelDetalheConf(x, window._confAba) : '');
+  // Troca de colaborador acontece muitas vezes em sequência (é o ponto
+  // principal do fluxo de alto volume) — usa replaceState, não pushState,
+  // senão o botão Voltar do navegador ficaria preso percorrendo colaborador
+  // por colaborador em vez de voltar direto pra lista de empresas.
+  const novoHash = _confMontarHash(window._confEmpresaChave, id);
+  if (location.hash !== novoHash) history.replaceState({pagina:'conformidade'}, '', novoHash);
 }
 
 function _htmlListaColabsConf(itens, selecionadoId, aba) {
@@ -4820,7 +4928,7 @@ async function _confSalvarStatus(id, btn) {
       data_vencimento: x.data_vencimento, status_excecao: status, motivo_excecao: motivo, definido_por: usuarioAtual.id,
     });
     showToast('Pendência atualizada!','success');
-    await renderConformidade();
+    await renderConformidade(true);
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = rotuloOriginal; }
     showToast(e.message||'Erro ao salvar','error');
@@ -4845,7 +4953,7 @@ async function reabrirPendencia(id) {
       data_vencimento: x.data_vencimento, status_excecao: null, motivo_excecao: null, definido_por: usuarioAtual.id,
     });
     showToast('Pendência reaberta!','success');
-    await renderConformidade();
+    await renderConformidade(true);
   } catch(e) { showToast(e.message||'Erro','error'); }
 }
 
@@ -4918,7 +5026,7 @@ async function confirmarAdicionarEmTurma(turmaId) {
     });
     fecharModal();
     showToast('Colaborador adicionado à turma!','success');
-    await renderConformidade();
+    await renderConformidade(true);
   } catch(e) { showToast(e.message||'Erro','error'); }
 }
 
@@ -9308,7 +9416,19 @@ window.addEventListener('DOMContentLoaded', async () => {
 // Navegação por botão Voltar/Avançar do browser e troca de hash
 window.addEventListener('popstate', async (e) => {
   if (!usuarioAtual) return;
-  const pagina = (e.state?.pagina) || location.hash.replace('#','').trim() || 'home';
+  const pagina = (e.state?.pagina) || _hashPagina() || 'home';
+  // Voltar/Avançar DENTRO da própria tela de Conformidade (ex.: de
+  // "#conformidade?empresa=X&colaborador=Y" pra "#conformidade?empresa=X",
+  // ou pra "#conformidade" puro) não troca de tela — paginaAtual continua
+  // "conformidade" nos dois estados, então o bloco abaixo (que só dispara
+  // quando a página muda) nunca rodaria. Aqui a gente resolve isso à parte:
+  // só resincroniza o estado a partir da URL e redesenha com o que já está
+  // em memória, sem nenhuma consulta nova ao banco.
+  if (pagina === 'conformidade' && paginaAtual === 'conformidade') {
+    _confSincronizarComHash();
+    _confRenderTudo();
+    return;
+  }
   if (TITULOS[pagina] && _perfilTemAcesso(pagina) && pagina !== paginaAtual) {
     paginaAtual = pagina;
     marcarNavAtivo(pagina);
