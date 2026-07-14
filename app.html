@@ -3976,14 +3976,23 @@ async function verColab(id) {
   ].filter(Boolean);
 
   const { data: treinos } = await sb.from('conformidade_status')
-    .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,catalogo(nome)')
+    .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,catalogo(nome)')
     .eq('colaborador_id', id)
     .order('data_vencimento', { ascending: false });
 
+  // Estado da lista de treinamentos (aba/busca/paginação) fica num objeto
+  // global, lido pelas funções _colabTreinos* — assim trocar de aba ou virar
+  // página só precisa re-renderizar o miolo da lista (id="treinosColabMiolo"),
+  // sem redesenhar a tela inteira nem perder o foco do campo de busca.
+  window._colabTreinos = { colaboradorId: id, lista: treinos || [], aba: 'turma', busca: '', pagina: 1, porPagina: 10 };
+
+  const totalTreinos = (treinos || []).length;
+
   setConteudo(`
     <div class="detail-page">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:20px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
+      ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="editarColab" data-id="${c.id}">Editar dados</button>` : ''}
     </div>
 
     <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
@@ -4008,43 +4017,94 @@ async function verColab(id) {
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
         <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em">Treinamentos</div>
-        ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${c.id}">+ Registrar treinamento externo</button>` : ''}
+        ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${c.id}">Registrar treinamento externo</button>` : ''}
       </div>
-      ${_htmlListaTreinosColab(treinos||[])}
+      ${totalTreinos > 8 ? `<input type="search" id="buscaTreinosColab" placeholder="Buscar por treinamento, instituição ou instrutor..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1);margin-bottom:12px" oninput="_colabTreinosFiltrar(this.value)">` : ''}
+      <div id="treinosColabMiolo">${_htmlTreinosColabMiolo()}</div>
     </div>
-
-    ${podeMgr?`
-    <div class="detail-actions">
-      <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">${ICONS.plus} Editar dados</button>
-    </div>`:''}
     </div>
   `);
 }
 
-// Histórico de treinamentos do colaborador (nível de detalhe) — mistura
-// conclusões via turma no Toledo Labs e treinamentos externos registrados
-// manualmente, diferenciados por um badge, ordenados do vencimento mais
-// recente para o mais antigo.
-function _htmlListaTreinosColab(treinos) {
-  if (!treinos.length) return '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum treinamento registrado ainda.</div>';
+// Miolo da lista de treinamentos do colaborador (abas + itens + paginação) —
+// separado em função própria para poder ser re-renderizado sozinho ao trocar
+// de aba, filtrar ou virar página, sem redesenhar a tela toda nem perder o
+// foco do campo de busca (que fica fora deste bloco).
+function _htmlTreinosColabMiolo() {
+  const st = window._colabTreinos;
+  if (!st) return '';
+
+  const totalTurma   = st.lista.filter(t => (t.origem||'turma') === 'turma').length;
+  const totalExterno = st.lista.filter(t => t.origem === 'externo').length;
+
+  let lista = st.lista.filter(t => (t.origem||'turma') === st.aba);
+  if (st.busca) {
+    const f = st.busca.toLowerCase();
+    lista = lista.filter(t =>
+      (t.catalogo?.nome||'').toLowerCase().includes(f) ||
+      (t.instituicao_externa||'').toLowerCase().includes(f) ||
+      (t.instrutor_externo||'').toLowerCase().includes(f));
+  }
+
+  const { itens, totalPaginas, paginaAtual, total } = _paginarLista(lista, st.pagina, st.porPagina);
+  st.pagina = paginaAtual;
+
+  const vazio = st.busca
+    ? 'Nenhum treinamento encontrado para essa busca.'
+    : (st.aba === 'turma' ? 'Nenhum treinamento pelo Toledo Labs ainda.' : 'Nenhum treinamento externo registrado ainda.');
+
+  return `
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-sm ${st.aba==='turma'?'btn-navy':'btn-outline'}" onclick="_colabTreinosMudarAba('turma')">Toledo Labs (${totalTurma})</button>
+      <button class="btn btn-sm ${st.aba==='externo'?'btn-navy':'btn-outline'}" onclick="_colabTreinosMudarAba('externo')">Externos (${totalExterno})</button>
+    </div>
+    ${itens.length ? itens.map(_htmlItemTreinoColab).join('') : `<div style="font-size:13px;color:var(--text-3);padding:20px 0;text-align:center">${vazio}</div>`}
+    ${_htmlPaginacao({ totalPaginas, paginaAtual, porPagina: st.porPagina, total, onPageChange:'_colabTreinosIrPagina', onPageSizeChange:'_colabTreinosAlterarPorPagina' })}
+  `;
+}
+
+function _htmlItemTreinoColab(t) {
   const hoje = new Date(); hoje.setHours(0,0,0,0);
-  return treinos.map(t => {
-    const vencido = t.data_vencimento && new Date(t.data_vencimento+'T12:00:00') < hoje;
-    const origemBadge = t.origem === 'externo'
-      ? `<span class="badge" style="background:var(--blue-l);color:var(--blue-text)">Externo</span>`
-      : `<span class="badge badge-gray">Turma Toledo Labs</span>`;
-    return `
+  const vencido = t.data_vencimento && new Date(t.data_vencimento+'T12:00:00') < hoje;
+  const detalheExterno = t.origem === 'externo'
+    ? [t.instituicao_externa, t.instrutor_externo ? `Instrutor: ${t.instrutor_externo}` : null].filter(Boolean).map(escapeHtml).join(' · ')
+    : '';
+  return `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <div style="flex:1;min-width:160px">
         <div style="font-size:13px;font-weight:600;color:var(--text-1)">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
-        <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Concluído em ${formatarData(t.data_conclusao)} · Vence em ${formatarData(t.data_vencimento)}${t.origem==='externo'&&t.instituicao_externa?` · ${escapeHtml(t.instituicao_externa)}`:''}</div>
+        <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Concluído em ${formatarData(t.data_conclusao)} · Vence em ${formatarData(t.data_vencimento)}${detalheExterno?` · ${detalheExterno}`:''}</div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        ${origemBadge}
-        <span class="badge ${vencido?'badge-red':'badge-green'}">${vencido?'Vencido':'Em dia'}</span>
-      </div>
+      <span class="badge ${vencido?'badge-red':'badge-green'}">${vencido?'Vencido':'Em dia'}</span>
     </div>`;
-  }).join('');
+}
+
+function _colabTreinosMudarAba(aba) {
+  const st = window._colabTreinos;
+  if (!st) return;
+  st.aba = aba;
+  st.pagina = 1;
+  _setElBoth('treinosColabMiolo', _htmlTreinosColabMiolo());
+}
+function _colabTreinosFiltrar(v) {
+  const st = window._colabTreinos;
+  if (!st) return;
+  st.busca = (v||'').trim();
+  st.pagina = 1;
+  _setElBoth('treinosColabMiolo', _htmlTreinosColabMiolo());
+}
+function _colabTreinosIrPagina(p) {
+  const st = window._colabTreinos;
+  if (!st) return;
+  st.pagina = p;
+  _setElBoth('treinosColabMiolo', _htmlTreinosColabMiolo());
+}
+function _colabTreinosAlterarPorPagina(v) {
+  const st = window._colabTreinos;
+  if (!st) return;
+  st.porPagina = parseInt(v, 10) || 10;
+  st.pagina = 1;
+  _setElBoth('treinosColabMiolo', _htmlTreinosColabMiolo());
 }
 
 function filtrarColabs(q) {
@@ -4394,7 +4454,7 @@ async function calcConformidade() {
   const oi = usuarioAtual.org_id;
   const [{data:rows, error}, {data:catalogoAll}] = await Promise.all([
     sb.from('conformidade_status')
-      .select('id,colaborador_id,cliente_id,data_vencimento,status_excecao,motivo_excecao,origem,instituicao_externa,colaboradores(nome),catalogo(id,nome,carga_horaria,tipo_curso,curso_relacionado_id),clientes(id,nome)')
+      .select('id,colaborador_id,cliente_id,data_vencimento,status_excecao,motivo_excecao,origem,instituicao_externa,instrutor_externo,colaboradores(nome),catalogo(id,nome,carga_horaria,tipo_curso,curso_relacionado_id),clientes(id,nome)')
       .eq('org_id', oi),
     sb.from('catalogo').select('id,nome,tipo_curso,curso_relacionado_id').eq('org_id', oi),
   ]);
@@ -4446,6 +4506,7 @@ async function calcConformidade() {
       motivoExcecao: r.motivo_excecao || null,
       origem: r.origem || 'turma',
       instituicaoExterna: r.instituicao_externa || null,
+      instrutorExterno: r.instrutor_externo || null,
     };
   });
 
@@ -4965,7 +5026,7 @@ function _htmlPainelDetalheConf(x, aba) {
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Empresa</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${escapeHtml(x.empresa)}</div></div>
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Vencimento</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${formatarData(x.data_vencimento)}</div></div>
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Situação</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${tratada ? 'Fora do índice de conformidade' : (x.status==='vencido' ? 'Vencido' : 'Dentro do prazo de alerta')}</div></div>
-        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Última conclusão</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${x.origem==='externo' ? `Externo${x.instituicaoExterna?` — ${escapeHtml(x.instituicaoExterna)}`:''}` : 'Turma Toledo Labs'}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Última conclusão</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${x.origem==='externo' ? `Externo${x.instituicaoExterna?` — ${escapeHtml(x.instituicaoExterna)}`:''}${x.instrutorExterno?` (${escapeHtml(x.instrutorExterno)})`:''}` : 'Turma Toledo Labs'}</div></div>
       </div>
       ${podeGerenciar && !tratada ? `<div class="li-sub" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;font-weight:700;color:var(--text-3)">Ações rápidas</div>` : ''}
       ${acoesHtml}
@@ -5080,7 +5141,7 @@ async function abrirModalTreinoExterno({ colaboradorId, catalogoId = null, orige
 
   abrirModal('Registrar treinamento externo', `
     <div style="background:var(--blue-l);color:var(--blue-text);border-radius:var(--r-md);padding:10px 12px;font-size:12px;margin-bottom:14px;line-height:1.45">
-      Use isso quando o colaborador concluiu o treinamento com outra empresa/instrutor, fora do Toledo Labs. O vencimento é calculado automaticamente pela validade cadastrada no catálogo.
+      Utilize esta opção quando o colaborador tiver concluído o treinamento por meio de uma empresa ou instrutor externo ao Toledo Labs. A data de vencimento será calculada automaticamente conforme a validade configurada no catálogo de treinamentos.
     </div>
     ${colaborador ? `<div class="field"><label>Colaborador</label><input type="text" value="${escapeHtml(colaborador.nome)}" disabled style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--gray-50);color:var(--text-3)"></div>` : ''}
     <div class="field"><label>Treinamento *</label>
@@ -5089,7 +5150,10 @@ async function abrirModalTreinoExterno({ colaboradorId, catalogoId = null, orige
       </select>
     </div>
     <div class="field"><label>Data de conclusão *</label><input type="date" id="mTreinoExtData" value="${hoje}" max="${hoje}" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-    <div class="field"><label>Instituição / instrutor externo *</label><input type="text" id="mTreinoExtInstituicao" placeholder="Ex.: Instituto XYZ Treinamentos" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field" style="margin:0"><label>Instituição Externa *</label><input type="text" id="mTreinoExtInstituicao" placeholder="Ex.: Instituto XYZ Treinamentos" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+      <div class="field" style="margin:0"><label>Instrutor Externo *</label><input type="text" id="mTreinoExtInstrutor" placeholder="Ex.: João da Silva" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+    </div>
     <div class="field"><label>Certificado (opcional)</label><input type="file" id="mTreinoExtArquivo" accept="application/pdf,image/png,image/jpeg"><div style="font-size:11px;color:var(--text-3);margin-top:4px">PDF ou imagem, até 10MB. Pode ser anexado depois, se preferir.</div></div>
     <div class="field"><label>Observação</label><textarea id="mTreinoExtObs" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13.5px;font-family:inherit;resize:vertical;outline:none" placeholder="Opcional"></textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
@@ -5103,13 +5167,15 @@ async function salvarTreinoExterno() {
   const catalogoId    = document.getElementById('mTreinoExtCatalogo')?.value || '';
   const dataConclusao = document.getElementById('mTreinoExtData')?.value || '';
   const instituicao   = document.getElementById('mTreinoExtInstituicao')?.value.trim() || '';
+  const instrutor     = document.getElementById('mTreinoExtInstrutor')?.value.trim() || '';
   const obs           = document.getElementById('mTreinoExtObs')?.value.trim() || '';
   const file           = document.getElementById('mTreinoExtArquivo')?.files?.[0] || null;
 
   if (!catalogoId)                                       { showToast('Selecione o treinamento.', 'error'); return; }
   if (!dataConclusao)                                     { showToast('Informe a data de conclusão.', 'error'); return; }
   if (dataConclusao > new Date().toISOString().slice(0,10)) { showToast('A data de conclusão não pode ser no futuro.', 'error'); return; }
-  if (!instituicao)                                       { showToast('Informe a instituição ou instrutor externo.', 'error'); return; }
+  if (!instituicao)                                       { showToast('Informe a instituição externa.', 'error'); return; }
+  if (!instrutor)                                         { showToast('Informe o instrutor externo.', 'error'); return; }
   if (file && file.size > 10*1024*1024)                   { showToast('O arquivo deve ter até 10MB.', 'error'); return; }
 
   const cat = _catalogoCache.find(c => c.id === catalogoId);
@@ -5146,6 +5212,7 @@ async function salvarTreinoExterno() {
       turma_vinculada_id: null,
       origem: 'externo',
       instituicao_externa: instituicao,
+      instrutor_externo: instrutor,
       certificado_externo_path: certificadoPath,
       registrado_por: usuarioAtual.id,
     };
@@ -5165,7 +5232,7 @@ async function salvarTreinoExterno() {
       await sb.from('conformidade_excecoes_historico').insert({
         org_id: usuarioAtual.org_id, colaborador_id: ctx.colaboradorId, catalogo_id: catalogoId,
         data_vencimento: dataVencimento, status_excecao: null,
-        motivo_excecao: `Treinamento externo (${instituicao}). ${obs}`, definido_por: usuarioAtual.id,
+        motivo_excecao: `Treinamento externo (${instituicao} — instrutor ${instrutor}). ${obs}`, definido_por: usuarioAtual.id,
       });
     }
 
