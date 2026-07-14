@@ -3968,12 +3968,17 @@ async function verColab(id) {
   const c = _colabsCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  const campos = [
-    c.cpf      ? {label:'CPF',      val:c.cpf}      : null,
-    c.cargo    ? {label:'Cargo',    val:c.cargo}    : null,
-    c.email    ? {label:'E-mail',   val:c.email}    : null,
-    c.telefone ? {label:'Telefone', val:c.telefone} : null,
-  ].filter(Boolean);
+
+  // Mesmo helper de ícone + linha já usado em "Dados cadastrais" da tela de
+  // Clientes (_htmlInfoIcone) — reaproveitado aqui pra manter os dois
+  // cadastros com a mesma linguagem visual.
+  const linhasCadastro = [
+    c.cpf      ? _htmlInfoIcone(ICONS.clip,  escapeHtml(c.cpf)) : '',
+    c.cargo    ? _htmlInfoIcone(ICONS.user,  escapeHtml(c.cargo)) : '',
+    c.email    ? _htmlInfoIcone(ICONS.mail,  escapeHtml(c.email)) : '',
+    c.telefone ? _htmlInfoIcone(ICONS.phone, escapeHtml(c.telefone)) : '',
+  ].join('');
+  const temAlgumDado = !!linhasCadastro;
 
   const { data: treinos } = await sb.from('conformidade_status')
     .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,catalogo(nome)')
@@ -3990,9 +3995,8 @@ async function verColab(id) {
 
   setConteudo(`
     <div class="detail-page">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
-      ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="editarColab" data-id="${c.id}">Editar dados</button>` : ''}
     </div>
 
     <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
@@ -4005,22 +4009,28 @@ async function verColab(id) {
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px">Informações cadastradas</div>
-      ${campos.length ? campos.map(f=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:13px;color:var(--text-2)">${f.label}</span>
-          <span style="font-size:13px;font-weight:500;color:var(--navy)">${f.val}</span>
-        </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
-    </div>
-
-    <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em">Treinamentos</div>
-        ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${c.id}">Registrar treinamento externo</button>` : ''}
+    <div class="detail-layout">
+      <div class="detail-sidebar">
+        <div class="card">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Dados cadastrais</div>
+          ${temAlgumDado ? linhasCadastro : '<div style="font-size:13px;color:var(--text-3);padding:4px 0">Nenhum dado adicional cadastrado.</div>'}
+        </div>
+        ${podeMgr?`
+        <div class="detail-actions">
+          <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">Editar dados</button>
+        </div>`:''}
       </div>
-      ${totalTreinos > 8 ? `<input type="search" id="buscaTreinosColab" placeholder="Buscar por treinamento, instituição ou instrutor..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1);margin-bottom:12px" oninput="_colabTreinosFiltrar(this.value)">` : ''}
-      <div id="treinosColabMiolo">${_htmlTreinosColabMiolo()}</div>
+
+      <div class="detail-main">
+        <div class="card detail-card-accent">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em">Treinamentos</div>
+            ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${c.id}">Registrar treinamento externo</button>` : ''}
+          </div>
+          ${totalTreinos > 8 ? `<input type="search" id="buscaTreinosColab" placeholder="Buscar por treinamento, instituição ou instrutor..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1);margin-bottom:12px" oninput="_colabTreinosFiltrar(this.value)">` : ''}
+          <div id="treinosColabMiolo">${_htmlTreinosColabMiolo()}</div>
+        </div>
+      </div>
     </div>
     </div>
   `);
