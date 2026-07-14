@@ -3964,7 +3964,7 @@ function _htmlListaColabs(lista) {
   }).join('');
 }
 
-function verColab(id) {
+async function verColab(id) {
   const c = _colabsCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
@@ -3974,6 +3974,12 @@ function verColab(id) {
     c.email    ? {label:'E-mail',   val:c.email}    : null,
     c.telefone ? {label:'Telefone', val:c.telefone} : null,
   ].filter(Boolean);
+
+  const { data: treinos } = await sb.from('conformidade_status')
+    .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,catalogo(nome)')
+    .eq('colaborador_id', id)
+    .order('data_vencimento', { ascending: false });
+
   setConteudo(`
     <div class="detail-page">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
@@ -3999,12 +4005,46 @@ function verColab(id) {
         </div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum dado adicional cadastrado.</div>'}
     </div>
 
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em">Treinamentos</div>
+        ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${c.id}">+ Registrar treinamento externo</button>` : ''}
+      </div>
+      ${_htmlListaTreinosColab(treinos||[])}
+    </div>
+
     ${podeMgr?`
     <div class="detail-actions">
       <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">${ICONS.plus} Editar dados</button>
     </div>`:''}
     </div>
   `);
+}
+
+// Histórico de treinamentos do colaborador (nível de detalhe) — mistura
+// conclusões via turma no Toledo Labs e treinamentos externos registrados
+// manualmente, diferenciados por um badge, ordenados do vencimento mais
+// recente para o mais antigo.
+function _htmlListaTreinosColab(treinos) {
+  if (!treinos.length) return '<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhum treinamento registrado ainda.</div>';
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  return treinos.map(t => {
+    const vencido = t.data_vencimento && new Date(t.data_vencimento+'T12:00:00') < hoje;
+    const origemBadge = t.origem === 'externo'
+      ? `<span class="badge" style="background:var(--blue-l);color:var(--blue-text)">Externo</span>`
+      : `<span class="badge badge-gray">Turma Toledo Labs</span>`;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="flex:1;min-width:160px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1)">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+        <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Concluído em ${formatarData(t.data_conclusao)} · Vence em ${formatarData(t.data_vencimento)}${t.origem==='externo'&&t.instituicao_externa?` · ${escapeHtml(t.instituicao_externa)}`:''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${origemBadge}
+        <span class="badge ${vencido?'badge-red':'badge-green'}">${vencido?'Vencido':'Em dia'}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function filtrarColabs(q) {
@@ -4354,7 +4394,7 @@ async function calcConformidade() {
   const oi = usuarioAtual.org_id;
   const [{data:rows, error}, {data:catalogoAll}] = await Promise.all([
     sb.from('conformidade_status')
-      .select('id,colaborador_id,cliente_id,data_vencimento,status_excecao,motivo_excecao,colaboradores(nome),catalogo(id,nome,carga_horaria,tipo_curso,curso_relacionado_id),clientes(id,nome)')
+      .select('id,colaborador_id,cliente_id,data_vencimento,status_excecao,motivo_excecao,origem,instituicao_externa,colaboradores(nome),catalogo(id,nome,carga_horaria,tipo_curso,curso_relacionado_id),clientes(id,nome)')
       .eq('org_id', oi),
     sb.from('catalogo').select('id,nome,tipo_curso,curso_relacionado_id').eq('org_id', oi),
   ]);
@@ -4404,6 +4444,8 @@ async function calcConformidade() {
       sugestaoId, sugestaoNome, ehReciclagem,
       statusExcecao: r.status_excecao || null,
       motivoExcecao: r.motivo_excecao || null,
+      origem: r.origem || 'turma',
+      instituicaoExterna: r.instituicao_externa || null,
     };
   });
 
@@ -4880,6 +4922,7 @@ function _htmlPainelDetalheConf(x, aba) {
     : `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
         ${x.sugestaoId ? `<button class="btn btn-amber" data-action="agendarReciclagem" data-id="${x.id}" style="justify-content:center">${ICONS.plus} Criar nova turma</button>
         <button class="btn btn-outline" data-action="adicionarEmTurmaExistente" data-id="${x.id}" style="justify-content:center">Adicionar em turma existente</button>` : ''}
+        <button class="btn btn-outline" data-action="abrirTreinoExternoConf" data-id="${x.id}" style="justify-content:center">Registrar treinamento externo</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;color:var(--text-3);font-size:11px;margin:2px 0 14px">
         <div style="flex:1;height:1px;background:var(--border)"></div>ou<div style="flex:1;height:1px;background:var(--border)"></div>
@@ -4922,6 +4965,7 @@ function _htmlPainelDetalheConf(x, aba) {
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Empresa</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${escapeHtml(x.empresa)}</div></div>
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Vencimento</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${formatarData(x.data_vencimento)}</div></div>
         <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Situação</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${tratada ? 'Fora do índice de conformidade' : (x.status==='vencido' ? 'Vencido' : 'Dentro do prazo de alerta')}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);font-weight:700">Última conclusão</div><div style="font-size:13.5px;color:var(--text-1);margin-top:3px">${x.origem==='externo' ? `Externo${x.instituicaoExterna?` — ${escapeHtml(x.instituicaoExterna)}`:''}` : 'Turma Toledo Labs'}</div></div>
       </div>
       ${podeGerenciar && !tratada ? `<div class="li-sub" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;font-weight:700;color:var(--text-3)">Ações rápidas</div>` : ''}
       ${acoesHtml}
@@ -5000,6 +5044,143 @@ async function reabrirPendencia(id) {
     showToast('Pendência reaberta!','success');
     await renderConformidade(true);
   } catch(e) { showToast(e.message||'Erro','error'); }
+}
+
+// ── Treinamento externo ──────────────────────────────────────────────
+// Registra que um colaborador concluiu um treinamento com outra empresa/
+// instrutor, fora do Toledo Labs — grava direto em conformidade_status
+// (mesma tabela que a conclusão de turma preenche), com origem='externo',
+// pra contar como válido na Conformidade sem precisar criar uma turma.
+// Dois pontos de entrada levam aqui: o painel de detalhe da Conformidade
+// (treinamento já vem travado, é o da pendência aberta) e a tela do
+// colaborador (usuário escolhe qualquer curso do catálogo, inclusive um
+// nunca feito antes por ele).
+function abrirTreinoExternoConf(id) {
+  const x = (window._confPorId || {})[id];
+  if (!x) return;
+  abrirModalTreinoExterno({ colaboradorId: x.colaborador_id, catalogoId: x.catalogo_id, origem: 'conformidade' });
+}
+
+function abrirTreinoExternoColab(colaboradorId) {
+  abrirModalTreinoExterno({ colaboradorId, catalogoId: null, origem: 'colaborador' });
+}
+
+async function abrirModalTreinoExterno({ colaboradorId, catalogoId = null, origem }) {
+  if (!_catalogoCache.length) {
+    const { data } = await sb.from('catalogo').select('*').eq('org_id', usuarioAtual.org_id).order('nome');
+    _catalogoCache = data || [];
+  }
+  const colaborador = _colabsCache.find(c => c.id === colaboradorId);
+  window._treinoExternoCtx = { colaboradorId, origem };
+
+  const catOpts = _catalogoCache.filter(c => !c.arquivado)
+    .map(c => `<option value="${c.id}" ${c.id === catalogoId ? 'selected' : ''}>${escapeHtml(c.nome)}</option>`).join('');
+  const hoje = new Date().toISOString().slice(0, 10);
+  const catalogoTravado = !!catalogoId;
+
+  abrirModal('Registrar treinamento externo', `
+    <div style="background:var(--blue-l);color:var(--blue-text);border-radius:var(--r-md);padding:10px 12px;font-size:12px;margin-bottom:14px;line-height:1.45">
+      Use isso quando o colaborador concluiu o treinamento com outra empresa/instrutor, fora do Toledo Labs. O vencimento é calculado automaticamente pela validade cadastrada no catálogo.
+    </div>
+    ${colaborador ? `<div class="field"><label>Colaborador</label><input type="text" value="${escapeHtml(colaborador.nome)}" disabled style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--gray-50);color:var(--text-3)"></div>` : ''}
+    <div class="field"><label>Treinamento *</label>
+      <select id="mTreinoExtCatalogo" ${catalogoTravado ? 'disabled' : ''} style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:${catalogoTravado ? 'var(--gray-50)' : 'var(--surface)'};color:${catalogoTravado ? 'var(--text-3)' : 'var(--text-1)'};outline:none">
+        <option value="">Selecione...</option>${catOpts}
+      </select>
+    </div>
+    <div class="field"><label>Data de conclusão *</label><input type="date" id="mTreinoExtData" value="${hoje}" max="${hoje}" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+    <div class="field"><label>Instituição / instrutor externo *</label><input type="text" id="mTreinoExtInstituicao" placeholder="Ex.: Instituto XYZ Treinamentos" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+    <div class="field"><label>Certificado (opcional)</label><input type="file" id="mTreinoExtArquivo" accept="application/pdf,image/png,image/jpeg"><div style="font-size:11px;color:var(--text-3);margin-top:4px">PDF ou imagem, até 10MB. Pode ser anexado depois, se preferir.</div></div>
+    <div class="field"><label>Observação</label><textarea id="mTreinoExtObs" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13.5px;font-family:inherit;resize:vertical;outline:none" placeholder="Opcional"></textarea></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTreinoExterno()">Salvar</button>`);
+}
+
+async function salvarTreinoExterno() {
+  const ctx = window._treinoExternoCtx || {};
+  if (!ctx.colaboradorId) { showToast('Colaborador não identificado — feche e tente de novo.', 'error'); return; }
+
+  const catalogoId    = document.getElementById('mTreinoExtCatalogo')?.value || '';
+  const dataConclusao = document.getElementById('mTreinoExtData')?.value || '';
+  const instituicao   = document.getElementById('mTreinoExtInstituicao')?.value.trim() || '';
+  const obs           = document.getElementById('mTreinoExtObs')?.value.trim() || '';
+  const file           = document.getElementById('mTreinoExtArquivo')?.files?.[0] || null;
+
+  if (!catalogoId)                                       { showToast('Selecione o treinamento.', 'error'); return; }
+  if (!dataConclusao)                                     { showToast('Informe a data de conclusão.', 'error'); return; }
+  if (dataConclusao > new Date().toISOString().slice(0,10)) { showToast('A data de conclusão não pode ser no futuro.', 'error'); return; }
+  if (!instituicao)                                       { showToast('Informe a instituição ou instrutor externo.', 'error'); return; }
+  if (file && file.size > 10*1024*1024)                   { showToast('O arquivo deve ter até 10MB.', 'error'); return; }
+
+  const cat = _catalogoCache.find(c => c.id === catalogoId);
+  const validadeMeses = cat?.validade_meses || 12;
+  const dtVenc = new Date(dataConclusao + 'T12:00:00');
+  dtVenc.setMonth(dtVenc.getMonth() + validadeMeses);
+  const dataVencimento = dtVenc.toISOString().split('T')[0];
+
+  const colaborador = _colabsCache.find(c => c.id === ctx.colaboradorId);
+
+  try {
+    setBtnModalLoading(true);
+
+    let certificadoPath = null;
+    if (file) {
+      const ext  = (file.name.split('.').pop() || (file.type.split('/')[1]) || 'pdf').toLowerCase();
+      const uuid = crypto.randomUUID();
+      certificadoPath = `${usuarioAtual.org_id}/${ctx.colaboradorId}/${uuid}.${ext}`;
+      const { error: upErr } = await sb.storage.from('certificados-externos').upload(certificadoPath, file, { upsert: false, contentType: file.type });
+      if (upErr) throw upErr;
+    }
+
+    const dados = {
+      org_id: usuarioAtual.org_id,
+      colaborador_id: ctx.colaboradorId,
+      catalogo_id: catalogoId,
+      cliente_id: colaborador?.cliente_id || null,
+      turma_id: null,
+      data_conclusao: dataConclusao,
+      data_vencimento: dataVencimento,
+      atualizado_em: new Date().toISOString(),
+      status_excecao: null,
+      motivo_excecao: null,
+      turma_vinculada_id: null,
+      origem: 'externo',
+      instituicao_externa: instituicao,
+      certificado_externo_path: certificadoPath,
+      registrado_por: usuarioAtual.id,
+    };
+    // .select('id') depois do upsert confirma que a linha foi realmente
+    // gravada (mesmo padrão defensivo usado em todo o resto do app contra
+    // RLS/onConflict silenciosos que não retornam erro nenhum).
+    const { data: salvo, error } = await sb.from('conformidade_status')
+      .upsert(dados, { onConflict: 'org_id,colaborador_id,catalogo_id' })
+      .select('id');
+    if (error) throw error;
+    if (!salvo || !salvo.length) throw new Error('Nada foi gravado — confira os dados e tente novamente.');
+
+    if (obs) {
+      // Reaproveita o histórico de exceções como trilha de auditoria — não é
+      // uma exceção de verdade (status_excecao continua null), só registra
+      // a observação livre digitada, se houver.
+      await sb.from('conformidade_excecoes_historico').insert({
+        org_id: usuarioAtual.org_id, colaborador_id: ctx.colaboradorId, catalogo_id: catalogoId,
+        data_vencimento: dataVencimento, status_excecao: null,
+        motivo_excecao: `Treinamento externo (${instituicao}). ${obs}`, definido_por: usuarioAtual.id,
+      });
+    }
+
+    fecharModal();
+    showToast('Treinamento externo registrado!', 'success');
+
+    if (ctx.origem === 'conformidade') {
+      await renderConformidade(true);
+    } else if (ctx.origem === 'colaborador') {
+      await verColab(ctx.colaboradorId);
+    }
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message || 'Erro ao salvar treinamento externo', 'error');
+  }
 }
 
 // "Adicionar em turma existente" — evita criar uma turma individual nova
@@ -9405,6 +9586,8 @@ document.addEventListener('click', function(e) {
     case 'toggleCliente':   document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); toggleCliente(id); break;
     // Colaboradores
     case 'verColab':        verColab(id); break;
+    case 'abrirTreinoExternoColab': abrirTreinoExternoColab(id); break;
+    case 'abrirTreinoExternoConf':  abrirTreinoExternoConf(id); break;
     case 'editarColab':     abrirModalColab(id); break;
     // Catálogo
     case 'verCatalogo':          verCatalogo(id); break;
