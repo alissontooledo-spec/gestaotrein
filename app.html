@@ -7911,8 +7911,8 @@ function _relFiltrarPorPeriodo(turmas, sessoes, meses) {
   let sFilt   = sessoes.filter(s => s.data && new Date(s.data) >= corte);
 
   // Aplicar filtros adicionais (catálogo e cliente) se estiverem ativos
-  const filtroCat = document.getElementById('relFiltroCat')?.value || '';
-  const filtroCli = document.getElementById('relFiltroCliente')?.value || '';
+  const filtroCat = _getElVisible('relFiltroCat')?.value || '';
+  const filtroCli = _getElVisible('relFiltroCliente')?.value || '';
   if (filtroCat) tFilt = tFilt.filter(t => t.catalogo?.nome === filtroCat);
   if (filtroCli) tFilt = tFilt.filter(t => t.clientes?.nome === filtroCli);
 
@@ -8249,23 +8249,30 @@ function relSetPeriodo(n, btn) {
   window._relPeriodo = n;
   document.querySelectorAll('.rel2-chip').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const sub = document.getElementById('relSubtitle');
+  const sub = _getElVisible('relSubtitle');
   if (sub) sub.textContent = (n === 1 ? 'Este mês' : `Últimos ${n} meses`) + ' · Atualizado agora';
   _renderRelatorioView();
 }
 
+// Corrigido bug mobile: document.getElementById() pega sempre o primeiro
+// elemento com aquele id no documento — como setConteudo() escreve o mesmo
+// HTML dentro de #mainBody E #mobileBody (só um dos dois fica visível por
+// vez, via CSS), no desktop o primeiro elemento "por acaso" é o visível,
+// mas no mobile é o elemento escondido do #mainBody que acaba sendo
+// atualizado, e o gráfico visível nunca muda. _getElVisible() resolve isso
+// pegando o elemento de dentro do body que está realmente em tela.
 function relToggle(btn, metric, label, color) {
   document.querySelectorAll('.rel2-tbtn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const dados = window._relDados?.[metric] || [];
-  const svg = document.getElementById('relSvg');
+  const svg = _getElVisible('relSvg');
   if (svg && window._relMeses) {
     svg.innerHTML = _buildRelBars(dados, color, window._relMeses);
     // Preservar dimensões responsivas após rebuild
     svg.style.maxWidth = '640px';
     svg.style.maxHeight = '130px';
   }
-  const leg = document.getElementById('relLegLabel');
+  const leg = _getElVisible('relLegLabel');
   if (leg) leg.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block"></span>${label}`;
 }
 
