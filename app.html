@@ -2047,6 +2047,27 @@ async function salvarNovaOrg() {
   }
 }
 
+// Badge de status da organização considerando também `assinatura_status`
+// (alimentado pelo webhook do Asaas — ver edge-function-asaas-webhook.ts).
+// Sem isso, uma assinatura cancelada direto no Asaas ou em atraso dentro da
+// tolerância de 5 dias ficaria indistinguível de uma organização ativa
+// normal, ou de uma pausada manualmente pelo provedor.
+function _badgeStatusAssinatura(org) {
+  if (!org.ativo) {
+    if (org.assinatura_status === 'cancelada') {
+      return '<span class="badge" style="background:var(--red-l);color:var(--red-text)">Cancelada (Asaas)</span>';
+    }
+    return '<span class="badge badge-gray">Inativa</span>';
+  }
+  if (org.assinatura_status === 'atrasada') {
+    const dias = org.assinatura_atraso_desde
+      ? Math.max(0, Math.round((new Date() - new Date(org.assinatura_atraso_desde + 'T12:00:00')) / 86400000))
+      : null;
+    return `<span class="badge" style="background:var(--amber-l);color:var(--amber-text)" title="Cobrança em atraso — a organização será desativada automaticamente após 5 dias sem pagamento">Atrasada${dias!==null?` · ${dias}d`:''}</span>`;
+  }
+  return '<span class="badge badge-green">Ativa</span>';
+}
+
 async function verOrgProvedor(orgId) {
   const { data: org }  = await sb.from('organizacoes').select('*').eq('id', orgId).single();
   const { data: usrs } = await sb.from('usuarios').select('id,nome,perfil,ativo,created_at').eq('org_id', orgId).order('nome');
@@ -2085,7 +2106,7 @@ async function verOrgProvedor(orgId) {
           ${orgData.cnpj ? `<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">CNPJ: ${orgData.cnpj}</div>` : ''}
           ${orgData.email ? `<div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:1px">${escapeHtml(orgData.email)}</div>` : ''}
         </div>
-        <span class="badge ${orgData.ativo?'badge-green':'badge-gray'}">${orgData.ativo?'Ativa':'Inativa'}</span>
+        ${_badgeStatusAssinatura(orgData)}
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
@@ -2764,7 +2785,7 @@ function _atualizarProjecaoMrr() {
 
 async function renderFinanceiroProvedor() {
   const [{ data: orgs }] = await Promise.all([
-    sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_vencimento,assinatura_id'),
+    sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_vencimento,assinatura_id,assinatura_status,assinatura_atraso_desde'),
   ]);
   const orgsAll = orgs || [];
   const hoje = new Date();
@@ -2830,19 +2851,29 @@ async function renderFinanceiroProvedor() {
     .map(o => {
       const isTrial = !o.assinatura_id && o.trial_fim;
       const data = isTrial ? o.trial_fim : o.assinatura_vencimento;
-      return { nome: o.nome, data, dias: diasAte(data), tipo: isTrial ? 'Trial' : 'Assinatura' };
+      // "atrasada" = confirmado pelo webhook do Asaas (PAYMENT_OVERDUE), não
+      // só inferido pela data de vencimento salva — evita rotular como
+      // atraso algo que já foi pago mas cujo campo de data ainda não foi
+      // atualizado, e mostra a contagem regressiva real da tolerância de 5
+      // dias (ver migration-asaas-tolerancia-cron.sql).
+      return { nome: o.nome, data, dias: diasAte(data), tipo: isTrial ? 'Trial' : 'Assinatura', atrasada: !isTrial && o.assinatura_status === 'atrasada', atrasoDesde: o.assinatura_atraso_desde };
     })
     .sort((a,b) => a.dias - b.dias);
 
   const qtdVencidos = vencimentos.filter(v => v.dias < 0).length;
   const tituloVencimentos = `Vencimentos e atrasos (30 dias)${qtdVencidos ? ` <span style="font-size:11px;font-weight:700;color:var(--red-text);background:var(--red-l);padding:2px 8px;border-radius:10px;margin-left:6px;text-transform:none;letter-spacing:0">${qtdVencidos} vencido${qtdVencidos>1?'s':''}</span>` : ''}`;
 
-  const htmlVencimentos = vencimentos.length ? vencimentos.map(v => `
+  const htmlVencimentos = vencimentos.length ? vencimentos.map(v => {
+    const diasTolerancia = v.atrasada && v.atrasoDesde
+      ? Math.max(0, 5 - Math.round((hoje - new Date(v.atrasoDesde + 'T12:00:00')) / 86400000))
+      : null;
+    return `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
-      <span class="badge ${v.dias<0?'badge-gray':v.dias<=3?'':'badge-blue'}" style="${v.dias>=0&&v.dias<=3?'background:var(--amber-l);color:var(--amber-text)':''}">${v.tipo}</span>
+      <span class="badge ${v.dias<0?'badge-gray':v.dias<=3?'':'badge-blue'}" style="${v.atrasada?'background:var(--red-l);color:var(--red-text)':(v.dias>=0&&v.dias<=3?'background:var(--amber-l);color:var(--amber-text)':'')}" ${v.atrasada?'title="Confirmado pelo Asaas — será desativada automaticamente se não regularizar"':''}>${v.atrasada?'Atrasada':v.tipo}</span>
       <span style="font-size:13px;color:var(--text-1);flex:1">${escapeHtml(v.nome)}</span>
-      <span style="font-size:12px;color:${v.dias<0?'var(--red-text)':'var(--text-3)'};font-weight:600">${v.dias<0?`Venceu há ${Math.abs(v.dias)}d`:v.dias===0?'Vence hoje':`Vence em ${v.dias}d`}</span>
-    </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Nenhum vencimento ou atraso nos últimos/próximos 30 dias.</div>';
+      <span style="font-size:12px;color:${v.dias<0?'var(--red-text)':'var(--text-3)'};font-weight:600">${v.dias<0?`Venceu há ${Math.abs(v.dias)}d`:v.dias===0?'Vence hoje':`Vence em ${v.dias}d`}${diasTolerancia!==null?` · desativa em ${diasTolerancia}d`:''}</span>
+    </div>`;
+  }).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Nenhum vencimento ou atraso nos últimos/próximos 30 dias.</div>';
 
   // ── Ranking de organizações por plano/valor ──
   const ranking = [...ativasComPlano]
@@ -3060,6 +3091,19 @@ function _htmlListaOrgs(orgs) {
     if (dias < 0) return `<span class="badge" style="background:var(--red-l);color:var(--red-text)">Trial expirado</span>`;
     return `<span class="badge" style="background:var(--blue-l);color:var(--blue-h)">Trial · ${dias}d</span>`;
   };
+  // Sinaliza os dois estados "anômalos" de assinatura vindos do Asaas (via
+  // webhook): em atraso dentro da tolerância, ou cancelada diretamente no
+  // Asaas (em vez de desativada manualmente pelo provedor). Estado normal
+  // (ativa/inativa comum) já é coberto pelo badge de plano abaixo.
+  const _badgeAtrasadaOuCancelada = (o) => {
+    if (o.ativo && o.assinatura_status === 'atrasada') {
+      return '<span class="badge" style="background:var(--amber-l);color:var(--amber-text)" title="Cobrança em atraso — desativação automática após 5 dias">Atrasada</span>';
+    }
+    if (!o.ativo && o.assinatura_status === 'cancelada') {
+      return '<span class="badge" style="background:var(--red-l);color:var(--red-text)">Cancelada (Asaas)</span>';
+    }
+    return '';
+  };
   return orgs.map(o=>{
     const totalU = usrsAll.filter(u=>u.org_id===o.id).length;
     return `
@@ -3073,6 +3117,7 @@ function _htmlListaOrgs(orgs) {
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_badgeTrial(o)}
+        ${_badgeAtrasadaOuCancelada(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
         ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support}</button>` : ''}
       </div>
