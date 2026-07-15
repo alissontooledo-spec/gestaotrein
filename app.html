@@ -1446,8 +1446,9 @@ function _paginarLista(lista, pagina, porPagina) {
   return { itens: lista.slice(inicio, inicio + porPagina), totalPaginas, paginaAtual: p, total };
 }
 function _htmlPaginacao(cfg) {
-  const { totalPaginas, paginaAtual, porPagina, total, onPageChange, onPageSizeChange } = cfg;
+  const { totalPaginas, paginaAtual, porPagina, total, onPageChange, onPageSizeChange, opcoesPorPagina } = cfg;
   if (!total) return '';
+  const opcoes = opcoesPorPagina || [10, 20, 50];
   const inicio = (paginaAtual - 1) * porPagina + 1;
   const fim = Math.min(paginaAtual * porPagina, total);
   const nums = [];
@@ -1457,9 +1458,7 @@ function _htmlPaginacao(cfg) {
     <div style="font-size:12px;color:var(--text-3)">${inicio}–${fim} de ${total}</div>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <select onchange="${onPageSizeChange}(this.value)" style="padding:6px 8px;border:1px solid var(--border);border-radius:var(--r-md);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="10" ${porPagina===10?'selected':''}>10/página</option>
-        <option value="20" ${porPagina===20?'selected':''}>20/página</option>
-        <option value="50" ${porPagina===50?'selected':''}>50/página</option>
+        ${opcoes.map(n => `<option value="${n}" ${porPagina===n?'selected':''}>${n}/página</option>`).join('')}
       </select>
       ${totalPaginas > 1 ? `
       <button class="btn btn-ghost btn-sm" style="padding:5px 9px" ${paginaAtual<=1?'disabled':''} onclick="${onPageChange}(${paginaAtual-1})">‹</button>
@@ -3989,12 +3988,11 @@ async function verColab(id) {
   // global, lido pelas funções _colabTreinos* — assim trocar de aba ou virar
   // página só precisa re-renderizar o miolo da lista (id="treinosColabMiolo"),
   // sem redesenhar a tela inteira nem perder o foco do campo de busca.
-  window._colabTreinos = { colaboradorId: id, lista: treinos || [], aba: 'turma', busca: '', pagina: 1, porPagina: 10 };
+  window._colabTreinos = { colaboradorId: id, lista: treinos || [], aba: 'turma', busca: '', pagina: 1, porPagina: 7 };
 
   const totalTreinos = (treinos || []).length;
 
   setConteudo(`
-    <div class="detail-page">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
       <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
     </div>
@@ -4032,7 +4030,6 @@ async function verColab(id) {
         </div>
       </div>
     </div>
-    </div>
   `);
 }
 
@@ -4069,7 +4066,7 @@ function _htmlTreinosColabMiolo() {
       <button class="btn btn-sm ${st.aba==='externo'?'btn-navy':'btn-outline'}" onclick="_colabTreinosMudarAba('externo')">Externos (${totalExterno})</button>
     </div>
     ${itens.length ? itens.map(_htmlItemTreinoColab).join('') : `<div style="font-size:13px;color:var(--text-3);padding:20px 0;text-align:center">${vazio}</div>`}
-    ${_htmlPaginacao({ totalPaginas, paginaAtual, porPagina: st.porPagina, total, onPageChange:'_colabTreinosIrPagina', onPageSizeChange:'_colabTreinosAlterarPorPagina' })}
+    ${_htmlPaginacao({ totalPaginas, paginaAtual, porPagina: st.porPagina, total, onPageChange:'_colabTreinosIrPagina', onPageSizeChange:'_colabTreinosAlterarPorPagina', opcoesPorPagina:[7,20,50] })}
   `;
 }
 
@@ -4112,7 +4109,7 @@ function _colabTreinosIrPagina(p) {
 function _colabTreinosAlterarPorPagina(v) {
   const st = window._colabTreinos;
   if (!st) return;
-  st.porPagina = parseInt(v, 10) || 10;
+  st.porPagina = parseInt(v, 10) || 7;
   st.pagina = 1;
   _setElBoth('treinosColabMiolo', _htmlTreinosColabMiolo());
 }
