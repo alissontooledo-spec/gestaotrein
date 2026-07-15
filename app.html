@@ -3988,7 +3988,7 @@ async function verColab(id) {
   // global, lido pelas funções _colabTreinos* — assim trocar de aba ou virar
   // página só precisa re-renderizar o miolo da lista (id="treinosColabMiolo"),
   // sem redesenhar a tela inteira nem perder o foco do campo de busca.
-  window._colabTreinos = { colaboradorId: id, lista: treinos || [], aba: 'turma', busca: '', pagina: 1, porPagina: 7 };
+  window._colabTreinos = { colaboradorId: id, lista: treinos || [], aba: 'turma', busca: '', pagina: 1, porPagina: 6 };
 
   const totalTreinos = (treinos || []).length;
 
@@ -4066,7 +4066,7 @@ function _htmlTreinosColabMiolo() {
       <button class="btn btn-sm ${st.aba==='externo'?'btn-navy':'btn-outline'}" onclick="_colabTreinosMudarAba('externo')">Externos (${totalExterno})</button>
     </div>
     ${itens.length ? itens.map(_htmlItemTreinoColab).join('') : `<div style="font-size:13px;color:var(--text-3);padding:20px 0;text-align:center">${vazio}</div>`}
-    ${_htmlPaginacao({ totalPaginas, paginaAtual, porPagina: st.porPagina, total, onPageChange:'_colabTreinosIrPagina', onPageSizeChange:'_colabTreinosAlterarPorPagina', opcoesPorPagina:[7,20,50] })}
+    ${_htmlPaginacao({ totalPaginas, paginaAtual, porPagina: st.porPagina, total, onPageChange:'_colabTreinosIrPagina', onPageSizeChange:'_colabTreinosAlterarPorPagina', opcoesPorPagina:[6,20,50] })}
   `;
 }
 
@@ -4109,7 +4109,7 @@ function _colabTreinosIrPagina(p) {
 function _colabTreinosAlterarPorPagina(v) {
   const st = window._colabTreinos;
   if (!st) return;
-  st.porPagina = parseInt(v, 10) || 7;
+  st.porPagina = parseInt(v, 10) || 6;
   st.pagina = 1;
   _setElBoth('treinosColabMiolo', _htmlTreinosColabMiolo());
 }
