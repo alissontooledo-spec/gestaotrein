@@ -1711,6 +1711,10 @@ async function renderHomeProvedor() {
   const orgsAll  = orgs  || [];
   const usrsAll  = usuarios || [];
   const orgsComColaborador = new Set((colaboradoresOrgId || []).map(c => c.org_id));
+  // Estado da listagem de organizações (filtro Ativas/Todas) — guardado em
+  // window para o toggle poder re-renderizar só essa parte da tela sem
+  // refazer as consultas ao banco.
+  window._inicioOrgs = { todas: orgsAll, usrs: usrsAll, filtro: 'ativas', busca: '' };
   const total    = orgsAll.length;
   const ativas   = orgsAll.filter(o => o.ativo).length;
   const hoje     = new Date();
@@ -1826,25 +1830,6 @@ async function renderHomeProvedor() {
       <span style="font-size:11px;color:var(--text-3);flex-shrink:0">${new Date(e.data).toLocaleDateString('pt-BR')}</span>
     </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Sem atividade recente.</div>';
 
-  const listaOrgs = orgsAll.map(o => {
-    const admins  = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
-    const total_u = usrsAll.filter(u => u.org_id === o.id).length;
-    return `
-    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
-      <div onclick="verOrgProvedor('${o.id}')" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer">
-        <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
-          <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${_badgePlano(o.plano, o.ativo)}
-        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support}</button>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-
   setConteudo(`
     <div class="home-navy-header" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -1911,18 +1896,83 @@ async function renderHomeProvedor() {
       </div>
     </div>
 
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:600;color:var(--text-1)">Organizações (${total})</div>
+    ${total > 5 ? `<input type="text" id="buscaOrgsInicio" placeholder="Buscar organização..." oninput="_inicioFiltrarOrgs(this.value)" style="width:100%;margin-bottom:10px;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">` : ''}
+    <div id="listaOrgsInicioWrap">${_htmlListaOrgsMiolo()}</div>
+    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
+  `);
+}
+
+// Lista de organizações da tela Início do Provedor, com filtro Ativas/Todas.
+// Separada em função própria (fora de renderHomeProvedor) para poder ser
+// re-renderizada sozinha pelo toggle, sem refazer as consultas ao banco.
+function _htmlListaOrgsMiolo() {
+  const st = window._inicioOrgs;
+  if (!st) return '';
+  const orgsAll = st.todas;
+  const usrsAll = st.usrs;
+  const ativasCount = orgsAll.filter(o => o.ativo).length;
+  let filtradas = st.filtro === 'ativas' ? orgsAll.filter(o => o.ativo) : orgsAll;
+  if (st.busca) {
+    const f = st.busca.toLowerCase();
+    filtradas = filtradas.filter(o => (o.nome||'').toLowerCase().includes(f));
+  }
+
+  const badgePlano = (plano, ativo) => {
+    if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
+    const map = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
+    const label = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+    const p = plano || 'starter';
+    return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
+  };
+
+  const listaHtml = filtradas.map(o => {
+    const admins  = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
+    const total_u = usrsAll.filter(u => u.org_id === o.id).length;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+      <div onclick="verOrgProvedor('${o.id}')" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer">
+        <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
+          <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${badgePlano(o.plano, o.ativo)}
+        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support}</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1)">Organizações (${filtradas.length})</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="exportarPortfolioCSV()">⬇ CSV</button>
         <button class="btn btn-navy btn-sm" onclick="abrirModalNovaOrg()">+ Nova organização</button>
       </div>
     </div>
-    <div class="card" style="padding:0;margin-bottom:14px">
-      ${listaOrgs || '<div class="empty" style="padding:32px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização</div><div class="empty-sub">Crie a primeira organização para começar.</div></div>'}
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-sm ${st.filtro==='ativas'?'btn-navy':'btn-outline'}" onclick="_inicioMudarFiltroOrgs('ativas')">Ativas (${ativasCount})</button>
+      <button class="btn btn-sm ${st.filtro==='todas'?'btn-navy':'btn-outline'}" onclick="_inicioMudarFiltroOrgs('todas')">Todas (${orgsAll.length})</button>
     </div>
-    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
-  `);
+    <div class="card" style="padding:0;margin-bottom:14px">
+      ${listaHtml || `<div class="empty" style="padding:32px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização${st.filtro==='ativas'?' ativa':''}</div><div class="empty-sub">${st.filtro==='ativas'?'Todas as organizações estão inativas no momento — use o filtro "Todas" para ver.':'Crie a primeira organização para começar.'}</div></div>`}
+    </div>
+  `;
+}
+
+function _inicioMudarFiltroOrgs(v) {
+  const st = window._inicioOrgs;
+  if (!st) return;
+  st.filtro = v;
+  _setElBoth('listaOrgsInicioWrap', _htmlListaOrgsMiolo());
+}
+function _inicioFiltrarOrgs(v) {
+  const st = window._inicioOrgs;
+  if (!st) return;
+  st.busca = (v||'').trim();
+  _setElBoth('listaOrgsInicioWrap', _htmlListaOrgsMiolo());
 }
 
 async function exportarPortfolioCSV() {
