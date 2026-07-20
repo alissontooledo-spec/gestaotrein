@@ -1700,15 +1700,17 @@ async function renderHome() {
 }
 
 async function renderHomeProvedor() {
-  const [{ data: orgs }, { data: usuarios }, { data: acessos }, { data: eventosAuditoria }] = await Promise.all([
+  const [{ data: orgs }, { data: usuarios }, { data: acessos }, { data: eventosAuditoria }, { data: colaboradoresOrgId }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
     sb.from('usuarios').select('id,nome,org_id,perfil,ativo,created_at'),
     sb.from('logs_acesso').select('id,org_id,created_at,encerrado_em,organizacoes(nome)').order('created_at', { ascending: false }).limit(5),
     sb.from('eventos_sistema').select('id,tabela,acao,dados_antigos,dados_novos,usuario_id,criado_em').order('criado_em', { ascending: false }).limit(8),
+    sb.from('colaboradores').select('org_id'),
   ]);
 
   const orgsAll  = orgs  || [];
   const usrsAll  = usuarios || [];
+  const orgsComColaborador = new Set((colaboradoresOrgId || []).map(c => c.org_id));
   const total    = orgsAll.length;
   const ativas   = orgsAll.filter(o => o.ativo).length;
   const hoje     = new Date();
@@ -1724,15 +1726,30 @@ async function renderHomeProvedor() {
   const mrr         = mrrStarter + mrrPro; // enterprise é sob consulta
 
   // ── Central de alertas (só o que é realmente acionável) ──
-  const diasAte = (dataStr) => Math.ceil((new Date(dataStr) - hoje) / 86400000);
+  const diasAte   = (dataStr) => Math.ceil((new Date(dataStr) - hoje) / 86400000);
+  const diasDesde = (dataStr) => Math.floor((hoje - new Date(dataStr)) / 86400000);
   const trialVencendo = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) >= 0 && diasAte(o.trial_fim) <= 3);
   const trialVencido  = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
   const orgsSemAdmin  = orgsAll.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
+
+  // Sinais de saúde da conta (risco de churn / oportunidade de upsell) —
+  // usam LIMITES_PLANO como fonte única de verdade, igual ao resto do app.
+  const limiteStarter = LIMITES_PLANO.starter.maxUsuarios;
+  const orgsPertoLimite = orgsAll.filter(o => {
+    if (!o.ativo || (o.plano && o.plano !== 'starter')) return false;
+    const ativosOrg = usrsAll.filter(u => u.org_id === o.id && u.ativo).length;
+    return ativosOrg >= limiteStarter - 1;
+  });
+  const orgsSemColaborador = orgsAll.filter(o =>
+    o.ativo && !orgsComColaborador.has(o.id) && diasDesde(o.created_at) >= 7
+  );
 
   const alertas = [
     ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id })),
     ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id })),
     ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id })),
+    ...orgsSemColaborador.map(o => ({ tipo:'atencao', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id })),
+    ...orgsPertoLimite.map(o => ({ tipo:'atencao', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id })),
   ];
 
   const htmlAlertas = alertas.length ? `
