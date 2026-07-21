@@ -2886,10 +2886,17 @@ async function renderHomeAdmin() {
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
 
-  const [{data:turmas},{data:clientes},{data:sessoes}] = await Promise.all([
+  const [{data:turmas},{data:clientes},{data:sessoes},{count:catalogoCount},{count:colaboradoresCount},{count:usuariosAtivosCount}] = await Promise.all([
     sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,clientes(nome),catalogo(nome)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
     sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida,local').order('data',{ascending:true}),
+    // Contagens leves (head:true, sem baixar linhas) só pra alimentar o
+    // checklist de primeiros passos abaixo — mesma lógica de "já usou esse
+    // recurso ao menos uma vez?" do painel de Adoção do Provedor, só que
+    // aqui do lado de quem precisa completar, não de quem está observando.
+    sb.from('catalogo').select('id',{count:'exact',head:true}).eq('org_id',oi),
+    sb.from('colaboradores').select('id',{count:'exact',head:true}).eq('org_id',oi),
+    sb.from('usuarios').select('id',{count:'exact',head:true}).eq('org_id',oi).eq('ativo',true),
   ]);
 
   const tAll   = turmas||[];
@@ -3014,6 +3021,42 @@ async function renderHomeAdmin() {
     </div>`;
   }).join('');
 
+  // ── Primeiros passos (onboarding guiado) ──────────────────────
+  // Não é um flag "dispensado" salvo em algum lugar — o próprio dado real
+  // (tem catálogo? tem colaborador? já criou turma? já convidou alguém da
+  // equipe?) decide se cada item está concluído. Isso tem duas vantagens:
+  // não precisa de migration nem de coluna nova, e o card some sozinho
+  // assim que a organização realmente configura tudo (não fica "resolvido
+  // manualmente" enquanto a configuração de verdade continua faltando).
+  // Mesmos 4 sinais que já alimentam o painel de Adoção do Provedor — só
+  // que aqui, quem vê é quem precisa agir, não quem está observando.
+  const onboardingItens = [
+    { done: (catalogoCount||0) > 0,       label: 'Configurar seu catálogo de treinamentos', acao: "irPara('catalogo')",       cta: 'Configurar' },
+    { done: (colaboradoresCount||0) > 0,  label: 'Cadastrar seus primeiros colaboradores',  acao: "irPara('colaboradores')",  cta: 'Cadastrar' },
+    { done: tAll.length > 0,              label: 'Criar sua primeira turma',                acao: "irPara('turmas')",         cta: 'Criar turma' },
+    { done: (usuariosAtivosCount||0) > 1, label: 'Convidar alguém da sua equipe',           acao: "irPara('equipe')",         cta: 'Convidar' },
+  ];
+  const onboardingFeitos    = onboardingItens.filter(i => i.done).length;
+  const onboardingCompleto  = onboardingFeitos === onboardingItens.length;
+  const htmlOnboarding = onboardingCompleto ? '' : `
+    <div class="card" style="padding:16px;margin-bottom:16px;border:1.5px solid var(--amber);background:var(--amber-l)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--amber-text)">👋 Primeiros passos na plataforma</div>
+        <div style="font-size:11.5px;font-weight:700;color:var(--amber-text);white-space:nowrap">${onboardingFeitos}/${onboardingItens.length}</div>
+      </div>
+      <div style="width:100%;height:6px;background:rgba(255,255,255,.6);border-radius:4px;overflow:hidden;margin-bottom:12px">
+        <div style="width:${Math.round(onboardingFeitos/onboardingItens.length*100)}%;height:100%;background:var(--amber);border-radius:4px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${onboardingItens.map(i => `
+          <div style="display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:var(--r-md);padding:9px 12px">
+            <span style="width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;${i.done?'background:var(--green);color:#fff':'background:var(--gray-100);color:var(--text-3);border:1.5px solid var(--border)'}">${i.done?'✓':''}</span>
+            <span style="flex:1;font-size:12.5px;min-width:0;color:${i.done?'var(--text-3)':'var(--text-1)'};${i.done?'text-decoration:line-through':''}">${i.label}</span>
+            ${!i.done ? `<button onclick="${i.acao}" style="border:none;background:var(--navy);color:#fff;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0">${i.cta} →</button>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Administrador</div>`);
   setConteudo(`
     <div class="home-navy-header">
@@ -3048,6 +3091,7 @@ async function renderHomeAdmin() {
       </div>
     </div>
 
+    ${htmlOnboarding}
     ${alertasHtml}
 
     <div class="home-chart-card" style="margin-bottom:16px">
