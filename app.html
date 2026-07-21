@@ -574,6 +574,7 @@ let _colabsCache    = [];
 // ---- Paginação (listas longas) ----
 let _paginaCatalogo = 1, _porPaginaCatalogo = 20, _catalogoListaFiltrada = [], _catalogoMaxUsoAtual = 1, _catalogoPodeMgrAtual = false;
 let _paginaOrgs = 1, _porPaginaOrgs = 20, _orgsListaFiltrada = [];
+let _orgsSelecionadas = new Set(); // ids selecionados para ações em lote na tela Organizações
 let _paginaUsuariosOrg = 1, _porPaginaUsuariosOrg = 20, _usuariosOrgAtual = [], _usuariosOrgFiltrado = [];
 
 // ============================================================
@@ -1863,6 +1864,13 @@ async function renderHomeProvedor() {
       </div>
     </div>
 
+    <!-- Busca global — achar um colaborador ou usuário em qualquer
+         organização sem precisar entrar em Modo Suporte antes -->
+    <div class="card" style="padding:14px;margin-bottom:14px">
+      <input type="search" id="buscaGlobalProvedor" placeholder="Buscar colaborador ou usuário em qualquer organização..." oninput="_buscaGlobalProvedor(this.value)" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)">
+      <div id="buscaGlobalResultados"></div>
+    </div>
+
     ${htmlAlertas}
 
     <!-- Dashboard financeiro por plano -->
@@ -1973,6 +1981,59 @@ function _inicioFiltrarOrgs(v) {
   if (!st) return;
   st.busca = (v||'').trim();
   _setElBoth('listaOrgsInicioWrap', _htmlListaOrgsMiolo());
+}
+
+// Busca global (colaborador/usuário em qualquer organização) — com
+// debounce simples pra não disparar 1 consulta a cada tecla digitada.
+let _buscaGlobalTimer = null;
+function _buscaGlobalProvedor(v) {
+  clearTimeout(_buscaGlobalTimer);
+  const termo = (v || '').trim();
+  if (termo.length < 2) {
+    _setElBoth('buscaGlobalResultados', '');
+    return;
+  }
+  _buscaGlobalTimer = setTimeout(() => _buscaGlobalExecutar(termo), 350);
+}
+
+async function _buscaGlobalExecutar(termo) {
+  const [{ data: colabs }, { data: usrs }] = await Promise.all([
+    sb.from('colaboradores').select('id,nome,org_id').ilike('nome', `%${termo}%`).limit(8),
+    sb.from('usuarios').select('id,nome,org_id,perfil').ilike('nome', `%${termo}%`).limit(8),
+  ]);
+
+  const orgIds = [...new Set([...(colabs||[]).map(c=>c.org_id), ...(usrs||[]).map(u=>u.org_id)].filter(Boolean))];
+  let orgsMap = {};
+  if (orgIds.length) {
+    const { data: orgsData } = await sb.from('organizacoes').select('id,nome').in('id', orgIds);
+    orgsMap = Object.fromEntries((orgsData||[]).map(o => [o.id, o.nome]));
+  }
+
+  window._buscaGlobalResultado = { colabs: colabs||[], usrs: usrs||[], orgsMap };
+  _setElBoth('buscaGlobalResultados', _htmlBuscaGlobalResultados());
+}
+
+function _htmlBuscaGlobalResultados() {
+  const st = window._buscaGlobalResultado;
+  if (!st) return '';
+  const { colabs, usrs, orgsMap } = st;
+  if (!colabs.length && !usrs.length) {
+    return '<div style="padding:12px 2px 0;font-size:12.5px;color:var(--text-3)">Nenhum resultado encontrado.</div>';
+  }
+  const item = (nome, org_id, sublabel, icone) => `
+    <div onclick="verOrgProvedor('${org_id}')" style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer">
+      <span style="font-size:14px">${icone}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--navy)">${escapeHtml(nome)}</div>
+        <div style="font-size:11px;color:var(--text-3)">${sublabel} · ${escapeHtml(orgsMap[org_id]||'—')}</div>
+      </div>
+      <span style="font-size:11px;color:var(--text-3);flex-shrink:0">Ver →</span>
+    </div>`;
+  return `
+    <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:6px">
+      ${colabs.map(c => item(c.nome, c.org_id, 'Colaborador', '👤')).join('')}
+      ${usrs.map(u => item(u.nome, u.org_id, `Usuário · ${labelPerfil(u.perfil)}`, '🔑')).join('')}
+    </div>`;
 }
 
 async function exportarPortfolioCSV() {
@@ -3121,6 +3182,7 @@ async function renderFinanceiroProvedor() {
 }
 
 async function renderOrgs() {
+  _orgsSelecionadas.clear();
   const [{data,error}, {data:usuarios}] = await Promise.all([
     sb.from('organizacoes').select('*').order('nome'),
     sb.from('usuarios').select('org_id,perfil,ativo'),
@@ -3224,7 +3286,7 @@ function _renderOrgsLista(orgs) {
 function _renderOrgsListaPaginada() {
   const { itens, totalPaginas, paginaAtual, total } = _paginarLista(_orgsListaFiltrada, _paginaOrgs, _porPaginaOrgs);
   _paginaOrgs = paginaAtual;
-  return _htmlListaOrgs(itens) + _htmlPaginacao({
+  return _htmlBarraSelecaoOrgs() + _htmlListaOrgs(itens) + _htmlPaginacao({
     totalPaginas, paginaAtual, porPagina: _porPaginaOrgs, total,
     onPageChange: '_irPaginaOrgs', onPageSizeChange: '_alterarPorPaginaOrgs'
   });
@@ -3272,6 +3334,7 @@ function _htmlListaOrgs(orgs) {
     const totalU = usrsAll.filter(u=>u.org_id===o.id).length;
     return `
     <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+      <input type="checkbox" ${_orgsSelecionadas.has(o.id)?'checked':''} onclick="event.stopPropagation()" onchange="_toggleSelecaoOrg('${o.id}', this.checked)" style="width:16px;height:16px;flex-shrink:0;cursor:pointer">
       <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer" onclick="verOrgProvedor('${o.id}')">
         <div style="width:40px;height:40px;border-radius:var(--r-md);background:${o.ativo?'var(--blue-l)':'var(--gray-100)'};color:${o.ativo?'var(--blue-h)':'var(--gray-500)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
         <div style="flex:1;min-width:0">
@@ -3287,6 +3350,79 @@ function _htmlListaOrgs(orgs) {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── Ações em lote (selecionar várias organizações e desativar/ativar de
+// uma vez) — vive só na tela Organizações, não no Início. ──
+function _toggleSelecaoOrg(id, marcado) {
+  if (marcado) _orgsSelecionadas.add(id); else _orgsSelecionadas.delete(id);
+  _setElBoth('listaOrgs', _renderOrgsListaPaginada());
+}
+
+function _htmlBarraSelecaoOrgs() {
+  const n = _orgsSelecionadas.size;
+  if (!n) return '';
+  return `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;margin-bottom:8px;background:var(--blue-l);border-radius:var(--r-md);border:1px solid var(--blue-h)">
+      <span style="font-size:13px;font-weight:600;color:var(--blue-h);flex:1">${n} organização${n!==1?'ões':''} selecionada${n!==1?'s':''}</span>
+      <button class="btn btn-outline btn-sm" onclick="ativarOrgsSelecionadas()">Ativar selecionadas</button>
+      <button class="btn btn-outline btn-sm" onclick="desativarOrgsSelecionadas()">Desativar selecionadas</button>
+      <button class="btn btn-ghost btn-sm" onclick="_limparSelecaoOrgs()">Limpar seleção</button>
+    </div>`;
+}
+
+function _limparSelecaoOrgs() {
+  _orgsSelecionadas.clear();
+  _setElBoth('listaOrgs', _renderOrgsListaPaginada());
+}
+
+async function desativarOrgsSelecionadas() {
+  if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode desativar organizações','error'); return; }
+  const ids = [..._orgsSelecionadas].filter(id => _orgsCache.find(o=>o.id===id)?.ativo);
+  if (!ids.length) { showToast('Nenhuma organização ativa está selecionada','error'); return; }
+  const ok = await confirmarAcao(`Deseja desativar ${ids.length} organização${ids.length!==1?'ões':''} selecionada${ids.length!==1?'s':''}? Os usuários dessas contas não conseguirão acessar o sistema.`, 'Desativar', true);
+  if (!ok) return;
+
+  let sucesso = 0, falhaAsaas = 0, falha = 0;
+  const { data: { session } } = await sb.auth.getSession();
+  for (const id of ids) {
+    const { error } = await sb.from('organizacoes').update({ ativo: false }).eq('id', id);
+    if (error) { falha++; continue; }
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/gerenciar-assinatura-asaas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ org_id: id, action: 'cancelar' }),
+      });
+      if (!res.ok) falhaAsaas++;
+    } catch (e) { falhaAsaas++; }
+    sucesso++;
+  }
+
+  _orgsSelecionadas.clear();
+  let msg = `${sucesso} organização${sucesso!==1?'ões':''} desativada${sucesso!==1?'s':''}.`;
+  if (falhaAsaas) msg += ` ${falhaAsaas} com erro ao cancelar a assinatura no Asaas — cancele manualmente.`;
+  if (falha) msg += ` ${falha} falharam.`;
+  showToast(msg, (falhaAsaas || falha) ? 'error' : 'success', 8000);
+  await renderOrgs();
+}
+
+async function ativarOrgsSelecionadas() {
+  if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode ativar organizações','error'); return; }
+  const ids = [..._orgsSelecionadas].filter(id => _orgsCache.find(o=>o.id===id) && !_orgsCache.find(o=>o.id===id).ativo);
+  if (!ids.length) { showToast('Nenhuma organização inativa está selecionada','error'); return; }
+  const ok = await confirmarAcao(`Deseja ativar ${ids.length} organização${ids.length!==1?'ões':''} selecionada${ids.length!==1?'s':''}?`, 'Ativar', false);
+  if (!ok) return;
+
+  let sucesso = 0, falha = 0;
+  for (const id of ids) {
+    const { error } = await sb.from('organizacoes').update({ ativo: true }).eq('id', id);
+    if (error) falha++; else sucesso++;
+  }
+
+  _orgsSelecionadas.clear();
+  showToast(`${sucesso} organização${sucesso!==1?'ões':''} ativada${sucesso!==1?'s':''}.${falha?` ${falha} falharam.`:''}`, falha ? 'error' : 'success');
+  await renderOrgs();
 }
 
 function aplicarFiltrosOrgs() {
@@ -3317,6 +3453,7 @@ function aplicarFiltrosOrgs() {
 
   _orgsListaFiltrada = r;
   _paginaOrgs = 1;
+  _orgsSelecionadas.clear(); // muda o filtro, some a seleção — evita confusão sobre o que estava marcado
   _setElBoth('listaOrgs', _renderOrgsListaPaginada());
 }
 
