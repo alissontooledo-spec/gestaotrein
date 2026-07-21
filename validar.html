@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Validação de Certificado — AvanteSeg</title>
-  <meta name="description" content="Verifique a autenticidade de certificados emitidos pela AvanteSeg Cursos e Treinamentos.">
+  <title>Validação de Certificado — Toledo Labs</title>
+  <meta name="description" content="Verifique a autenticidade de certificados emitidos através da plataforma Toledo Labs.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -568,10 +568,14 @@
   <!-- HEADER -->
   <header class="site-header">
     <a class="site-logo" href="https://www.toledolabs.com.br">
-      <div class="logo-mark">A</div>
+      <div class="logo-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E2A4A" stroke-width="2.5" stroke-linecap="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
       <div>
-        <div class="logo-text">AvanteSeg</div>
-        <div class="logo-sub">Cursos e Treinamentos</div>
+        <div class="logo-text">Toledo Labs</div>
+        <div class="logo-sub">Central de Validação de Certificados</div>
       </div>
     </a>
     <div class="header-badge">
@@ -721,10 +725,7 @@
         </div>
         <!-- Footer do card -->
         <div class="result-footer">
-          <div class="result-footer-text">
-            Documento emitido por <strong>AvanteSeg Cursos e Treinamentos Corporativos Ltda</strong><br>
-            CNPJ 17.883.200/0001-32 — Brusque, SC
-          </div>
+          <div class="result-footer-text" id="resultFooterText">—</div>
           <button class="btn-nova-busca" onclick="voltarBusca()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -738,8 +739,7 @@
   <!-- FOOTER -->
   <footer class="site-footer">
     <div class="site-footer-text">
-      © 2026 AvanteSeg Cursos e Treinamentos Corporativos Ltda —
-      <a href="https://www.toledolabs.com.br">Sistema Toledo Labs</a>
+      © 2026 <a href="https://www.toledolabs.com.br">Toledo Labs</a> — Plataforma de gestão de treinamentos
     </div>
   </footer>
 </div>
@@ -771,6 +771,16 @@
     const meses = ['janeiro','fevereiro','março','abril','maio','junho',
                    'julho','agosto','setembro','outubro','novembro','dezembro'];
     return `${meses[d.getMonth()]} de ${d.getFullYear()}`;
+  }
+  // Página pública/anônima — qualquer texto vindo do banco (nome de
+  // colaborador, curso, empresa, organização emissora etc.) passa por
+  // aqui antes de entrar via innerHTML, mesmo padrão de segurança já
+  // usado no app principal.
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
   }
   function iniciais(nome) {
     if (!nome) return '?';
@@ -890,10 +900,17 @@
     ];
     document.getElementById('infoGrid').innerHTML = infos.map(item =>
       `<div class="info-item">
-        <div class="info-lbl">${item.l}</div>
-        <div class="info-val${item.amber ? ' amber' : ''}">${item.v}</div>
+        <div class="info-lbl">${escapeHtml(item.l)}</div>
+        <div class="info-val${item.amber ? ' amber' : ''}">${escapeHtml(item.v)}</div>
       </div>`
     ).join('');
+    // Rodapé — dados reais da organização emissora, vindos do banco
+    // (assim refletem qualquer atualização cadastral, como renomear a
+    // empresa, sem precisar editar/publicar esta página de novo).
+    const emissorNome = doc.emissor_nome || 'Toledo Labs';
+    const emissorCnpjTxt = doc.emissor_cnpj ? ` — CNPJ ${escapeHtml(doc.emissor_cnpj)}` : '';
+    document.getElementById('resultFooterText').innerHTML =
+      `Documento emitido por <strong>${escapeHtml(emissorNome)}</strong>${emissorCnpjTxt}`;
     // Seção validação
     const urlBase = `https://www.toledolabs.com.br/validar.html?codigo=${codigoCerto}`;
     document.getElementById('resultValidMeta').textContent =
