@@ -10691,46 +10691,53 @@ async function renderConta() {
   }
 
   const corP = corPerfil(u.perfil);
+  const contaAtiva = u.ativo !== false;
   setConteudo(`
-    <div class="card" style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
-        <div style="width:64px;height:64px;border-radius:50%;background:${corP};display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px ${corP}22">${iniciais(u.nome)}</div>
-        <div style="min-width:0">
-          <div style="font-size:18px;font-weight:700;color:var(--text-1)">${escapeHtml(u.nome)}</div>
-          <div style="font-size:13px;color:var(--text-2);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'—')}</div>
-          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-            <span class="badge badge-blue">${labelPerfil(u.perfil)}</span>
-            <span class="badge ${u.ativo!==false?'badge-green':'badge-red'}">${u.ativo!==false?'● Conta ativa':'○ Conta inativa'}</span>
+    <div class="detail-page">
+
+    <div style="background:var(--navy);border-radius:var(--r-lg);padding:24px;margin-bottom:16px;border-top:3px solid var(--amber)">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="width:64px;height:64px;border-radius:50%;background:${corP};display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,.15)">${iniciais(u.nome)}</div>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:19px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.65);margin-top:3px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'—')}</div>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(245,158,11,.18);color:var(--amber);border:1px solid rgba(245,158,11,.3);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
+            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${contaAtiva?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${contaAtiva?'#6EE7B7':'#94A3B8'};border:1px solid ${contaAtiva?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${contaAtiva?'● Conta ativa':'○ Conta inativa'}</span>
           </div>
         </div>
-      </div>
-      <div class="divider"></div>
-      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Dados pessoais</div>
-      <div class="field"><label>Nome completo</label><input type="text" id="editNome" value="${escapeHtml(u.nome)}"></div>
-      <div class="field">
-        <label>E-mail</label>
-        <input type="email" id="editEmail" value="${escapeHtml(u.email||'')}" readonly style="background:var(--gray-50);color:var(--text-3);cursor:not-allowed">
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px">O e-mail não pode ser alterado pois é o identificador do usuário.</div>
-      </div>
-      <div style="display:flex;justify-content:flex-end">
-        <button class="btn btn-navy" onclick="salvarConta()">Salvar alterações</button>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px">Segurança</div>
+      <div class="card-title" style="margin-bottom:14px">👤 Dados pessoais</div>
+      <div class="field"><label>Nome completo</label><input type="text" id="editNome" value="${escapeHtml(u.nome)}"></div>
+      <div class="field" style="margin-bottom:4px">
+        <label>E-mail</label>
+        <input type="email" id="editEmail" value="${escapeHtml(u.email||'')}" readonly style="background:var(--gray-50);color:var(--text-3);cursor:not-allowed">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">O e-mail não pode ser alterado pois é o identificador do usuário.</div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-navy" onclick="salvarConta()">Salvar alterações</button>
+      </div>
+    </div>
 
-      <div id="formAlterarSenha" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px">
+    ${secaoAssinatura}
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">🛡️ Segurança</div>
+
+      <div id="formAlterarSenha" style="display:none;margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px">
         <div class="field"><label>Senha atual</label><input type="password" id="senhaAtual" placeholder="Digite sua senha atual"></div>
         <div class="field"><label>Nova senha</label><input type="password" id="senhaNova" placeholder="Mínimo 6 caracteres"></div>
-        <div class="field"><label>Confirmar nova senha</label><input type="password" id="senhaConfirm" placeholder="Repita a nova senha"></div>
-        <div style="display:flex;gap:8px">
+        <div class="field" style="margin-bottom:0"><label>Confirmar nova senha</label><input type="password" id="senhaConfirm" placeholder="Repita a nova senha"></div>
+        <div style="display:flex;gap:8px;margin-top:14px">
           <button class="btn btn-navy" onclick="confirmarAlterarSenha()" style="flex:1">Confirmar alteração</button>
           <button class="btn btn-outline" onclick="cancelarAlterarSenha()">Cancelar</button>
         </div>
       </div>
 
-      <div id="linhaAlterarSenha" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="mostrarFormSenha()">
+      <div id="linhaAlterarSenha" style="display:flex;align-items:center;gap:12px;padding-top:14px;cursor:pointer" onclick="mostrarFormSenha()">
         <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔑</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--text-1)">Alterar senha</div>
@@ -10738,17 +10745,12 @@ async function renderConta() {
         </div>
         <button class="btn btn-outline btn-sm" id="btnAlterarSenha" onclick="event.stopPropagation();mostrarFormSenha()">Alterar</button>
       </div>
-
-      <div style="display:flex;align-items:center;gap:12px;padding:12px 0 0">
-        <div style="width:36px;height:36px;border-radius:10px;background:var(--red-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🚪</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Sair do sistema</div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:1px">Encerra sua sessão neste dispositivo</div>
-        </div>
-        <button class="btn btn-danger btn-sm" onclick="fazerLogout()">Sair</button>
-      </div>
     </div>
-    ${secaoAssinatura}`);
+
+    <button class="btn btn-outline" style="width:100%;color:var(--red-text);border-color:#FECACA;background:var(--red-l)" onclick="fazerLogout()">🚪 Sair do sistema</button>
+    <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:8px">Encerra sua sessão apenas neste dispositivo</div>
+
+    </div>`);
 }
 
 // Card de upload da assinatura digitalizada (imagem) do instrutor —
@@ -10885,24 +10887,27 @@ async function removerAssinaturaInstrutor() {
 }
 
 function mostrarFormSenha() {
-  document.getElementById('formAlterarSenha').style.display = 'block';
-  const linha = document.getElementById('linhaAlterarSenha');
+  const form = _getElVisible('formAlterarSenha');
+  if (form) form.style.display = 'block';
+  const linha = _getElVisible('linhaAlterarSenha');
   if (linha) linha.style.display = 'none';
 }
 
 function cancelarAlterarSenha() {
-  document.getElementById('formAlterarSenha').style.display = 'none';
-  const linha = document.getElementById('linhaAlterarSenha');
+  const form = _getElVisible('formAlterarSenha');
+  if (form) form.style.display = 'none';
+  const linha = _getElVisible('linhaAlterarSenha');
   if (linha) linha.style.display = 'flex';
-  document.getElementById('senhaAtual').value  = '';
-  document.getElementById('senhaNova').value   = '';
-  document.getElementById('senhaConfirm').value = '';
+  const cAtual = _getElVisible('senhaAtual'), cNova = _getElVisible('senhaNova'), cConfirm = _getElVisible('senhaConfirm');
+  if (cAtual)   cAtual.value   = '';
+  if (cNova)    cNova.value    = '';
+  if (cConfirm) cConfirm.value = '';
 }
 
 async function confirmarAlterarSenha() {
-  const atual   = document.getElementById('senhaAtual')?.value;
-  const nova    = document.getElementById('senhaNova')?.value;
-  const confirm = document.getElementById('senhaConfirm')?.value;
+  const atual   = _getElVisible('senhaAtual')?.value;
+  const nova    = _getElVisible('senhaNova')?.value;
+  const confirm = _getElVisible('senhaConfirm')?.value;
   if (!atual || !nova || !confirm) { showToast('Preencha todos os campos de senha','error'); return; }
   if (nova.length < 6) { showToast('A nova senha deve ter no mínimo 6 caracteres','error'); return; }
   if (nova !== confirm) { showToast('A confirmação de senha não confere','error'); return; }
@@ -10921,7 +10926,7 @@ async function confirmarAlterarSenha() {
 }
 
 async function salvarConta() {
-  const nome = document.getElementById('editNome')?.value.trim();
+  const nome = _getElVisible('editNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   try {
     const {error} = await sb.from('usuarios').update({nome}).eq('id',usuarioAtual.id);
