@@ -3005,8 +3005,13 @@ function _atualizarProjecaoMrr() {
 }
 
 async function renderFinanceiroProvedor() {
-  const [{ data: orgs }] = await Promise.all([
+  const [{ data: orgs }, { data: eventosOrgTodos }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_vencimento,assinatura_id,assinatura_status,assinatura_atraso_desde'),
+    // Usado só para estimar o churn mensal (item de Inteligência de Negócio,
+    // mais abaixo) — encontra quando cada organização foi desativada,
+    // olhando o histórico de auditoria (não existe coluna de data de
+    // cancelamento direto em organizacoes).
+    sb.from('eventos_sistema').select('acao,dados_antigos,dados_novos,criado_em').eq('tabela','organizacoes').order('criado_em',{ascending:false}).limit(500),
   ]);
   const orgsAll = orgs || [];
   const hoje = new Date();
@@ -3031,6 +3036,106 @@ async function renderFinanceiroProvedor() {
 
   setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Financeiro</div>`);
   fabOcultar();
+
+  // ══════════════════════════════════════════════════════════════════
+  // Inteligência de Negócio — cohort de retenção, conversão trial→pago,
+  // churn mensal e LTV estimado. Tudo calculado em cima dos dados que já
+  // existem (organizacoes + eventos_sistema), sem migration nova.
+  //
+  // Aviso importante embutido na própria tela: com a base ainda pequena,
+  // esses números têm pouca significância estatística hoje — a
+  // infraestrutura fica pronta para quando a base de clientes crescer.
+  // ══════════════════════════════════════════════════════════════════
+  const mesesAnalise = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    mesesAnalise.push({
+      chave: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+      label: d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.',''),
+      inicioMes: new Date(d.getFullYear(), d.getMonth(), 1),
+      fimMes: new Date(d.getFullYear(), d.getMonth()+1, 0, 23,59,59),
+    });
+  }
+
+  // Cohort: organizações agrupadas pelo mês de criação — quantas ainda
+  // ativas hoje (retenção) e quantas converteram de trial para pagante.
+  const cohortData = mesesAnalise.map(m => {
+    const criadas = orgsAll.filter(o => o.created_at?.startsWith(m.chave));
+    return {
+      label: m.label,
+      total: criadas.length,
+      ativasHoje: criadas.filter(o => o.ativo).length,
+      convertidas: criadas.filter(o => o.assinatura_id).length,
+    };
+  });
+
+  // Churn mensal (estimativa): organizações que existiam antes do início
+  // do mês, e quantas foram desativadas (ativo true->false) dentro dele,
+  // segundo o histórico de auditoria.
+  const churnData = mesesAnalise.map(m => {
+    const ativasInicioMes = orgsAll.filter(o => new Date(o.created_at) < m.inicioMes).length;
+    const canceladasNoMes = (eventosOrgTodos||[]).filter(e => {
+      if (e.acao !== 'UPDATE' || e.dados_antigos?.ativo !== true || e.dados_novos?.ativo !== false) return false;
+      const dt = new Date(e.criado_em);
+      return dt >= m.inicioMes && dt <= m.fimMes;
+    }).length;
+    return { label: m.label, ativasInicioMes, canceladas: canceladasNoMes, pct: ativasInicioMes > 0 ? Math.round((canceladasNoMes/ativasInicioMes)*1000)/10 : 0 };
+  });
+
+  // LTV médio estimado por plano — aproximação pelo tempo de permanência
+  // atual dos clientes ativos (não há churn suficiente ainda para calcular
+  // um LTV "de verdade" baseado em tempo de vida real até o cancelamento).
+  const ltvPorPlano = ['starter','pro'].map(p => {
+    const orgsDoPlano = ativasComPlano.filter(o => (o.plano||'starter') === p);
+    if (!orgsDoPlano.length) return { plano: p, meses: 0, ltv: 0, qtd: 0 };
+    const mesesMedios = orgsDoPlano.reduce((acc,o) => acc + Math.max(1, Math.round((hoje - new Date(o.created_at)) / (86400000*30))), 0) / orgsDoPlano.length;
+    return { plano: p, meses: Math.round(mesesMedios*10)/10, ltv: Math.round(mesesMedios * VALOR_PLANO[p]), qtd: orgsDoPlano.length };
+  });
+
+  const htmlCohort = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <tr style="text-align:left;color:var(--text-3)"><th style="padding:4px 6px 4px 0;font-weight:600">Mês</th><th style="padding:4px 6px;font-weight:600">Criadas</th><th style="padding:4px 6px;font-weight:600">Ativas hoje</th><th style="padding:4px 0;font-weight:600">Retenção</th></tr>
+      ${cohortData.map(c => `
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 6px 6px 0">${c.label}</td>
+        <td style="padding:6px">${c.total}</td>
+        <td style="padding:6px">${c.ativasHoje}</td>
+        <td style="padding:6px 0;font-weight:700;color:var(--navy)">${c.total ? Math.round(c.ativasHoje/c.total*100) : 0}%</td>
+      </tr>`).join('')}
+    </table>`;
+
+  const htmlConversao = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <tr style="text-align:left;color:var(--text-3)"><th style="padding:4px 6px 4px 0;font-weight:600">Mês</th><th style="padding:4px 6px;font-weight:600">Criadas</th><th style="padding:4px 6px;font-weight:600">Converteram</th><th style="padding:4px 0;font-weight:600">Taxa</th></tr>
+      ${cohortData.map(c => `
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 6px 6px 0">${c.label}</td>
+        <td style="padding:6px">${c.total}</td>
+        <td style="padding:6px">${c.convertidas}</td>
+        <td style="padding:6px 0;font-weight:700;color:var(--navy)">${c.total ? Math.round(c.convertidas/c.total*100) : 0}%</td>
+      </tr>`).join('')}
+    </table>`;
+
+  const htmlChurn = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <tr style="text-align:left;color:var(--text-3)"><th style="padding:4px 6px 4px 0;font-weight:600">Mês</th><th style="padding:4px 6px;font-weight:600">Ativas no início</th><th style="padding:4px 6px;font-weight:600">Canceladas</th><th style="padding:4px 0;font-weight:600">Churn</th></tr>
+      ${churnData.map(c => `
+      <tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 6px 6px 0">${c.label}</td>
+        <td style="padding:6px">${c.ativasInicioMes}</td>
+        <td style="padding:6px">${c.canceladas}</td>
+        <td style="padding:6px 0;font-weight:700;color:${c.pct>0?'var(--red-text)':'var(--navy)'}">${c.pct}%</td>
+      </tr>`).join('')}
+    </table>`;
+
+  const htmlLtv = ltvPorPlano.map(l => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--navy);text-transform:capitalize">${l.plano}</div>
+        <div style="font-size:11px;color:var(--text-3)">${l.qtd} organização${l.qtd!==1?'ões':''} · ${l.meses} meses de permanência média</div>
+      </div>
+      <div style="font-size:16px;font-weight:700;color:var(--navy)">${l.ltv ? `R$${l.ltv.toLocaleString('pt-BR')}` : '—'}</div>
+    </div>`).join('');
 
   // ── Histórico de MRR (estimativa) — últimos 6 meses ──
   // Aproximação: conta organizações com created_at até o fim de cada mês e ainda ativas hoje.
@@ -3177,7 +3282,34 @@ async function renderFinanceiroProvedor() {
       </div>
     </div>
 
-    <button class="btn btn-outline" onclick="exportarPortfolioCSV()">⬇ Exportar portfólio (CSV)</button>
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 4px">Inteligência de Negócio</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-bottom:10px;line-height:1.4">Com a base de organizações ainda pequena, estes números têm pouca significância estatística — a leitura fica mais confiável conforme a base de clientes reais crescer.</div>
+    <div class="home-2col" style="margin-bottom:14px">
+      <div class="card" style="padding:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">Retenção por cohort</div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Organizações agrupadas pelo mês de criação, e quantas seguem ativas hoje.</div>
+        ${htmlCohort}
+      </div>
+      <div class="card" style="padding:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">Conversão trial → pago</div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Organizações criadas em cada mês que viraram assinatura paga.</div>
+        ${htmlConversao}
+      </div>
+    </div>
+    <div class="home-2col">
+      <div class="card" style="padding:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">Churn mensal (estimativa)</div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Organizações desativadas em cada mês, sobre o total que já existia no início dele.</div>
+        ${htmlChurn}
+      </div>
+      <div class="card" style="padding:14px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">LTV médio estimado por plano</div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Baseado no tempo de permanência atual dos clientes ativos — ainda não reflete churn real de longo prazo.</div>
+        ${htmlLtv || '<div style="font-size:12.5px;color:var(--text-3);padding:8px 0">Sem organizações pagantes ainda.</div>'}
+      </div>
+    </div>
+
+    <button class="btn btn-outline" style="margin-top:14px" onclick="exportarPortfolioCSV()">⬇ Exportar portfólio (CSV)</button>
   `);
 }
 
