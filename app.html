@@ -1712,10 +1712,6 @@ async function renderHomeProvedor() {
   const orgsAll  = orgs  || [];
   const usrsAll  = usuarios || [];
   const orgsComColaborador = new Set((colaboradoresOrgId || []).map(c => c.org_id));
-  // Estado da listagem de organizações (filtro Ativas/Todas) — guardado em
-  // window para o toggle poder re-renderizar só essa parte da tela sem
-  // refazer as consultas ao banco.
-  window._inicioOrgs = { todas: orgsAll, usrs: usrsAll, filtro: 'ativas', busca: '' };
   const total    = orgsAll.length;
   const ativas   = orgsAll.filter(o => o.ativo).length;
   const hoje     = new Date();
@@ -1775,27 +1771,7 @@ async function renderHomeProvedor() {
     return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
   };
 
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Provedor · Toledo Labs</div>`);
-
-  // ── Gráfico de crescimento — novas orgs por mês, últimos 6 meses ──
-  const mesesLabel = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    mesesLabel.push({ chave: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','') });
-  }
-  const dadosCrescimento = mesesLabel.map(m => orgsAll.filter(o => o.created_at?.startsWith(m.chave)).length);
-  const maxCrescimento   = Math.max(...dadosCrescimento, 1);
-  const htmlGrafico = `
-    <div style="display:flex;align-items:flex-end;gap:6px;height:70px;padding:0 4px">
-      ${mesesLabel.map((m,i) => {
-        const altura = Math.max(Math.round((dadosCrescimento[i]/maxCrescimento)*54), dadosCrescimento[i]>0?6:2);
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-          <div style="font-size:10px;color:var(--text-3);font-weight:600">${dadosCrescimento[i]||''}</div>
-          <div style="width:100%;max-width:26px;height:${altura}px;background:${i===mesesLabel.length-1?'var(--amber)':'var(--navy)'};border-radius:3px 3px 0 0;opacity:${i===mesesLabel.length-1?1:.75}"></div>
-          <div style="font-size:10px;color:var(--text-3)">${m.label}</div>
-        </div>`;
-      }).join('')}
-    </div>`;
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Provedor · Toledo Labs</div>`);
 
   // ── Feed de atividade recente (eventos reais de auditoria + acessos de suporte) ──
   const acessosAll = acessos || [];
@@ -1835,7 +1811,7 @@ async function renderHomeProvedor() {
     <div class="home-navy-header" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome.split(' ')[0]}</div>
+          <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome}</div>
           <div class="home-navy-sub">Painel Toledo Labs · Provedor</div>
         </div>
         <div style="width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy)">${iniciais(usuarioAtual.nome)}</div>
@@ -1873,114 +1849,20 @@ async function renderHomeProvedor() {
 
     ${htmlAlertas}
 
-    <!-- Dashboard financeiro por plano -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px">
-        <div style="font-size:10px;font-weight:700;color:var(--blue-h);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Starter</div>
-        <div style="font-size:22px;font-weight:700;color:var(--navy)">${starters}</div>
-        <div style="font-size:11px;color:var(--text-3)">R$${mrrStarter.toLocaleString('pt-BR')}/mês</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--amber);border-radius:var(--r-lg);padding:12px 14px">
-        <div style="font-size:10px;font-weight:700;color:var(--amber-h);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Pro</div>
-        <div style="font-size:22px;font-weight:700;color:var(--navy)">${pros}</div>
-        <div style="font-size:11px;color:var(--text-3)">R$${mrrPro.toLocaleString('pt-BR')}/mês</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid rgba(30,42,74,.3);border-radius:var(--r-lg);padding:12px 14px">
-        <div style="font-size:10px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Enterprise</div>
-        <div style="font-size:22px;font-weight:700;color:var(--navy)">${enterprises}</div>
-        <div style="font-size:11px;color:var(--text-3)">Sob consulta</div>
-      </div>
+    <!-- Atividade recente — a quebra por plano/MRR já mora inteira na tela
+         Financeiro, e a lista completa de organizações mora em
+         Organizações; aqui fica só o que é do dia a dia. -->
+    <div class="card" style="padding:14px 14px 4px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:6px">Atividade recente</div>
+      ${htmlFeed}
     </div>
 
-    <!-- Crescimento e atividade -->
-    <div class="home-2col">
-      <div class="card" style="padding:14px">
-        <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:10px">Crescimento (6 meses)</div>
-        ${htmlGrafico}
-      </div>
-      <div class="card" style="padding:14px 14px 4px">
-        <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:6px">Atividade recente</div>
-        ${htmlFeed}
-      </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-outline" onclick="renderOrgs()">🏢 Ver todas as organizações (${total})</button>
+      <button class="btn btn-outline" onclick="renderFinanceiroProvedor()">💰 Ver Financeiro</button>
     </div>
-
-    ${total > 5 ? `<input type="text" id="buscaOrgsInicio" placeholder="Buscar organização..." oninput="_inicioFiltrarOrgs(this.value)" style="width:100%;margin-bottom:10px;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">` : ''}
-    <div id="listaOrgsInicioWrap">${_htmlListaOrgsMiolo()}</div>
     <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>
   `);
-}
-
-// Lista de organizações da tela Início do Provedor, com filtro Ativas/Todas.
-// Separada em função própria (fora de renderHomeProvedor) para poder ser
-// re-renderizada sozinha pelo toggle, sem refazer as consultas ao banco.
-function _htmlListaOrgsMiolo() {
-  const st = window._inicioOrgs;
-  if (!st) return '';
-  const orgsAll = st.todas;
-  const usrsAll = st.usrs;
-  const ativasCount = orgsAll.filter(o => o.ativo).length;
-  let filtradas = st.filtro === 'ativas' ? orgsAll.filter(o => o.ativo) : orgsAll;
-  if (st.busca) {
-    const f = st.busca.toLowerCase();
-    filtradas = filtradas.filter(o => (o.nome||'').toLowerCase().includes(f));
-  }
-
-  const badgePlano = (plano, ativo) => {
-    if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
-    const map = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
-    const label = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
-    const p = plano || 'starter';
-    return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
-  };
-
-  const listaHtml = filtradas.map(o => {
-    const admins  = usrsAll.filter(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo).length;
-    const total_u = usrsAll.filter(u => u.org_id === o.id).length;
-    return `
-    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
-      <div onclick="verOrgProvedor('${o.id}')" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer">
-        <div style="width:40px;height:40px;border-radius:50%;background:${o.ativo?'rgba(30,42,74,.1)':'var(--gray-100)'};color:${o.ativo?'var(--navy)':'var(--text-3)'};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(o.nome)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
-          <div style="font-size:12px;color:var(--text-3);margin-top:2px">${total_u} usuário${total_u!==1?'s':''} · ${admins} admin${admins!==1?'s':''}</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${badgePlano(o.plano, o.ativo)}
-        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support}</button>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-
-  return `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-      <div style="font-size:13px;font-weight:600;color:var(--text-1)">Organizações (${filtradas.length})</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-outline btn-sm" onclick="exportarPortfolioCSV()">⬇ CSV</button>
-        <button class="btn btn-navy btn-sm" onclick="abrirModalNovaOrg()">+ Nova organização</button>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="btn btn-sm ${st.filtro==='ativas'?'btn-navy':'btn-outline'}" onclick="_inicioMudarFiltroOrgs('ativas')">Ativas (${ativasCount})</button>
-      <button class="btn btn-sm ${st.filtro==='todas'?'btn-navy':'btn-outline'}" onclick="_inicioMudarFiltroOrgs('todas')">Todas (${orgsAll.length})</button>
-    </div>
-    <div class="card" style="padding:0;margin-bottom:14px">
-      ${listaHtml || `<div class="empty" style="padding:32px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhuma organização${st.filtro==='ativas'?' ativa':''}</div><div class="empty-sub">${st.filtro==='ativas'?'Todas as organizações estão inativas no momento — use o filtro "Todas" para ver.':'Crie a primeira organização para começar.'}</div></div>`}
-    </div>
-  `;
-}
-
-function _inicioMudarFiltroOrgs(v) {
-  const st = window._inicioOrgs;
-  if (!st) return;
-  st.filtro = v;
-  _setElBoth('listaOrgsInicioWrap', _htmlListaOrgsMiolo());
-}
-function _inicioFiltrarOrgs(v) {
-  const st = window._inicioOrgs;
-  if (!st) return;
-  st.busca = (v||'').trim();
-  _setElBoth('listaOrgsInicioWrap', _htmlListaOrgsMiolo());
 }
 
 // Busca global (colaborador/usuário em qualquer organização) — com
@@ -2677,12 +2559,12 @@ async function renderHomeAdmin() {
     </div>`;
   }).join('');
 
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Administrador</div>`);
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Administrador</div>`);
   setConteudo(`
     <div class="home-navy-header">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome.split(' ')[0]}</div>
+          <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome}</div>
           <div class="home-navy-sub">${hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</div>
         </div>
         <div style="width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy);flex-shrink:0">${iniciais(usuarioAtual.nome)}</div>
@@ -2802,7 +2684,7 @@ async function renderHomeComercial() {
     sb.from('turmas').select('id,status').eq('org_id',oi),
     sb.from('clientes').select('id').eq('org_id',oi).eq('ativo',true),
   ]);
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Comercial</div>`);
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Comercial</div>`);
   setConteudo(`
     <div class="stats-grid">
       <div class="stat-card navy"><div class="stat-label">Agendadas</div><div class="stat-value">${(turmas||[]).filter(t=>t.status==='agendada').length}</div><div class="stat-sub">Turmas</div></div>
@@ -2908,7 +2790,7 @@ async function renderHomeInstrutor() {
     }).filter(Boolean);
   }
 
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome.split(' ')[0]}</div><div class="mh-badge">Instrutor</div>`);
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Instrutor</div>`);
 
   // ── Helper: linha compacta de sessão (reaproveitada em vários blocos) ──
   const _linhaSessao = (s, corIcone, icone, badge) => `
@@ -3092,49 +2974,76 @@ async function renderFinanceiroProvedor() {
     return { plano: p, meses: Math.round(mesesMedios*10)/10, ltv: Math.round(mesesMedios * VALOR_PLANO[p]), qtd: orgsDoPlano.length };
   });
 
+  // Gráficos de barra (mesmo padrão visual das outras barras da tela —
+  // "Evolução do MRR" logo acima). Cor diferente por métrica pra ficar
+  // fácil diferenciar um card do outro num piscar de olhos.
   const htmlCohort = `
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <tr style="text-align:left;color:var(--text-3)"><th style="padding:4px 6px 4px 0;font-weight:600">Mês</th><th style="padding:4px 6px;font-weight:600">Criadas</th><th style="padding:4px 6px;font-weight:600">Ativas hoje</th><th style="padding:4px 0;font-weight:600">Retenção</th></tr>
-      ${cohortData.map(c => `
-      <tr style="border-top:1px solid var(--border)">
-        <td style="padding:6px 6px 6px 0">${c.label}</td>
-        <td style="padding:6px">${c.total}</td>
-        <td style="padding:6px">${c.ativasHoje}</td>
-        <td style="padding:6px 0;font-weight:700;color:var(--navy)">${c.total ? Math.round(c.ativasHoje/c.total*100) : 0}%</td>
-      </tr>`).join('')}
-    </table>`;
+    <div style="display:flex;align-items:flex-end;gap:6px;height:86px;padding:0 2px">
+      ${cohortData.map((c,i) => {
+        const pct = c.total ? Math.round(c.ativasHoje/c.total*100) : 0;
+        const isLast = i === cohortData.length-1;
+        const altura = c.total ? Math.max(Math.round(pct*0.58), 4) : 2;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" title="${c.ativasHoje} de ${c.total} organizações criadas em ${c.label} seguem ativas hoje">
+          <div style="font-size:10px;color:var(--text-2);font-weight:700">${c.total ? pct+'%' : '—'}</div>
+          <div style="width:100%;max-width:26px;height:${altura}px;background:${c.total ? (isLast?'var(--amber)':'var(--navy)') : 'var(--border)'};border-radius:3px 3px 0 0;opacity:${isLast?1:.8}"></div>
+          <div style="font-size:10px;color:var(--text-3)">${c.label}</div>
+          <div style="font-size:9px;color:var(--text-3)">${c.total} org.</div>
+        </div>`;
+      }).join('')}
+    </div>`;
 
   const htmlConversao = `
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <tr style="text-align:left;color:var(--text-3)"><th style="padding:4px 6px 4px 0;font-weight:600">Mês</th><th style="padding:4px 6px;font-weight:600">Criadas</th><th style="padding:4px 6px;font-weight:600">Converteram</th><th style="padding:4px 0;font-weight:600">Taxa</th></tr>
-      ${cohortData.map(c => `
-      <tr style="border-top:1px solid var(--border)">
-        <td style="padding:6px 6px 6px 0">${c.label}</td>
-        <td style="padding:6px">${c.total}</td>
-        <td style="padding:6px">${c.convertidas}</td>
-        <td style="padding:6px 0;font-weight:700;color:var(--navy)">${c.total ? Math.round(c.convertidas/c.total*100) : 0}%</td>
-      </tr>`).join('')}
-    </table>`;
+    <div style="display:flex;align-items:flex-end;gap:6px;height:86px;padding:0 2px">
+      ${cohortData.map((c,i) => {
+        const pct = c.total ? Math.round(c.convertidas/c.total*100) : 0;
+        const isLast = i === cohortData.length-1;
+        const altura = c.total ? Math.max(Math.round(pct*0.58), 4) : 2;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" title="${c.convertidas} de ${c.total} organizações criadas em ${c.label} viraram assinatura paga">
+          <div style="font-size:10px;color:var(--text-2);font-weight:700">${c.total ? pct+'%' : '—'}</div>
+          <div style="width:100%;max-width:26px;height:${altura}px;background:${c.total ? (isLast?'var(--blue-h)':'var(--blue)') : 'var(--border)'};border-radius:3px 3px 0 0;opacity:${isLast?1:.8}"></div>
+          <div style="font-size:10px;color:var(--text-3)">${c.label}</div>
+          <div style="font-size:9px;color:var(--text-3)">${c.total} org.</div>
+        </div>`;
+      }).join('')}
+    </div>`;
 
+  // Churn vira gráfico de linha, não de barra — é a métrica que mais se
+  // beneficia de mostrar tendência (subindo/descendo) em vez de valores
+  // isolados por mês. SVG pequeno, sem biblioteca externa.
+  const churnMax = Math.max(...churnData.map(c=>c.pct), 5);
+  const churnW = 100, churnH = 64, churnPadX = 4;
+  const churnStepX = (churnW - churnPadX*2) / Math.max(churnData.length-1, 1);
+  const churnPts = churnData.map((c,i) => ({
+    x: churnPadX + i*churnStepX,
+    y: 4 + (churnH-16) * (1 - c.pct/churnMax),
+    c,
+  }));
+  const churnLinha = churnPts.map((p,i) => `${i===0?'M':'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const churnArea  = `${churnLinha} L ${churnPts[churnPts.length-1].x.toFixed(1)} ${churnH-8} L ${churnPts[0].x.toFixed(1)} ${churnH-8} Z`;
   const htmlChurn = `
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <tr style="text-align:left;color:var(--text-3)"><th style="padding:4px 6px 4px 0;font-weight:600">Mês</th><th style="padding:4px 6px;font-weight:600">Ativas no início</th><th style="padding:4px 6px;font-weight:600">Canceladas</th><th style="padding:4px 0;font-weight:600">Churn</th></tr>
-      ${churnData.map(c => `
-      <tr style="border-top:1px solid var(--border)">
-        <td style="padding:6px 6px 6px 0">${c.label}</td>
-        <td style="padding:6px">${c.ativasInicioMes}</td>
-        <td style="padding:6px">${c.canceladas}</td>
-        <td style="padding:6px 0;font-weight:700;color:${c.pct>0?'var(--red-text)':'var(--navy)'}">${c.pct}%</td>
-      </tr>`).join('')}
-    </table>`;
+    <svg viewBox="0 0 ${churnW} ${churnH+14}" style="width:100%;height:100px;overflow:visible">
+      <path d="${churnArea}" fill="#DC2626" opacity="0.08"></path>
+      <path d="${churnLinha}" fill="none" stroke="#DC2626" stroke-width="1.6" vector-effect="non-scaling-stroke"></path>
+      ${churnPts.map(p => `
+        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.2" fill="${p.c.pct>0?'#DC2626':'#1E2A4A'}"></circle>
+        <text x="${p.x.toFixed(1)}" y="${(p.y-4.5).toFixed(1)}" font-size="5.2" text-anchor="middle" fill="#64748B" font-weight="700">${p.c.pct}%</text>
+        <text x="${p.x.toFixed(1)}" y="${churnH+11}" font-size="5.2" text-anchor="middle" fill="#94A3B8">${p.c.label}</text>
+      `).join('')}
+    </svg>`;
 
+  // LTV — barra horizontal (mesmo padrão de "Top organizações por receita",
+  // mais abaixo nesta mesma tela), largura proporcional ao maior valor.
+  const maxLtv = Math.max(...ltvPorPlano.map(l => l.ltv), 1);
   const htmlLtv = ltvPorPlano.map(l => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div>
+    <div style="padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px">
         <div style="font-size:13px;font-weight:600;color:var(--navy);text-transform:capitalize">${l.plano}</div>
-        <div style="font-size:11px;color:var(--text-3)">${l.qtd} organização${l.qtd!==1?'ões':''} · ${l.meses} meses de permanência média</div>
+        <div style="font-size:15px;font-weight:700;color:var(--green)">${l.ltv ? `R$${l.ltv.toLocaleString('pt-BR')}` : '—'}</div>
       </div>
-      <div style="font-size:16px;font-weight:700;color:var(--navy)">${l.ltv ? `R$${l.ltv.toLocaleString('pt-BR')}` : '—'}</div>
+      <div style="width:100%;height:8px;background:var(--bg);border-radius:5px;overflow:hidden">
+        <div style="width:${l.ltv ? Math.max(Math.round(l.ltv/maxLtv*100),4) : 0}%;height:100%;background:var(--green);border-radius:5px"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">${l.qtd} organização${l.qtd!==1?'ões':''} · ${l.meses} meses de permanência média</div>
     </div>`).join('');
 
   // ── Histórico de MRR (estimativa) — últimos 6 meses ──
@@ -3336,25 +3245,31 @@ function _renderOrgsLista(orgs) {
   // no filtro para quem precisar ver o resto.
   _orgsListaFiltrada = orgs.filter(o => o.ativo);
   _paginaOrgs = 1;
-  const hoje    = new Date();
   const ativas  = orgs.filter(o=>o.ativo).length;
-  const usrsAll = _orgsUsuariosCache;
 
-  const starters    = orgs.filter(o => o.ativo && (!o.plano || o.plano === 'starter')).length;
-  const pros        = orgs.filter(o => o.ativo && o.plano === 'pro').length;
-  const enterprises = orgs.filter(o => o.ativo && o.plano === 'enterprise').length;
-  const mrr = starters*197 + pros*397;
-
-  // Central de alertas — mesma lógica da Home, disponível aqui também
-  const diasAte = (d) => Math.ceil((new Date(d) - hoje) / 86400000);
-  const trialVencendo = orgs.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) >= 0 && diasAte(o.trial_fim) <= 3);
-  const trialVencido  = orgs.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
-  const semAdmin       = orgs.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
-  const alertas = [
-    ...trialVencido.map(o => `🔴 Trial vencido: <strong>${escapeHtml(o.nome)}</strong>`),
-    ...trialVencendo.map(o => `⚠️ Trial vence em ${diasAte(o.trial_fim)}d: <strong>${escapeHtml(o.nome)}</strong>`),
-    ...semAdmin.map(o => `⚠️ Sem administrador ativo: <strong>${escapeHtml(o.nome)}</strong>`),
-  ];
+  // Gráfico de crescimento — novas orgs por mês, últimos 6 meses. Vivia no
+  // Início; trazido pra cá porque é uma métrica de portfólio, e a tela
+  // Início já tem a Central de Alertas cobrindo o que precisa de ação (não
+  // repetimos mais o mesmo alerta nas duas telas).
+  const hoje = new Date();
+  const mesesCrescimento = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    mesesCrescimento.push({ chave: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','') });
+  }
+  const dadosCrescimento = mesesCrescimento.map(m => orgs.filter(o => o.created_at?.startsWith(m.chave)).length);
+  const maxCrescimento   = Math.max(...dadosCrescimento, 1);
+  const htmlCrescimento = `
+    <div style="display:flex;align-items:flex-end;gap:6px;height:70px;padding:0 4px">
+      ${mesesCrescimento.map((m,i) => {
+        const altura = Math.max(Math.round((dadosCrescimento[i]/maxCrescimento)*54), dadosCrescimento[i]>0?6:2);
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="font-size:10px;color:var(--text-3);font-weight:600">${dadosCrescimento[i]||''}</div>
+          <div style="width:100%;max-width:26px;height:${altura}px;background:${i===mesesCrescimento.length-1?'var(--amber)':'var(--navy)'};border-radius:3px 3px 0 0;opacity:${i===mesesCrescimento.length-1?1:.75}"></div>
+          <div style="font-size:10px;color:var(--text-3)">${m.label}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
 
   setConteudo(`
     <div class="home-navy-header" style="margin-bottom:14px">
@@ -3371,21 +3286,22 @@ function _renderOrgsLista(orgs) {
           <div class="home-kpi-delta green">${ativas} ativas</div>
         </div>
         <div class="home-kpi">
-          <div class="home-kpi-val">${orgs.length-ativas}</div>
-          <div class="home-kpi-lbl">Inativas</div>
+          <div class="home-kpi-val">${ativas}</div>
+          <div class="home-kpi-lbl">Ativas</div>
         </div>
         <div class="home-kpi">
-          <div class="home-kpi-val">R$${mrr.toLocaleString('pt-BR')}</div>
-          <div class="home-kpi-lbl">MRR estimado</div>
-          <div class="home-kpi-delta green">${pros}P · ${starters}S · ${enterprises}E</div>
+          <div class="home-kpi-val">${orgs.length-ativas}</div>
+          <div class="home-kpi-lbl">Inativas</div>
         </div>
       </div>
     </div>
 
-    ${alertas.length ? `
-    <div style="margin-bottom:14px">
-      ${alertas.slice(0,6).map(a => `<div style="padding:9px 14px;border-radius:var(--r-md);margin-bottom:6px;font-size:12.5px;color:var(--amber-text);background:var(--amber-l);border-left:3px solid var(--amber)">${a}</div>`).join('')}
-    </div>` : ''}
+    <!-- Detalhes financeiros (MRR, plano) ficam só na tela Financeiro, pra
+         não repetir o mesmo número em 3 lugares diferentes. -->
+    <div class="card" style="padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:10px">Crescimento (6 meses)</div>
+      ${htmlCrescimento}
+    </div>
 
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="aplicarFiltrosOrgs()">
