@@ -2893,7 +2893,7 @@ async function renderFinanceiroProvedor() {
     // mais abaixo) — encontra quando cada organização foi desativada,
     // olhando o histórico de auditoria (não existe coluna de data de
     // cancelamento direto em organizacoes).
-    sb.from('eventos_sistema').select('acao,dados_antigos,dados_novos,criado_em').eq('tabela','organizacoes').order('criado_em',{ascending:false}).limit(500),
+    sb.from('eventos_sistema').select('acao,registro_id,dados_antigos,dados_novos,criado_em').eq('tabela','organizacoes').order('criado_em',{ascending:false}).limit(500),
   ]);
   const orgsAll = orgs || [];
   const hoje = new Date();
@@ -2934,6 +2934,7 @@ async function renderFinanceiroProvedor() {
     mesesAnalise.push({
       chave: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
       label: d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.',''),
+      labelCurto: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''), // só o mês, pro eixo do gráfico de churn (sem espaço pra "de XX")
       inicioMes: new Date(d.getFullYear(), d.getMonth(), 1),
       fimMes: new Date(d.getFullYear(), d.getMonth()+1, 0, 23,59,59),
     });
@@ -2953,15 +2954,23 @@ async function renderFinanceiroProvedor() {
 
   // Churn mensal (estimativa): organizações que existiam antes do início
   // do mês, e quantas foram desativadas (ativo true->false) dentro dele,
-  // segundo o histórico de auditoria.
+  // segundo o histórico de auditoria. Conta organizações DISTINTAS
+  // (registro_id), não eventos — uma mesma organização desativada e
+  // reativada mais de uma vez no mês (comum em conta de teste) não pode
+  // contar como 2 cancelamentos.
   const churnData = mesesAnalise.map(m => {
     const ativasInicioMes = orgsAll.filter(o => new Date(o.created_at) < m.inicioMes).length;
-    const canceladasNoMes = (eventosOrgTodos||[]).filter(e => {
-      if (e.acao !== 'UPDATE' || e.dados_antigos?.ativo !== true || e.dados_novos?.ativo !== false) return false;
-      const dt = new Date(e.criado_em);
-      return dt >= m.inicioMes && dt <= m.fimMes;
-    }).length;
-    return { label: m.label, ativasInicioMes, canceladas: canceladasNoMes, pct: ativasInicioMes > 0 ? Math.round((canceladasNoMes/ativasInicioMes)*1000)/10 : 0 };
+    const orgsCanceladasNoMes = new Set(
+      (eventosOrgTodos||[])
+        .filter(e => {
+          if (e.acao !== 'UPDATE' || e.dados_antigos?.ativo !== true || e.dados_novos?.ativo !== false) return false;
+          const dt = new Date(e.criado_em);
+          return dt >= m.inicioMes && dt <= m.fimMes;
+        })
+        .map(e => e.registro_id)
+    );
+    const canceladasNoMes = orgsCanceladasNoMes.size;
+    return { label: m.label, labelCurto: m.labelCurto, ativasInicioMes, canceladas: canceladasNoMes, pct: ativasInicioMes > 0 ? Math.min(100, Math.round((canceladasNoMes/ativasInicioMes)*1000)/10) : 0 };
   });
 
   // LTV médio estimado por plano — aproximação pelo tempo de permanência
@@ -3010,24 +3019,30 @@ async function renderFinanceiroProvedor() {
   // Churn vira gráfico de linha, não de barra — é a métrica que mais se
   // beneficia de mostrar tendência (subindo/descendo) em vez de valores
   // isolados por mês. SVG pequeno, sem biblioteca externa.
-  const churnMax = Math.max(...churnData.map(c=>c.pct), 5);
-  const churnW = 100, churnH = 64, churnPadX = 4;
+  // Canvas bem maior que a primeira versão (que ficou pequena e com rótulos
+  // sobrepostos) — folga generosa nas margens e rótulo do eixo X só com o
+  // mês (sem "de XX", que não cabia no espaço entre os pontos).
+  const churnMax = Math.max(...churnData.map(c=>c.pct), 10);
+  const churnW = 320, churnPlotH = 90, churnPadX = 26, churnPadTop = 24, churnPadBottom = 26;
+  const churnH = churnPadTop + churnPlotH + churnPadBottom;
   const churnStepX = (churnW - churnPadX*2) / Math.max(churnData.length-1, 1);
   const churnPts = churnData.map((c,i) => ({
     x: churnPadX + i*churnStepX,
-    y: 4 + (churnH-16) * (1 - c.pct/churnMax),
+    y: churnPadTop + churnPlotH * (1 - c.pct/churnMax),
     c,
   }));
+  const churnBaseY = churnPadTop + churnPlotH;
   const churnLinha = churnPts.map((p,i) => `${i===0?'M':'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  const churnArea  = `${churnLinha} L ${churnPts[churnPts.length-1].x.toFixed(1)} ${churnH-8} L ${churnPts[0].x.toFixed(1)} ${churnH-8} Z`;
+  const churnArea  = `${churnLinha} L ${churnPts[churnPts.length-1].x.toFixed(1)} ${churnBaseY.toFixed(1)} L ${churnPts[0].x.toFixed(1)} ${churnBaseY.toFixed(1)} Z`;
   const htmlChurn = `
-    <svg viewBox="0 0 ${churnW} ${churnH+14}" style="width:100%;height:100px;overflow:visible">
+    <svg viewBox="0 0 ${churnW} ${churnH}" style="width:100%;height:150px;display:block">
+      <line x1="${churnPadX}" y1="${churnBaseY.toFixed(1)}" x2="${churnW-churnPadX}" y2="${churnBaseY.toFixed(1)}" stroke="#E2E8F0" stroke-width="1"></line>
       <path d="${churnArea}" fill="#DC2626" opacity="0.08"></path>
-      <path d="${churnLinha}" fill="none" stroke="#DC2626" stroke-width="1.6" vector-effect="non-scaling-stroke"></path>
+      <path d="${churnLinha}" fill="none" stroke="#DC2626" stroke-width="2"></path>
       ${churnPts.map(p => `
-        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.2" fill="${p.c.pct>0?'#DC2626':'#1E2A4A'}"></circle>
-        <text x="${p.x.toFixed(1)}" y="${(p.y-4.5).toFixed(1)}" font-size="5.2" text-anchor="middle" fill="#64748B" font-weight="700">${p.c.pct}%</text>
-        <text x="${p.x.toFixed(1)}" y="${churnH+11}" font-size="5.2" text-anchor="middle" fill="#94A3B8">${p.c.label}</text>
+        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="${p.c.pct>0?'#DC2626':'#1E2A4A'}"></circle>
+        <text x="${p.x.toFixed(1)}" y="${(p.y-9).toFixed(1)}" font-size="12" text-anchor="middle" fill="#334155" font-weight="700">${p.c.pct}%</text>
+        <text x="${p.x.toFixed(1)}" y="${(churnBaseY+18).toFixed(1)}" font-size="11" text-anchor="middle" fill="#94A3B8">${p.c.labelCurto}</text>
       `).join('')}
     </svg>`;
 
