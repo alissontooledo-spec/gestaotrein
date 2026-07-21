@@ -103,6 +103,14 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .su-name{font-size:12px;font-weight:500;color:#fff;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .su-role{font-size:10px;color:rgba(255,255,255,.38)}
 
+/* ── Gatilho da paleta de comandos, na sidebar (visível também no mobile,
+   via o menu hambúrguer — não precisa de teclado físico pra abrir) ── */
+.sidebar-search{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:8px 10px;border-radius:var(--r-md);border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-size:12px;font-family:inherit;cursor:pointer;transition:background .12s,color .12s;width:calc(100% - 20px)}
+.sidebar-search:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.85)}
+.sidebar-search svg{width:14px;height:14px;flex-shrink:0}
+.sidebar-search-label{flex:1;text-align:left}
+.sidebar-search-kbd{font-size:9.5px;font-weight:600;background:rgba(255,255,255,.08);padding:2px 5px;border-radius:4px;letter-spacing:.03em;flex-shrink:0}
+
 /* ── Main content area ── */
 .main-content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
 .main-header{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
@@ -260,6 +268,28 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .modal-close:hover{color:var(--text-1)}
 .modal-body{padding:20px;overflow-y:auto;flex:1}
 .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+
+/* ── Paleta de comandos (Ctrl+K / Cmd+K) ── acima do modal-overlay (500)
+   pra poder ser aberta a qualquer momento, sem depender de estar numa tela
+   específica — vive fora de #screenApp, junto com o modal genérico. */
+.cmdk-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:520;align-items:flex-start;justify-content:center;padding:12vh 16px 0}
+.cmdk-overlay.show{display:flex}
+.cmdk-box{background:var(--surface);border-radius:var(--r-xl);box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:560px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden;animation:slideUp .15s ease}
+.cmdk-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text-3);flex-shrink:0}
+.cmdk-input-row svg{flex-shrink:0}
+.cmdk-input-row input{flex:1;min-width:0;border:none;outline:none;font-size:15px;font-family:inherit;color:var(--text-1);background:transparent}
+.cmdk-results{overflow-y:auto;flex:1;padding:6px}
+.cmdk-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);padding:10px 12px 4px;font-weight:600}
+.cmdk-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-md);cursor:pointer;font-size:13.5px;color:var(--text-1)}
+.cmdk-item .ci-icon{width:20px;flex-shrink:0;color:var(--text-3);display:flex;align-items:center;justify-content:center}
+.cmdk-item .ci-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmdk-item .ci-tag{font-size:10px;color:var(--text-3);flex-shrink:0}
+.cmdk-item.active{background:var(--amber-l)}
+.cmdk-item.active .ci-icon{color:var(--amber-text)}
+.cmdk-empty{padding:32px 16px;text-align:center;font-size:13px;color:var(--text-3)}
+.cmdk-footer{display:flex;gap:16px;padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);flex-shrink:0}
+.cmdk-footer kbd{background:var(--gray-100);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-family:inherit;font-size:10px;margin-right:2px}
+@media(max-width:640px){.cmdk-overlay{padding-top:6vh}.cmdk-footer{display:none}}
 
 /* ── Dropdown menu ── */
 .menu-item{padding:9px 14px;font-size:13px;color:var(--text-1);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
@@ -520,6 +550,11 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
         </div>
       </div>
     </div>
+    <button class="sidebar-search" onclick="abrirPaletaComandos()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span class="sidebar-search-label">Buscar</span>
+      <span class="sidebar-search-kbd">Ctrl K</span>
+    </button>
     <div class="sidebar-nav" id="sidebarNav"></div>
     <div class="sidebar-bottom">
       <div class="sidebar-user" onclick="irPara('conta')">
@@ -546,6 +581,21 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
     <span class="sino-badge" id="sinoBadge"></span>
   </button>
   <div class="sino-painel" id="sinoPainel"></div>
+</div>
+
+<div class="cmdk-overlay" id="cmdkOverlay" onclick="if(event.target===this)fecharPaletaComandos()">
+  <div class="cmdk-box">
+    <div class="cmdk-input-row">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="cmdkInput" placeholder="Ir para uma tela ou organização..." autocomplete="off" oninput="_cmdkBuscar(this.value)" onkeydown="_cmdkTeclado(event)">
+    </div>
+    <div class="cmdk-results" id="cmdkResultados"></div>
+    <div class="cmdk-footer">
+      <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
+      <span><kbd>Enter</kbd> selecionar</span>
+      <span><kbd>Esc</kbd> fechar</span>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay" style="display:none">
@@ -868,6 +918,176 @@ document.addEventListener('click', (e) => {
   const btn    = document.getElementById('sinoBtn');
   if (painel && !painel.contains(e.target) && btn && !btn.contains(e.target)) {
     _fecharSino();
+  }
+});
+
+// ============================================================
+// PALETA DE COMANDOS (Ctrl+K / Cmd+K) — busca rápida pra pular direto pra
+// qualquer tela do menu do perfil logado ou, no caso do Provedor, pra
+// qualquer organização pelo nome. Mesmo padrão do sino: vive fora de
+// #mainBody/#mobileBody/#mobileHeader, então não é apagada ao trocar de
+// tela. Abre por Ctrl+K/Cmd+K (atalho global) ou pelo botão "Buscar" na
+// sidebar (funciona também no mobile, via o menu hambúrguer, sem depender
+// de teclado físico).
+// ============================================================
+let _cmdkFlat = [];    // itens renderizados agora, na ordem visual (telas primeiro, organizações depois)
+let _cmdkAtivo = -1;   // índice (em _cmdkFlat) destacado pelo teclado/mouse
+let _cmdkOrgsTimer = null;
+let _cmdkBuscaId = 0;  // evita que uma resposta de busca desatualizada sobrescreva uma mais recente
+
+function abrirPaletaComandos() {
+  if (!usuarioAtual) return;
+  const overlay = document.getElementById('cmdkOverlay');
+  const input   = document.getElementById('cmdkInput');
+  if (!overlay || !input) return;
+  fecharSidebar(); // se veio do menu hambúrguer no mobile, fecha o off-canvas por trás
+  overlay.classList.add('show');
+  input.value = '';
+  _cmdkBuscar('');
+  setTimeout(() => input.focus(), 10);
+}
+
+function fecharPaletaComandos() {
+  const overlay = document.getElementById('cmdkOverlay');
+  if (overlay) overlay.classList.remove('show');
+  clearTimeout(_cmdkOrgsTimer);
+  _cmdkBuscaId++; // invalida qualquer busca de organização já em voo (clearTimeout só cancela o que ainda não disparou)
+}
+
+// Telas do menu do perfil atual, filtradas pelo termo — reaproveita NAV
+// (mesma fonte da sidebar/bottom-nav), sem duplicar a lista em outro lugar.
+function _cmdkItensNav(termo) {
+  const perfil = usuarioAtual?.perfil;
+  const itens = (NAV[perfil] || []).filter(i => i.id); // ignora separadores {sec:...}
+  const t = termo.trim().toLowerCase();
+  return itens
+    .filter(i => !t || i.l.toLowerCase().includes(t))
+    .map(i => ({ tipo:'nav', id:i.id, label:i.l, icon:i.icon, tag:'' }));
+}
+
+function _cmdkBuscar(termo) {
+  termo = termo || '';
+  const itensNav = _cmdkItensNav(termo);
+  clearTimeout(_cmdkOrgsTimer);
+  // Invalida SEMPRE (não só quando uma busca de organização é de fato
+  // disparada) — clearTimeout só cancela o timer se ele ainda não tiver
+  // estourado; se a requisição já estava em voo (rede lenta, aba em
+  // segundo plano etc.), só descartar a resposta pelo id evita que ela
+  // sobrescreva um estado mais novo (termo apagado, termo diferente, ou
+  // a paleta já fechada) quando finalmente chegar.
+  const idBusca = ++_cmdkBuscaId;
+  if (usuarioAtual?.perfil !== 'provedor' || termo.trim().length < 2) {
+    _cmdkFlat = itensNav;
+    _cmdkRenderizar(false);
+    return;
+  }
+  // Provedor com pelo menos 2 letras digitadas: mostra as telas já
+  // filtradas na hora, e busca organizações com debounce (evita 1
+  // consulta ao banco por tecla digitada).
+  _cmdkFlat = itensNav;
+  _cmdkRenderizar(true); // true = organizações ainda carregando
+  _cmdkOrgsTimer = setTimeout(async () => {
+    const { data } = await sb.from('organizacoes').select('id,nome,ativo').ilike('nome', `%${termo.trim()}%`).order('nome').limit(8);
+    if (idBusca !== _cmdkBuscaId) return; // busca obsoleta (termo mudou ou paleta foi fechada) — descarta
+    const itensOrg = (data||[]).map(o => ({ tipo:'org', id:o.id, label:o.nome, icon:'building', tag:o.ativo?'Ativa':'Inativa' }));
+    _cmdkFlat = itensNav.concat(itensOrg);
+    _cmdkRenderizar(false);
+  }, 300);
+}
+
+function _cmdkRenderizar(carregandoOrg) {
+  const painel = document.getElementById('cmdkResultados');
+  if (!painel) return;
+  _cmdkAtivo = _cmdkFlat.length ? 0 : -1;
+  const itensNav = _cmdkFlat.filter(i => i.tipo === 'nav');
+  const itensOrg = _cmdkFlat.filter(i => i.tipo === 'org');
+  const ehProvedor = usuarioAtual?.perfil === 'provedor';
+  if (!itensNav.length && !itensOrg.length && !carregandoOrg && !ehProvedor) {
+    painel.innerHTML = '<div class="cmdk-empty">Nada encontrado.</div>';
+    return;
+  }
+  let html = '';
+  if (itensNav.length) {
+    html += '<div class="cmdk-section-label">Telas</div>';
+    html += itensNav.map(it => _cmdkHtmlItem(it, _cmdkFlat.indexOf(it))).join('');
+  } else if (!ehProvedor) {
+    html = '<div class="cmdk-empty">Nada encontrado.</div>';
+  }
+  if (ehProvedor) {
+    const termoAtual = document.getElementById('cmdkInput')?.value.trim() || '';
+    html += '<div class="cmdk-section-label">Organizações</div>';
+    if (carregandoOrg) {
+      html += '<div class="cmdk-empty" style="padding:14px">Buscando...</div>';
+    } else if (itensOrg.length) {
+      html += itensOrg.map(it => _cmdkHtmlItem(it, _cmdkFlat.indexOf(it))).join('');
+    } else {
+      html += `<div class="cmdk-empty" style="padding:14px">${termoAtual.length >= 2 ? 'Nenhuma organização encontrada.' : 'Digite ao menos 2 letras pra buscar organizações.'}</div>`;
+    }
+  }
+  painel.innerHTML = html;
+}
+
+function _cmdkHtmlItem(it, idx) {
+  return `
+    <div class="cmdk-item ${idx===0?'active':''}" data-idx="${idx}" onclick="_cmdkExecutar(${idx})" onmouseenter="_cmdkDestacar(${idx})">
+      <span class="ci-icon">${ICONS[it.icon]||''}</span>
+      <span class="ci-label">${escapeHtml(it.label)}</span>
+      ${it.tag ? `<span class="ci-tag">${it.tag}</span>` : ''}
+    </div>`;
+}
+
+function _cmdkDestacar(idx) {
+  _cmdkAtivo = idx;
+  document.querySelectorAll('#cmdkResultados .cmdk-item').forEach(el => {
+    el.classList.toggle('active', Number(el.dataset.idx) === idx);
+  });
+}
+
+function _cmdkExecutar(idx) {
+  const it = _cmdkFlat[idx];
+  if (!it) return;
+  fecharPaletaComandos();
+  if (it.tipo === 'nav') irPara(it.id);
+  else if (it.tipo === 'org') verOrgProvedor(it.id);
+}
+
+function _cmdkTeclado(e) {
+  if (e.key === 'Escape') { fecharPaletaComandos(); return; }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (_cmdkFlat.length) { _cmdkDestacar(Math.min(_cmdkAtivo+1, _cmdkFlat.length-1)); _cmdkGarantirVisivel(); }
+    return;
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (_cmdkFlat.length) { _cmdkDestacar(Math.max(_cmdkAtivo-1, 0)); _cmdkGarantirVisivel(); }
+    return;
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_cmdkAtivo >= 0) _cmdkExecutar(_cmdkAtivo);
+  }
+}
+
+function _cmdkGarantirVisivel() {
+  const ativo = document.querySelector(`#cmdkResultados .cmdk-item[data-idx="${_cmdkAtivo}"]`);
+  if (ativo) ativo.scrollIntoView({ block:'nearest' });
+}
+
+// Atalho global — Ctrl+K (Windows/Linux) ou Cmd+K (Mac). Não abre se não
+// estiver logado, ou se já houver um modal genérico aberto (evita
+// empilhar duas camadas de overlay concorrendo pela tecla Esc).
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+  e.preventDefault();
+  if (!usuarioAtual) return;
+  const modalAberto = document.getElementById('modalOverlay')?.style.display !== 'none';
+  if (modalAberto) return;
+  const overlay = document.getElementById('cmdkOverlay');
+  if (overlay && overlay.classList.contains('show')) {
+    document.getElementById('cmdkInput')?.focus();
+  } else {
+    abrirPaletaComandos();
   }
 });
 
