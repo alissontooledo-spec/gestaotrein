@@ -2046,13 +2046,13 @@ async function fazerLogout() {
 // NAVEGAÇÃO
 // ============================================================
 const NAV = {
-  provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'conta',l:'Minha conta',icon:'user'}],
+  provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'conta',l:'Minha conta',icon:'user'}],
   administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 const NAV_BOTTOM = {
-  provedor:['home','orgs','financeiro','conta'],
+  provedor:['home','orgs','financeiro','adocao','conta'],
   administrador:['home','turmas','clientes','colaboradores','conformidade','relatorios','equipe','conta'],
   comercial:['home','turmas','relatorios','clientes','conformidade','conta'],
   instrutor:['home','agenda','historico','conta'],
@@ -2105,7 +2105,7 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {home:'Início',orgs:'Organizações',financeiro:'Financeiro',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
+const TITULOS = {home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
 async function irPara(pagina, params={}) {
   // Bloqueia navegação para telas fora do menu do perfil atual (ver
@@ -2127,6 +2127,7 @@ async function irPara(pagina, params={}) {
       case 'home':          await renderHome(); break;
       case 'orgs':          await renderOrgs(); break;
       case 'financeiro':    await renderFinanceiroProvedor(); break;
+      case 'adocao':        await renderAdocaoProvedor(); break;
       case 'clientes':      await renderClientes(); break;
       case 'colaboradores': await renderColaboradores(); break;
       case 'catalogo':      await renderCatalogo(); break;
@@ -3801,6 +3802,186 @@ async function renderFinanceiroProvedor() {
     </div>
 
     <button class="btn btn-outline" style="margin-top:14px" onclick="exportarPortfolioCSV()">⬇ Exportar portfólio (CSV)</button>
+  `);
+}
+
+// ============================================================
+// ADOÇÃO DE RECURSOS (Provedor) — o quanto cada organização realmente usa
+// da plataforma, não só se está ativa/paga. Mede presença (já usou ao
+// menos uma vez), não volume — o objetivo é apontar quem está com baixo
+// engajamento (risco de churn silencioso) ou quem nunca configurou algo
+// básico (oportunidade de onboarding), não fazer um ranking de uso.
+//
+// Uma query por tabela (select enxuto, só org_id), sem N+1 por
+// organização — mesmo padrão já usado no sino e na Central de Alertas.
+// ============================================================
+let _adocaoDadosCache = null; // { dadosOrgs, RECURSOS_DEF } — evita reconsultar o banco só pra trocar o filtro Ativas/Todas
+
+async function renderAdocaoProvedor() {
+  const [
+    { data: orgs },
+    { data: colaboradoresRows },
+    { data: catalogoRows },
+    { data: turmasRows },
+    { data: documentosRows },
+    { data: conformidadeRows },
+    { data: usuariosRows },
+  ] = await Promise.all([
+    sb.from('organizacoes').select('id,nome,ativo,plano,created_at'),
+    sb.from('colaboradores').select('org_id'),
+    sb.from('catalogo').select('org_id'),
+    sb.from('turmas').select('org_id'),
+    sb.from('documentos').select('org_id,tipo').in('tipo', ['certificado_individual','certificado_coletivo']),
+    sb.from('conformidade_status').select('org_id'),
+    sb.from('usuarios').select('org_id,ativo'),
+  ]);
+
+  const orgsAll = orgs || [];
+
+  // Cada Set responde "essa organização já usou esse recurso ao menos uma
+  // vez?" — presença, não volume (1 turma criada já conta como "usa Turmas").
+  const setColab       = new Set((colaboradoresRows  || []).map(r => r.org_id));
+  const setCatalogo    = new Set((catalogoRows       || []).map(r => r.org_id));
+  const setTurmas      = new Set((turmasRows         || []).map(r => r.org_id));
+  const setCertificados= new Set((documentosRows     || []).map(r => r.org_id));
+  const setConformidade= new Set((conformidadeRows   || []).map(r => r.org_id));
+  // "Equipe": usuários ATIVOS por organização — precisa de mais de 1
+  // (quem criou a conta já é 1) pra considerar que a org convidou alguém.
+  const mapUsuariosAtivos = new Map();
+  (usuariosRows || []).forEach(u => {
+    if (!u.ativo) return;
+    mapUsuariosAtivos.set(u.org_id, (mapUsuariosAtivos.get(u.org_id) || 0) + 1);
+  });
+
+  const RECURSOS_DEF = [
+    { key:'colaboradores', label:'Colaboradores cadastrados',  icon:'users' },
+    { key:'catalogo',      label:'Catálogo configurado',       icon:'book'  },
+    { key:'turmas',        label:'Turmas criadas',             icon:'clip'  },
+    { key:'certificados',  label:'Certificados emitidos',      icon:'shield'},
+    { key:'conformidade',  label:'Conformidade acompanhada',   icon:'target'},
+    { key:'equipe',        label:'Equipe (mais de 1 usuário)', icon:'team'  },
+  ];
+
+  const dadosOrgs = orgsAll.map(o => {
+    const recursos = [
+      { ...RECURSOS_DEF[0], usado: setColab.has(o.id) },
+      { ...RECURSOS_DEF[1], usado: setCatalogo.has(o.id) },
+      { ...RECURSOS_DEF[2], usado: setTurmas.has(o.id) },
+      { ...RECURSOS_DEF[3], usado: setCertificados.has(o.id) },
+      { ...RECURSOS_DEF[4], usado: setConformidade.has(o.id) },
+      { ...RECURSOS_DEF[5], usado: (mapUsuariosAtivos.get(o.id) || 0) > 1 },
+    ];
+    const usados = recursos.filter(r => r.usado).length;
+    return { id:o.id, nome:o.nome, ativo:o.ativo, plano:o.plano||'starter', recursos, usados, pct: Math.round(usados/recursos.length*100) };
+  });
+
+  _adocaoDadosCache = { dadosOrgs, RECURSOS_DEF };
+  setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Adoção de Recursos</div>`);
+  fabOcultar();
+  _renderAdocaoConteudo('ativas');
+}
+
+// Redesenha a tela a partir do cache já calculado — troca de filtro
+// (Ativas/Todas) não dispara nova consulta ao banco.
+function _renderAdocaoConteudo(filtro) {
+  if (!_adocaoDadosCache) return;
+  const { dadosOrgs, RECURSOS_DEF } = _adocaoDadosCache;
+  const lista = (filtro === 'todas' ? dadosOrgs : dadosOrgs.filter(o => o.ativo))
+    .slice()
+    .sort((a,b) => a.pct - b.pct || a.nome.localeCompare(b.nome));
+
+  const totalOrgs   = lista.length;
+  const mediaAdocao = totalOrgs ? Math.round(lista.reduce((a,o) => a+o.pct, 0) / totalOrgs) : 0;
+  const baixaAdocao = lista.filter(o => o.pct < 50).length;
+
+  // Adoção agregada por recurso — aponta qual funcionalidade menos "pega"
+  // entre as organizações do filtro atual, pra orientar onboarding/comunicação.
+  const porRecurso = RECURSOS_DEF.map((r,i) => {
+    const usamCount = lista.filter(o => o.recursos[i].usado).length;
+    return { ...r, usamCount, pct: totalOrgs ? Math.round(usamCount/totalOrgs*100) : 0 };
+  });
+  const maisUsado  = [...porRecurso].sort((a,b) => b.pct-a.pct)[0];
+  const menosUsado = [...porRecurso].sort((a,b) => a.pct-b.pct)[0];
+
+  const corPct = (pct) => pct>=67 ? 'var(--green)'   : pct>=34 ? 'var(--amber-h)' : 'var(--red)';
+  const bgPct  = (pct) => pct>=67 ? 'var(--green-l)' : pct>=34 ? 'var(--amber-l)' : 'var(--red-l)';
+
+  const resumo = totalOrgs
+    ? `Em média, as organizações ${filtro==='todas'?'do filtro atual':'ativas'} usam ${mediaAdocao}% dos recursos disponíveis. ${baixaAdocao ? `${baixaAdocao} organização${baixaAdocao!==1?'ões':''} está${baixaAdocao!==1?'ão':''} com adoção abaixo de 50% — maior risco de cancelamento por baixo engajamento.` : 'Nenhuma organização está com adoção crítica no momento.'} Recurso menos adotado: ${menosUsado ? `${menosUsado.label} (${menosUsado.pct}%)` : '—'}.`
+    : 'Nenhuma organização no filtro atual.';
+
+  const htmlRecursos = porRecurso.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <span style="width:22px;color:var(--text-3);display:flex;align-items:center;justify-content:center;flex-shrink:0">${ICONS[r.icon]||''}</span>
+      <span style="font-size:13px;color:var(--text-1);flex:1;min-width:0">${r.label}</span>
+      <div style="width:90px;height:6px;background:var(--bg);border-radius:4px;overflow:hidden;flex-shrink:0">
+        <div style="width:${r.pct}%;height:100%;background:${corPct(r.pct)};border-radius:4px"></div>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:${corPct(r.pct)};min-width:80px;text-align:right;flex-shrink:0;white-space:nowrap">${r.usamCount}/${totalOrgs} (${r.pct}%)</span>
+    </div>`).join('');
+
+  const _labelPlano = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+  const htmlLista = lista.length ? lista.map(o => `
+    <div onclick="verOrgProvedor('${o.id}')" style="display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <div style="font-size:13.5px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:1px">${!o.ativo?'Inativa · ':''}${_labelPlano[o.plano]||'Starter'}</div>
+      </div>
+      <div style="display:flex;gap:3px;flex-shrink:0">
+        ${o.recursos.map(r => `<span style="width:9px;height:9px;border-radius:2.5px;background:${r.usado?'var(--navy)':'var(--border)'};display:inline-block" title="${r.label}: ${r.usado?'em uso':'não usado'}"></span>`).join('')}
+      </div>
+      <span class="badge" style="background:${bgPct(o.pct)};color:${corPct(o.pct)};min-width:44px;text-align:center;flex-shrink:0">${o.usados}/${o.recursos.length}</span>
+    </div>`).join('') : '<div style="padding:24px 4px;text-align:center;font-size:12.5px;color:var(--text-3)">Nenhuma organização encontrada.</div>';
+
+  setConteudo(`
+    <div class="home-navy-header" style="margin-bottom:14px">
+      <div class="home-navy-greeting">Adoção de Recursos</div>
+      <div class="home-navy-sub">O quanto cada organização realmente usa da plataforma</div>
+      <div class="home-kpi-grid" style="margin-top:16px">
+        <div class="home-kpi">
+          <div class="home-kpi-val">${mediaAdocao}%</div>
+          <div class="home-kpi-lbl">Adoção média</div>
+          <div class="home-kpi-delta">${totalOrgs} organizaç${totalOrgs!==1?'ões':'ão'}</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val">${baixaAdocao}</div>
+          <div class="home-kpi-lbl">Abaixo de 50%</div>
+          <div class="home-kpi-delta ${baixaAdocao?'red':''}">${baixaAdocao?'Risco de churn':'Nenhuma'}</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val" style="font-size:15px">${maisUsado?maisUsado.label:'—'}</div>
+          <div class="home-kpi-lbl">Recurso mais usado</div>
+          <div class="home-kpi-delta green">${maisUsado?maisUsado.pct+'%':''}</div>
+        </div>
+        <div class="home-kpi">
+          <div class="home-kpi-val" style="font-size:15px">${menosUsado?menosUsado.label:'—'}</div>
+          <div class="home-kpi-lbl">Recurso menos usado</div>
+          <div class="home-kpi-delta amber">${menosUsado?menosUsado.pct+'%':''}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--navy);border-radius:var(--r-lg);padding:14px 18px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center">
+      <div style="font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🧠 Resumo</div>
+      <div style="flex:1;min-width:220px;font-size:12.5px;color:rgba(255,255,255,.8);line-height:1.5">${resumo}</div>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:10px">Adoção por recurso</div>
+      ${htmlRecursos}
+    </div>
+
+    <div class="card" style="padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1)">Organizações (menor adoção primeiro)</div>
+        <select onchange="_renderAdocaoConteudo(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+          <option value="ativas" ${filtro!=='todas'?'selected':''}>Ativas</option>
+          <option value="todas" ${filtro==='todas'?'selected':''}>Todas</option>
+        </select>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:8px;line-height:1.4">Cada quadrado é um recurso (passe o mouse pra ver qual) — preenchido quando a organização já usou ao menos uma vez.</div>
+      ${htmlLista}
+    </div>
   `);
 }
 
@@ -10692,6 +10873,7 @@ window.addEventListener('popstate', async (e) => {
         case 'home':          await renderHome(); break;
         case 'orgs':          await renderOrgs(); break;
         case 'financeiro':    await renderFinanceiroProvedor(); break;
+        case 'adocao':        await renderAdocaoProvedor(); break;
         case 'clientes':      await renderClientes(); break;
         case 'colaboradores': await renderColaboradores(); break;
         case 'catalogo':      await renderCatalogo(); break;
