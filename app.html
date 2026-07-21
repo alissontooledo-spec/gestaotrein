@@ -128,6 +128,20 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(245,158,11,.18);padding:4px 10px;border-radius:999px;font-size:11px;color:var(--amber);font-weight:500;border:1px solid rgba(245,158,11,.25)}
 .mobile-content{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
 
+/* ── Sino de notificações (fixo, só Provedor) — vive fora de #mainBody/
+   #mobileBody/#mobileHeader, por isso sobrevive a toda troca de tela. */
+.sino-btn{display:none;position:fixed;top:16px;right:16px;z-index:150;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;align-items:center;justify-content:center;padding:0}
+.sino-btn svg{width:19px;height:19px}
+.sino-badge{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 3px;border-radius:8px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;line-height:1;border:2px solid var(--navy)}
+body.modo-suporte-ativo .sino-btn{top:calc(16px + var(--suporte-h,34px))}
+@media(min-width:768px){
+  .sino-btn{top:11px;right:24px;background:var(--gray-100);color:var(--navy)}
+  .sino-badge{border-color:var(--surface)}
+}
+.sino-painel{display:none;position:fixed;top:60px;right:16px;width:320px;max-width:calc(100vw - 32px);background:var(--surface);border-radius:var(--r-lg);box-shadow:0 10px 32px rgba(0,0,0,.2);border:1px solid var(--border);z-index:150;overflow:hidden}
+body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
+@media(min-width:768px){.sino-painel{top:54px;right:24px}}
+
 /* ── Cards & surfaces ── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px}
 .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
@@ -527,6 +541,11 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
   <div id="mobileHeader" class="mobile-header"></div>
   <div class="mobile-content scrollable" id="mobileBody"></div>
   <nav class="bottom-nav" id="bottomNav"><div class="bn-items" id="bnItems"></div></nav>
+  <button class="sino-btn" id="sinoBtn" onclick="toggleSinoNotificacoes()" aria-label="Notificações" title="Notificações">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    <span class="sino-badge" id="sinoBadge"></span>
+  </button>
+  <div class="sino-painel" id="sinoPainel"></div>
 </div>
 
 <div class="modal-overlay" id="modalOverlay" style="display:none">
@@ -699,6 +718,158 @@ function _htmlDeltaKpi(atual, anterior, opts) {
   if (diff === 0) return '<span class="home-kpi-delta">Estável vs mês anterior</span>';
   return `<span class="home-kpi-delta ${diff>0?'green':'red'}">${diff>0?'▲':'▼'} ${Math.abs(diff)} vs mês anterior</span>`;
 }
+
+// Botão de "próxima ação sugerida" dentro de um alerta — nível módulo pra
+// poder ser usado tanto pela Central de Alertas do Início quanto pelo
+// sino de notificações fixo (mesmo texto, mesma ação, um só lugar pra
+// manter).
+function _btnAcao(label, onclick) {
+  return `<button onclick="event.stopPropagation();${onclick}" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">${label}</button>`;
+}
+
+// Calcula a Central de Alertas do Provedor — fonte única de verdade,
+// reaproveitada pelo Início e pelo sino de notificações fixo (visível em
+// qualquer tela). Recebe os dados já buscados (orgsAll/usrsAll/Set de
+// colaboradores) pra quem chamar decidir como e quando buscar.
+function _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje) {
+  hoje = hoje || new Date();
+  const diasAte   = (dataStr) => Math.ceil((new Date(dataStr) - hoje) / 86400000);
+  const diasDesde = (dataStr) => Math.floor((hoje - new Date(dataStr)) / 86400000);
+  const trialVencendo = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) >= 0 && diasAte(o.trial_fim) <= 3);
+  const trialVencido  = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
+  const orgsSemAdmin  = orgsAll.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
+
+  const limiteStarter = LIMITES_PLANO.starter.maxUsuarios;
+  const orgsPertoLimite = orgsAll.filter(o => {
+    if (!o.ativo || (o.plano && o.plano !== 'starter')) return false;
+    const ativosOrg = usrsAll.filter(u => u.org_id === o.id && u.ativo).length;
+    return ativosOrg >= limiteStarter - 1;
+  });
+  const orgsSemColaborador = orgsAll.filter(o =>
+    o.ativo && !orgsComColaborador.has(o.id) && diasDesde(o.created_at) >= 7
+  );
+
+  return [
+    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--red-text);opacity:.7">Considere contato direto</span>' })),
+    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--amber-text);opacity:.7">Lembrete automático agendado</span>' })),
+    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('+ Criar administrador', `abrirModalUsuarioOrg('${o.id}')`) })),
+    ...orgsSemColaborador.map(o => ({ tipo:'atencao', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('🔧 Ajudar no onboarding', `iniciarModoSuporte('${o.id}')`) })),
+    ...orgsPertoLimite.map(o => ({ tipo:'atencao', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:`<a href="https://wa.me/5547992809019?text=${encodeURIComponent(`Olá! Vi que a organização ${o.nome} está perto do limite de usuários do plano Starter — bom momento pra oferecer upgrade.`)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">📲 Oferecer upgrade</a>` })),
+  ];
+}
+
+// ============================================================
+// SINO DE NOTIFICAÇÕES (Provedor) — fixo, visível em qualquer tela (Web
+// e Mobile), diferente da Central de Alertas do Início que só aparece
+// quando o Provedor está naquela tela específica. O botão/painel vivem no
+// shell estático do app (fora de #mainBody/#mobileBody), então nunca são
+// apagados quando setConteudo() troca o conteúdo da tela.
+// ============================================================
+let _sinoAlertasCache = [];
+let _sinoAberto = false;
+let _sinoCarregando = false;
+
+// Chamada sempre que alguém já calculou os alertas (hoje: renderHomeProvedor)
+// — atualiza o badge sem precisar buscar de novo no banco.
+function _setSinoAlertas(alertas) {
+  _sinoAlertasCache = alertas || [];
+  _atualizarBadgeSino();
+  if (_sinoAberto) _renderPainelSino();
+}
+
+function _atualizarBadgeSino() {
+  const badge = document.getElementById('sinoBadge');
+  if (!badge) return;
+  const n = _sinoAlertasCache.length;
+  const criticos = _sinoAlertasCache.some(a => a.tipo === 'critico');
+  if (!n) { badge.style.display = 'none'; return; }
+  badge.style.display = 'flex';
+  badge.textContent = n > 9 ? '9+' : String(n);
+  badge.style.background = criticos ? 'var(--red)' : 'var(--amber)';
+}
+
+// Busca fresca no banco — chamada ao abrir o painel, pra sempre mostrar o
+// estado real (análise em tempo real), mesmo que o Provedor não tenha
+// passado pelo Início nesta sessão.
+async function _carregarSinoDoBanco() {
+  if (_sinoCarregando) return;
+  _sinoCarregando = true;
+  try {
+    const [{ data: orgs }, { data: usuarios }, { data: colaboradoresOrgId }] = await Promise.all([
+      sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
+      sb.from('usuarios').select('id,org_id,perfil,ativo'),
+      sb.from('colaboradores').select('org_id'),
+    ]);
+    const orgsComColaborador = new Set((colaboradoresOrgId || []).map(c => c.org_id));
+    _setSinoAlertas(_calcularAlertasProvedor(orgs || [], usuarios || [], orgsComColaborador));
+  } catch(e) {
+    console.warn('Sino de notificações:', e.message);
+  } finally {
+    _sinoCarregando = false;
+  }
+}
+
+function toggleSinoNotificacoes() {
+  _sinoAberto = !_sinoAberto;
+  const painel = document.getElementById('sinoPainel');
+  if (!painel) return;
+  painel.style.display = _sinoAberto ? 'block' : 'none';
+  if (_sinoAberto) _carregarSinoDoBanco(); // sempre atualiza ao abrir
+}
+
+function _fecharSino() {
+  _sinoAberto = false;
+  const painel = document.getElementById('sinoPainel');
+  if (painel) painel.style.display = 'none';
+}
+
+function _renderPainelSino() {
+  const painel = document.getElementById('sinoPainel');
+  if (!painel) return;
+  const alertas = _sinoAlertasCache;
+  painel.innerHTML = `
+    <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;font-weight:700;color:var(--navy)">Notificações</span>
+      <span style="font-size:11px;color:var(--text-3)">${alertas.length ? `${alertas.length} alerta${alertas.length!==1?'s':''}` : 'Tudo em dia'}</span>
+    </div>
+    <div style="max-height:360px;overflow-y:auto">
+      ${alertas.length ? alertas.map(a => `
+        <div onclick="_fecharSino();verOrgProvedor('${a.orgId}')" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap">
+          <span style="font-size:13px">${a.tipo==='critico'?'🔴':'⚠️'}</span>
+          <span style="font-size:12.5px;color:var(--text-1);flex:1;min-width:140px">${a.texto}</span>
+          ${a.acaoHtml ? a.acaoHtml.replace(/rgba\(255,255,255,\.55\)/g, 'var(--gray-100)') : ''}
+        </div>`).join('')
+        : '<div style="padding:24px 14px;text-align:center;font-size:12.5px;color:var(--text-3)">Nenhum alerta no momento 🎉</div>'}
+    </div>`;
+}
+
+// Mostra/esconde o sino conforme o perfil logado (só Provedor tem Central
+// de Alertas) e, se aplicável, já busca a contagem inicial pro badge —
+// chamada uma vez por login/restauração de sessão, dentro de
+// configurarNavegacao().
+function _configurarSinoVisibilidade() {
+  const btn = document.getElementById('sinoBtn');
+  if (!btn) return;
+  const ehProvedor = usuarioAtual?.perfil === 'provedor';
+  btn.style.display = ehProvedor ? 'flex' : 'none';
+  if (ehProvedor) {
+    _carregarSinoDoBanco();
+  } else {
+    _sinoAlertasCache = [];
+    _fecharSino();
+  }
+}
+
+// Fecha o painel ao clicar fora dele (fora do botão e fora do painel) —
+// listener único, registrado uma vez no carregamento do script.
+document.addEventListener('click', (e) => {
+  if (!_sinoAberto) return;
+  const painel = document.getElementById('sinoPainel');
+  const btn    = document.getElementById('sinoBtn');
+  if (painel && !painel.contains(e.target) && btn && !btn.contains(e.target)) {
+    _fecharSino();
+  }
+});
 
 // ============================================================
 // SESSÃO — timeout por inatividade
@@ -1643,6 +1814,7 @@ async function fazerLogout() {
   if (!ok) return;
   if (_suporteAtivo) await encerrarModoSuporte(true); // encerrar suporte antes de sair
   _sessaoEncerrar(); // limpar timers
+  _fecharSino(); _sinoAlertasCache = []; _atualizarBadgeSino(); // limpar sino
   showLoading('Saindo...');
   await sb.auth.signOut();
   usuarioAtual = null;
@@ -1702,6 +1874,7 @@ function configurarNavegacao() {
   av.style.color = '#1E2A4A';
   document.getElementById('sidebarNome').textContent = usuarioAtual.nome;
   document.getElementById('sidebarPerfil').textContent = labelPerfil(perfil);
+  _configurarSinoVisibilidade();
 }
 
 function marcarNavAtivo(id) {
@@ -1797,41 +1970,11 @@ async function renderHomeProvedor() {
   const mrrPro      = pros * 397;
   const mrr         = mrrStarter + mrrPro; // enterprise é sob consulta
 
-  // ── Central de alertas (só o que é realmente acionável) ──
-  const diasAte   = (dataStr) => Math.ceil((new Date(dataStr) - hoje) / 86400000);
-  const diasDesde = (dataStr) => Math.floor((hoje - new Date(dataStr)) / 86400000);
-  const trialVencendo = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) >= 0 && diasAte(o.trial_fim) <= 3);
-  const trialVencido  = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
-  const orgsSemAdmin  = orgsAll.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
-
-  // Sinais de saúde da conta (risco de churn / oportunidade de upsell) —
-  // usam LIMITES_PLANO como fonte única de verdade, igual ao resto do app.
-  const limiteStarter = LIMITES_PLANO.starter.maxUsuarios;
-  const orgsPertoLimite = orgsAll.filter(o => {
-    if (!o.ativo || (o.plano && o.plano !== 'starter')) return false;
-    const ativosOrg = usrsAll.filter(u => u.org_id === o.id && u.ativo).length;
-    return ativosOrg >= limiteStarter - 1;
-  });
-  const orgsSemColaborador = orgsAll.filter(o =>
-    o.ativo && !orgsComColaborador.has(o.id) && diasDesde(o.created_at) >= 7
-  );
-
-  // Cada alerta agora carrega uma "próxima ação sugerida" — sempre que
-  // existe uma ação real e segura já disponível no sistema (criar admin,
-  // entrar como suporte, oferecer upgrade), vira um botão que chama a
-  // função direto, sem passar pelo detalhe da organização. Trial é só
-  // aviso: o lembrete por e-mail já roda automaticamente via cron, então
-  // não tem ação manual segura pra oferecer aqui.
-  const _btnAcao = (label, onclick) =>
-    `<button onclick="event.stopPropagation();${onclick}" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">${label}</button>`;
-
-  const alertas = [
-    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--red-text);opacity:.7">Considere contato direto</span>' })),
-    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--amber-text);opacity:.7">Lembrete automático agendado</span>' })),
-    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('+ Criar administrador', `abrirModalUsuarioOrg('${o.id}')`) })),
-    ...orgsSemColaborador.map(o => ({ tipo:'atencao', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('🔧 Ajudar no onboarding', `iniciarModoSuporte('${o.id}')`) })),
-    ...orgsPertoLimite.map(o => ({ tipo:'atencao', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:`<a href="https://wa.me/5547992809019?text=${encodeURIComponent(`Olá! Vi que a organização ${o.nome} está perto do limite de usuários do plano Starter — bom momento pra oferecer upgrade.`)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">📲 Oferecer upgrade</a>` })),
-  ];
+  // Central de alertas — lógica movida para _calcularAlertasProvedor
+  // (fonte única de verdade), pra poder ser reaproveitada pelo sino de
+  // notificações fixo, que precisa dela em qualquer tela, não só aqui.
+  const alertas = _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje);
+  _setSinoAlertas(alertas);
 
   const htmlAlertas = alertas.length ? `
     <div style="margin-bottom:14px">
