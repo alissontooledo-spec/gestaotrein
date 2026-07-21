@@ -285,6 +285,7 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .home-kpi-delta{font-size:10px;margin-top:5px;font-weight:600}
 .home-kpi-delta.amber{color:var(--amber)}
 .home-kpi-delta.green{color:#34D399}
+.home-kpi-delta.red{color:#F87171}
 .home-alert{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.22);border-left:3px solid var(--amber);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .home-alert-text{font-size:12px;color:var(--amber-h);font-weight:500}
 .home-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
@@ -634,6 +635,70 @@ function modalUpgrade(recurso, planoNecessario) {
   );
 }
 
+// ============================================================
+// SCORE DE SAÚDE DA ORGANIZAÇÃO (visão Provedor) — fonte única de
+// verdade. Combina os mesmos sinais já usados na Central de Alertas num
+// selo único (A/B/C/D), pra dar pra entender o risco de uma conta com uma
+// olhada, sem precisar ler uma lista de textos. Reutilizado em: lista de
+// Organizações, detalhe da organização. Regra simples e transparente
+// (soma de pontos perdidos), sem IA — o motivo de cada nota fica
+// disponível em `motivos` pra quem quiser conferir.
+// ============================================================
+function calcularScoreSaude(org, { temAdmin, temColaborador }) {
+  if (!org.ativo) return { grade:'—', cor:'var(--text-3)', bg:'var(--gray-100)', label:'Inativa', pontos:null, motivos:[] };
+
+  let pontos = 100;
+  const motivos = [];
+  const hoje = new Date();
+  const diasAte = (d) => Math.ceil((new Date(d) - hoje) / 86400000);
+
+  if (org.assinatura_status === 'atrasada') {
+    pontos -= 45; motivos.push('Pagamento em atraso');
+  }
+  if (!org.assinatura_id && org.trial_fim) {
+    const d = diasAte(org.trial_fim);
+    if (d < 0)       { pontos -= 50; motivos.push('Trial vencido'); }
+    else if (d <= 3) { pontos -= 15; motivos.push(`Trial vence em ${d}d`); }
+  }
+  if (!temAdmin) { pontos -= 40; motivos.push('Sem administrador ativo'); }
+
+  const diasDesdeCriacao = Math.floor((hoje - new Date(org.created_at)) / 86400000);
+  if (!temColaborador && diasDesdeCriacao >= 7) {
+    pontos -= 20; motivos.push('Nenhum colaborador cadastrado');
+  }
+
+  pontos = Math.max(0, pontos);
+  if      (pontos >= 90) return { grade:'A', cor:'var(--green-text)', bg:'var(--green-l)', label:'Saudável', pontos, motivos };
+  else if (pontos >= 70) return { grade:'B', cor:'var(--blue-text)',  bg:'var(--blue-l)',  label:'Estável',  pontos, motivos };
+  else if (pontos >= 50) return { grade:'C', cor:'var(--amber-text)', bg:'var(--amber-l)', label:'Atenção',  pontos, motivos };
+  else                   return { grade:'D', cor:'var(--red-text)',   bg:'var(--red-l)',   label:'Crítico',  pontos, motivos };
+}
+
+// Selo circular com a nota — usado em qualquer lugar que precisar mostrar
+// o Score de Saúde. `grande` deixa maior pra usar no topo do detalhe.
+function _htmlBadgeSaude(score, grande) {
+  if (!score || score.grade === '—') return '';
+  const tam = grande ? '30px' : '22px';
+  const fs  = grande ? '13px' : '10.5px';
+  const titulo = score.motivos.length ? `${score.label}: ${score.motivos.join(', ')}` : `${score.label} — nenhum sinal de risco identificado`;
+  return `<span title="${escapeHtml(titulo)}" style="display:inline-flex;align-items:center;justify-content:center;width:${tam};height:${tam};border-radius:50%;background:${score.bg};color:${score.cor};font-size:${fs};font-weight:800;flex-shrink:0;cursor:default">${score.grade}</span>`;
+}
+
+// Pill de comparação com o período anterior (▲/▼), reutilizável em
+// qualquer KPI que tiver um valor de referência pra comparar.
+function _htmlDeltaKpi(atual, anterior, opts) {
+  opts = opts || {};
+  if (anterior === null || anterior === undefined) return '';
+  const diff = atual - anterior;
+  if (opts.pct) {
+    if (anterior === 0) return diff > 0 ? '<span class="home-kpi-delta green">▲ novo</span>' : '';
+    const pct = Math.round((diff/anterior)*100);
+    if (pct === 0) return '<span class="home-kpi-delta">Estável vs mês anterior</span>';
+    return `<span class="home-kpi-delta ${pct>0?'green':'red'}">${pct>0?'▲':'▼'} ${Math.abs(pct)}% vs mês anterior</span>`;
+  }
+  if (diff === 0) return '<span class="home-kpi-delta">Estável vs mês anterior</span>';
+  return `<span class="home-kpi-delta ${diff>0?'green':'red'}">${diff>0?'▲':'▼'} ${Math.abs(diff)} vs mês anterior</span>`;
+}
 
 // ============================================================
 // SESSÃO — timeout por inatividade
@@ -1718,6 +1783,12 @@ async function renderHomeProvedor() {
   const mes      = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   const novasMes = orgsAll.filter(o => o.created_at?.startsWith(mes)).length;
 
+  // Comparativo com 30 dias atrás — aproximação (conta quem já existia
+  // na época; não desconta cancelamentos ocorridos dentro da janela, por
+  // isso é uma estimativa, igual às demais projeções desta tela).
+  const ha30dias   = new Date(hoje.getTime() - 30*86400000);
+  const ativas30dAtras = orgsAll.filter(o => new Date(o.created_at) <= ha30dias).length;
+
   // KPIs financeiros
   const starters    = orgsAll.filter(o => o.ativo && (!o.plano || o.plano === 'starter')).length;
   const pros        = orgsAll.filter(o => o.ativo && o.plano === 'pro').length;
@@ -1745,20 +1816,30 @@ async function renderHomeProvedor() {
     o.ativo && !orgsComColaborador.has(o.id) && diasDesde(o.created_at) >= 7
   );
 
+  // Cada alerta agora carrega uma "próxima ação sugerida" — sempre que
+  // existe uma ação real e segura já disponível no sistema (criar admin,
+  // entrar como suporte, oferecer upgrade), vira um botão que chama a
+  // função direto, sem passar pelo detalhe da organização. Trial é só
+  // aviso: o lembrete por e-mail já roda automaticamente via cron, então
+  // não tem ação manual segura pra oferecer aqui.
+  const _btnAcao = (label, onclick) =>
+    `<button onclick="event.stopPropagation();${onclick}" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">${label}</button>`;
+
   const alertas = [
-    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id })),
-    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id })),
-    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id })),
-    ...orgsSemColaborador.map(o => ({ tipo:'atencao', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id })),
-    ...orgsPertoLimite.map(o => ({ tipo:'atencao', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id })),
+    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--red-text);opacity:.7">Considere contato direto</span>' })),
+    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--amber-text);opacity:.7">Lembrete automático agendado</span>' })),
+    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('+ Criar administrador', `abrirModalUsuarioOrg('${o.id}')`) })),
+    ...orgsSemColaborador.map(o => ({ tipo:'atencao', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('🔧 Ajudar no onboarding', `iniciarModoSuporte('${o.id}')`) })),
+    ...orgsPertoLimite.map(o => ({ tipo:'atencao', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:`<a href="https://wa.me/5547992809019?text=${encodeURIComponent(`Olá! Vi que a organização ${o.nome} está perto do limite de usuários do plano Starter — bom momento pra oferecer upgrade.`)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">📲 Oferecer upgrade</a>` })),
   ];
 
   const htmlAlertas = alertas.length ? `
     <div style="margin-bottom:14px">
       ${alertas.slice(0,6).map(a => `
-        <div onclick="verOrgProvedor('${a.orgId}')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-md);margin-bottom:6px;cursor:pointer;background:${a.tipo==='critico'?'var(--red-l)':'var(--amber-l)'};border-left:3px solid ${a.tipo==='critico'?'var(--red)':'var(--amber)'}">
+        <div onclick="verOrgProvedor('${a.orgId}')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-md);margin-bottom:6px;cursor:pointer;flex-wrap:wrap;background:${a.tipo==='critico'?'var(--red-l)':'var(--amber-l)'};border-left:3px solid ${a.tipo==='critico'?'var(--red)':'var(--amber)'}">
           <span style="font-size:15px">${a.tipo==='critico'?'🔴':'⚠️'}</span>
-          <span style="font-size:13px;color:${a.tipo==='critico'?'var(--red-text)':'var(--amber-text)'};font-weight:500;flex:1">${a.texto}</span>
+          <span style="font-size:13px;color:${a.tipo==='critico'?'var(--red-text)':'var(--amber-text)'};font-weight:500;flex:1;min-width:160px">${a.texto}</span>
+          ${a.acaoHtml || ''}
           <span style="font-size:11px;color:var(--text-3)">Ver →</span>
         </div>`).join('')}
     </div>` : '';
@@ -1821,6 +1902,7 @@ async function renderHomeProvedor() {
           <div class="home-kpi-val">${total}</div>
           <div class="home-kpi-lbl">Organizações</div>
           <div class="home-kpi-delta green">${ativas} ativas</div>
+          ${_htmlDeltaKpi(ativas, ativas30dAtras)}
         </div>
         <div class="home-kpi">
           <div class="home-kpi-val">${novasMes}</div>
@@ -2081,6 +2163,7 @@ async function verOrgProvedor(orgId) {
   const { data: org }  = await sb.from('organizacoes').select('*').eq('id', orgId).single();
   const { data: usrs } = await sb.from('usuarios').select('id,nome,perfil,ativo,created_at').eq('org_id', orgId).order('nome');
   const { data: turms} = await sb.from('turmas').select('id,status').eq('org_id', orgId);
+  const { count: colabCount } = await sb.from('colaboradores').select('id', { count:'exact', head:true }).eq('org_id', orgId);
   // Tabela nova (migration-notas-internas-org.sql) — se ainda não tiver
   // rodado, o select falha e a gente simplesmente não mostra o card, sem
   // quebrar o resto da tela.
@@ -2117,6 +2200,10 @@ async function verOrgProvedor(orgId) {
   const planoClrDark = { starter:'#93C5FD', pro:'var(--amber)', enterprise:'#F1F5F9' }[plano] || '#93C5FD';
   const planoValor= { starter:'R$ 197/mês', pro:'R$ 397/mês', enterprise:'Sob consulta' }[plano] || 'R$ 197/mês';
   const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
+  const scoreSaude = calcularScoreSaude(orgData, {
+    temAdmin: usrsData.some(u => u.perfil === 'administrador' && u.ativo),
+    temColaborador: (colabCount || 0) > 0,
+  });
 
   if (!_orgsCache.some(o=>o.id===orgId)) _orgsCache = [..._orgsCache, orgData];
 
@@ -2134,9 +2221,13 @@ async function verOrgProvedor(orgId) {
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
         <div style="width:48px;height:48px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(orgData.nome||'')}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:17px;font-weight:700;color:#fff">${escapeHtml(orgData.nome||'—')}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:17px;font-weight:700;color:#fff">${escapeHtml(orgData.nome||'—')}</div>
+            ${_htmlBadgeSaude(scoreSaude, true)}
+          </div>
           ${orgData.cnpj ? `<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">CNPJ: ${orgData.cnpj}</div>` : ''}
           ${orgData.email ? `<div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:1px">${escapeHtml(orgData.email)}</div>` : ''}
+          ${scoreSaude.grade !== '—' && scoreSaude.motivos.length ? `<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:3px">Score de Saúde: ${escapeHtml(scoreSaude.label)} — ${escapeHtml(scoreSaude.motivos.join(', '))}</div>` : ''}
         </div>
         ${_badgeStatusAssinatura(orgData)}
       </div>
@@ -3115,6 +3206,10 @@ async function renderFinanceiroProvedor() {
     return s*VALOR_PLANO.starter + p*VALOR_PLANO.pro;
   });
   const maxMrr = Math.max(...dadosMrr, 1);
+  // Mês anterior já está no próprio array de 6 meses (penúltima posição) —
+  // reaproveita em vez de recalcular, pra manter os dois números
+  // consistentes entre si (gráfico e KPI do topo sempre batem).
+  const mrrMesAnterior = dadosMrr.length >= 2 ? dadosMrr[dadosMrr.length-2] : null;
   const htmlGraficoMrr = `
     <div style="display:flex;align-items:flex-end;gap:8px;height:110px;padding:0 4px">
       ${mesesLabel.map((m,i) => {
@@ -3184,6 +3279,7 @@ async function renderFinanceiroProvedor() {
           <div class="home-kpi-val">R$${mrr.toLocaleString('pt-BR')}</div>
           <div class="home-kpi-lbl">MRR atual</div>
           <div class="home-kpi-delta green">${pros}P · ${starters}S · ${enterprises}E</div>
+          ${_htmlDeltaKpi(mrr, mrrMesAnterior, {pct:true})}
         </div>
         <div class="home-kpi">
           <div class="home-kpi-val">R$${arr.toLocaleString('pt-BR')}</div>
@@ -3295,19 +3391,22 @@ async function renderFinanceiroProvedor() {
 
 async function renderOrgs() {
   _orgsSelecionadas.clear();
-  const [{data,error}, {data:usuarios}] = await Promise.all([
+  const [{data,error}, {data:usuarios}, {data:colaboradoresOrgId}] = await Promise.all([
     sb.from('organizacoes').select('*').order('nome'),
     sb.from('usuarios').select('org_id,perfil,ativo'),
+    sb.from('colaboradores').select('org_id'),
   ]);
   if (error) throw error;
   _orgsCache = data||[];
   _orgsUsuariosCache = usuarios||[];
+  _orgsColaboradorSet = new Set((colaboradoresOrgId||[]).map(c=>c.org_id));
   setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Organizações</div>`);
   fabMostrar(()=>abrirModalOrg());
   _renderOrgsLista(_orgsCache);
 }
 
 let _orgsUsuariosCache = [];
+let _orgsColaboradorSet = new Set(); // orgs com pelo menos 1 colaborador cadastrado — usado no Score de Saúde da lista
 
 function _renderOrgsLista(orgs) {
   // Lista começa mostrando só as ativas, igual ao padrão da tela Início —
@@ -3317,6 +3416,8 @@ function _renderOrgsLista(orgs) {
   _orgsListaFiltrada = orgs.filter(o => o.ativo);
   _paginaOrgs = 1;
   const ativas  = orgs.filter(o=>o.ativo).length;
+  const ha30diasOrgs   = new Date(Date.now() - 30*86400000);
+  const ativas30dAtras = orgs.filter(o => new Date(o.created_at) <= ha30diasOrgs).length;
 
   // Gráfico de crescimento — novas orgs por mês, últimos 6 meses. Vivia no
   // Início; trazido pra cá porque é uma métrica de portfólio, e a tela
@@ -3359,6 +3460,7 @@ function _renderOrgsLista(orgs) {
         <div class="home-kpi">
           <div class="home-kpi-val">${ativas}</div>
           <div class="home-kpi-lbl">Ativas</div>
+          ${_htmlDeltaKpi(ativas, ativas30dAtras)}
         </div>
         <div class="home-kpi">
           <div class="home-kpi-val">${orgs.length-ativas}</div>
@@ -3451,6 +3553,8 @@ function _htmlListaOrgs(orgs) {
   };
   return orgs.map(o=>{
     const totalU = usrsAll.filter(u=>u.org_id===o.id).length;
+    const temAdmin = usrsAll.some(u=>u.org_id===o.id && u.perfil==='administrador' && u.ativo);
+    const score = calcularScoreSaude(o, { temAdmin, temColaborador: _orgsColaboradorSet.has(o.id) });
     return `
     <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
       <input type="checkbox" ${_orgsSelecionadas.has(o.id)?'checked':''} onclick="event.stopPropagation()" onchange="_toggleSelecaoOrg('${o.id}', this.checked)" style="width:16px;height:16px;flex-shrink:0;cursor:pointer">
@@ -3462,6 +3566,7 @@ function _htmlListaOrgs(orgs) {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${_htmlBadgeSaude(score)}
         ${_badgeTrial(o)}
         ${_badgeAtrasadaOuCancelada(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
