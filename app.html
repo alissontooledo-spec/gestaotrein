@@ -2879,11 +2879,16 @@ async function renderHomeInstrutor() {
 // ORGANIZAÇÕES
 // ============================================================
 function _atualizarProjecaoMrr() {
-  const taxa = parseInt(document.getElementById('taxaConversaoMrr')?.value || '50', 10);
-  document.getElementById('taxaConversaoLabel').textContent = `${taxa}%`;
+  // Web e Mobile renderizam o mesmo id duas vezes no DOM (uma escondida);
+  // document.getElementById sempre pega a primeira ocorrência, que no
+  // celular é a versão desktop (parada em 50%, nunca tocada) — por isso o
+  // valor não acompanhava o slider real. _getElVisible pega a instância
+  // que está de fato visível na tela de quem mexeu no controle.
+  const taxa = parseInt(_getElVisible('taxaConversaoMrr')?.value || '50', 10);
+  _setElBoth('taxaConversaoLabel', `${taxa}%`);
   const { mrr, mrrPotencialTrials } = window._financeiroCalc || { mrr:0, mrrPotencialTrials:0 };
   const projetado = mrr + mrrPotencialTrials * (taxa/100);
-  document.getElementById('mrrProjetadoValor').textContent = `R$${Math.round(projetado).toLocaleString('pt-BR')}`;
+  _setElBoth('mrrProjetadoValor', `R$${Math.round(projetado).toLocaleString('pt-BR')}`);
 }
 
 async function renderFinanceiroProvedor() {
@@ -2982,6 +2987,38 @@ async function renderFinanceiroProvedor() {
     const mesesMedios = orgsDoPlano.reduce((acc,o) => acc + Math.max(1, Math.round((hoje - new Date(o.created_at)) / (86400000*30))), 0) / orgsDoPlano.length;
     return { plano: p, meses: Math.round(mesesMedios*10)/10, ltv: Math.round(mesesMedios * VALOR_PLANO[p]), qtd: orgsDoPlano.length };
   });
+
+  // ── Números-destaque + leitura automática por card — transforma cada
+  // gráfico num mini-widget de dashboard (número grande + frase com o que
+  // aquele número significa), em vez de só mostrar a curva/barra crua.
+  const somaCriadas    = cohortData.reduce((a,c) => a + c.total, 0);
+  const somaAtivas     = cohortData.reduce((a,c) => a + c.ativasHoje, 0);
+  const somaConvertidas= cohortData.reduce((a,c) => a + c.convertidas, 0);
+  const retTotalPct    = somaCriadas ? Math.round(somaAtivas/somaCriadas*100) : null;
+  const convTotalPct   = somaCriadas ? Math.round(somaConvertidas/somaCriadas*100) : null;
+
+  const mesesComBase   = churnData.filter(c => c.ativasInicioMes > 0);
+  const churnMedioPct  = mesesComBase.length ? Math.round((mesesComBase.reduce((a,c)=>a+c.pct,0)/mesesComBase.length)*10)/10 : null;
+  const piorMesChurn   = [...churnData].sort((a,b)=>b.pct-a.pct)[0];
+
+  const ltvPortfolioTotal = ltvPorPlano.reduce((a,l) => a + l.ltv*l.qtd, 0);
+  const melhorPlanoLtv    = [...ltvPorPlano].sort((a,b)=>b.ltv-a.ltv)[0];
+
+  const headlineRetencao  = retTotalPct  !== null ? `${retTotalPct}%`  : '—';
+  const headlineConversao = convTotalPct !== null ? `${convTotalPct}%` : '—';
+  const headlineChurn     = churnMedioPct!== null ? `${churnMedioPct}%` : '—';
+  const headlineLtv       = ltvPortfolioTotal ? `R$${ltvPortfolioTotal.toLocaleString('pt-BR')}` : '—';
+
+  const insightRetencao  = somaCriadas ? `${somaAtivas} de ${somaCriadas} organizações criadas nos últimos 6 meses seguem ativas hoje.` : 'Ainda não há organizações criadas no período pra medir retenção.';
+  const insightConversao = somaCriadas ? `${somaConvertidas} de ${somaCriadas} organizações criadas no período já viraram assinatura paga.` : 'Ainda não há organizações criadas no período pra medir conversão.';
+  const insightChurn     = piorMesChurn && piorMesChurn.pct > 0 ? `Mês mais crítico: ${piorMesChurn.label} (${piorMesChurn.pct}% de cancelamento).` : 'Nenhum cancelamento registrado nos últimos 6 meses.';
+  const insightLtv       = melhorPlanoLtv && melhorPlanoLtv.ltv > 0 ? `Maior valor médio por organização: plano ${melhorPlanoLtv.plano} (R$${melhorPlanoLtv.ltv.toLocaleString('pt-BR')}).` : 'Ainda sem organizações pagantes suficientes pra comparar planos.';
+
+  // Frase única no topo da seção, amarrando os 4 números — dá a sensação
+  // de leitura executiva em vez de 4 gráficos soltos.
+  const resumoEstrategico = somaCriadas || ltvPortfolioTotal
+    ? `Nos últimos 6 meses: ${headlineRetencao} de retenção acumulada, ${headlineConversao} de conversão trial→pago, churn médio de ${headlineChurn}${ltvPortfolioTotal ? ` e LTV total estimado de ${headlineLtv}` : ''}.`
+    : 'Ainda não há dados suficientes no período pra montar um resumo — volte aqui conforme a base de clientes crescer.';
 
   // Gráficos de barra (mesmo padrão visual das outras barras da tela —
   // "Evolução do MRR" logo acima). Cor diferente por métrica pra ficar
@@ -3206,29 +3243,48 @@ async function renderFinanceiroProvedor() {
       </div>
     </div>
 
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 4px">Inteligência de Negócio</div>
-    <div style="font-size:11.5px;color:var(--text-3);margin-bottom:10px;line-height:1.4">Com a base de organizações ainda pequena, estes números têm pouca significância estatística — a leitura fica mais confiável conforme a base de clientes reais crescer.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin:18px 0 10px">
+      <span style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">Inteligência de Negócio</span>
+      <span style="font-size:9px;font-weight:700;color:var(--navy);background:var(--amber-l);border:1px solid var(--amber);padding:1px 7px;border-radius:999px;letter-spacing:.03em">ANÁLISE AUTOMÁTICA</span>
+    </div>
+    <div style="background:var(--navy);border-radius:var(--r-lg);padding:14px 18px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center">
+      <div style="font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">🧠 Resumo estratégico</div>
+      <div style="flex:1;min-width:220px;font-size:12.5px;color:rgba(255,255,255,.8);line-height:1.5">${resumoEstrategico}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;line-height:1.4">Com a base de organizações ainda pequena, estes números têm pouca significância estatística — a leitura fica mais confiável conforme a base de clientes reais crescer.</div>
     <div class="home-2col" style="margin-bottom:14px">
-      <div class="card" style="padding:14px">
-        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">Retenção por cohort</div>
-        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Organizações agrupadas pelo mês de criação, e quantas seguem ativas hoje.</div>
+      <div class="card" style="padding:14px;border-top:3px solid var(--navy)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Retenção por cohort</div>
+          <div style="font-size:22px;font-weight:800;color:var(--navy);line-height:1;white-space:nowrap">${headlineRetencao}</div>
+        </div>
+        <div style="font-size:11.5px;color:var(--text-2);margin-bottom:12px;line-height:1.4">${insightRetencao}</div>
         ${htmlCohort}
       </div>
-      <div class="card" style="padding:14px">
-        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">Conversão trial → pago</div>
-        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Organizações criadas em cada mês que viraram assinatura paga.</div>
+      <div class="card" style="padding:14px;border-top:3px solid var(--blue)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Conversão trial → pago</div>
+          <div style="font-size:22px;font-weight:800;color:var(--blue-h);line-height:1;white-space:nowrap">${headlineConversao}</div>
+        </div>
+        <div style="font-size:11.5px;color:var(--text-2);margin-bottom:12px;line-height:1.4">${insightConversao}</div>
         ${htmlConversao}
       </div>
     </div>
     <div class="home-2col">
-      <div class="card" style="padding:14px">
-        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">Churn mensal (estimativa)</div>
-        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Organizações desativadas em cada mês, sobre o total que já existia no início dele.</div>
+      <div class="card" style="padding:14px;border-top:3px solid var(--red)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Churn mensal (estimativa)</div>
+          <div style="font-size:22px;font-weight:800;color:var(--red-text);line-height:1;white-space:nowrap">${headlineChurn}</div>
+        </div>
+        <div style="font-size:11.5px;color:var(--text-2);margin-bottom:12px;line-height:1.4">${insightChurn}</div>
         ${htmlChurn}
       </div>
-      <div class="card" style="padding:14px">
-        <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:2px">LTV médio estimado por plano</div>
-        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Baseado no tempo de permanência atual dos clientes ativos — ainda não reflete churn real de longo prazo.</div>
+      <div class="card" style="padding:14px;border-top:3px solid var(--green)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">LTV médio estimado por plano</div>
+          <div style="font-size:20px;font-weight:800;color:var(--green);line-height:1;white-space:nowrap">${headlineLtv}</div>
+        </div>
+        <div style="font-size:11.5px;color:var(--text-2);margin-bottom:12px;line-height:1.4">${insightLtv}</div>
         ${htmlLtv || '<div style="font-size:12.5px;color:var(--text-3);padding:8px 0">Sem organizações pagantes ainda.</div>'}
       </div>
     </div>
