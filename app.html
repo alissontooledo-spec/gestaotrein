@@ -2338,7 +2338,10 @@ async function renderHomeProvedor() {
           <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome}</div>
           <div class="home-navy-sub">Painel Toledo Labs · Provedor</div>
         </div>
-        <div style="width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy)">${iniciais(usuarioAtual.nome)}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button onclick="exportarPainelExecutivoPDF()" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:11.5px;font-weight:600;padding:8px 12px;border-radius:var(--r-md);cursor:pointer;white-space:nowrap;font-family:inherit">📄 PDF executivo</button>
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy);flex-shrink:0">${iniciais(usuarioAtual.nome)}</div>
+        </div>
       </div>
       <div class="home-kpi-grid" style="margin-top:16px">
         <div class="home-kpi">
@@ -2471,6 +2474,236 @@ async function exportarPortfolioCSV() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast('CSV exportado.', 'success');
+}
+
+// Decodifica entidades HTML (&amp; &lt; etc.) — os textos de alerta em
+// _calcularAlertasProvedor passam o nome da organização por escapeHtml()
+// pensando em renderização segura dentro de innerHTML; aqui o destino é
+// texto puro de PDF, não HTML, então a entidade precisa voltar ao
+// caractere original antes de ir para pdfSafe() (senão "Silva & Santos"
+// apareceria literalmente como "Silva &amp; Santos" no PDF).
+function _decodeEntidadesHtml(str) {
+  const el = document.createElement('textarea');
+  el.innerHTML = str;
+  return el.value;
+}
+
+// PDF executivo (Provedor) — snapshot de 2 páginas com os números que
+// hoje ficam espalhados entre Início/Financeiro/Adoção, pronto pra
+// reunião ou apresentação sem precisar printar a tela. Busca os dados
+// direto do banco (não depende de já ter visitado nenhuma tela
+// específica) e reaproveita _calcularAlertasProvedor como fonte única de
+// verdade dos alertas, já descontando o que foi descartado.
+async function exportarPainelExecutivoPDF() {
+  showToast('Gerando PDF executivo...', 'info');
+  try {
+    const hoje = new Date();
+    const [
+      { data: orgs },
+      { data: usuarios },
+      { data: colaboradoresRows },
+      { data: catalogoRows },
+      { data: turmasRows },
+      { data: documentosRows },
+      { data: conformidadeRows },
+      { data: dispensadosRows },
+    ] = await Promise.all([
+      sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id'),
+      sb.from('usuarios').select('id,org_id,perfil,ativo'),
+      sb.from('colaboradores').select('org_id'),
+      sb.from('catalogo').select('org_id'),
+      sb.from('turmas').select('org_id'),
+      sb.from('documentos').select('org_id,tipo').in('tipo', ['certificado_individual','certificado_coletivo']),
+      sb.from('conformidade_status').select('org_id'),
+      sb.from('alertas_dispensados').select('id,org_id,categoria,assinatura'),
+    ]);
+
+    const orgsAll = orgs || [];
+    const usrsAll = usuarios || [];
+    const orgsComColaborador = new Set((colaboradoresRows || []).map(r => r.org_id));
+
+    // KPIs financeiros — mesma fórmula do Financeiro/Início.
+    const ativasComPlano = orgsAll.filter(o => o.ativo);
+    const starters = ativasComPlano.filter(o => !o.plano || o.plano === 'starter').length;
+    const pros     = ativasComPlano.filter(o => o.plano === 'pro').length;
+    const mrr = starters*197 + pros*397;
+    const arr = mrr*12;
+    const ativas = orgsAll.filter(o => o.ativo).length;
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const novasMes = orgsAll.filter(o => o.created_at?.startsWith(mesAtual)).length;
+
+    // Alertas — reaproveita a mesma fonte única de verdade do sino/Início,
+    // já descontando descartes ainda válidos.
+    const dispensadosMap = new Map((dispensadosRows || []).map(d => [`${d.org_id}:${d.categoria}`, d.assinatura]));
+    const { alertas } = _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje, dispensadosMap);
+    const criticos = alertas.filter(a => a.tipo === 'critico').length;
+    const atencao  = alertas.filter(a => a.tipo === 'atencao').length;
+
+    // Adoção de recursos — os mesmos 6 sinais do painel de Adoção
+    // (renderAdocaoProvedor), recalculados aqui pra o PDF poder ser
+    // gerado de qualquer tela, sem depender de já ter visitado a tela
+    // Adoção antes.
+    const setColab        = new Set((colaboradoresRows || []).map(r => r.org_id));
+    const setCatalogo     = new Set((catalogoRows || []).map(r => r.org_id));
+    const setTurmas       = new Set((turmasRows || []).map(r => r.org_id));
+    const setCertificados = new Set((documentosRows || []).map(r => r.org_id));
+    const setConformidade = new Set((conformidadeRows || []).map(r => r.org_id));
+    const mapUsuariosAtivos = new Map();
+    usrsAll.forEach(u => { if (!u.ativo) return; mapUsuariosAtivos.set(u.org_id, (mapUsuariosAtivos.get(u.org_id)||0) + 1); });
+
+    const ativasOrgs  = orgsAll.filter(o => o.ativo);
+    const totalAtivas = ativasOrgs.length;
+    const RECURSOS_PDF = [
+      { label:'Colaboradores cadastrados', set:setColab },
+      { label:'Catalogo configurado',      set:setCatalogo },
+      { label:'Turmas criadas',            set:setTurmas },
+      { label:'Certificados emitidos',     set:setCertificados },
+      { label:'Conformidade acompanhada',  set:setConformidade },
+    ];
+    const porRecurso = RECURSOS_PDF.map(r => {
+      const usamCount = ativasOrgs.filter(o => r.set.has(o.id)).length;
+      return { label:r.label, pct: totalAtivas ? Math.round(usamCount/totalAtivas*100) : 0 };
+    });
+    const equipeCount = ativasOrgs.filter(o => (mapUsuariosAtivos.get(o.id)||0) > 1).length;
+    porRecurso.push({ label:'Equipe (mais de 1 usuario)', pct: totalAtivas ? Math.round(equipeCount/totalAtivas*100) : 0 });
+
+    const mediaAdocao = totalAtivas ? Math.round(
+      ativasOrgs.reduce((acc,o) => {
+        const flags = [setColab.has(o.id), setCatalogo.has(o.id), setTurmas.has(o.id), setCertificados.has(o.id), setConformidade.has(o.id), (mapUsuariosAtivos.get(o.id)||0) > 1];
+        return acc + (flags.filter(Boolean).length / flags.length) * 100;
+      }, 0) / totalAtivas
+    ) : 0;
+
+    // ── Monta o PDF ──
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+    const W=297, H=210;
+    const NAVY=[30,42,74], AMBER=[245,158,11], WHITE=[255,255,255];
+    const GREEN=[5,150,105], RED=[220,38,38], BLUE=[29,78,216];
+    const T2=[71,85,105], T3=[148,163,184], BORD=[220,228,240], GRAY=[244,246,250];
+    const s = v => pdfSafe(v);
+    const hojeStr = hoje.toLocaleDateString('pt-BR');
+
+    // ══════════════ PÁGINA 1 — RESUMO EXECUTIVO ══════════════
+    doc.setFillColor(...NAVY); doc.rect(0,0,W,40,'F');
+    doc.setFillColor(...AMBER); doc.rect(0,40,W,2.5,'F');
+    doc.setFontSize(16); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('TOLEDO LABS', 14, 18);
+    doc.setFontSize(8); doc.setTextColor(...AMBER); doc.setFont('helvetica','normal');
+    doc.text('TREINAMENTOS NR', 14, 25);
+    doc.setFontSize(13); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('PAINEL EXECUTIVO', W-14, 20, {align:'right'});
+    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
+    doc.text(`Gerado em ${hojeStr}`, W-14, 29, {align:'right'});
+
+    doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('RESUMO EXECUTIVO', 14, 52);
+
+    const kpis = [
+      { l:'Organizacoes ativas', v: String(ativas),                          c: NAVY },
+      { l:'Novas este mes',      v: String(novasMes),                        c: GREEN },
+      { l:'MRR atual',           v: `R$ ${mrr.toLocaleString('pt-BR')}`,     c: AMBER },
+      { l:'ARR projetado',       v: `R$ ${arr.toLocaleString('pt-BR')}`,     c: BLUE },
+      { l:'Alertas criticos',    v: String(criticos),                        c: RED },
+      { l:'Alertas em atencao',  v: String(atencao),                         c: AMBER },
+    ];
+    const cols = 3, kw = (W-28-(cols-1)*4)/cols, kh = 26, kStartY = 56;
+    kpis.forEach((k,i) => {
+      const col = i % cols, row = Math.floor(i/cols);
+      const kx = 14 + col*(kw+4), ky = kStartY + row*(kh+4);
+      doc.setFillColor(...GRAY); doc.rect(kx,ky,kw,kh,'F');
+      doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(kx,ky,kw,kh,'S');
+      doc.setDrawColor(...k.c); doc.setLineWidth(1.8); doc.line(kx,ky,kx,ky+kh);
+      doc.setFontSize(15); doc.setTextColor(...k.c); doc.setFont('helvetica','bold');
+      doc.text(s(k.v), kx+kw/2, ky+13, {align:'center'});
+      doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(s(k.l), kx+kw/2, ky+20, {align:'center'});
+    });
+
+    const yResumo = kStartY + 2*(kh+4) + 8;
+    doc.setFillColor(...NAVY); doc.roundedRect(14, yResumo, W-28, 26, 2, 2, 'F');
+    doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('RESUMO', 20, yResumo+8);
+    doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','normal');
+    const totalAlertasAbertos = criticos + atencao;
+    const resumoTexto = s(`${ativas} organizacoes ativas gerando R$ ${mrr.toLocaleString('pt-BR')} de MRR (R$ ${arr.toLocaleString('pt-BR')} projetado ao ano). ${totalAlertasAbertos} alerta${totalAlertasAbertos!==1?'s':''} em aberto (${criticos} critico${criticos!==1?'s':''}, ${atencao} de atencao). Adocao media de recursos entre organizacoes ativas: ${mediaAdocao}%.`);
+    const linhasResumo = doc.splitTextToSize(resumoTexto, W-28-12);
+    doc.text(linhasResumo, 20, yResumo+15);
+
+    doc.setFillColor(...NAVY); doc.rect(0,H-9,W,9,'F');
+    doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('toledolabs.com.br  |  Confidencial - uso interno', W/2, H-3.5, {align:'center'});
+    doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('1 / 2', W-14, H-3.5, {align:'right'});
+
+    // ══════════════ PÁGINA 2 — ALERTAS E ADOÇÃO ══════════════
+    doc.addPage();
+    doc.setFillColor(...NAVY); doc.rect(0,0,W,28,'F');
+    doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
+    doc.setFontSize(11); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text('ALERTAS E ADOCAO DE RECURSOS', 14, 18);
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
+    doc.text(`Gerado em ${hojeStr}`, 14, 25);
+
+    // Coluna esquerda — alertas em aberto (críticos primeiro, já vem
+    // nessa ordem de _calcularAlertasProvedor)
+    const colLX = 14, colLW = 165, colTop = 38, limiteY = H - 14;
+    doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(`ALERTAS EM ABERTO (${alertas.length})`, colLX, colTop);
+    let yA = colTop + 8;
+    if (!alertas.length) {
+      doc.setFontSize(8); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text('Nenhum alerta no momento.', colLX, yA);
+    } else {
+      let mostrados = 0;
+      for (const a of alertas) {
+        const textoDecodificado = s(_decodeEntidadesHtml(a.texto));
+        const linhas = doc.splitTextToSize(textoDecodificado, colLW-8);
+        const alturaItem = 5*linhas.length + 2;
+        if (yA + alturaItem > limiteY) break; // sem espaço — o restante vira "+N outros" abaixo
+        const cor = a.tipo === 'critico' ? RED : AMBER;
+        doc.setFillColor(...cor); doc.circle(colLX+1.3, yA-1.3, 1.2, 'F');
+        doc.setFontSize(7.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+        doc.text(linhas, colLX+6, yA);
+        yA += alturaItem;
+        mostrados++;
+      }
+      if (mostrados < alertas.length) {
+        doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','italic');
+        doc.text(`+ ${alertas.length-mostrados} outro(s) alerta(s) nao exibido(s) aqui — ver Central de Alertas no app.`, colLX, yA+2);
+      }
+    }
+
+    // Coluna direita — adoção de recursos (% de organizações ativas que
+    // já usaram cada recurso ao menos uma vez)
+    const colRX = 190, colRW = 93;
+    doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(`ADOCAO DE RECURSOS (media: ${mediaAdocao}%)`, colRX, colTop);
+    let yR = colTop + 10;
+    porRecurso.forEach(r => {
+      doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+      doc.text(s(r.label), colRX, yR);
+      doc.setFontSize(7); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text(`${r.pct}%`, colRX+colRW, yR, {align:'right'});
+      yR += 3;
+      doc.setFillColor(...GRAY); doc.rect(colRX, yR, colRW, 3, 'F');
+      const corBarra = r.pct>=67 ? GREEN : r.pct>=34 ? AMBER : RED;
+      if (r.pct > 0) { doc.setFillColor(...corBarra); doc.rect(colRX, yR, colRW*(r.pct/100), 3, 'F'); }
+      yR += 9;
+    });
+
+    doc.setFillColor(...NAVY); doc.rect(0,H-9,W,9,'F');
+    doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text('toledolabs.com.br  |  Confidencial - uso interno', W/2, H-3.5, {align:'center'});
+    doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('2 / 2', W-14, H-3.5, {align:'right'});
+
+    doc.save(`painel-executivo-toledo-labs-${hoje.toISOString().slice(0,10)}.pdf`);
+    showToast('PDF executivo gerado.', 'success');
+  } catch(e) {
+    console.error(e);
+    showToast('Erro ao gerar PDF: ' + e.message, 'error');
+  }
 }
 
 function abrirModalNovaOrg() {
