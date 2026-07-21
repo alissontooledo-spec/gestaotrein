@@ -3042,6 +3042,7 @@ async function renderFinanceiroProvedor() {
     const criadas = orgsAll.filter(o => o.created_at?.startsWith(m.chave));
     return {
       label: m.label,
+      labelCurto: m.labelCurto,
       total: criadas.length,
       ativasHoje: criadas.filter(o => o.ativo).length,
       convertidas: criadas.filter(o => o.assinatura_id).length,
@@ -3114,32 +3115,37 @@ async function renderFinanceiroProvedor() {
   // Gráficos de barra (mesmo padrão visual das outras barras da tela —
   // "Evolução do MRR" logo acima). Cor diferente por métrica pra ficar
   // fácil diferenciar um card do outro num piscar de olhos.
+  // min-height (em vez de height fixo) + white-space:nowrap nos rótulos:
+  // em telas estreitas "fev de 26" quebrava em 2 linhas, e como o container
+  // tinha altura travada com alinhamento pela base, o texto extra
+  // "empurrava" pra cima e sobrepunha o card. Rótulo curto (só o mês) e
+  // container que cresce com o conteúdo resolvem os dois lados do problema.
   const htmlCohort = `
-    <div style="display:flex;align-items:flex-end;gap:6px;height:86px;padding:0 2px">
+    <div style="display:flex;align-items:flex-end;gap:6px;min-height:86px;padding:0 2px">
       ${cohortData.map((c,i) => {
         const pct = c.total ? Math.round(c.ativasHoje/c.total*100) : 0;
         const isLast = i === cohortData.length-1;
         const altura = c.total ? Math.max(Math.round(pct*0.58), 4) : 2;
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" title="${c.ativasHoje} de ${c.total} organizações criadas em ${c.label} seguem ativas hoje">
-          <div style="font-size:10px;color:var(--text-2);font-weight:700">${c.total ? pct+'%' : '—'}</div>
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0" title="${c.ativasHoje} de ${c.total} organizações criadas em ${c.label} seguem ativas hoje">
+          <div style="font-size:10px;color:var(--text-2);font-weight:700;white-space:nowrap">${c.total ? pct+'%' : '—'}</div>
           <div style="width:100%;max-width:26px;height:${altura}px;background:${c.total ? (isLast?'var(--amber)':'var(--navy)') : 'var(--border)'};border-radius:3px 3px 0 0;opacity:${isLast?1:.8}"></div>
-          <div style="font-size:10px;color:var(--text-3)">${c.label}</div>
-          <div style="font-size:9px;color:var(--text-3)">${c.total} org.</div>
+          <div style="font-size:10px;color:var(--text-3);white-space:nowrap">${c.labelCurto}</div>
+          <div style="font-size:9px;color:var(--text-3);white-space:nowrap">${c.total} org.</div>
         </div>`;
       }).join('')}
     </div>`;
 
   const htmlConversao = `
-    <div style="display:flex;align-items:flex-end;gap:6px;height:86px;padding:0 2px">
+    <div style="display:flex;align-items:flex-end;gap:6px;min-height:86px;padding:0 2px">
       ${cohortData.map((c,i) => {
         const pct = c.total ? Math.round(c.convertidas/c.total*100) : 0;
         const isLast = i === cohortData.length-1;
         const altura = c.total ? Math.max(Math.round(pct*0.58), 4) : 2;
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" title="${c.convertidas} de ${c.total} organizações criadas em ${c.label} viraram assinatura paga">
-          <div style="font-size:10px;color:var(--text-2);font-weight:700">${c.total ? pct+'%' : '—'}</div>
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0" title="${c.convertidas} de ${c.total} organizações criadas em ${c.label} viraram assinatura paga">
+          <div style="font-size:10px;color:var(--text-2);font-weight:700;white-space:nowrap">${c.total ? pct+'%' : '—'}</div>
           <div style="width:100%;max-width:26px;height:${altura}px;background:${c.total ? (isLast?'var(--blue-h)':'var(--blue)') : 'var(--border)'};border-radius:3px 3px 0 0;opacity:${isLast?1:.8}"></div>
-          <div style="font-size:10px;color:var(--text-3)">${c.label}</div>
-          <div style="font-size:9px;color:var(--text-3)">${c.total} org.</div>
+          <div style="font-size:10px;color:var(--text-3);white-space:nowrap">${c.labelCurto}</div>
+          <div style="font-size:9px;color:var(--text-3);white-space:nowrap">${c.total} org.</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -3211,13 +3217,13 @@ async function renderFinanceiroProvedor() {
   // consistentes entre si (gráfico e KPI do topo sempre batem).
   const mrrMesAnterior = dadosMrr.length >= 2 ? dadosMrr[dadosMrr.length-2] : null;
   const htmlGraficoMrr = `
-    <div style="display:flex;align-items:flex-end;gap:8px;height:110px;padding:0 4px">
+    <div style="display:flex;align-items:flex-end;gap:8px;min-height:110px;padding:0 4px">
       ${mesesLabel.map((m,i) => {
         const altura = Math.max(Math.round((dadosMrr[i]/maxMrr)*84), dadosMrr[i]>0?6:2);
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px">
-          <div style="font-size:10px;color:var(--text-2);font-weight:700">R$${dadosMrr[i].toLocaleString('pt-BR')}</div>
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0">
+          <div style="font-size:10px;color:var(--text-2);font-weight:700;white-space:nowrap">R$${dadosMrr[i].toLocaleString('pt-BR')}</div>
           <div style="width:100%;max-width:34px;height:${altura}px;background:${i===mesesLabel.length-1?'var(--amber)':'var(--navy)'};border-radius:4px 4px 0 0;opacity:${i===mesesLabel.length-1?1:.75}"></div>
-          <div style="font-size:10.5px;color:var(--text-3)">${m.label}</div>
+          <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap">${m.label}</div>
         </div>`;
       }).join('')}
     </div>
@@ -3432,13 +3438,13 @@ function _renderOrgsLista(orgs) {
   const dadosCrescimento = mesesCrescimento.map(m => orgs.filter(o => o.created_at?.startsWith(m.chave)).length);
   const maxCrescimento   = Math.max(...dadosCrescimento, 1);
   const htmlCrescimento = `
-    <div style="display:flex;align-items:flex-end;gap:6px;height:70px;padding:0 4px">
+    <div style="display:flex;align-items:flex-end;gap:6px;min-height:70px;padding:0 4px">
       ${mesesCrescimento.map((m,i) => {
         const altura = Math.max(Math.round((dadosCrescimento[i]/maxCrescimento)*54), dadosCrescimento[i]>0?6:2);
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-          <div style="font-size:10px;color:var(--text-3);font-weight:600">${dadosCrescimento[i]||''}</div>
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
+          <div style="font-size:10px;color:var(--text-3);font-weight:600;white-space:nowrap">${dadosCrescimento[i]||''}</div>
           <div style="width:100%;max-width:26px;height:${altura}px;background:${i===mesesCrescimento.length-1?'var(--amber)':'var(--navy)'};border-radius:3px 3px 0 0;opacity:${i===mesesCrescimento.length-1?1:.75}"></div>
-          <div style="font-size:10px;color:var(--text-3)">${m.label}</div>
+          <div style="font-size:10px;color:var(--text-3);white-space:nowrap">${m.label}</div>
         </div>`;
       }).join('')}
     </div>`;
