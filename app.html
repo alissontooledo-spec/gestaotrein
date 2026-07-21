@@ -3354,13 +3354,39 @@ async function renderFinanceiroProvedor() {
     const p = orgsNoMes.filter(o => o.plano==='pro').length;
     return s*VALOR_PLANO.starter + p*VALOR_PLANO.pro;
   });
-  const maxMrr = Math.max(...dadosMrr, 1);
   // Mês anterior já está no próprio array de 6 meses (penúltima posição) —
   // reaproveita em vez de recalcular, pra manter os dois números
   // consistentes entre si (gráfico e KPI do topo sempre batem).
   const mrrMesAnterior = dadosMrr.length >= 2 ? dadosMrr[dadosMrr.length-2] : null;
+
+  // ── Previsão de MRR (3 próximos meses) ──
+  // Método simples e explicável (mesmo espírito da taxa de conversão manual
+  // acima: nada de "caixa preta" com pouca base de dados pra sustentar).
+  // Pega a variação média dos últimos 3 meses (do histórico que já existe,
+  // sem consulta nova) e projeta esse mesmo ritmo pra frente, mês a mês,
+  // nunca deixando o valor cair abaixo de zero.
+  const mediaDeltaMrr = Math.round((dadosMrr[dadosMrr.length-1] - dadosMrr[dadosMrr.length-4]) / 3);
+  const mesesFuturosLabel = [];
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()+i, 1);
+    mesesFuturosLabel.push(d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''));
+  }
+  const dadosMrrProjetado = [];
+  let _baseProjecao = dadosMrr[dadosMrr.length-1];
+  for (let i = 0; i < 3; i++) {
+    _baseProjecao = Math.max(0, _baseProjecao + mediaDeltaMrr);
+    dadosMrrProjetado.push(Math.round(_baseProjecao));
+  }
+  const previsao3m = dadosMrrProjetado[dadosMrrProjetado.length-1];
+  const insightPrevisao = mediaDeltaMrr > 0
+    ? `Crescimento médio de R$${mediaDeltaMrr.toLocaleString('pt-BR')}/mês nos últimos 3 meses. Mantendo esse ritmo, a previsão é de R$${previsao3m.toLocaleString('pt-BR')} em ${mesesFuturosLabel[2]}.`
+    : mediaDeltaMrr < 0
+      ? `Queda média de R$${Math.abs(mediaDeltaMrr).toLocaleString('pt-BR')}/mês nos últimos 3 meses. Mantendo essa tendência, a previsão é de R$${previsao3m.toLocaleString('pt-BR')} em ${mesesFuturosLabel[2]} — vale investigar a causa.`
+      : `MRR estável nos últimos 3 meses (sem variação média). Mantendo esse ritmo, a previsão é de R$${previsao3m.toLocaleString('pt-BR')} em ${mesesFuturosLabel[2]}.`;
+
+  const maxMrr = Math.max(...dadosMrr, ...dadosMrrProjetado, 1);
   const htmlGraficoMrr = `
-    <div style="display:flex;align-items:flex-end;gap:8px;min-height:110px;padding:0 4px">
+    <div style="display:flex;align-items:flex-end;gap:6px;min-height:110px;padding:0 4px">
       ${mesesLabel.map((m,i) => {
         const altura = Math.max(Math.round((dadosMrr[i]/maxMrr)*84), dadosMrr[i]>0?6:2);
         return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0">
@@ -3369,8 +3395,21 @@ async function renderFinanceiroProvedor() {
           <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap">${m.label}</div>
         </div>`;
       }).join('')}
+      <div style="width:1px;align-self:stretch;background:var(--border);margin:0 2px;flex-shrink:0"></div>
+      ${mesesFuturosLabel.map((label,i) => {
+        const altura = Math.max(Math.round((dadosMrrProjetado[i]/maxMrr)*84), dadosMrrProjetado[i]>0?6:2);
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0" title="Previsão — não é um valor confirmado">
+          <div style="font-size:10px;color:var(--amber-h);font-weight:700;white-space:nowrap">R$${dadosMrrProjetado[i].toLocaleString('pt-BR')}</div>
+          <div style="width:100%;max-width:34px;height:${altura}px;border-radius:4px 4px 0 0;border:1.5px dashed var(--amber);background:repeating-linear-gradient(45deg,var(--amber-l),var(--amber-l) 4px,transparent 4px,transparent 8px)"></div>
+          <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap">${label}</div>
+        </div>`;
+      }).join('')}
     </div>
-    <div style="font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.4">Estimativa baseada em organizações criadas até cada período e ainda ativas hoje — não considera cancelamentos ocorridos dentro do intervalo.</div>`;
+    <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
+      <span style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text-3)"><span style="width:9px;height:9px;border-radius:2px;background:var(--navy);display:inline-block"></span>Real</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text-3)"><span style="width:9px;height:9px;border-radius:2px;border:1.3px dashed var(--amber);background:var(--amber-l);display:inline-block"></span>Previsão</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.4">Histórico: organizações criadas até cada período e ainda ativas hoje. Previsão: projeta a variação média dos últimos 3 meses — estimativa de tendência, não uma garantia de receita.</div>`;
 
   // ── Vencimentos e atrasos (assinatura ou trial) — janela de -30 a +30 dias ──
   // Mostra tanto o que já venceu (para ação de cobrança) quanto o que vai vencer.
@@ -3472,8 +3511,15 @@ async function renderFinanceiroProvedor() {
       </div>
     </div>
 
-    <div class="card" style="padding:16px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:10px">Evolução do MRR (6 meses)</div>
+    <div class="card" style="padding:16px;margin-bottom:14px;border-top:3px solid var(--amber)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1)">Evolução e previsão de MRR</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:20px;font-weight:800;color:var(--amber-h);line-height:1;white-space:nowrap">R$${previsao3m.toLocaleString('pt-BR')}</div>
+          <div style="font-size:9.5px;color:var(--text-3);white-space:nowrap">previsto p/ ${mesesFuturosLabel[2]}</div>
+        </div>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-2);margin-bottom:12px;line-height:1.4">${insightPrevisao}</div>
       ${htmlGraficoMrr}
     </div>
 
