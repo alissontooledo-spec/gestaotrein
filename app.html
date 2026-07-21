@@ -781,8 +781,21 @@ function _btnAcao(label, onclick) {
 // reaproveitada pelo Início e pelo sino de notificações fixo (visível em
 // qualquer tela). Recebe os dados já buscados (orgsAll/usrsAll/Set de
 // colaboradores) pra quem chamar decidir como e quando buscar.
-function _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje) {
+//
+// `dispensadosMap` (opcional): Map de `${orgId}:${categoria}` → assinatura
+// descartada — vem da tabela alertas_dispensados (ver
+// migration-alertas-dispensados.sql). Um alerta descartado só fica de
+// fora se a assinatura atual bater com a que foi descartada; se mudou
+// (trial renovado, por exemplo), volta a aparecer normalmente.
+//
+// Retorna { alertas, chavesAtuais } — chavesAtuais é o conjunto de
+// `orgId:categoria` que ainda são candidatas HOJE, usado por quem chamar
+// pra limpar (via _limparDispensasResolvidas) descartes de problemas já
+// resolvidos, pra que uma recorrência futura não fique escondida por um
+// descarte de uma ocorrência antiga.
+function _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje, dispensadosMap) {
   hoje = hoje || new Date();
+  dispensadosMap = dispensadosMap || new Map();
   const diasAte   = (dataStr) => Math.ceil((new Date(dataStr) - hoje) / 86400000);
   const diasDesde = (dataStr) => Math.floor((hoje - new Date(dataStr)) / 86400000);
   const trialVencendo = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) >= 0 && diasAte(o.trial_fim) <= 3);
@@ -799,13 +812,70 @@ function _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje) {
     o.ativo && !orgsComColaborador.has(o.id) && diasDesde(o.created_at) >= 7
   );
 
-  return [
-    ...trialVencido.map(o => ({ tipo:'critico', texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--red-text);opacity:.7">Considere contato direto</span>' })),
-    ...trialVencendo.map(o => ({ tipo:'atencao', texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--amber-text);opacity:.7">Lembrete automático agendado</span>' })),
-    ...orgsSemAdmin.map(o => ({ tipo:'atencao', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('+ Criar administrador', `abrirModalUsuarioOrg('${o.id}')`) })),
-    ...orgsSemColaborador.map(o => ({ tipo:'atencao', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('🔧 Ajudar no onboarding', `iniciarModoSuporte('${o.id}')`) })),
-    ...orgsPertoLimite.map(o => ({ tipo:'atencao', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:`<a href="https://wa.me/5547992809019?text=${encodeURIComponent(`Olá! Vi que a organização ${o.nome} está perto do limite de usuários do plano Starter — bom momento pra oferecer upgrade.`)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">📲 Oferecer upgrade</a>` })),
+  // Cada alerta ganha `categoria` (identidade estável do tipo de
+  // problema) e `assinatura` (o que precisa mudar pra ele voltar depois
+  // de descartado) — trial usa a própria data de vencimento (assim a
+  // contagem de dias mudando todo dia não "desdescarta" à toa; só uma
+  // renovação de verdade muda a assinatura); as categorias binárias
+  // (sem_admin/sem_colaborador/perto_limite) usam uma assinatura fixa e
+  // dependem da limpeza em _limparDispensasResolvidas pra reaparecerem
+  // corretamente numa recorrência futura.
+  const candidatos = [
+    ...trialVencido.map(o => ({ tipo:'critico', categoria:'trial_vencido', assinatura:o.trial_fim, texto:`Trial vencido: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--red-text);opacity:.7">Considere contato direto</span>' })),
+    ...trialVencendo.map(o => ({ tipo:'atencao', categoria:'trial_vencendo', assinatura:o.trial_fim, texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--amber-text);opacity:.7">Lembrete automático agendado</span>' })),
+    ...orgsSemAdmin.map(o => ({ tipo:'atencao', categoria:'sem_admin', assinatura:'ativo', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('+ Criar administrador', `abrirModalUsuarioOrg('${o.id}')`) })),
+    ...orgsSemColaborador.map(o => ({ tipo:'atencao', categoria:'sem_colaborador', assinatura:'ativo', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('🔧 Ajudar no onboarding', `iniciarModoSuporte('${o.id}')`) })),
+    ...orgsPertoLimite.map(o => ({ tipo:'atencao', categoria:'perto_limite', assinatura:'ativo', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:`<a href="https://wa.me/5547992809019?text=${encodeURIComponent(`Olá! Vi que a organização ${o.nome} está perto do limite de usuários do plano Starter — bom momento pra oferecer upgrade.`)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">📲 Oferecer upgrade</a>` })),
   ];
+
+  const chavesAtuais = new Set(candidatos.map(a => `${a.orgId}:${a.categoria}`));
+
+  const alertas = candidatos.filter(a => {
+    const assinaturaDispensada = dispensadosMap.get(`${a.orgId}:${a.categoria}`);
+    return assinaturaDispensada === undefined || assinaturaDispensada !== a.assinatura;
+  });
+
+  return { alertas, chavesAtuais };
+}
+
+// Botão "✕" de descartar, reaproveitado pela Central de Alertas do Início
+// e pelo painel do sino — mesmo visual, mesma ação, um só lugar pra manter.
+function _htmlBtnDispensar(a) {
+  return `<button onclick="event.stopPropagation();_dispensarAlerta('${a.orgId}','${a.categoria}','${a.assinatura}')" title="Descartar — volta a aparecer se a situação mudar" style="flex-shrink:0;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,.08);color:inherit;opacity:.6;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>`;
+}
+
+// Descarta um alerta (upsert em alertas_dispensados) e recarrega a fonte
+// certa: se a tela atual é o Início do Provedor, refaz o render completo
+// (que já atualiza o sino também via _setSinoAlertas); caso contrário,
+// só recarrega o sino.
+async function _dispensarAlerta(orgId, categoria, assinatura) {
+  try {
+    await sb.from('alertas_dispensados').upsert(
+      { org_id: orgId, categoria, assinatura, dispensado_por: usuarioAtual?.id },
+      { onConflict: 'org_id,categoria' }
+    );
+    showToast('Alerta descartado — volta a aparecer se a situação mudar.', 'success');
+  } catch(e) {
+    showToast('Não foi possível descartar: ' + e.message, 'error');
+    return;
+  }
+  if (paginaAtual === 'home' && usuarioAtual?.perfil === 'provedor') await renderHomeProvedor();
+  else await _carregarSinoDoBanco();
+}
+
+// Apaga descartes de problemas que já foram resolvidos — sem isso, uma
+// organização que corrigiu algo (ex.: cadastrou um administrador) e mais
+// tarde volta a ter o mesmo problema (ex.: aquele administrador foi
+// desativado) ficaria com o alerta escondido pra sempre por causa de um
+// descarte de uma ocorrência antiga e já resolvida. Roda em segundo
+// plano, sem bloquear o carregamento da tela.
+async function _limparDispensasResolvidas(dispensadosRows, chavesAtuais) {
+  const idsParaApagar = (dispensadosRows || [])
+    .filter(d => !chavesAtuais.has(`${d.org_id}:${d.categoria}`))
+    .map(d => d.id);
+  if (!idsParaApagar.length) return;
+  try { await sb.from('alertas_dispensados').delete().in('id', idsParaApagar); }
+  catch(e) { console.warn('Limpeza de alertas dispensados:', e.message); }
 }
 
 // ============================================================
@@ -845,13 +915,17 @@ async function _carregarSinoDoBanco() {
   if (_sinoCarregando) return;
   _sinoCarregando = true;
   try {
-    const [{ data: orgs }, { data: usuarios }, { data: colaboradoresOrgId }] = await Promise.all([
+    const [{ data: orgs }, { data: usuarios }, { data: colaboradoresOrgId }, { data: dispensadosRows }] = await Promise.all([
       sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
       sb.from('usuarios').select('id,org_id,perfil,ativo'),
       sb.from('colaboradores').select('org_id'),
+      sb.from('alertas_dispensados').select('id,org_id,categoria,assinatura'),
     ]);
     const orgsComColaborador = new Set((colaboradoresOrgId || []).map(c => c.org_id));
-    _setSinoAlertas(_calcularAlertasProvedor(orgs || [], usuarios || [], orgsComColaborador));
+    const dispensadosMap = new Map((dispensadosRows || []).map(d => [`${d.org_id}:${d.categoria}`, d.assinatura]));
+    const { alertas, chavesAtuais } = _calcularAlertasProvedor(orgs || [], usuarios || [], orgsComColaborador, null, dispensadosMap);
+    _setSinoAlertas(alertas);
+    _limparDispensasResolvidas(dispensadosRows, chavesAtuais); // segundo plano, não bloqueia o painel
   } catch(e) {
     console.warn('Sino de notificações:', e.message);
   } finally {
@@ -888,6 +962,7 @@ function _renderPainelSino() {
           <span style="font-size:13px">${a.tipo==='critico'?'🔴':'⚠️'}</span>
           <span style="font-size:12.5px;color:var(--text-1);flex:1;min-width:140px">${a.texto}</span>
           ${a.acaoHtml ? a.acaoHtml.replace(/rgba\(255,255,255,\.55\)/g, 'var(--gray-100)') : ''}
+          ${_htmlBtnDispensar(a)}
         </div>`).join('')
         : '<div style="padding:24px 14px;text-align:center;font-size:12.5px;color:var(--text-3)">Nenhum alerta no momento 🎉</div>'}
     </div>`;
@@ -2160,12 +2235,13 @@ async function renderHome() {
 }
 
 async function renderHomeProvedor() {
-  const [{ data: orgs }, { data: usuarios }, { data: acessos }, { data: eventosAuditoria }, { data: colaboradoresOrgId }] = await Promise.all([
+  const [{ data: orgs }, { data: usuarios }, { data: acessos }, { data: eventosAuditoria }, { data: colaboradoresOrgId }, { data: dispensadosRows }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
     sb.from('usuarios').select('id,nome,org_id,perfil,ativo,created_at'),
     sb.from('logs_acesso').select('id,org_id,created_at,encerrado_em,organizacoes(nome)').order('created_at', { ascending: false }).limit(5),
     sb.from('eventos_sistema').select('id,tabela,acao,dados_antigos,dados_novos,usuario_id,criado_em').order('criado_em', { ascending: false }).limit(8),
     sb.from('colaboradores').select('org_id'),
+    sb.from('alertas_dispensados').select('id,org_id,categoria,assinatura'),
   ]);
 
   const orgsAll  = orgs  || [];
@@ -2194,8 +2270,10 @@ async function renderHomeProvedor() {
   // Central de alertas — lógica movida para _calcularAlertasProvedor
   // (fonte única de verdade), pra poder ser reaproveitada pelo sino de
   // notificações fixo, que precisa dela em qualquer tela, não só aqui.
-  const alertas = _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje);
+  const dispensadosMap = new Map((dispensadosRows || []).map(d => [`${d.org_id}:${d.categoria}`, d.assinatura]));
+  const { alertas, chavesAtuais } = _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje, dispensadosMap);
   _setSinoAlertas(alertas);
+  _limparDispensasResolvidas(dispensadosRows, chavesAtuais); // segundo plano, não bloqueia o render
 
   const htmlAlertas = alertas.length ? `
     <div style="margin-bottom:14px">
@@ -2205,6 +2283,7 @@ async function renderHomeProvedor() {
           <span style="font-size:13px;color:${a.tipo==='critico'?'var(--red-text)':'var(--amber-text)'};font-weight:500;flex:1;min-width:160px">${a.texto}</span>
           ${a.acaoHtml || ''}
           <span style="font-size:11px;color:var(--text-3)">Ver →</span>
+          ${_htmlBtnDispensar(a)}
         </div>`).join('')}
     </div>` : '';
 
