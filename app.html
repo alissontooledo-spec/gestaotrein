@@ -2144,6 +2144,24 @@ async function verOrgProvedor(orgId) {
   const { data: notas } = await sb.from('organizacoes_notas').select('id,texto,autor_nome,criado_em').eq('org_id', orgId).order('criado_em', { ascending: false });
   window._orgNotasAtual = { orgId, lista: notas || [] };
 
+  // Histórico de mudanças desta organização — reaproveita a mesma tabela
+  // de auditoria (eventos_sistema) que já alimenta o feed geral do
+  // Início, só que filtrada pra uma organização específica. A tabela não
+  // tem org_id direto: em eventos de 'organizacoes' o próprio registro_id
+  // já É o id da organização; em eventos de 'usuarios' o org_id vem de
+  // dentro do dados_novos/dados_antigos.
+  const { data: eventosOrgRaw } = await sb.from('eventos_sistema')
+    .select('id,tabela,acao,registro_id,dados_antigos,dados_novos,criado_em,usuarios(nome)')
+    .in('tabela', ['organizacoes', 'usuarios'])
+    .order('criado_em', { ascending: false })
+    .limit(300);
+  const eventosOrg = (eventosOrgRaw || []).filter(e => {
+    if (e.tabela === 'organizacoes') return e.registro_id === orgId;
+    if (e.tabela === 'usuarios')     return e.dados_novos?.org_id === orgId || e.dados_antigos?.org_id === orgId;
+    return false;
+  }).slice(0, 15);
+  window._orgHistoricoAtual = eventosOrg;
+
   const orgData   = org  || {};
   const usrsData  = usrs || [];
   const turmsData = turms || [];
@@ -2241,7 +2259,33 @@ async function verOrgProvedor(orgId) {
     <!-- Notas internas — só o provedor vê, fica invisível pro cliente -->
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Notas internas</div>
     <div class="card" style="padding:14px" id="notasInternasOrg">${_htmlNotasInternasOrg()}</div>
+
+    <!-- Histórico de mudanças — só leitura, últimos 15 eventos desta organização -->
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Histórico de mudanças</div>
+    <div class="card" style="padding:0">${_htmlHistoricoOrg()}</div>
   `);
+}
+
+function _htmlHistoricoOrg() {
+  const lista = window._orgHistoricoAtual || [];
+  if (!lista.length) return '<div style="font-size:12.5px;color:var(--text-3);padding:16px 18px">Nenhuma mudança registrada ainda para esta organização.</div>';
+
+  const labelAcao  = { INSERT:'criad', UPDATE:'atualizad', DELETE:'removid' };
+  const labelTab   = { organizacoes:'Organização', usuarios:'Usuário' };
+  const iconeTab   = { organizacoes:'🏢', usuarios:'👤' };
+
+  return lista.map(e => {
+    const dados  = e.dados_novos || e.dados_antigos || {};
+    const nome   = dados.nome || '—';
+    const sufixo = e.tabela === 'organizacoes' ? 'a' : 'o';
+    const ator   = e.usuarios?.nome;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border)">
+      <span style="font-size:14px">${iconeTab[e.tabela] || '📋'}</span>
+      <span style="font-size:12.5px;color:var(--text-2);flex:1">${labelTab[e.tabela]||e.tabela} ${labelAcao[e.acao]||e.acao}${sufixo}: <strong>${escapeHtml(nome)}</strong>${ator ? ` <span style="color:var(--text-3)">· por ${escapeHtml(ator)}</span>` : ''}</span>
+      <span style="font-size:11px;color:var(--text-3);flex-shrink:0">${new Date(e.criado_em).toLocaleDateString('pt-BR')}</span>
+    </div>`;
+  }).join('');
 }
 
 function _htmlNotasInternasOrg() {
