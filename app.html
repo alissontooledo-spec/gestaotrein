@@ -4713,6 +4713,12 @@ function abrirModalOrg(id=null) {
         <span style="font-size:13px;color:var(--text-1)">Aplicar esta cor também aos certificados, lista de presença e relatórios em PDF <span style="color:var(--text-3);font-weight:400">— se desligado (padrão), os documentos continuam usando as cores do Toledo Labs. Cores muito claras são ignoradas automaticamente por legibilidade.</span></span>
       </label>
 
+      <div class="field" style="margin:0 0 14px">
+        <label>Rodapé personalizado nos documentos (opcional)</label>
+        <input type="text" id="mOrgTextoRodape" value="${escapeHtml(org?.cert_texto_rodape||'')}" placeholder="Ex.: uma mensagem institucional da organização" maxlength="120">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">Substitui o link de validação no rodapé da lista de presença e dos certificados. Vazio (padrão) mantém "toledolabs.com.br/validar".</div>
+      </div>
+
       <label style="font-size:13px;font-weight:600;color:var(--text-1);display:block;margin-bottom:6px">Logomarca</label>
       ${org ? `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -4855,6 +4861,7 @@ async function salvarOrg() {
     cor_primaria: plano==='enterprise' ? (document.getElementById('mOrgCorPrimaria')?.value||null) : null,
     logo_url: plano==='enterprise' ? (document.getElementById('mOrgLogoUrl')?.value.trim()||null) : null,
     cert_aplicar_cor_documentos: plano==='enterprise' ? !!document.getElementById('mOrgAplicarCorDocs')?.checked : false,
+    cert_texto_rodape: plano==='enterprise' ? (document.getElementById('mOrgTextoRodape')?.value.trim()||null) : null,
   };
   try {
     setBtnModalLoading(true);
@@ -11797,21 +11804,27 @@ function _luminanciaRgb([r,g,b]) {
 }
 
 // Fase 0 preparou o terreno (todos os geradores já buscam a cor só por
-// aqui). Fase 1 (atual): quando a organização tem o toggle "aplicar
-// também em certificados" ligado e uma cor_primaria válida e legível
-// salva, essa cor substitui o NAVY padrão nos 4 documentos. A cor
-// secundária (AMBER) continua fixa por enquanto — personalizável em
-// fase futura junto com os modelos de layout.
+// aqui). Fase 1: quando a organização tem o toggle "aplicar também em
+// certificados" ligado e uma cor_primaria válida e legível salva, essa
+// cor substitui o NAVY padrão nos 4 documentos. A cor secundária (AMBER)
+// continua fixa por enquanto — personalizável em fase futura junto com
+// os modelos de layout.
+// Fase 2a: rodapé de texto livre (cert_texto_rodape), independente do
+// toggle de cor — uma organização pode querer só a mensagem
+// institucional, sem mexer nas cores. Vazio/ausente = comportamento
+// idêntico ao de antes (mostra o link de validação padrão).
 function _temaDocumentoOrg(org) {
   const padrao = {
     primaria:   [30,42,74],   // NAVY padrão Toledo Labs
     secundaria: [245,158,11], // AMBER padrão Toledo Labs
+    rodape:     '',
   };
-  if (!org?.cert_aplicar_cor_documentos || !org?.cor_primaria) return padrao;
+  const rodape = (org?.cert_texto_rodape || '').trim();
+  if (!org?.cert_aplicar_cor_documentos || !org?.cor_primaria) return {...padrao, rodape};
   const rgb = _hexParaRgb(org.cor_primaria);
-  if (!rgb) return padrao; // valor salvo inválido — nunca quebra o documento, só ignora
-  if (_luminanciaRgb(rgb) > 200) return padrao; // cor clara demais — mantém o padrão por legibilidade
-  return { primaria: rgb, secundaria: padrao.secundaria };
+  if (!rgb) return {...padrao, rodape}; // valor salvo inválido — nunca quebra o documento, só ignora
+  if (_luminanciaRgb(rgb) > 200) return {...padrao, rodape}; // cor clara demais — mantém o padrão por legibilidade
+  return { primaria: rgb, secundaria: padrao.secundaria, rodape };
 }
 
 // ============================================================
@@ -11821,7 +11834,7 @@ async function gerarListaPresenca(turmaId) {
   showLoading('Gerando ficha de presença...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — a ficha de presença ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -11831,7 +11844,8 @@ async function gerarListaPresenca(turmaId) {
     const W = 210, H = 297;
     const mg = 14;
 
-    const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(t.organizacoes);
+    const _tema = _temaDocumentoOrg(t.organizacoes);
+    const {primaria:NAVY, secundaria:AMBER} = _tema;
     const WHITE = [255, 255, 255];
     const GRAY50 = [244, 246, 250];
     const BORDER = [226, 232, 240];
@@ -12008,7 +12022,7 @@ async function gerarListaPresenca(turmaId) {
     doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
     doc.text(nomeOrg, mg+4, fy+5.5);
     doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text('toledolabs.com.br/validar', mg+4, fy+10.5);
+    doc.text(_tema.rodape ? pdfSafe(_tema.rodape,70) : 'toledolabs.com.br/validar', mg+4, fy+10.5);
     doc.text(protocolo, W-mg-4, fy+8, {align:'right'});
 
     doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}.pdf`);
@@ -12028,7 +12042,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -12075,7 +12089,8 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const W=297, H=210;
 
     // Paleta - apenas arrays RGB [r,g,b], sem 4º argumento
-    const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(t.organizacoes);
+    const _tema = _temaDocumentoOrg(t.organizacoes);
+    const {primaria:NAVY, secundaria:AMBER} = _tema;
     const WHITE = [255,255,255];
     const LGRAY = [180,196,220]; // branco suavizado p/ linhas sobre navy
     const T2    = [71,85,105];
@@ -12362,7 +12377,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
     doc.text(nomeOrg, W/2, H-6.5, {align:'center'});
     doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('toledolabs.com.br/validar', W/2, H-2.5, {align:'center'});
+    doc.text(_tema.rodape ? s(_tema.rodape,100) : 'toledolabs.com.br/validar', W/2, H-2.5, {align:'center'});
 
     const nomeSafe = s(col.nome,60).replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-${nomeSafe}.pdf`);
@@ -12381,7 +12396,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -12421,7 +12436,8 @@ async function gerarCertificadoColetivo(turmaId) {
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
-    const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(t.organizacoes);
+    const _tema = _temaDocumentoOrg(t.organizacoes);
+    const {primaria:NAVY, secundaria:AMBER} = _tema;
     const WHITE = [255,255,255];
     const LGRAY = [180,196,220];
     const T2    = [71,85,105];
@@ -12674,7 +12690,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
     doc.text(nomeOrg, W/2, H-6.5, {align:'center'});
     doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text('toledolabs.com.br/validar', W/2, H-2.5, {align:'center'});
+    doc.text(_tema.rodape ? s(_tema.rodape,100) : 'toledolabs.com.br/validar', W/2, H-2.5, {align:'center'});
 
     // ════════════════════════════════
     // PÁGINAS ADICIONAIS - participantes excedentes (20 por página)
