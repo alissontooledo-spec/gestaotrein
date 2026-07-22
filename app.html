@@ -1280,11 +1280,13 @@ async function iniciarModoSuporte(orgId) {
       orgNome:     usuarioAtual.orgNome,
       orgPlano:    usuarioAtual.orgPlano,
       orgLogoUrl:  usuarioAtual.orgLogoUrl,
+      orgCorPrimaria:    usuarioAtual.orgCorPrimaria,
+      orgCertAplicarCor: usuarioAtual.orgCertAplicarCor,
     };
 
     // Buscar dados da org para simular o perfil de administrador
     const { data: org } = await sb.from('organizacoes')
-      .select('nome,plano,ativo,logo_url')
+      .select('nome,plano,ativo,logo_url,cor_primaria,cert_aplicar_cor_documentos')
       .eq('id', orgId).single();
 
     // Assumir identidade de administrador da org
@@ -1295,6 +1297,8 @@ async function iniciarModoSuporte(orgId) {
     // Sem isso, os PDFs gerados em Modo Suporte caem sempre no nome em texto
     // (a logo é lida só de usuarioAtual.orgLogoUrl — ver carregarLogoOrgPDF)
     usuarioAtual.orgLogoUrl = org?.logo_url || null;
+    usuarioAtual.orgCorPrimaria = org?.cor_primaria || null;
+    usuarioAtual.orgCertAplicarCor = !!org?.cert_aplicar_cor_documentos;
 
     // Ativar flags de suporte
     _suporteAtivo   = true;
@@ -1339,6 +1343,8 @@ async function encerrarModoSuporte(silencioso = false) {
   usuarioAtual.orgNome    = estado.orgNome    || null;
   usuarioAtual.orgPlano   = estado.orgPlano   || null;
   usuarioAtual.orgLogoUrl = estado.orgLogoUrl || null;
+  usuarioAtual.orgCorPrimaria    = estado.orgCorPrimaria    || null;
+  usuarioAtual.orgCertAplicarCor = estado.orgCertAplicarCor || false;
 
   // Limpar flags
   _suporteAtivo   = false;
@@ -2077,7 +2083,7 @@ async function fazerLogin() {
 async function entrarNoApp() {
   // Provedor não tem org — acesso sempre liberado
   if (usuarioAtual.perfil !== 'provedor' && usuarioAtual.org_id) {
-    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome,trial_fim,logo_url,cor_primaria').eq('id',usuarioAtual.org_id).single();
+    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome,trial_fim,logo_url,cor_primaria,cert_aplicar_cor_documentos').eq('id',usuarioAtual.org_id).single();
     if (org && !org.ativo) {
       document.getElementById('bloqueadoMsg').textContent =
         'Sua assinatura está vencida ou foi cancelada. Entre em contato para regularizar e continuar usando o sistema.';
@@ -2091,6 +2097,10 @@ async function entrarNoApp() {
     // Branding Enterprise: aplica cor/logo da organização, se configurados
     if (org?.cor_primaria) document.documentElement.style.setProperty('--navy', org.cor_primaria);
     if (org?.logo_url) usuarioAtual.orgLogoUrl = org.logo_url;
+    // Cache pra _temaDocumentoOrg() nos PDFs que não têm a turma/organização
+    // já carregada junto (ex.: relatório comparativo do Administrador)
+    usuarioAtual.orgCorPrimaria = org?.cor_primaria || null;
+    usuarioAtual.orgCertAplicarCor = !!org?.cert_aplicar_cor_documentos;
   }
   showScreen('screenApp');
   configurarNavegacao();
@@ -4696,7 +4706,12 @@ function abrirModalOrg(id=null) {
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Personalização visual <span style="font-weight:400;text-transform:none">(benefício Enterprise)</span></div>
 
       <div class="field" style="margin:0 0 4px"><label>Cor de destaque na interface</label><input type="color" id="mOrgCorPrimaria" value="${org?.cor_primaria||'#1E2A4A'}" style="width:100%;height:40px;padding:2px;border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer"></div>
-      <div style="font-size:11px;color:var(--text-3);margin-bottom:14px;line-height:1.5">Aplica essa cor à interface do sistema para os usuários dessa organização (menu lateral, botões). <strong>Não altera</strong> certificados, listas de presença nem outros documentos em PDF — esses usam sempre as cores padrão do Toledo Labs.</div>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;line-height:1.5">Aplica essa cor à interface do sistema para os usuários dessa organização (menu lateral, botões).</div>
+
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" id="mOrgAplicarCorDocs" ${org?.cert_aplicar_cor_documentos?'checked':''} style="margin-top:3px">
+        <span style="font-size:13px;color:var(--text-1)">Aplicar esta cor também aos certificados, lista de presença e relatórios em PDF <span style="color:var(--text-3);font-weight:400">— se desligado (padrão), os documentos continuam usando as cores do Toledo Labs. Cores muito claras são ignoradas automaticamente por legibilidade.</span></span>
+      </label>
 
       <label style="font-size:13px;font-weight:600;color:var(--text-1);display:block;margin-bottom:6px">Logomarca</label>
       ${org ? `
@@ -4839,6 +4854,7 @@ async function salvarOrg() {
     telefone:document.getElementById('mOrgTel')?.value.trim()||null,
     cor_primaria: plano==='enterprise' ? (document.getElementById('mOrgCorPrimaria')?.value||null) : null,
     logo_url: plano==='enterprise' ? (document.getElementById('mOrgLogoUrl')?.value.trim()||null) : null,
+    cert_aplicar_cor_documentos: plano==='enterprise' ? !!document.getElementById('mOrgAplicarCorDocs')?.checked : false,
   };
   try {
     setBtnModalLoading(true);
@@ -11753,28 +11769,49 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
 }
 
 // ============================================================
-// TEMA DE DOCUMENTO (Fase 0 — personalização de certificados por
-// organização, ver requisito-personalizacao-certificados.md)
+// TEMA DE DOCUMENTO (personalização de certificados por organização,
+// ver requisito-personalizacao-certificados.md)
 // ============================================================
 // Centraliza a origem das cores usadas nos documentos em PDF (lista de
 // presença, certificado individual, certificado coletivo, relatório
 // comparativo do Administrador). Hoje cada gerador declarava suas
-// próprias constantes NAVY/AMBER soltas; a partir de agora todos
-// consomem esta função.
-//
-// Fase 0 (atual): retorna sempre o tema padrão do Toledo Labs,
-// independente da organização recebida — NENHUMA mudança visual ainda.
-// O objetivo desta fase é só preparar o terreno com o mínimo de risco.
-//
-// Fase 1 (futura): esta função passa a ler org.cor_primaria (quando a
-// organização tiver o toggle "aplicar também em certificados" ligado),
-// sem precisar tocar novamente em nenhum dos 4 geradores de PDF, já que
-// todos passam a obter a cor só por aqui.
+// próprias constantes NAVY/AMBER soltas; todos consomem esta função.
+
+// Converte "#RRGGBB" em [r,g,b] — formato que o jsPDF espera em
+// setFillColor(...arr)/setTextColor(...arr). Retorna null se o valor
+// salvo não for um hex válido (nunca deve derrubar a geração do PDF).
+function _hexParaRgb(hex) {
+  if (!hex) return null;
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+// Luminância aproximada (0 = preto, 255 = branco) — heurística simples
+// pra evitar cor ilegível. Nesses PDFs a cor primária é usada tanto como
+// fundo com texto branco em cima (cabeçalho/rodapé) quanto como texto
+// direto sobre fundo branco (nome do aluno em destaque) — nos dois casos
+// uma cor clara demais vira texto invisível.
+function _luminanciaRgb([r,g,b]) {
+  return 0.299*r + 0.587*g + 0.114*b;
+}
+
+// Fase 0 preparou o terreno (todos os geradores já buscam a cor só por
+// aqui). Fase 1 (atual): quando a organização tem o toggle "aplicar
+// também em certificados" ligado e uma cor_primaria válida e legível
+// salva, essa cor substitui o NAVY padrão nos 4 documentos. A cor
+// secundária (AMBER) continua fixa por enquanto — personalizável em
+// fase futura junto com os modelos de layout.
 function _temaDocumentoOrg(org) {
-  return {
+  const padrao = {
     primaria:   [30,42,74],   // NAVY padrão Toledo Labs
     secundaria: [245,158,11], // AMBER padrão Toledo Labs
   };
+  if (!org?.cert_aplicar_cor_documentos || !org?.cor_primaria) return padrao;
+  const rgb = _hexParaRgb(org.cor_primaria);
+  if (!rgb) return padrao; // valor salvo inválido — nunca quebra o documento, só ignora
+  if (_luminanciaRgb(rgb) > 200) return padrao; // cor clara demais — mantém o padrão por legibilidade
+  return { primaria: rgb, secundaria: padrao.secundaria };
 }
 
 // ============================================================
@@ -11784,7 +11821,7 @@ async function gerarListaPresenca(turmaId) {
   showLoading('Gerando ficha de presença...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — a ficha de presença ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -11991,7 +12028,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -12344,7 +12381,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -13180,7 +13217,10 @@ async function exportarRelatorioComparativoPDF() {
 
   const { jsPDF } = window.jspdf;
   const W = 297, H = 210;
-  const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(null);
+  const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg({
+    cor_primaria: usuarioAtual.orgCorPrimaria,
+    cert_aplicar_cor_documentos: usuarioAtual.orgCertAplicarCor,
+  });
   const WHITE = [255,255,255];
   const T2 = [71,85,105], T3 = [148,163,184], BORD = [220,228,240], GRAY = [244,246,250];
   const GREEN = [5,150,105], RED = [220,38,38];
