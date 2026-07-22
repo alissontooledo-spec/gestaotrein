@@ -1433,6 +1433,18 @@ function formatarDataHora(iso) {
   if (!iso) return '-';
   return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
+// Monta um endereço em uma linha só a partir dos campos estruturados de
+// clientes/organizações (logradouro, numero, complemento, bairro, cidade,
+// uf). Usado para pré-preencher o "Local do treinamento" da turma e para
+// montar o link de mapa exibido ao instrutor.
+function _enderecoFormatado(c) {
+  if (!c) return '';
+  const parte1 = [c.logradouro, c.numero].filter(Boolean).join(', ');
+  const parte2 = [parte1, c.complemento].filter(Boolean).join(' - ');
+  const parte3 = [parte2, c.bairro].filter(Boolean).join(' - ');
+  const cidadeUf = [c.cidade, c.uf].filter(Boolean).join('/');
+  return [parte3, cidadeUf].filter(Boolean).join(' - ');
+}
 function mascararCnpj(input) {
   let v = input.value.replace(/\D/g,'').slice(0,14);
   if (v.length > 12) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/,'$1.$2.$3/$4-$5');
@@ -3526,7 +3538,7 @@ async function renderHomeInstrutor() {
   if (tIds.length) {
     const {data:tData} = await sb
       .from('turmas')
-      .select('id,status,clientes(nome),catalogo(nome,carga_horaria)')
+      .select('id,status,local,clientes(nome),catalogo(nome,carga_horaria)')
       .in('id',tIds);
     (tData||[]).forEach(t=>{ tMap[t.id]=t; });
   }
@@ -3619,6 +3631,10 @@ async function renderHomeInstrutor() {
   if (proximo) {
     const st = proximo.turma?.status||'agendada';
     const ehHoje = proximo.data === hoje;
+    // Endereço completo da turma (proximo.turma.local) + complemento da
+    // sessão (sala/andar, se houver) — mesma lógica usada em verTurma().
+    const localCardTxt = proximo.turma?.local && proximo.local ? `${proximo.turma.local} · ${proximo.local}`
+      : (proximo.turma?.local || proximo.local || '');
     let btnAcao = '';
     if (ehHoje && st === 'agendada') {
       btnAcao = `<button class="btn btn-navy" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Iniciar treinamento</button>`;
@@ -3636,7 +3652,7 @@ async function renderHomeInstrutor() {
             </div>
             <span class="badge ${ehHoje?'badge-amber':'badge-gray'}" style="flex-shrink:0">${ehHoje?'Hoje':formatarData(proximo.data)}</span>
           </div>
-          <div style="font-size:12px;color:var(--text-3);margin-top:8px">${proximo.hora_inicio?'⏰ '+proximo.hora_inicio.slice(0,5)+(proximo.hora_fim?' – '+proximo.hora_fim.slice(0,5):''):''}${proximo.local?'  ·  📍 '+proximo.local:''}</div>
+          <div style="font-size:12px;color:var(--text-3);margin-top:8px;line-height:1.5">${proximo.hora_inicio?'⏰ '+proximo.hora_inicio.slice(0,5)+(proximo.hora_fim?' – '+proximo.hora_fim.slice(0,5):''):''}${localCardTxt?'  ·  📍 '+escapeHtml(localCardTxt):''}</div>
           ${btnAcao}
         </div>
       </div>`;
@@ -5383,7 +5399,7 @@ async function renderColaboradores() {
   const data = await _fetchTodosColaboradores(usuarioAtual.org_id, '*');
   _colabsCache = data||[];
   if (!_clientesCache.length) {
-    const {data:clis} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    const {data:clis} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = clis||[];
   }
   window._clientesPorId = Object.fromEntries(_clientesCache.map(c=>[c.id,c.nome]));
@@ -5609,7 +5625,7 @@ async function abrirModalColab(id=null) {
   _modalCurrentId = id;
   const c = id ? _colabsCache.find(x=>x.id===id) : null;
   if (!_clientesCache.length) {
-    const {data} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    const {data} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = data||[];
   }
   const cliOpts = _clientesCache.map(cli=>`<option value="${cli.id}" ${c?.cliente_id===cli.id?'selected':''}>${escapeHtml(cli.nome)}</option>`).join('');
@@ -7393,6 +7409,15 @@ async function verTurma(id) {
       ? agendamentos.find(ag => ag.instrutor_id === usuarioAtual.id) || agendamentos[0]
       : null;
 
+    // Local exibido ao instrutor: endereço completo da turma (t.local) +
+    // complemento da sessão (sala/andar, se houver). t.local costuma vir
+    // pré-preenchido com o endereço do cliente ao criar a turma, mas pode
+    // ter sido sobrescrito manualmente (treinamento fora do endereço do
+    // cliente) — por isso é sempre a fonte da verdade pro "para onde ir".
+    const localTxt = t.local && agMeuAgend?.local ? `${t.local} · ${agMeuAgend.local}`
+      : (t.local || agMeuAgend?.local || '—');
+    const localMapaUrl = t.local ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.local)}` : '';
+
     const html = usuarioAtual.perfil === 'instrutor' ? `
       <!-- ===== TELA INSTRUTOR ===== -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
@@ -7416,9 +7441,10 @@ async function verTurma(id) {
             <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Horário</div>
             <div style="font-size:13px;color:#fff;font-weight:500">${agMeuAgend&&agMeuAgend.hora_inicio?agMeuAgend.hora_inicio.slice(0,5)+(agMeuAgend.hora_fim?' – '+agMeuAgend.hora_fim.slice(0,5):''):'—'}</div>
           </div>
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Local</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${agMeuAgend?.local||t.local||'—'}</div>
+          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px;grid-column:1 / -1">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">📍 Local</div>
+            <div style="font-size:13px;color:#fff;font-weight:500;line-height:1.4">${escapeHtml(localTxt)}</div>
+            ${localMapaUrl?`<a href="${localMapaUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12px;color:var(--amber);text-decoration:none;font-weight:600">🗺️ Abrir no mapa</a>`:''}
           </div>
           <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
             <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Carga</div>
@@ -7478,7 +7504,7 @@ async function verTurma(id) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Cliente</div><div style="font-size:14px;font-weight:500">${nomeC}</div></div>
           <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Carga Horária</div><div style="font-size:14px;font-weight:500">${t.catalogo?.carga_horaria||'-'}h</div></div>
-          <div><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500">${escapeHtml(t.local||'-')}</div></div>
+          <div style="grid-column:1 / -1"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Local</div><div style="font-size:14px;font-weight:500;line-height:1.4">${escapeHtml(t.local||'-')}</div>${t.local?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.local)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;color:var(--amber-h);text-decoration:none;font-weight:600">🗺️ Abrir no mapa</a>`:''}</div>
         </div>
         ${t.observacoes?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Observações</div><div style="font-size:13px;color:var(--text-2)">${escapeHtml(t.observacoes)}</div></div>`:''}
         ${podeMgr&&st==='agendada'?`<div style="margin-top:14px;display:flex;gap:8px">
@@ -7560,7 +7586,7 @@ async function abrirModalTurma(id=null, preSel=null) {
   // aparecendo como "Planejar" depois de agendado).
   window._turmaOrigemConfId = (preSel && preSel.travar) ? (preSel.origemConfId||null) : null;
   if (!_clientesCache.length) {
-    const {data} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    const {data} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = data||[];
   }
   if (!_catalogoCache.length) {
@@ -7591,7 +7617,7 @@ async function abrirModalTurma(id=null, preSel=null) {
         <label style="margin:0">Cliente *</label>
         ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.plus} Novo cliente</button>`:''}
       </div>
-      <select id="mTurCli" ${travado?'disabled':''} style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:${travado?'var(--gray-50)':'var(--surface)'};color:${travado?'var(--text-2)':'var(--text-1)'};outline:none">
+      <select id="mTurCli" ${travado?'disabled':''} onchange="_autoPreencherLocalTurma()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:${travado?'var(--gray-50)':'var(--surface)'};color:${travado?'var(--text-2)':'var(--text-1)'};outline:none">
         <option value="">Selecione o cliente...</option>${cliOpts}
       </select>
     </div>
@@ -7599,10 +7625,45 @@ async function abrirModalTurma(id=null, preSel=null) {
       <select id="mTurCat" ${travado?'disabled':''} style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:${travado?'var(--gray-50)':'var(--surface)'};color:${travado?'var(--text-2)':'var(--text-1)'};outline:none">
         <option value="">Selecione o treinamento...</option>${catOpts}
       </select></div>
+    <div class="field">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label style="margin:0">Local do treinamento</label>
+        <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_preencherLocalComCliente()">📍 Usar endereço do cliente</button>
+      </div>
+      <textarea id="mTurLocal" rows="2" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.local||'')}</textarea>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do treinamento — pode ser diferente do endereço cadastrado do cliente.</div>
+    </div>
     <div class="field"><label>Observações</label>
       <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.observacoes||'')}</textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
+  // Turma nova já nascendo com cliente pré-selecionado (ex.: "Agendar" a
+  // partir de uma pendência de Conformidade) — o onchange do select não
+  // dispara sozinho nesse caso, então preenche o Local manualmente aqui.
+  if (!t && cliPreId) _autoPreencherLocalTurma();
+}
+
+// Preenche o campo Local do treinamento com o endereço cadastrado do
+// cliente selecionado. Usada tanto pelo botão "Usar endereço do cliente"
+// (sempre sobrescreve, ação explícita do usuário) quanto pelo onchange do
+// select de cliente (só preenche automaticamente se o campo ainda estiver
+// vazio, pra não apagar um endereço diferente que o usuário já tenha digitado).
+function _preencherLocalComCliente() {
+  const cliId = document.getElementById('mTurCli')?.value;
+  const c = _clientesCache.find(x=>x.id===cliId);
+  if (!c) { showToast('Selecione um cliente primeiro','error'); return; }
+  const endereco = _enderecoFormatado(c);
+  if (!endereco) { showToast('Este cliente não tem endereço cadastrado. Edite o cadastro em Clientes.','error'); return; }
+  const campo = document.getElementById('mTurLocal');
+  if (campo) campo.value = endereco;
+}
+function _autoPreencherLocalTurma() {
+  if (_modalCurrentId) return; // editando turma existente — não sobrescrever o que já foi digitado
+  const campo = document.getElementById('mTurLocal');
+  if (!campo || campo.value.trim()) return; // já preenchido manualmente — não sobrescrever
+  const cliId = document.getElementById('mTurCli')?.value;
+  const c = _clientesCache.find(x=>x.id===cliId);
+  if (c) campo.value = _enderecoFormatado(c);
 }
 
 async function abrirModalClienteRapido() {
@@ -7671,12 +7732,12 @@ async function salvarClienteRapido() {
     const {data, error} = await sb.from('clientes').insert(dados).select().single();
     if (error) throw error;
     _clientesCache = [];
-    const {data:clis} = await sb.from('clientes').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    const {data:clis} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = clis||[];
     fecharModal();
     showToast(`${nome} cadastrado!`,'success');
     await abrirModalTurma(turmaId||null);
-    setTimeout(()=>{ const sel = document.getElementById('mTurCli'); if(sel && data) sel.value = data.id; },100);
+    setTimeout(()=>{ const sel = document.getElementById('mTurCli'); if(sel && data) { sel.value = data.id; _autoPreencherLocalTurma(); } },100);
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
 
@@ -7685,7 +7746,7 @@ async function salvarTurma() {
   const cat = document.getElementById('mTurCat')?.value;
   if (!cli) { showToast('Selecione o cliente','error'); return; }
   if (!cat) { showToast('Selecione o treinamento','error'); return; }
-  const dados = {cliente_id:cli, catalogo_id:cat, observacoes:document.getElementById('mTurObs')?.value.trim()||null};
+  const dados = {cliente_id:cli, catalogo_id:cat, local:document.getElementById('mTurLocal')?.value.trim()||null, observacoes:document.getElementById('mTurObs')?.value.trim()||null};
   const origemConfId = window._turmaOrigemConfId; // capturado antes de fecharModal() poder zerar estado
   try {
     setBtnModalLoading(true);
@@ -7859,8 +7920,10 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
         <option value="online" ${ag?.modalidade==='online'?'selected':''}>Online</option>
         <option value="hibrido" ${ag?.modalidade==='hibrido'?'selected':''}>Híbrido</option>
       </select></div>
-    <div class="field"><label>Local (opcional)</label>
-      <input type="text" id="mAgLocal" value="${escapeHtml(ag?.local||'')}" placeholder="Ex.: Sala de treinamento..."></div>`,
+    <div class="field"><label>Sala / complemento do local (opcional)</label>
+      <input type="text" id="mAgLocal" value="${escapeHtml(ag?.local||'')}" placeholder="Ex.: Sala 1, 2º andar...">
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">O endereço completo do treinamento é definido na turma. Use este campo só para complementar (sala, bloco, andar).</div>
+    </div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarAgendamento()">
        ${ag?'Salvar':'Adicionar agendamento'}
