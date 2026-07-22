@@ -11753,6 +11753,31 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
 }
 
 // ============================================================
+// TEMA DE DOCUMENTO (Fase 0 — personalização de certificados por
+// organização, ver requisito-personalizacao-certificados.md)
+// ============================================================
+// Centraliza a origem das cores usadas nos documentos em PDF (lista de
+// presença, certificado individual, certificado coletivo, relatório
+// comparativo do Administrador). Hoje cada gerador declarava suas
+// próprias constantes NAVY/AMBER soltas; a partir de agora todos
+// consomem esta função.
+//
+// Fase 0 (atual): retorna sempre o tema padrão do Toledo Labs,
+// independente da organização recebida — NENHUMA mudança visual ainda.
+// O objetivo desta fase é só preparar o terreno com o mínimo de risco.
+//
+// Fase 1 (futura): esta função passa a ler org.cor_primaria (quando a
+// organização tiver o toggle "aplicar também em certificados" ligado),
+// sem precisar tocar novamente em nenhum dos 4 geradores de PDF, já que
+// todos passam a obter a cor só por aqui.
+function _temaDocumentoOrg(org) {
+  return {
+    primaria:   [30,42,74],   // NAVY padrão Toledo Labs
+    secundaria: [245,158,11], // AMBER padrão Toledo Labs
+  };
+}
+
+// ============================================================
 // PDF — LISTA DE PRESENÇA
 // ============================================================
 async function gerarListaPresenca(turmaId) {
@@ -11769,8 +11794,7 @@ async function gerarListaPresenca(turmaId) {
     const W = 210, H = 297;
     const mg = 14;
 
-    const NAVY = [30, 42, 74];
-    const AMBER = [245, 158, 11];
+    const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(t.organizacoes);
     const WHITE = [255, 255, 255];
     const GRAY50 = [244, 246, 250];
     const BORDER = [226, 232, 240];
@@ -12014,8 +12038,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const W=297, H=210;
 
     // Paleta - apenas arrays RGB [r,g,b], sem 4º argumento
-    const NAVY  = [30,42,74];
-    const AMBER = [245,158,11];
+    const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(t.organizacoes);
     const WHITE = [255,255,255];
     const LGRAY = [180,196,220]; // branco suavizado p/ linhas sobre navy
     const T2    = [71,85,105];
@@ -12361,8 +12384,7 @@ async function gerarCertificadoColetivo(turmaId) {
 
     const {jsPDF} = window.jspdf;
     const W=297, H=210;
-    const NAVY  = [30,42,74];
-    const AMBER = [245,158,11];
+    const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(t.organizacoes);
     const WHITE = [255,255,255];
     const LGRAY = [180,196,220];
     const T2    = [71,85,105];
@@ -13158,7 +13180,8 @@ async function exportarRelatorioComparativoPDF() {
 
   const { jsPDF } = window.jspdf;
   const W = 297, H = 210;
-  const NAVY = [30,42,74], AMBER = [245,158,11], WHITE = [255,255,255];
+  const {primaria:NAVY, secundaria:AMBER} = _temaDocumentoOrg(null);
+  const WHITE = [255,255,255];
   const T2 = [71,85,105], T3 = [148,163,184], BORD = [220,228,240], GRAY = [244,246,250];
   const GREEN = [5,150,105], RED = [220,38,38];
 
