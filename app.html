@@ -4741,6 +4741,31 @@ function abrirModalOrg(id=null) {
       </details>
       ` : `<div style="font-size:12px;color:var(--text-3);padding:10px;background:var(--gray-50);border-radius:var(--r-md)">Salve a organização primeiro — depois, em "Editar organização", você poderá enviar a logomarca.</div>
       <input type="hidden" id="mOrgLogoUrl" value="">`}
+
+      <label style="font-size:13px;font-weight:600;color:var(--text-1);display:block;margin:18px 0 6px">Arte de fundo do certificado <span style="font-weight:400;color:var(--text-3)">(Fase 3 — opcional, em teste)</span></label>
+      ${org ? `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div id="mOrgArteFundoPreviewWrap" style="width:96px;height:68px;border-radius:var(--r-md);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:var(--gray-50)">
+          ${org?.cert_arte_fundo_url ? `<img id="mOrgArteFundoPreview" src="${escapeHtml(org.cert_arte_fundo_url)}" style="max-width:100%;max-height:100%;object-fit:cover">` : `<span id="mOrgArteFundoPreview" style="font-size:9px;color:var(--text-3);text-align:center;padding:0 4px">Sem arte enviada</span>`}
+        </div>
+        <div style="flex:1;min-width:0">
+          <input type="file" id="mOrgArteFundoFile" accept="image/png,image/jpeg" style="display:none" onchange="uploadArteFundoOrg(this,'${org.id}')">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('mOrgArteFundoFile').click()">Enviar arte de fundo</button>
+            ${org?.cert_arte_fundo_url ? `<button type="button" class="btn btn-outline btn-sm" onclick="abrirEditorPosicoesCertificado('${org.id}')">Configurar posições</button>` : ''}
+            ${org?.cert_arte_fundo_url ? `<button type="button" class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="removerArteFundoOrg('${org.id}')">Remover</button>` : ''}
+          </div>
+          <div id="mOrgArteFundoStatus" style="font-size:11px;color:var(--text-3);margin-top:5px">PNG ou JPG · paisagem A4 (297×210mm) · até 5 MB · aplica-se só na capa dos certificados individual e coletivo — a contracapa nunca muda</div>
+        </div>
+      </div>
+      <input type="hidden" id="mOrgArteFundoUrl" value="${escapeHtml(org?.cert_arte_fundo_url||'')}">
+      <input type="hidden" id="mOrgLayoutCampos" value="${escapeHtml(JSON.stringify(org?.cert_layout_campos||null))}">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-top:10px;${(org?.cert_arte_fundo_url && _layoutCamposValido(org?.cert_layout_campos)) ? '' : 'opacity:.5;pointer-events:none'}" title="${(org?.cert_arte_fundo_url && _layoutCamposValido(org?.cert_layout_campos)) ? '' : 'Envie uma arte e configure as posições dos campos primeiro'}">
+        <input type="checkbox" id="mOrgUsarArteFundo" ${org?.cert_usar_arte_propria?'checked':''} style="margin-top:3px">
+        <span style="font-size:13px;color:var(--text-1)">Usar esta arte na capa dos certificados, no lugar do layout padrão Toledo Labs <span style="color:var(--text-3);font-weight:400">— exige arte enviada e todas as posições configuradas. A contracapa (QR de validação, conteúdo programático, código de autenticidade) continua sempre igual.</span></span>
+      </label>
+      ` : `<div style="font-size:12px;color:var(--text-3);padding:10px;background:var(--gray-50);border-radius:var(--r-md)">Salve a organização primeiro — depois, em "Editar organização", você poderá enviar uma arte de fundo própria para os certificados.</div>
+      <input type="hidden" id="mOrgArteFundoUrl" value=""><input type="hidden" id="mOrgLayoutCampos" value="null">`}
     </div>
     ${!org ? `
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
@@ -4846,11 +4871,248 @@ async function removerLogoOrganizacao(orgId) {
   } catch(e) { showToast(e.message||'Erro ao remover logomarca','error'); }
 }
 
+// ------------------------------------------------------------------
+// Fase 3 — arte de fundo própria do certificado (upload + remoção).
+// Mesmo padrão de uploadLogoOrganizacao/removerLogoOrganizacao acima,
+// com duas diferenças propositais: teto de tamanho maior (5MB, é uma
+// página inteira em alta resolução, não um ícone) e validação extra de
+// proporção (a imagem precisa se aproximar de A4 paisagem — 297×210mm —
+// senão o jsPDF vai esticá-la ao desenhar em tela cheia na página 1).
+// ------------------------------------------------------------------
+async function uploadArteFundoOrg(inputEl, orgId) {
+  const arquivo = inputEl.files?.[0];
+  if (!arquivo) return;
+
+  const planoSelecionado = document.getElementById('mOrgPlano')?.value || 'starter';
+  if (planoSelecionado !== 'enterprise') {
+    showToast('A arte de fundo do certificado só é aplicada em organizações no plano Enterprise. Selecione o plano Enterprise antes de enviar.', 'error');
+    inputEl.value = '';
+    return;
+  }
+  if (!['image/png','image/jpeg'].includes(arquivo.type)) { showToast('Envie um arquivo PNG ou JPG.','error'); inputEl.value=''; return; }
+  if (arquivo.size > 5*1024*1024) { showToast('Arquivo muito grande (máx. 5MB).','error'); inputEl.value=''; return; }
+
+  const statusEl = document.getElementById('mOrgArteFundoStatus');
+  const statusPadrao = 'PNG ou JPG · paisagem A4 (297×210mm) · até 5 MB · aplica-se só na capa dos certificados individual e coletivo — a contracapa nunca muda';
+  if (statusEl) statusEl.textContent = 'Enviando...';
+
+  try {
+    const dataUrl = await new Promise((res,rej)=>{
+      const reader = new FileReader();
+      reader.onload  = ()=>res(reader.result);
+      reader.onerror = rej;
+      reader.readAsDataURL(arquivo);
+    });
+    const img = new Image();
+    await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=dataUrl; });
+
+    // Validação de proporção: a arte precisa se aproximar de A4 paisagem
+    // (297/210 ≈ 1,4143). Tolerância de 5% — fora disso a imagem seria
+    // esticada/cortada de forma perceptível na hora de gerar o PDF, então
+    // rejeitamos aqui em vez de gerar um certificado com aparência ruim.
+    const RATIO_A4 = 297/210;
+    const ratioImg = img.naturalWidth / img.naturalHeight;
+    if (Math.abs(ratioImg - RATIO_A4) / RATIO_A4 > 0.05) {
+      showToast(`Proporção incompatível (a imagem está ${ratioImg.toFixed(2)}:1 — o certificado é ${RATIO_A4.toFixed(2)}:1, paisagem A4). Ajuste o arquivo e envie novamente para não sair distorcido no PDF.`, 'error', 8000);
+      if (statusEl) statusEl.textContent = statusPadrao;
+      inputEl.value = '';
+      return;
+    }
+
+    // Redimensiona só se exceder o teto — mantém boa resolução de impressão
+    // (2000px de largura ainda é ~170dpi numa página de 297mm) sem deixar o
+    // arquivo gigante no Storage.
+    const MAX_W = 2000;
+    let w = img.naturalWidth, h = img.naturalHeight;
+    if (w > MAX_W) { const escala = MAX_W/w; w = Math.round(w*escala); h = Math.round(h*escala); }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    const blob = await new Promise(res=>canvas.toBlob(res,'image/png'));
+
+    const path = `${orgId}.png`;
+    const { error: upErr } = await sb.storage.from('certificados-fundo').upload(path, blob, { upsert:true, contentType:'image/png' });
+    if (upErr) throw upErr;
+
+    const { data: pub } = sb.storage.from('certificados-fundo').getPublicUrl(path);
+    const urlFinal = `${pub.publicUrl}?v=${Date.now()}`;
+
+    // Se a organização ainda não tem posições configuradas, semeia o layout
+    // padrão sugerido agora — assim "Configurar posições" já abre com um
+    // ponto de partida sensato em vez de campos soltos no canto.
+    const orgCache0 = _orgsCache.find(o=>o.id===orgId);
+    const layoutAtual = orgCache0?.cert_layout_campos || null;
+    const novoLayout = _layoutCamposValido(layoutAtual) ? layoutAtual : DEFAULT_LAYOUT_CAMPOS_CERTIFICADO;
+
+    const { error: dbErr } = await sb.from('organizacoes').update({ cert_arte_fundo_url: urlFinal, cert_layout_campos: novoLayout }).eq('id', orgId);
+    if (dbErr) throw dbErr;
+
+    if (orgCache0) { orgCache0.cert_arte_fundo_url = urlFinal; orgCache0.cert_layout_campos = novoLayout; }
+    showToast('Arte de fundo enviada! Configure as posições dos campos antes de ativar.','success', 6000);
+    abrirModalOrg(orgId); // reabre o modal para mostrar "Configurar posições" e habilitar o toggle
+  } catch(e) {
+    showToast(e.message||'Erro ao enviar arte de fundo','error');
+    if (statusEl) statusEl.textContent = statusPadrao;
+  } finally {
+    inputEl.value = '';
+  }
+}
+
+async function removerArteFundoOrg(orgId) {
+  if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode remover a arte de fundo do certificado','error'); return; }
+  const ok = await confirmarAcao('Remover a arte de fundo personalizada desta organização? Os certificados voltam a usar o layout padrão Toledo Labs imediatamente.','Remover',true);
+  if (!ok) return;
+  try {
+    await sb.storage.from('certificados-fundo').remove([`${orgId}.png`]);
+    // Desativa o uso e limpa a arte, mas preserva o layout de posições
+    // configurado (se a organização enviar outra arte depois, não perde o
+    // trabalho de posicionamento já feito).
+    const { error } = await sb.from('organizacoes').update({ cert_arte_fundo_url: null, cert_usar_arte_propria: false }).eq('id', orgId);
+    if (error) throw error;
+    const orgCache = _orgsCache.find(o=>o.id===orgId);
+    if (orgCache) { orgCache.cert_arte_fundo_url = null; orgCache.cert_usar_arte_propria = false; }
+    showToast('Arte de fundo removida — certificados voltam ao layout padrão.','success');
+    abrirModalOrg(orgId);
+  } catch(e) { showToast(e.message||'Erro ao remover arte de fundo','error'); }
+}
+
+// ------------------------------------------------------------------
+// Fase 3 — mini-editor de posicionamento dos campos do certificado.
+// Não existia nenhum drag-and-drop no projeto antes disso (só a
+// assinatura digital via canvas de desenho livre, que é um problema
+// diferente) — aqui os "campos" são divs posicionadas em cima da arte via
+// left/top em porcentagem, arrastadas com Pointer Events. Escolhido no
+// lugar de um canvas HTML5 porque é bem mais simples de acertar o hit-
+// testing e ainda reproduz fielmente a coordenada fracionária 0–1 usada
+// em desenharCapaCertificadoComArte no gerador de PDF de verdade.
+//
+// Limitação proposital desta primeira versão: só a POSIÇÃO (x,y) de cada
+// campo é ajustável no editor — tamanho de fonte e dimensão de assinatura/
+// QR seguem o padrão sugerido (DEFAULT_LAYOUT_CAMPOS_CERTIFICADO). Reduz a
+// superfície de erro da primeira entrega; redimensionamento fica para uma
+// iteração futura, se houver demanda.
+// ------------------------------------------------------------------
+let _editorPosOrgId = null;
+let _editorPosLayout = null; // rascunho em memória — só grava no banco ao clicar em "Salvar posições"
+
+const _CAMPOS_EDITOR_INFO = {
+  nome_participante:    {label:'Nome do participante',    tipo:'texto',  amostra:'João da Silva Teste'},
+  nome_treinamento:     {label:'Nome do treinamento',     tipo:'texto',  amostra:'NR-35 — Trabalho em Altura'},
+  carga_horaria:        {label:'Carga horária',           tipo:'texto',  amostra:'Carga horaria: 8h'},
+  data_conclusao:       {label:'Data de conclusão',       tipo:'texto',  amostra:'Realizado em 22/07/2026'},
+  assinatura_instrutor: {label:'Assinatura do instrutor', tipo:'imagem'},
+  assinatura_aluno:     {label:'Assinatura do aluno',     tipo:'imagem'},
+  qr_validacao:         {label:'QR de validação',         tipo:'imagem'},
+  codigo_certificado:   {label:'Código do certificado',   tipo:'texto',  amostra:'Cod: A1B2C3D4'},
+};
+
+function abrirEditorPosicoesCertificado(orgId) {
+  const org = _orgsCache.find(o=>o.id===orgId);
+  if (!org?.cert_arte_fundo_url) { showToast('Envie uma arte de fundo primeiro.','error'); return; }
+  _editorPosOrgId = orgId;
+  _editorPosLayout = JSON.parse(JSON.stringify(_layoutCamposValido(org.cert_layout_campos) ? org.cert_layout_campos : DEFAULT_LAYOUT_CAMPOS_CERTIFICADO));
+
+  const corpo = `
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:10px;line-height:1.5">Arraste cada campo para a posição desejada sobre a sua arte. Os valores mostrados são fictícios, só para você visualizar o resultado — nesta primeira versão o tamanho da fonte e da assinatura/QR seguem o padrão do sistema, só a posição é ajustável.</div>
+    <div id="editorPosContainer" style="position:relative;width:100%;max-width:640px;aspect-ratio:297/210;margin:0 auto;border:1.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:#eee;touch-action:none">
+      <img src="${escapeHtml(org.cert_arte_fundo_url)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;user-select:none" draggable="false">
+      <div id="editorPosCampos" style="position:absolute;inset:0"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text-3);margin-top:8px;text-align:center">Prévia aproximada — o certificado real é gerado em alta resolução pelo mesmo mecanismo desta prévia.</div>
+  `;
+  const rodape = `
+    <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+    <button class="btn btn-outline" onclick="_restaurarPadraoEditorPos()">Restaurar padrão</button>
+    <button class="btn btn-navy" onclick="_salvarEditorPosicoesCertificado()">Salvar posições</button>
+  `;
+  abrirModal('Configurar posições do certificado', corpo, rodape);
+  setTimeout(_renderEditorPosCampos, 0); // aguarda o modal entrar no DOM antes de medir o container
+}
+
+function _restaurarPadraoEditorPos() {
+  _editorPosLayout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT_CAMPOS_CERTIFICADO));
+  _renderEditorPosCampos();
+}
+
+function _renderEditorPosCampos() {
+  const wrap = document.getElementById('editorPosCampos');
+  if (!wrap || !_editorPosLayout) return;
+  wrap.innerHTML = '';
+  Object.keys(_CAMPOS_EDITOR_INFO).forEach(chave => {
+    const info = _CAMPOS_EDITOR_INFO[chave];
+    const c = _editorPosLayout[chave] || DEFAULT_LAYOUT_CAMPOS_CERTIFICADO[chave];
+    const box = document.createElement('div');
+    box.dataset.campo = chave;
+    box.style.cssText = `position:absolute;left:${c.x*100}%;top:${c.y*100}%;transform:translate(-50%,-50%);padding:4px 8px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;cursor:grab;user-select:none;border:1.5px dashed ${info.tipo==='imagem'?'#F59E0B':'#1E2A4A'};background:${info.tipo==='imagem'?'rgba(245,158,11,.85)':'rgba(30,42,74,.85)'};color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)`;
+    box.textContent = info.tipo==='imagem' ? info.label : (info.amostra || info.label);
+    box.title = info.label;
+    _ativarArrastoCampo(box, chave);
+    wrap.appendChild(box);
+  });
+}
+
+function _ativarArrastoCampo(box, chave) {
+  box.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    box.setPointerCapture(e.pointerId);
+    box.style.cursor = 'grabbing';
+    const container = document.getElementById('editorPosContainer');
+    const mover = (ev) => {
+      const rect = container.getBoundingClientRect();
+      let xFrac = (ev.clientX - rect.left) / rect.width;
+      let yFrac = (ev.clientY - rect.top) / rect.height;
+      xFrac = Math.max(0, Math.min(1, xFrac));
+      yFrac = Math.max(0, Math.min(1, yFrac));
+      box.style.left = (xFrac*100)+'%';
+      box.style.top  = (yFrac*100)+'%';
+      _editorPosLayout[chave] = {..._editorPosLayout[chave], x:xFrac, y:yFrac};
+    };
+    const soltar = (ev) => {
+      box.releasePointerCapture(e.pointerId);
+      box.style.cursor = 'grab';
+      box.removeEventListener('pointermove', mover);
+      box.removeEventListener('pointerup', soltar);
+      box.removeEventListener('pointercancel', soltar);
+    };
+    box.addEventListener('pointermove', mover);
+    box.addEventListener('pointerup', soltar);
+    box.addEventListener('pointercancel', soltar);
+  });
+}
+
+async function _salvarEditorPosicoesCertificado() {
+  if (!_editorPosOrgId || !_layoutCamposValido(_editorPosLayout)) { showToast('Não foi possível salvar — tente reabrir o editor.','error'); return; }
+  try {
+    const { error } = await sb.from('organizacoes').update({ cert_layout_campos: _editorPosLayout }).eq('id', _editorPosOrgId);
+    if (error) throw error;
+    const orgCache = _orgsCache.find(o=>o.id===_editorPosOrgId);
+    if (orgCache) orgCache.cert_layout_campos = _editorPosLayout;
+    showToast('Posições salvas!','success');
+    const orgIdReabrir = _editorPosOrgId;
+    fecharModal();
+    abrirModalOrg(orgIdReabrir);
+  } catch(e) { showToast(e.message||'Erro ao salvar posições','error'); }
+}
+
 async function salvarOrg() {
   const nome = document.getElementById('mOrgNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   const plano = document.getElementById('mOrgPlano')?.value || 'starter';
   const carregarModelo = !_modalCurrentId && !!document.getElementById('mOrgCatalogoModelo')?.checked;
+
+  // Trava de segurança: o toggle "usar esta arte" só pode ser salvo como
+  // true se houver arte enviada E todas as posições obrigatórias válidas —
+  // o checkbox já vem desabilitado visualmente nesse caso, mas o app não
+  // confia só na UI (usuário pode reabrir o modal em outro estado).
+  const usarArteFundoMarcado = !!document.getElementById('mOrgUsarArteFundo')?.checked;
+  let layoutCamposParsed = null;
+  try { layoutCamposParsed = JSON.parse(document.getElementById('mOrgLayoutCampos')?.value || 'null'); } catch(e) { layoutCamposParsed = null; }
+  const arteFundoUrlAtual = document.getElementById('mOrgArteFundoUrl')?.value.trim() || null;
+  if (plano==='enterprise' && usarArteFundoMarcado && (!arteFundoUrlAtual || !_layoutCamposValido(layoutCamposParsed))) {
+    showToast('Antes de ativar a arte personalizada, envie a arte de fundo e configure as posições de todos os campos obrigatórios.', 'error');
+    return;
+  }
+
   const dados = {
     nome, plano,
     cnpj:document.getElementById('mOrgCnpj')?.value.trim()||null,
@@ -4862,6 +5124,9 @@ async function salvarOrg() {
     logo_url: plano==='enterprise' ? (document.getElementById('mOrgLogoUrl')?.value.trim()||null) : null,
     cert_aplicar_cor_documentos: plano==='enterprise' ? !!document.getElementById('mOrgAplicarCorDocs')?.checked : false,
     cert_texto_rodape: plano==='enterprise' ? (document.getElementById('mOrgTextoRodape')?.value.trim()||null) : null,
+    cert_arte_fundo_url: plano==='enterprise' ? arteFundoUrlAtual : null,
+    cert_layout_campos: plano==='enterprise' ? layoutCamposParsed : null,
+    cert_usar_arte_propria: plano==='enterprise' ? usarArteFundoMarcado : false,
   };
   try {
     setBtnModalLoading(true);
@@ -11828,6 +12093,162 @@ function _temaDocumentoOrg(org) {
 }
 
 // ============================================================
+// Fase 3 da personalização de certificados — arte de fundo própria por
+// organização + posicionamento dos campos obrigatórios (mini-editor).
+// Ver 01-Requisitos/personalizacao-certificados.md na base de conhecimento.
+//
+// Escopo (decisão de arquitetura): aplica-se SOMENTE à página 1 (capa) do
+// certificado individual e do certificado coletivo — as duas páginas que a
+// organização de fato entrega ao seu cliente final. A contracapa (QR de
+// validação, conteúdo programático, código de autenticidade) e a lista de
+// presença NUNCA mudam, em nenhuma organização — é ali que fica a rede de
+// segurança documental caso a arte enviada tenha algum problema.
+//
+// Tudo aqui segue o mesmo princípio já usado em _temaDocumentoOrg: qualquer
+// dúvida, dado ausente ou inválido faz a função devolver null/o padrão, e
+// quem chama sempre trata isso como "usar o layout fixo de sempre" — a
+// emissão do certificado nunca falha por causa de uma arte mal configurada.
+// ============================================================
+
+const CAMPOS_OBRIGATORIOS_CERTIFICADO = [
+  'nome_participante','nome_treinamento','carga_horaria','data_conclusao',
+  'assinatura_instrutor','assinatura_aluno','qr_validacao','codigo_certificado'
+];
+
+// Posição inicial sugerida no mini-editor (aproxima o layout padrão atual)
+// — também é a referência de formato usada pela validação abaixo.
+const DEFAULT_LAYOUT_CAMPOS_CERTIFICADO = {
+  nome_participante:    {x:0.50, y:0.42, tamanho:22, alinhamento:'center', cor:'auto'},
+  nome_treinamento:     {x:0.50, y:0.52, tamanho:13, alinhamento:'center', cor:'auto'},
+  carga_horaria:        {x:0.50, y:0.58, tamanho:10, alinhamento:'center', cor:'auto'},
+  data_conclusao:       {x:0.20, y:0.86, tamanho:9,  alinhamento:'left',   cor:'auto'},
+  assinatura_instrutor: {x:0.30, y:0.90, largura:0.18, altura:0.06},
+  assinatura_aluno:     {x:0.70, y:0.90, largura:0.18, altura:0.06},
+  qr_validacao:         {x:0.90, y:0.88, largura:0.08, altura:0.08},
+  codigo_certificado:   {x:0.90, y:0.95, tamanho:7,  alinhamento:'center', cor:'auto'},
+};
+
+// Valida se cert_layout_campos tem todos os campos obrigatórios com
+// coordenadas numéricas dentro de 0–1. Não valida "bom gosto" (campos
+// sobrepostos, por exemplo) — só o mínimo pra não quebrar o desenho do PDF.
+function _layoutCamposValido(layout) {
+  if (!layout || typeof layout !== 'object') return false;
+  return CAMPOS_OBRIGATORIOS_CERTIFICADO.every(chave => {
+    const c = layout[chave];
+    if (!c || typeof c !== 'object') return false;
+    if (typeof c.x !== 'number' || c.x < 0 || c.x > 1) return false;
+    if (typeof c.y !== 'number' || c.y < 0 || c.y > 1) return false;
+    return true;
+  });
+}
+
+// Resolve se a organização tem uma arte de fundo própria ativa e válida
+// para a capa do certificado. Retorna null em qualquer caso de dúvida —
+// gerarCertificadoIndividual/Coletivo sempre tratam null como "layout
+// padrão fixo", igual ao comportamento de antes desta fase existir.
+function _arteCertificadoOrg(org) {
+  if (!org?.cert_usar_arte_propria) return null;
+  if (!org?.cert_arte_fundo_url) return null;
+  if (!_layoutCamposValido(org?.cert_layout_campos)) return null;
+  return { url: org.cert_arte_fundo_url, layout: org.cert_layout_campos };
+}
+
+// Carrega a arte de fundo personalizada do certificado como Data URL pronta
+// para o jsPDF, mantendo também o canvas para calcular automaticamente se o
+// texto sobre cada campo deve ser claro ou escuro (ver _corTextoAutoArteFundo).
+// Retorna null se a URL não puder ser lida — nesse caso o chamador cai no
+// layout padrão fixo, exatamente como se cert_usar_arte_propria estivesse
+// desligado.
+async function carregarArteFundoOrgPDF(url) {
+  if (!url) return null;
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = url;
+    });
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth || 1; c.height = img.naturalHeight || 1;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    return { dataUrl: c.toDataURL('image/png'), w: c.width, h: c.height, canvas: c };
+  } catch(e) { return null; }
+}
+
+// Amostra a luminância média de uma pequena região da arte de fundo (em
+// coordenadas fracionárias 0–1) e devolve a cor de texto recomendada — mesmo
+// limiar (200) usado em _luminanciaRgb/_temaDocumentoOrg para decidir entre
+// navy (fundo claro) e branco (fundo escuro) — nunca lança erro: se a
+// leitura de pixels falhar (ex. CORS), cai no navy padrão.
+function _corTextoAutoArteFundo(arte, xFrac, yFrac) {
+  const PADRAO = [30,42,74]; // navy
+  if (!arte?.canvas) return PADRAO;
+  try {
+    const ctx = arte.canvas.getContext('2d');
+    const px = Math.max(0, Math.min(arte.w-1, Math.round(xFrac*arte.w)));
+    const py = Math.max(0, Math.min(arte.h-1, Math.round(yFrac*arte.h)));
+    const raio = Math.max(4, Math.round(arte.w*0.03));
+    const sx = Math.max(0, px-raio), sy = Math.max(0, py-raio);
+    const sw = Math.min(arte.w-sx, raio*2) || 1, sh = Math.min(arte.h-sy, raio*2) || 1;
+    const dados = ctx.getImageData(sx, sy, sw, sh).data;
+    let soma = 0, n = 0;
+    for (let i=0; i<dados.length; i+=4) { soma += _luminanciaRgb([dados[i],dados[i+1],dados[i+2]]); n++; }
+    const media = n ? soma/n : 255;
+    return media > 200 ? PADRAO : [255,255,255];
+  } catch(e) { return PADRAO; }
+}
+
+// Desenha um campo de texto posicionado por coordenada fracionária sobre a
+// arte de fundo. `campo.cor` pode ser 'auto' (calcula contraste — padrão),
+// um hex fixo escolhido no mini-editor, ou ausente (mesmo que 'auto').
+function _desenharCampoTextoArte(doc, campo, valor, arte, W, H, alinhamentoPadrao) {
+  if (!campo) return;
+  const x = campo.x*W, y = campo.y*H;
+  doc.setFontSize(campo.tamanho || 10);
+  doc.setFont('helvetica', campo.negrito===false ? 'normal' : 'bold');
+  let cor = null;
+  if (campo.cor && campo.cor !== 'auto') cor = _hexParaRgb(campo.cor);
+  if (!cor) cor = _corTextoAutoArteFundo(arte, campo.x, campo.y);
+  doc.setTextColor(...cor);
+  doc.text(pdfSafe(String(valor ?? ''), 120), x, y, {align: campo.alinhamento || alinhamentoPadrao || 'center'});
+}
+
+// Desenha um campo de imagem (assinatura ou QR) centrado na coordenada
+// fracionária, dentro de uma caixa largura×altura (também fracionária).
+// Mantém proporção da imagem original, igual a desenharLogoOrg. Se a
+// imagem não existir (ex. aluno sem assinatura digital), simplesmente não
+// desenha nada — nunca quebra o PDF.
+function _desenharCampoImagemArte(doc, campo, img, W, H) {
+  if (!campo || !img?.dataUrl) return;
+  const w = (campo.largura || 0.15) * W, h = (campo.altura || 0.06) * H;
+  const cx = campo.x*W, cy = campo.y*H;
+  try {
+    const ratio = (img.w||1) / (img.h||1);
+    let dw = w, dh = w/ratio;
+    if (dh > h) { dh = h; dw = h*ratio; }
+    doc.addImage(img.dataUrl, 'PNG', cx-dw/2, cy-dh/2, dw, dh);
+  } catch(e) { /* imagem inválida — campo simplesmente não aparece */ }
+}
+
+// Desenha a página 1 (capa) do certificado individual ou coletivo usando a
+// arte de fundo própria da organização em vez do header/rodapé navy fixo.
+// `campos` traz os valores já resolvidos (texto pronto, imagens carregadas)
+// pelo gerador que chamou esta função.
+function desenharCapaCertificadoComArte(doc, arte, layout, campos, W, H) {
+  doc.addImage(arte.dataUrl, 'PNG', 0, 0, W, H);
+  _desenharCampoTextoArte(doc, layout.nome_participante, campos.nomeDestaque, arte, W, H);
+  _desenharCampoTextoArte(doc, layout.nome_treinamento, campos.nomeTreinamento, arte, W, H);
+  _desenharCampoTextoArte(doc, layout.carga_horaria, campos.cargaHorariaTexto, arte, W, H);
+  _desenharCampoTextoArte(doc, layout.data_conclusao, campos.dataTexto, arte, W, H, 'left');
+  _desenharCampoImagemArte(doc, layout.assinatura_instrutor, campos.imgAssinaturaInstrutor, W, H);
+  _desenharCampoImagemArte(doc, layout.assinatura_aluno, campos.imgAssinaturaAluno, W, H);
+  if (campos.qrDataUrl) _desenharCampoImagemArte(doc, layout.qr_validacao, {dataUrl:campos.qrDataUrl, w:1, h:1}, W, H);
+  _desenharCampoTextoArte(doc, layout.codigo_certificado, `Cod: ${campos.codigoShort}`, arte, W, H);
+}
+
+// ============================================================
 // PDF — LISTA DE PRESENÇA
 // ============================================================
 async function gerarListaPresenca(turmaId) {
@@ -12042,7 +12463,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_usar_arte_propria,cert_arte_fundo_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -12146,9 +12567,24 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
 
     // ════════════════════════════════
-    // PÁGINA 1 - CAPA (Modelo B)
+    // PÁGINA 1 - CAPA (Modelo B, ou arte própria da organização — Fase 3)
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
+    const nomePart = s(col.nome,60);
+    const _arteCapa = _arteCertificadoOrg(t.organizacoes);
+    const _arteCapaImg = _arteCapa ? await carregarArteFundoOrgPDF(_arteCapa.url) : null;
+    if (_arteCapa && _arteCapaImg) {
+      desenharCapaCertificadoComArte(doc, _arteCapaImg, _arteCapa.layout, {
+        nomeDestaque: nomePart,
+        nomeTreinamento: s(nomeT,90),
+        cargaHorariaTexto: `Carga horaria: ${ch}h`,
+        dataTexto: `Realizado em ${fmtDataExtensoPDF(dataCert)}`,
+        imgAssinaturaInstrutor,
+        imgAssinaturaAluno,
+        qrDataUrl: qrData,
+        codigoShort,
+      }, W, H);
+    } else {
     cabecalhoNavy(doc, 'CERTIFICADO DE CONCLUSAO');
 
     // Área central
@@ -12159,7 +12595,6 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 
     // Nome em destaque
     doc.setFontSize(34); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-    const nomePart = s(col.nome,60);
     doc.text(nomePart, W/2, cy, {align:'center'});
     const nW = doc.getTextWidth(nomePart);
     doc.setDrawColor(...AMBER); doc.setLineWidth(2.5);
@@ -12195,6 +12630,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 
     doc.setFontSize(6.5); doc.setTextColor(...T3);
     doc.text(`Certificado No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(dataLocalISO())}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
+    }
 
     // ════════════════════════════════════════════════════════
     // PÁGINA 2 - CONTRACAPA INDIVIDUAL — Layout B1 v2
@@ -12396,7 +12832,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_usar_arte_propria,cert_arte_fundo_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -12450,10 +12886,24 @@ async function gerarCertificadoColetivo(turmaId) {
     const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
 
     // ════════════════════════════════
-    // PÁGINA 1 - CAPA COLETIVA
+    // PÁGINA 1 - CAPA COLETIVA (ou arte própria da organização — Fase 3)
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
-
+    const nomeEmpSafe0 = s(nomeEmp,45);
+    const _arteCapaCol = _arteCertificadoOrg(t.organizacoes);
+    const _arteCapaColImg = _arteCapaCol ? await carregarArteFundoOrgPDF(_arteCapaCol.url) : null;
+    if (_arteCapaCol && _arteCapaColImg) {
+      desenharCapaCertificadoComArte(doc, _arteCapaColImg, _arteCapaCol.layout, {
+        nomeDestaque: nomeEmpSafe0,
+        nomeTreinamento: s(nomeT,90),
+        cargaHorariaTexto: `Carga horaria: ${ch} hora${ch!==1?'s':''}`,
+        dataTexto: `Realizado em ${fmtDataExtensoPDF(dataCert)}`,
+        imgAssinaturaInstrutor,
+        imgAssinaturaAluno: null,
+        qrDataUrl: qrData,
+        codigoShort,
+      }, W, H);
+    } else {
     // Faixa navy topo
     doc.setFillColor(...NAVY); doc.rect(0,0,W,52,'F');
     doc.setFillColor(...AMBER); doc.rect(0,52,W,3,'F');
@@ -12533,6 +12983,7 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.text(`Cod: ${codigoShort}`, W-41, fy+24, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text(`No ${codigoShort}  |  Emitido em ${fmtDataExtensoPDF(dataLocalISO())}  |  toledolabs.com.br/validar`, W/2, H-3, {align:'center'});
+    }
 
     // ════════════════════════════════════════════════════════
     // PÁGINA 2 - CONTRACAPA COLETIVO — Layout B1 v2
