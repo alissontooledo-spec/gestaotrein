@@ -625,6 +625,20 @@ const SUPABASE_URL = 'https://cldbqcpnzitwqvgqbipz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_uuOYchKEtJXdYPI0pKmM_A_mtp-ihMT';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Captura o retorno do link de recuperação de senha (enviarRecuperacaoSenha,
+// em Minha Conta) — o supabase-js detecta o token na URL automaticamente e
+// dispara este evento antes de qualquer outra coisa rodar. Guardamos numa
+// flag porque o listener pode disparar antes ou depois do DOMContentLoaded
+// (a ordem não é garantida), e o DOMContentLoaded precisa saber para não
+// deixar a pessoa cair direto no app sem trocar a senha.
+let _flagRecuperacaoSenhaPendente = false;
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    _flagRecuperacaoSenhaPendente = true;
+    _abrirModalDefinirNovaSenhaRecuperacao();
+  }
+});
+
 // ---- Estado global ----
 let usuarioAtual = null;
 let paginaAtual  = 'home';
@@ -2906,6 +2920,7 @@ async function verOrgProvedor(orgId) {
   if (!_orgsCache.some(o=>o.id===orgId)) _orgsCache = [..._orgsCache, orgData];
 
   _usuariosOrgAtual = usrsData;
+  window._orgIdAtualProvedor = orgId; // usado por _htmlListaUsuariosOrg para abrir editar/senha/inativar
   _usuariosOrgFiltrado = usrsData.filter(u=>u.ativo); // padrão: só usuários ativos (item 4)
   _paginaUsuariosOrg = 1;
 
@@ -3063,14 +3078,18 @@ async function salvarNotaOrg() {
 
 function _htmlListaUsuariosOrg(lista) {
   if (!lista.length) return '<div class="empty" style="padding:24px"><div class="empty-title">Nenhum usuário encontrado</div></div>';
+  // Clicável (item 4 — gestão de usuários pelo Provedor): abre o mesmo modal
+  // de editar usuário usado pelo Administrador na tela Equipe (nome, perfil,
+  // alterar senha, inativar/reativar) — ver abrirModalUsuarioOrg.
   return lista.map(u => `
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onclick="abrirModalUsuarioOrg('${window._orgIdAtualProvedor}','${u.id}')" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
           <div style="width:36px;height:36px;border-radius:50%;background:rgba(30,42,74,.1);color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--navy)">${escapeHtml(u.nome)}</div>
             <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${labelPerfil(u.perfil)}</div>
           </div>
           <span class="badge ${u.ativo?'badge-green':'badge-gray'}">${u.ativo?'Ativo':'Inativo'}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
         </div>`).join('');
 }
 function _renderUsuariosOrgLista() {
@@ -5455,9 +5474,98 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
         <div class="field" style="margin:0"><label>Registro</label><input type="text" id="mUsrConselho" value="${u?.conselho_classe||''}" placeholder="Ex: CREA-SC 109085-1"></div>
       </div>
       <div class="field"><label>Especialidade</label><input type="text" id="mUsrEspecialidade" value="${u?.especialidade||''}" placeholder="Ex: Engenheiro de Segurança do Trabalho"></div>
-    </div>`,
+    </div>
+    ${u && u.perfil !== 'provedor' ? `
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Segurança</div>
+      <div id="linhaAlterarSenhaGerenciado" style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="_mostrarFormSenhaGerenciado()">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Alterar senha de acesso</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:1px">Define uma nova senha para este usuário, sem precisar da senha atual</div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();_mostrarFormSenhaGerenciado()">Alterar</button>
+      </div>
+      <div id="formSenhaGerenciado" style="display:none;margin-top:10px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:12px">
+        <div class="field"><label>Nova senha</label><input type="password" id="mUsrSenhaNova" placeholder="Mínimo 6 caracteres"></div>
+        <div class="field" style="margin-bottom:0"><label>Confirmar nova senha</label><input type="password" id="mUsrSenhaNovaConfirm" placeholder="Repita a nova senha"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button type="button" class="btn btn-navy btn-sm" style="flex:1" onclick="_confirmarAlterarSenhaGerenciado('${u.id}')">Salvar nova senha</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="_ocultarFormSenhaGerenciado()">Cancelar</button>
+        </div>
+      </div>
+    </div>` : ''}
+    ${u && u.perfil !== 'provedor' && u.id !== usuarioAtual.id ? `
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="font-size:12px;color:var(--text-3)">${u.ativo ? 'Conta ativa — o usuário consegue acessar o sistema.' : 'Conta inativa — o usuário não consegue mais acessar.'}</div>
+      <button type="button" class="btn btn-outline btn-sm" style="color:${u.ativo?'var(--red)':'var(--green)'}" onclick="_toggleAtivoUsuarioGerenciado('${u.id}','${orgId}')">${u.ativo?'Inativar':'Reativar'}</button>
+    </div>` : ''}`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="${u?'salvarUsuarioOrg()':'criarUsuarioOrg()'}">${u?'Salvar alterações':'Criar usuário'}</button>`);
+}
+
+function _mostrarFormSenhaGerenciado() {
+  const form = document.getElementById('formSenhaGerenciado');
+  if (form) form.style.display = 'block';
+}
+function _ocultarFormSenhaGerenciado() {
+  const form = document.getElementById('formSenhaGerenciado');
+  if (form) form.style.display = 'none';
+  const n1 = document.getElementById('mUsrSenhaNova'), n2 = document.getElementById('mUsrSenhaNovaConfirm');
+  if (n1) n1.value=''; if (n2) n2.value='';
+}
+
+// Troca a senha de outro usuário — sempre via Edge Function com service
+// role (nunca é possível fazer isso só com a chave pública do navegador).
+// Usada tanto pelo Administrador (tela Equipe) quanto pelo Provedor (tela
+// da organização) — a autorização de fato é checada no servidor
+// (alterar-senha-usuario), este é só o disparo da chamada.
+async function _confirmarAlterarSenhaGerenciado(usuarioId) {
+  const nova = document.getElementById('mUsrSenhaNova')?.value;
+  const confirm = document.getElementById('mUsrSenhaNovaConfirm')?.value;
+  if (!nova || !confirm) { showToast('Preencha os dois campos de senha','error'); return; }
+  if (nova.length < 6) { showToast('A senha deve ter no mínimo 6 caracteres','error'); return; }
+  if (nova !== confirm) { showToast('A confirmação não confere','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const {data:{session}} = await sb.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/alterar-senha-usuario`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`,'apikey':SUPABASE_KEY},
+      body:JSON.stringify({usuario_id:usuarioId, nova_senha:nova}),
+    });
+    const resultado = await res.json();
+    setBtnModalLoading(false);
+    if (!res.ok) throw new Error(resultado.error||'Erro ao alterar senha');
+    showToast('Senha alterada com sucesso!','success');
+    _ocultarFormSenhaGerenciado();
+  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao alterar senha','error'); }
+}
+
+// Ativa/inativa um usuário gerenciado pelo Administrador (própria org) ou
+// pelo Provedor (qualquer org) — reaproveitado pelos dois pontos de entrada
+// (Equipe e tela da organização no Provedor).
+async function _toggleAtivoUsuarioGerenciado(usuarioId, orgId) {
+  if (!['administrador','provedor'].includes(usuarioAtual.perfil)) {
+    showToast('Você não tem permissão para esta ação','error'); return;
+  }
+  const {data:u, error:errU} = await sb.from('usuarios').select('nome,ativo').eq('id',usuarioId).single();
+  if (errU || !u) { showToast('Usuário não encontrado','error'); return; }
+  const ativo = u.ativo;
+  const ok = await confirmarAcao(ativo ? `Inativar ${u.nome}? A pessoa não conseguirá mais acessar o sistema.` : `Reativar ${u.nome}?`, ativo?'Inativar':'Reativar', ativo);
+  if (!ok) return;
+  try {
+    const { error } = await sb.from('usuarios').update({ativo: !ativo}).eq('id', usuarioId);
+    if (error) throw error;
+    showToast(`${u.nome} ${!ativo?'reativado':'inativado'} com sucesso.`,'success');
+    fecharModal();
+    // Reabre a origem certa: tela da organização (Provedor) ou o próprio
+    // modal de edição, dependendo de onde a ação foi disparada.
+    if (usuarioAtual.perfil === 'provedor' && !usuarioAtual.org_id) {
+      await verOrgProvedor(orgId);
+    } else if (paginaAtual === 'equipe') {
+      await renderEquipe();
+    }
+  } catch(e) { showToast(e.message||'Erro ao atualizar usuário','error'); }
 }
 
 async function salvarUsuarioOrg() {
@@ -8421,11 +8529,19 @@ async function confirmarExcluirTurma() {
 }
 
 // ---- Agendamentos ----
+// Bug crítico corrigido (2026-07-22): esta função tinha um cache "primeira
+// vez only" (window._instrutoresCache) que nunca era invalidado. Inofensivo
+// para um usuário comum — org_id nunca muda durante a sessão dele — mas
+// vazava instrutores de uma organização para outra durante o Modo Suporte,
+// onde o Provedor troca de org_id várias vezes sem recarregar a página. Foi
+// a causa raiz do vazamento de dados entre organizações relatado por
+// Alisson. Correção: sempre busca fresco do banco, sem cache — é uma
+// consulta leve (id,nome), o custo de nunca cachear é desprezível perto do
+// risco. NUNCA reintroduzir cache aqui (ou em qualquer lista dependente de
+// org_id) sem invalidar explicitamente a cada troca de organização.
 async function _carregarInstrutores() {
-  if (window._instrutoresCache && window._instrutoresCache.length) return window._instrutoresCache;
   const {data} = await sb.from('usuarios').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('perfil','instrutor').eq('ativo',true).order('nome');
-  window._instrutoresCache = data||[];
-  return window._instrutoresCache;
+  return data||[];
 }
 
 async function abrirModalAgendamento(turmaId, agendamentoId=null) {
@@ -11356,6 +11472,15 @@ async function renderConta() {
         </div>
         <button class="btn btn-outline btn-sm" id="btnAlterarSenha" onclick="event.stopPropagation();mostrarFormSenha()">Alterar</button>
       </div>
+
+      <div style="display:flex;align-items:center;gap:12px;padding-top:14px;border-top:1px solid var(--border);margin-top:14px;cursor:pointer" onclick="enviarRecuperacaoSenha()">
+        <div style="width:36px;height:36px;border-radius:10px;background:var(--amber-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✉️</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Recuperar senha por e-mail</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:1px">Envia um link de redefinição para ${escapeHtml(u.email||'seu e-mail cadastrado')} — use se não lembrar a senha atual</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();enviarRecuperacaoSenha()">Enviar link</button>
+      </div>
     </div>
 
     <button class="btn btn-outline" style="width:100%;color:var(--red-text);border-color:#FECACA;background:var(--red-l)" onclick="fazerLogout()">🚪 Sair do sistema</button>
@@ -11534,6 +11659,62 @@ async function confirmarAlterarSenha() {
     showToast('Senha alterada com sucesso!','success');
     cancelarAlterarSenha();
   } catch(e) { hideLoading(); showToast(e.message||'Erro ao alterar senha','error'); }
+}
+
+// ------------------------------------------------------------------
+// Recuperação de senha por e-mail (item 2 da correção de julho/2026) —
+// disponível para todos os perfis em Minha Conta. Complementa "Alterar
+// senha" (que exige saber a senha atual): este fluxo é para quem não
+// lembra a senha. Dois pontos:
+//   1) enviarRecuperacaoSenha() dispara o e-mail (self-service, não requer
+//      Edge Function nem service role — é a API pública do Supabase Auth).
+//   2) O listener PASSWORD_RECOVERY abaixo (perto da inicialização) capta o
+//      retorno do link do e-mail e força a definição de uma nova senha
+//      antes de liberar o app.
+// ------------------------------------------------------------------
+async function enviarRecuperacaoSenha() {
+  if (!usuarioAtual?.email) { showToast('Não há e-mail cadastrado nesta conta — contate o suporte.','error'); return; }
+  const ok = await confirmarAcao(`Enviar um link de redefinição de senha para ${usuarioAtual.email}?`, 'Enviar', false);
+  if (!ok) return;
+  try {
+    showLoading('Enviando e-mail...');
+    const { error } = await sb.auth.resetPasswordForEmail(usuarioAtual.email, {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    hideLoading();
+    if (error) throw error;
+    showToast('E-mail de recuperação enviado! Verifique sua caixa de entrada (e o spam).', 'success', 7000);
+  } catch(e) { hideLoading(); showToast(e.message||'Erro ao enviar e-mail de recuperação','error'); }
+}
+
+// Modal de definição de nova senha, mostrado quando o usuário volta pelo
+// link de recuperação. Não bloqueia o app se a pessoa cancelar (ela pode
+// tentar de novo depois em Minha Conta) — só não deixa a sessão de
+// recuperação "perdida" sem oferecer a troca.
+function _abrirModalDefinirNovaSenhaRecuperacao() {
+  abrirModal('Definir nova senha', `
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:12px;line-height:1.5">Você está redefinindo sua senha pelo link enviado por e-mail. Escolha uma nova senha para continuar.</div>
+    <div class="field"><label>Nova senha</label><input type="password" id="recSenhaNova" placeholder="Mínimo 6 caracteres"></div>
+    <div class="field" style="margin-bottom:0"><label>Confirmar nova senha</label><input type="password" id="recSenhaConfirm" placeholder="Repita a nova senha"></div>
+  `, `
+    <button class="btn btn-outline" onclick="fecharModal()">Agora não</button>
+    <button class="btn btn-navy" onclick="_confirmarNovaSenhaRecuperacao()">Salvar nova senha</button>
+  `);
+}
+
+async function _confirmarNovaSenhaRecuperacao() {
+  const nova = document.getElementById('recSenhaNova')?.value;
+  const confirm = document.getElementById('recSenhaConfirm')?.value;
+  if (!nova || !confirm) { showToast('Preencha os dois campos','error'); return; }
+  if (nova.length < 6) { showToast('A senha deve ter no mínimo 6 caracteres','error'); return; }
+  if (nova !== confirm) { showToast('A confirmação não confere','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const { error } = await sb.auth.updateUser({ password: nova });
+    if (error) throw error;
+    fecharModal();
+    showToast('Senha atualizada com sucesso!','success');
+  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao definir nova senha','error'); }
 }
 
 async function salvarConta() {
