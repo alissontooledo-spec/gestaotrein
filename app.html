@@ -8123,9 +8123,15 @@ async function verTurma(id) {
     const nomeC = t.clientes?.nome||'-';
     const podeEditar = podeMgr && st !== 'concluida' && st !== 'cancelada';
 
-    // Agendamento do instrutor logado (para exibir data/hora)
+    // Agendamento do instrutor logado (para exibir data/hora).
+    // IMPORTANTE: em turmas com mais de um encontro, não pode ser "o
+    // primeiro agendamento do instrutor" (isso trava no 1º dia pra sempre,
+    // mesmo depois de concluído). Tem que ser o próximo encontro pendente
+    // e, só se não houver nenhum pendente, o último concluído — mesma regra
+    // usada no "Continuar treinamento" logo abaixo.
+    const agendamentosInstrutor = agendamentos.filter(ag => ag.instrutor_id === usuarioAtual.id);
     const agMeuAgend = usuarioAtual.perfil === 'instrutor'
-      ? agendamentos.find(ag => ag.instrutor_id === usuarioAtual.id) || agendamentos[0]
+      ? (agendamentosInstrutor.find(ag => !ag.concluida) || agendamentosInstrutor[agendamentosInstrutor.length-1] || agendamentos[0])
       : null;
 
     // Local exibido ao instrutor: endereço completo da turma (t.local) +
@@ -8171,11 +8177,11 @@ async function verTurma(id) {
           </div>
         </div>
         ${st==='agendada'?`
-          <button class="btn" style="width:100%;background:var(--amber);color:var(--navy);font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="iniciarExecucao" data-id="${id}">
+          <button class="btn" style="width:100%;background:var(--amber);color:var(--navy);font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="iniciarExecucaoSessao" data-id="${id}" data-sessao="${agMeuAgend?.id||''}">
             ▶ Iniciar treinamento
           </button>`:``}
         ${st==='em_andamento'?`
-          <button class="btn" style="width:100%;background:var(--green);color:#fff;font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="abrirExecucao" data-id="${id}">
+          <button class="btn" style="width:100%;background:var(--green);color:#fff;font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="abrirExecucaoSessao" data-id="${id}" data-sessao="${agMeuAgend?.id||''}">
             ▶ Continuar treinamento
           </button>`:``}
         ${st==='concluida'?`
@@ -8185,6 +8191,23 @@ async function verTurma(id) {
               📄 Documentos e Certificados
             </button>
           </div>`:``}      </div>
+
+      ${agendamentosInstrutor.length>1&&st!=='agendada'?`
+      <!-- Encontros (turma com mais de um dia) — permite revisar um encontro
+           já concluído (evidências/anotações) mesmo depois de finalizado,
+           sem depender só do botão "Continuar" (que só resolve o pendente). -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:14px;font-weight:600;color:var(--text-1);margin-bottom:10px">Encontros (${agendamentosInstrutor.length})</div>
+        ${agendamentosInstrutor.map((ag,i)=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;${i<agendamentosInstrutor.length-1?'border-bottom:1px solid var(--border)':''}">
+          <div style="width:28px;height:28px;border-radius:50%;background:${ag.concluida?'var(--green-l)':'var(--gray-100)'};color:${ag.concluida?'var(--green)':'var(--text-3)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--text-1)">${formatarData(ag.data)}${ag.hora_inicio?' · '+ag.hora_inicio.slice(0,5):''}</div>
+            <div style="font-size:11px;color:var(--text-3)">${ag.concluida?'Concluído':'Pendente'}</div>
+          </div>
+          <button class="btn btn-outline btn-sm" data-action="abrirExecucaoSessao" data-id="${id}" data-sessao="${ag.id}">${ag.concluida?'Revisar':'Abrir'}</button>
+        </div>`).join('')}
+      </div>`:``}
 
       <!-- Participantes -->
       <div class="card" style="margin-bottom:12px">
@@ -9527,11 +9550,26 @@ function _filaDb() {
   });
 }
 
+// Guarda o retrato desta turma para uso offline. Mantido chaveado só por
+// turmaId (sem mudar o schema do IndexedDB, pra não exigir migração no
+// dispositivo do instrutor) — mas agora guarda um "porSessao" com o
+// snapshot de presenças/evidências de CADA encontro já aberto online neste
+// dispositivo, em vez de sobrescrever tudo com o último encontro aberto.
+// Antes, abrir o dia 1 online e depois o dia 2 offline mostrava os dados do
+// dia 1 (único snapshot guardado), mesmo pedindo explicitamente o dia 2.
 async function _cacheExecSalvar(turmaId, dados) {
   const db = await _filaDb();
+  const existente = await _cacheExecCarregar(turmaId).catch(()=>null);
+  const porSessao = {...(existente?.porSessao||{})};
+  if (dados.sessaoAtivaId) {
+    porSessao[dados.sessaoAtivaId] = {presencas: dados.presencas||[], evidencias: dados.evidencias||[]};
+  }
   return new Promise((resolve, reject) => {
     const tx = db.transaction(CACHE_EXEC_STORE, 'readwrite');
-    tx.objectStore(CACHE_EXEC_STORE).put({turmaId, ...dados, salvo_em:new Date().toISOString()});
+    tx.objectStore(CACHE_EXEC_STORE).put({
+      turmaId, t: dados.t, ultimaSessaoId: dados.sessaoAtivaId||null, porSessao,
+      salvo_em:new Date().toISOString(),
+    });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -9594,7 +9632,13 @@ function _erroDeRede(e) {
 async function _enviarAssinatura(reg) {
   const {error:upErr} = await sb.storage.from('assinaturas').upload(reg.path, reg.blob, {upsert:true, contentType:'image/png'});
   if (upErr) throw upErr;
-  const {data:presExist} = await sb.from('presencas').select('id').eq('turma_id',reg.turmaId).eq('colaborador_id',reg.colId).maybeSingle();
+  // IMPORTANTE: a busca por presença existente precisa ser por sessao_id +
+  // colaborador_id, NUNCA só por turma_id + colaborador_id. Turma_id sozinho
+  // identifica a turma inteira, não o encontro — buscar só por ele fazia a
+  // assinatura do 2º dia encontrar (e sobrescrever) a linha de presença do
+  // 1º dia, apagando a presença do encontro anterior (bug raiz do
+  // "presença incompleta" mesmo com o aluno presente em todos os dias).
+  const {data:presExist} = await sb.from('presencas').select('id').eq('sessao_id',reg.sessaoId).eq('colaborador_id',reg.colId).maybeSingle();
   let dbErr;
   if (presExist) {
     ({error:dbErr} = await sb.from('presencas').update({
@@ -9731,6 +9775,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
   showLoading('Carregando execução...');
   try {
     let t, presencas, evidencias, sessaoAtiva, deCache = false;
+    window._execSemCacheDoEncontro = false;
     const hoje = dataLocalISO();
 
     try {
@@ -9747,7 +9792,10 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         sessaoAtiva = (t.sessoes||[]).find(s => s.id === sessaoIdParam) || null;
       }
       if (!sessaoAtiva) {
-        const sessoesInstrutor = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id);
+        // Ordenado por data — sem isso, "primeira pendente"/"última" dependia
+        // da ordem de retorno do banco (não garantida), podendo pegar um
+        // encontro fora de ordem em turmas com 3+ dias.
+        const sessoesInstrutor = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id).sort((a,b)=>a.data>b.data?1:-1);
         sessaoAtiva = sessoesInstrutor.find(s => s.data === hoje && !s.concluida)
           || sessoesInstrutor.find(s => !s.concluida)
           || sessoesInstrutor[sessoesInstrutor.length - 1]
@@ -9776,9 +9824,24 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         return;
       }
       t = snap.t;
-      presencas = snap.presencas||[];
-      evidencias = snap.evidencias||[];
-      sessaoAtiva = (t.sessoes||[]).find(s => s.id === snap.sessaoAtivaId) || null;
+      // Resolve pelo encontro pedido (parâmetro), não pelo último aberto —
+      // snap antigos (salvos antes desta correção) não têm porSessao/
+      // ultimaSessaoId; nesse caso cai no comportamento anterior.
+      const sessaoIdOffline = sessaoIdParam || snap.ultimaSessaoId || snap.sessaoAtivaId || null;
+      sessaoAtiva = (t.sessoes||[]).find(s => s.id === sessaoIdOffline) || null;
+      const subSnap = snap.porSessao ? snap.porSessao[sessaoAtiva?.id] : null;
+      if (subSnap) {
+        presencas = subSnap.presencas||[];
+        evidencias = subSnap.evidencias||[];
+      } else {
+        // Este encontro específico nunca foi aberto online neste
+        // dispositivo — não há como saber quem já assinou; melhor mostrar
+        // vazio (e sinalizar) do que reaproveitar por engano os dados de
+        // outro encontro salvos no formato antigo.
+        presencas = snap.sessaoAtivaId === sessaoAtiva?.id ? (snap.presencas||[]) : [];
+        evidencias = snap.sessaoAtivaId === sessaoAtiva?.id ? (snap.evidencias||[]) : [];
+        window._execSemCacheDoEncontro = !!sessaoAtiva && snap.sessaoAtivaId !== sessaoAtiva?.id;
+      }
       deCache = true;
     }
 
@@ -9791,11 +9854,14 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
     window._execEvidencias = evidencias||[];
 
-    // Mescla itens ainda não sincronizados desta turma (sobreviventes de uma
-    // sessão offline anterior) no estado local, marcados como "pendente".
+    // Mescla itens ainda não sincronizados DESTE ENCONTRO (sobreviventes de
+    // uma sessão offline anterior) no estado local, marcados como
+    // "pendente". Filtrado por sessaoId, não só turmaId — senão uma
+    // assinatura pendente do dia 1 aparecia (por engano) como se fosse do
+    // dia 2 ao abrir o encontro seguinte antes de sincronizar.
     try {
       const filaAtual = await _filaListar();
-      filaAtual.filter(it => it.turmaId === turmaId).forEach(it => {
+      filaAtual.filter(it => it.turmaId === turmaId && it.sessaoId === window._execSessaoId).forEach(it => {
         if (it.tipo === 'assinatura') {
           window._execPresencas[it.colId] = {colaborador_id:it.colId, presente:true, assinatura_path:null, assinado_em:it.criado_em, _pendente:true};
         } else if (it.tipo === 'evidencia') {
@@ -9819,10 +9885,10 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
           <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
           <div style="font-size:13px;color:var(--text-2)">${nomeC}${infoSessao ? ' · '+infoSessao : ''}</div>
         </div>
-        <span class="badge badge-blue">Em andamento</span>
+        <span class="badge ${sessaoAtiva?.concluida?'badge-green':'badge-blue'}">${sessaoAtiva?.concluida?'Concluído — revisão':'Em andamento'}</span>
       </div>
 
-      ${deCache ? `<div style="display:flex;align-items:center;gap:6px;background:var(--blue-l);color:var(--blue-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:12px">📶 Sem conexão agora — exibindo dados salvos localmente na última vez que este dispositivo esteve online.</div>` : ''}
+      ${deCache && window._execSemCacheDoEncontro ? `<div style="display:flex;align-items:center;gap:6px;background:var(--amber-l);color:var(--amber-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:12px">📶 Sem conexão agora, e este encontro específico ainda não tinha sido aberto online neste dispositivo — a lista de presença abaixo pode estar incompleta até você reconectar.</div>` : deCache ? `<div style="display:flex;align-items:center;gap:6px;background:var(--blue-l);color:var(--blue-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:12px">📶 Sem conexão agora — exibindo dados salvos localmente na última vez que este dispositivo esteve online.</div>` : ''}
 
       <div class="badge-fila-offline" style="display:none;align-items:center;gap:6px;background:var(--amber-l);color:var(--amber-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:16px">
         ⏳ <span class="badge-fila-offline-n">0</span> ação(ões) guardadas offline aguardando conexão para sincronizar
@@ -9896,14 +9962,19 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
               <span style="font-size:14px;font-weight:600" id="totalEvidencias">${window._execEvidencias.length}</span>
             </div>
           </div>
+          ${sessaoAtiva?.concluida ? `
+          <div style="background:var(--green-l);color:var(--green);border-radius:var(--r-md);padding:12px 14px;font-size:13px;font-weight:600;text-align:center">
+            ✓ Este encontro já foi finalizado${sessaoAtiva?.data?' em '+formatarData(sessaoAtiva.data):''}. Você está revisando os dados registrados.
+          </div>` : `
           <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:20px;font-size:13px;line-height:1.5">
             <div style="font-weight:600;margin-bottom:4px">⚠️ Atenção</div>
-            Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>.
-            Os documentos ficarão disponíveis para geração.
+            ${(t.sessoes||[]).filter(s=>s.id!==sessaoAtiva?.id).every(s=>s.concluida)
+              ? 'Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>. Os documentos ficarão disponíveis para geração.'
+              : 'Isso finaliza apenas o encontro de hoje. A turma só fica <strong>Concluída</strong> (com documentos liberados) depois que todos os encontros forem finalizados.'}
           </div>
           <button class="btn btn-navy" style="width:100%" onclick="finalizarTurma('${turmaId}')">
             ✓ Finalizar treinamento
-          </button>
+          </button>`}
         </div>
       </div>`;
 
@@ -12278,9 +12349,17 @@ async function carregarLogoOrgPDF(logoUrl) {
 // bucket `assinaturas`). Retorna null se o aluno não assinou digitalmente
 // nessa turma; nesse caso o certificado individual mostra só a linha e o
 // nome do aluno, sem imagem de assinatura.
-async function carregarAssinaturaAlunoPDF(turmaId, colaboradorId) {
+// Em turmas com mais de um encontro existe uma linha de `presencas` por
+// sessão — por isso é preciso informar QUAL encontro (sessaoId); sem isso,
+// buscar só por turma_id quebraria (mais de uma linha) ou pegaria a
+// assinatura errada. O chamador usa o último encontro da turma, mesmo
+// critério já adotado para a data impressa no certificado.
+async function carregarAssinaturaAlunoPDF(turmaId, colaboradorId, sessaoId) {
   try {
-    const {data:pr} = await sb.from('presencas').select('assinatura_path').eq('turma_id', turmaId).eq('colaborador_id', colaboradorId).maybeSingle();
+    const query = sb.from('presencas').select('assinatura_path').eq('colaborador_id', colaboradorId);
+    const {data:pr} = sessaoId
+      ? await query.eq('sessao_id', sessaoId).maybeSingle()
+      : await query.eq('turma_id', turmaId).order('assinado_em', {ascending:false}).limit(1).maybeSingle();
     if (!pr?.assinatura_path) return null;
     const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(pr.assinatura_path, 60);
     if (!urlData?.signedUrl) return null;
@@ -13214,7 +13293,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // Logomarca da organização (plano Enterprise), se houver
     const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
     // Assinatura digital do aluno, capturada na execução da aula, se houver
-    const imgAssinaturaAluno = await carregarAssinaturaAlunoPDF(turmaId, colaboradorId);
+    const imgAssinaturaAluno = await carregarAssinaturaAlunoPDF(turmaId, colaboradorId, ag?.id);
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
