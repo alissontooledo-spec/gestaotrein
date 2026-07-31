@@ -9619,9 +9619,9 @@ async function _enviarEvidencia(reg) {
   if (dbErr) throw dbErr;
 }
 
-// Reenvia as anotações do instrutor da fila.
+// Reenvia as anotações do instrutor da fila — por sessão (ver salvarAnotacoes).
 async function _enviarAnotacoes(reg) {
-  const {error} = await sb.from('turmas').update({anotacoes_instrutor:reg.texto}).eq('id',reg.turmaId);
+  const {error} = await sb.from('sessoes').update({anotacoes_instrutor:reg.texto}).eq('id',reg.sessaoId);
   if (error) throw error;
 }
 
@@ -9867,7 +9867,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         </div>
         <div class="card">
           <div class="card-title">Anotações do instrutor</div>
-          <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${escapeHtml(t.anotacoes_instrutor||'')}</textarea>
+          <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${escapeHtml(sessaoAtiva?.anotacoes_instrutor||'')}</textarea>
           <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
             <button class="btn btn-navy btn-sm" id="btnSalvarAnotacoes" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
             <button class="btn btn-outline btn-sm" id="btnEditarAnotacoes" style="display:none" onclick="editarAnotacoes()">✏ Editar</button>
@@ -10244,11 +10244,19 @@ function _marcarAnotacoesSalvas(pendente) {
 async function salvarAnotacoes(turmaId) {
   const textarea = execEl('anotacoesInstrutor');
   if (!textarea) return;
+  // Corrigido em 2026-07-30: anotações eram gravadas em turmas.anotacoes_instrutor
+  // (um valor só pra turma inteira) — qualquer dia mostrava e sobrescrevia o
+  // mesmo texto de todos os outros dias da mesma turma. Agora grava em
+  // sessoes.anotacoes_instrutor, usando a sessão ativa desta execução
+  // (window._execSessaoId — o mesmo id que presenças e evidências já usam
+  // corretamente há tempos).
+  const sessaoId = window._execSessaoId;
+  if (!sessaoId) { showToast('Sessão não encontrada — reabra a execução.','error'); return; }
   const texto = textarea.value.trim();
-  const reg = {tipo:'anotacoes', turmaId, texto, criado_em:new Date().toISOString()};
+  const reg = {tipo:'anotacoes', turmaId, sessaoId, texto, criado_em:new Date().toISOString()};
   try {
     if (!navigator.onLine) throw new Error('__offline__');
-    const {error} = await sb.from('turmas').update({anotacoes_instrutor:texto}).eq('id',turmaId);
+    const {error} = await sb.from('sessoes').update({anotacoes_instrutor:texto}).eq('id',sessaoId);
     if (error) throw error;
     _marcarAnotacoesSalvas(false);
     showToast('Anotações salvas!','success');
@@ -12544,7 +12552,7 @@ function fmtValidadePDF(dtVal) {
 }
 
 // Salva o PDF no Supabase Storage e registra na tabela documentos
-async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colaboradorId, codigoValidacao) {
+async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colaboradorId, codigoValidacao, sessaoId=null) {
   try {
     const pdfBytes = pdfDoc.output('arraybuffer');
     const blob     = new Blob([pdfBytes], {type:'application/pdf'});
@@ -12554,13 +12562,12 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
     const {error:upErr} = await sb.storage.from('documentos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
     if (upErr) { console.warn('Storage documentos:', upErr.message); return; }
 
-    // Verificar se já existe registro para evitar o ON CONFLICT problemático
+    // Verificar se já existe registro para evitar o ON CONFLICT problemático.
+    // sessaoId distingue a lista de presença de cada encontro (uma por dia,
+    // desde 2026-07-30) — para certificado individual/coletivo continua null.
     let query = sb.from('documentos').select('id').eq('turma_id', turmaId).eq('tipo', tipo);
-    if (colaboradorId) {
-      query = query.eq('colaborador_id', colaboradorId);
-    } else {
-      query = query.is('colaborador_id', null);
-    }
+    query = colaboradorId ? query.eq('colaborador_id', colaboradorId) : query.is('colaborador_id', null);
+    query = sessaoId      ? query.eq('sessao_id', sessaoId)           : query.is('sessao_id', null);
     const {data: existente} = await query.maybeSingle();
 
     let dbErr;
@@ -12575,6 +12582,7 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
         org_id:           orgId,
         turma_id:         turmaId,
         colaborador_id:   colaboradorId || null,
+        sessao_id:        sessaoId || null,
         tipo,
         arquivo_path:     path,
         codigo_validacao: codigoValidacao,
@@ -12872,16 +12880,86 @@ function desenharCapaCertificadoComArte(doc, arte, layout, campos, W, H) {
 }
 
 // ============================================================
+// TURMAS COM MÚLTIPLOS ENCONTROS — elegibilidade e datas
+// ============================================================
+// Regra de negócio (2026-07-30, a pedido do Alisson): num curso com vários
+// encontros, só quem tem presença confirmada em TODOS eles pode receber
+// certificado. Quem faltou em algum dia fica de fora — mesmo que tenha
+// assinado nos demais. Calculado sempre no momento de gerar (não gravado),
+// então reflete o estado real do banco a cada geração.
+async function _participantesElegiveisCertificado(turmaId) {
+  const {data:sessoesTurma} = await sb.from('sessoes').select('id').eq('turma_id', turmaId);
+  const sessaoIds = (sessoesTurma||[]).map(s=>s.id);
+  if (!sessaoIds.length) return new Set();
+  const {data:presencas} = await sb.from('presencas').select('colaborador_id,sessao_id,presente').eq('turma_id', turmaId);
+  const porColaborador = {};
+  (presencas||[]).forEach(p => {
+    if (!p.presente || !p.colaborador_id) return;
+    if (!sessaoIds.includes(p.sessao_id)) return;
+    (porColaborador[p.colaborador_id] ||= new Set()).add(p.sessao_id);
+  });
+  const elegiveis = new Set();
+  Object.entries(porColaborador).forEach(([colId, presentesEm]) => {
+    if (presentesEm.size === sessaoIds.length) elegiveis.add(colId);
+  });
+  return elegiveis;
+}
+
+// Verifica se todos os encontros da turma já foram concluídos — mesma regra
+// já usada na tela "Documentos da turma" (renderDocumentosTurma), reaproveitada
+// aqui para bloquear a geração de documentos, não só colorir um indicador.
+function _turmaTodosEncontrosConcluidos(t) {
+  const sessoes = t.sessoes||[];
+  if (t.status === 'concluida') return true;
+  if (!sessoes.length) return true; // sem agendamento — outra validação já bloqueia isso
+  return sessoes.every(s => s.concluida === true);
+}
+
+// Formata as datas de realização para impressão no certificado, sem deixar
+// o campo poluído em turmas com muitos encontros:
+//  1 data  -> "22 de julho de 2026"
+//  2 datas -> "10 e 30 de julho de 2026"
+//  3+      -> "de 10 a 17 de julho de 2026 · 5 encontros" (período + contagem,
+//             independente de as datas serem sequenciais — sempre previsível
+//             e sempre cabe no mesmo espaço que hoje tem uma data só)
+function fmtPeriodoRealizacaoPDF(sessoesTurma) {
+  const datas = [...new Set((sessoesTurma||[]).map(s=>s.data).filter(Boolean))].sort();
+  if (!datas.length) return '-';
+  if (datas.length === 1) return fmtDataExtensoPDF(datas[0]);
+  if (datas.length === 2) {
+    const [y1,m1,d1] = datas[0].split('-');
+    const [y2,m2,d2] = datas[1].split('-');
+    const mesmoMes = m1===m2 && y1===y2;
+    if (mesmoMes) {
+      const meses = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+      return `${parseInt(d1)} e ${parseInt(d2)} de ${meses[parseInt(m1)-1]} de ${y1}`;
+    }
+    return `${fmtDataExtensoPDF(datas[0])} e ${fmtDataExtensoPDF(datas[1])}`;
+  }
+  return `de ${fmtDataExtensoPDF(datas[0])} a ${fmtDataExtensoPDF(datas[datas.length-1])} · ${datas.length} encontros`;
+}
+
+// ============================================================
 // PDF — LISTA DE PRESENÇA
 // ============================================================
-async function gerarListaPresenca(turmaId) {
+// Uma ficha de presença por ENCONTRO (não mais uma só pra turma inteira) —
+// desde 2026-07-30. sessaoId é obrigatório: identifica de qual dia é esta
+// ficha específica, tanto para puxar a data/instrutor certos quanto para
+// filtrar só as presenças assinadas naquele dia (antes buscava por
+// turma_id, o que misturava presenças de dias diferentes no mesmo registro).
+async function gerarListaPresenca(turmaId, sessaoId) {
   showLoading('Gerando ficha de presença...');
   try {
+    if (!sessaoId) throw new Error('Encontro não informado — não é possível gerar a ficha de presença.');
     const {data:t, error} = await sb.from('turmas')
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(nome,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — a ficha de presença ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
+
+    const sessoesOrdenadas = (t.sessoes||[]).slice().sort((a,b)=>a.data>b.data?1:-1);
+    const indiceEncontro = sessoesOrdenadas.findIndex(s => s.id === sessaoId);
+    if (indiceEncontro === -1) throw new Error('Este encontro não foi encontrado nesta turma.');
 
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
@@ -12898,10 +12976,11 @@ async function gerarListaPresenca(turmaId) {
     const TEXT3 = [148, 163, 184];
     const AMBERLT = [254, 243, 199];
 
-    const ag = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
+    const ag = sessoesOrdenadas[indiceEncontro];
     const instrutor = pdfSafe(ag?.usuarios?.nome||'-');
     const dataAula = ag?.data ? fmtDataExtensoPDF(ag.data) : '-';
     const local = pdfSafe(ag?.local||t.local||'-');
+    const infoEncontro = sessoesOrdenadas.length > 1 ? `Encontro ${indiceEncontro+1} de ${sessoesOrdenadas.length}` : '';
     const protocolo = t.protocolo||turmaId.slice(0,12).toUpperCase();
     const nomeOrg = pdfSafe(t.organizacoes?.nome || usuarioAtual.orgNome || 'Toledo Labs');
     // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
@@ -12957,7 +13036,7 @@ async function gerarListaPresenca(turmaId) {
     linhasT.forEach((l,i)=>doc.text(l, mg+2, y+i*6));
     y += linhasT.length * 6 + 2;
     doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor(...TEXT2);
-    doc.text(pdfSafe(t.clientes?.nome||'-'), mg+2, y); y += 5;
+    doc.text(pdfSafe(t.clientes?.nome||'-') + (infoEncontro ? `  ·  ${infoEncontro}` : ''), mg+2, y); y += 5;
 
     // ── Bloco de metadados (3 colunas) ──
     doc.setFillColor(...GRAY50);
@@ -12996,7 +13075,9 @@ async function gerarListaPresenca(turmaId) {
     y += 7;
 
     const participantes = t.turma_participantes||[];
-    const {data:presencas} = await sb.from('presencas').select('*').eq('turma_id', turmaId);
+    // Filtrado por sessao_id — antes buscava por turma_id inteira, o que
+    // misturava (e sobrescrevia) a presença de dias diferentes no mesmo mapa.
+    const {data:presencas} = await sb.from('presencas').select('*').eq('sessao_id', sessaoId);
     const presMap = {};
     (presencas||[]).forEach(p=>{ presMap[p.colaborador_id]=p; });
 
@@ -13069,10 +13150,10 @@ async function gerarListaPresenca(turmaId) {
     doc.text(_tema.rodape ? pdfSafe(_tema.rodape,70) : 'toledolabs.com.br/validar', mg+4, fy+10.5);
     doc.text(protocolo, W-mg-4, fy+8, {align:'right'});
 
-    doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}.pdf`);
+    doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
     const codigo = crypto.randomUUID();
-    await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}.pdf`, 'lista_presenca', turmaId, null, codigo);
-    showToast('Ficha de presença gerada!','success');
+    await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
+    showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
   } catch(e) {
     console.error(e);
     showToast(e.message||'Erro ao gerar PDF','error');
@@ -13091,10 +13172,31 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
 
+    // Regra de negócio (2026-07-30): certificado só pode ser gerado depois
+    // que TODOS os encontros da turma foram concluídos, e só para quem tem
+    // presença confirmada em 100% deles. Isso já é reforçado na navegação
+    // (a tela de documentos só é alcançável com a turma concluída), mas fica
+    // checado aqui também — defesa em profundidade, e cobre qualquer chamada
+    // futura que não passe por aquela tela.
+    if (!_turmaTodosEncontrosConcluidos(t)) {
+      const concl = t.sessoes.filter(s=>s.concluida).length;
+      throw new Error(`Ainda faltam ${t.sessoes.length-concl} de ${t.sessoes.length} encontro(s) desta turma para concluir. O certificado só pode ser gerado depois de todos os encontros finalizados.`);
+    }
+    const elegiveis = await _participantesElegiveisCertificado(turmaId);
+    if (!elegiveis.has(colaboradorId)) {
+      throw new Error('Este participante não tem presença confirmada em todos os encontros da turma — não é possível gerar o certificado.');
+    }
+
     const {data:col} = await sb.from('colaboradores').select('*').eq('id',colaboradorId).eq('org_id',usuarioAtual.org_id).single();
     if (!col) throw new Error('Colaborador nao encontrado');
 
-    const ag           = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
+    // Instrutor e data usados no certificado são do ÚLTIMO encontro (quem
+    // conduziu e quando concluiu o treinamento) — não do primeiro. Antes usava
+    // sempre a sessão mais antiga, o que fazia a validade do certificado ser
+    // contada a partir do primeiro dia em turmas de vários encontros, encurtando
+    // indevidamente o prazo de validade real.
+    const sessoesOrdenadas = (t.sessoes||[]).slice().sort((a,b)=>a.data>b.data?1:-1);
+    const ag           = sessoesOrdenadas[sessoesOrdenadas.length-1];
     const dataCert     = ag?.data || t.created_at?.split('T')[0];
     const instrutor    = ag?.usuarios?.nome || '';
     // Dados profissionais do instrutor para o certificado
@@ -13201,7 +13303,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         nomeDestaque: nomePart,
         nomeTreinamento: s(nomeT,90),
         cargaHorariaTexto: `Carga horaria: ${ch}h`,
-        dataTexto: `Realizado em ${fmtDataExtensoPDF(dataCert)}`,
+        dataTexto: `Realizado em ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         imgAssinaturaInstrutor,
         imgAssinaturaAluno,
         qrDataUrl: qrData,
@@ -13242,7 +13344,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 
     // Linha de info em texto corrido
     doc.setFontSize(9); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-    const infoLinha = `Realizado em ${fmtDataExtensoPDF(dataCert)}  |  Carga horaria: ${ch}h  |  Empresa: ${s(t.clientes?.nome||'nao informada',30)}`;
+    const infoLinha = `Realizado em ${fmtPeriodoRealizacaoPDF(t.sessoes)}  |  Carga horaria: ${ch}h  |  Empresa: ${s(t.clientes?.nome||'nao informada',30)}`;
     doc.text(s(infoLinha,200), W/2, cy, {align:'center'});
 
     // Rodapé com assinaturas + QR
@@ -13408,7 +13510,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.line(p_c3x, p_y3, p_c3x+30, p_y3); p_y3+=6;
 
     [
-      {l:'Realizado em', v:fmtDataExtensoPDF(dataCert)},
+      {l:'Realizado em', v:fmtPeriodoRealizacaoPDF(t.sessoes)},
       {l:'Carga horaria', v:`${ch} hora${ch!==1?'s':''}`},
       {l:'Empresa',       v:s(t.clientes?.nome||'nao informada',24)},
       {l:'Valido ate',    v:s(fmtVal)},
@@ -13489,14 +13591,29 @@ async function gerarCertificadoColetivo(turmaId) {
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
 
-    const ag            = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1)[0];
+    // Mesma regra de conclusão e elegibilidade do certificado individual —
+    // ver comentário em gerarCertificadoIndividual.
+    if (!_turmaTodosEncontrosConcluidos(t)) {
+      const concl = t.sessoes.filter(s=>s.concluida).length;
+      throw new Error(`Ainda faltam ${t.sessoes.length-concl} de ${t.sessoes.length} encontro(s) desta turma para concluir. O certificado coletivo só pode ser gerado depois de todos os encontros finalizados.`);
+    }
+    const elegiveisColetivo = await _participantesElegiveisCertificado(turmaId);
+    if (!elegiveisColetivo.size) {
+      throw new Error('Nenhum participante tem presença confirmada em todos os encontros desta turma — não é possível gerar o certificado coletivo.');
+    }
+
+    const sessoesOrdenadas = (t.sessoes||[]).slice().sort((a,b)=>a.data>b.data?1:-1);
+    const ag            = sessoesOrdenadas[sessoesOrdenadas.length-1];
     const dataCert      = ag?.data || t.created_at?.split('T')[0];
     const instrutor     = ag?.usuarios?.nome || '';
     const instConselho  = ag?.usuarios?.conselho_classe||'';
     const instSigla     = ag?.usuarios?.sigla_conselho||'';
     const instEspec     = ag?.usuarios?.especialidade||'';
     const instCredencial = instConselho ? pdfSafe(`${instSigla?instSigla+' ':''} ${instConselho}`.trim()) : '';
-    const participantes = t.turma_participantes || [];
+    // Só entram no certificado coletivo os participantes com presença em
+    // 100% dos encontros — quem faltou em algum dia não é considerado
+    // concluinte e fica de fora da lista impressa no documento.
+    const participantes = (t.turma_participantes || []).filter(p => elegiveisColetivo.has(p.colaborador_id));
     const ch            = t.catalogo?.carga_horaria || 0;
     const nomeT         = t.catalogo?.nome || 'Treinamento';
     const valMeses      = t.catalogo?.validade_meses || 12;
@@ -13549,7 +13666,7 @@ async function gerarCertificadoColetivo(turmaId) {
         nomeDestaque: nomeEmpSafe0,
         nomeTreinamento: s(nomeT,90),
         cargaHorariaTexto: `Carga horaria: ${ch} hora${ch!==1?'s':''}`,
-        dataTexto: `Realizado em ${fmtDataExtensoPDF(dataCert)}`,
+        dataTexto: `Realizado em ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         imgAssinaturaInstrutor,
         imgAssinaturaAluno: null,
         qrDataUrl: qrData,
@@ -13613,7 +13730,7 @@ async function gerarCertificadoColetivo(turmaId) {
 
     // Dados obrigatórios do treinamento, sempre exibidos abaixo da descrição
     doc.setFontSize(8.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-    doc.text(`Realizado em ${fmtDataExtensoPDF(dataCert)}  |  Carga horaria: ${ch} hora${ch!==1?'s':''}`, W/2, cy, {align:'center'});
+    doc.text(`Realizado em ${fmtPeriodoRealizacaoPDF(t.sessoes)}  |  Carga horaria: ${ch} hora${ch!==1?'s':''}`, W/2, cy, {align:'center'});
 
     // Rodapé com assinatura do instrutor + QR
     const fy = H-30;
@@ -13698,7 +13815,7 @@ async function gerarCertificadoColetivo(turmaId) {
     [
       {l:'Empresa',      v:s(nomeEmp,28)},
       {l:'CNPJ',         v:s(t.clientes?.cnpj||'nao informado')},
-      {l:'Realizado em', v:fmtDataExtensoPDF(dataCert)},
+      {l:'Realizado em', v:fmtPeriodoRealizacaoPDF(t.sessoes)},
       {l:'Carga horaria',v:`${ch} hora${ch!==1?'s':''}`},
       {l:'Validade',     v:s(fmtVal)},
       {l:'Instrutor',    v:s(instrutor,28)},
@@ -13831,7 +13948,7 @@ async function gerarCertificadoColetivo(turmaId) {
       doc.setFillColor(...AMBER); doc.rect(0,28,W,2,'F');
       desenharLogoOrg(doc, nomeOrg, 16, 5, 44, 14, undefined, imgLogoOrg);
       doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(`${s(nomeT,60)}  |  ${s(nomeEmp,30)}  |  ${fmtDataExtensoPDF(dataCert)}`, W-16, 11, {align:'right'});
+      doc.text(`${s(nomeT,60)}  |  ${s(nomeEmp,30)}  |  ${fmtPeriodoRealizacaoPDF(t.sessoes)}`, W-16, 11, {align:'right'});
       doc.text(`Pagina ${pg+3}  |  Cod: ${codigoShort}`, W-16, 18, {align:'right'});
 
       let ty = 38;
@@ -13901,20 +14018,30 @@ async function renderDocumentosTurma(turmaId) {
     const concluidosAg = agendamentos.filter(a => a.concluida === true).length;
     const todosConcluidos = turmaJaConcluida || totalAg === 0 || concluidosAg === totalAg;
 
-    // Documentos já gerados
+    // Documentos já gerados. Chave inclui sessao_id porque a lista de
+    // presença agora é uma por encontro (2026-07-30) — antes era uma só
+    // pra turma inteira.
     const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
     const docsMap = {};
-    (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')] = d; });
+    (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')+(d.sessao_id||'')] = d; });
 
-    const temLista     = !!docsMap['lista_presenca'];
-    const temColetivo  = !!docsMap['certificado_coletivo'];
+    const sessoesOrdenadas = agendamentos.slice().sort((a,b)=>a.data>b.data?1:-1);
+    const listasGeradas = sessoesOrdenadas.filter(s => !!docsMap['lista_presenca'+''+s.id]).length;
+    const totalListas   = sessoesOrdenadas.length;
+    const temTodasListas = totalListas > 0 && listasGeradas === totalListas;
+
+    const temColetivo  = !!docsMap['certificado_coletivo'+''];
     const totalInd      = participantes.length;
-    const geradosIndArr = participantes.filter(p => !!docsMap['certificado_individual'+p.colaborador_id]);
+    // Só participantes com presença em 100% dos encontros são elegíveis —
+    // os demais aparecem marcados como "presença incompleta", não "pendente"
+    // (não é que falte gerar, é que não podem receber certificado).
+    const elegiveisDoc  = await _participantesElegiveisCertificado(turmaId);
+    const geradosIndArr = participantes.filter(p => !!docsMap['certificado_individual'+p.colaborador_id+'']);
     const geradosInd    = geradosIndArr.length;
     const temTodosInd   = totalInd > 0 && geradosInd === totalInd;
 
-    const totalDocs   = 2 + totalInd;
-    const geradosDocs = (temLista?1:0) + (temColetivo?1:0) + geradosInd;
+    const totalDocs   = totalListas + 1 + totalInd;
+    const geradosDocs = listasGeradas + (temColetivo?1:0) + geradosInd;
     const todosDocsGerados = geradosDocs === totalDocs;
 
     // Status de envio anterior
@@ -13965,12 +14092,26 @@ async function renderDocumentosTurma(turmaId) {
       ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0 0 48px">Nenhum participante nesta turma.</div>`
       : participantes.map(p => {
           const col = p.colaboradores||{};
-          const jaGerado = docsMap['certificado_individual'+p.colaborador_id];
+          const elegivel = elegiveisDoc.has(p.colaborador_id);
+          const jaGerado = docsMap['certificado_individual'+p.colaborador_id+''];
+          const status = !elegivel ? '⚠ presença incompleta' : (jaGerado ? '✓ gerado' : 'pendente');
+          const corStatus = !elegivel ? 'var(--amber-text)' : (jaGerado ? 'var(--green)' : 'var(--text-3)');
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 8px 48px">
               <div style="width:26px;height:26px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
               <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${escapeHtml(col.nome||'-')}</div>
-              <span style="font-size:11px;color:${jaGerado?'var(--green)':'var(--text-3)'};margin-right:4px">${jaGerado?'✓ gerado':'pendente'}</span>
-              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">${jaGerado?'↻':'⬇'} PDF</button>
+              <span style="font-size:11px;color:${corStatus};margin-right:4px">${status}</span>
+              ${elegivel ? `<button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">${jaGerado?'↻':'⬇'} PDF</button>` : ''}
+            </div>`;
+        }).join('');
+
+    const htmlListasSub = totalListas === 0
+      ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0 0 48px">Nenhum encontro agendado.</div>`
+      : sessoesOrdenadas.map(sess => {
+          const jaGerado = !!docsMap['lista_presenca'+''+sess.id];
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 8px 48px">
+              <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${formatarData(sess.data)}</div>
+              <span style="font-size:11px;color:${jaGerado?'var(--green)':'var(--text-3)'};margin-right:4px">${jaGerado?'✓ gerada':'pendente'}</span>
+              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarListaPresenca('${turmaId}','${sess.id}')">${jaGerado?'↻':'⬇'} PDF</button>
             </div>`;
         }).join('');
 
@@ -13980,17 +14121,23 @@ async function renderDocumentosTurma(turmaId) {
           <div style="font-size:15px;font-weight:600;color:var(--text-1)">📄 Documentos da turma</div>
           <span class="badge ${todosDocsGerados?'badge-green':'badge-amber'}">${geradosDocs}/${totalDocs}</span>
         </div>
-        ${_linhaDoc('📋','Lista de Presença','Consolidada por todos os agendamentos', temLista,
-            `gerarListaPresenca('${turmaId}')`)}
-        ${_linhaDoc('🏢','Certificado Coletivo', `Para a empresa · ${totalInd} participante(s)`, temColetivo,
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 0 ${totalListas?'4px':'0'} 0;${totalListas?'border-bottom:1px solid var(--border)':''}">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📋</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--text-1)">Lista de Presença</div>
+            <div style="font-size:11px;margin-top:2px;color:${temTodasListas?'var(--green)':'var(--text-3)'}">Uma por encontro · ${listasGeradas}/${totalListas} geradas</div>
+          </div>
+        </div>
+        ${htmlListasSub}
+        ${_linhaDoc('🏢','Certificado Coletivo', `Para a empresa · ${elegiveisDoc.size} elegível(is) de ${totalInd} participante(s)`, temColetivo,
             `gerarCertificadoColetivo('${turmaId}')`)}
         <div style="display:flex;align-items:center;gap:12px;padding:13px 0 ${totalInd?'4px':'0'} 0;${totalInd?'border-bottom:1px solid var(--border)':''}">
           <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎓</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--text-1)">Certificados Individuais</div>
-            <div style="font-size:11px;margin-top:2px;color:${temTodosInd?'var(--green)':'var(--text-3)'}">${geradosInd}/${totalInd} gerados</div>
+            <div style="font-size:11px;margin-top:2px;color:${temTodosInd?'var(--green)':'var(--text-3)'}">${geradosInd}/${totalInd} gerados${elegiveisDoc.size<totalInd?` · ${totalInd-elegiveisDoc.size} com presença incompleta`:''}</div>
           </div>
-          ${totalInd>0 ? `<button class="btn btn-outline btn-sm" onclick="gerarTodosCertificados('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}'))" style="flex-shrink:0">⬇ Gerar todos</button>` : ''}
+          ${elegiveisDoc.size>0 ? `<button class="btn btn-outline btn-sm" onclick="gerarTodosCertificados('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}'))" style="flex-shrink:0">⬇ Gerar todos</button>` : ''}
         </div>
         ${htmlIndividuaisSub}
       </div>`;
@@ -14068,29 +14215,48 @@ async function gerarTudoEnviarEmail(turmaId) {
       .eq('id', turmaId).single();
     if (error) throw error;
 
+    // Não gera nem envia nada (nem o e-mail automático ao cliente) se ainda
+    // faltar concluir algum encontro da turma.
+    if (!_turmaTodosEncontrosConcluidos(t)) {
+      const concl = (t.sessoes||[]).filter(s=>s.concluida).length;
+      throw new Error(`Ainda faltam ${(t.sessoes||[]).length-concl} de ${(t.sessoes||[]).length} encontro(s) desta turma para concluir. Os documentos só podem ser gerados e enviados depois de todos os encontros finalizados.`);
+    }
+
     const participantes = t.turma_participantes || [];
+    const elegiveis = await _participantesElegiveisCertificado(turmaId);
     const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
     const docsMap = {};
-    (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')] = d; });
+    (docs||[]).forEach(d => { docsMap[d.tipo+(d.colaborador_id||'')+(d.sessao_id||'')] = d; });
 
-    // Gerar lista de presença se pendente
-    if (!docsMap['lista_presenca']) {
-      showLoading('Gerando lista de presença...');
-      await gerarListaPresenca(turmaId);
+    // Gerar lista de presença de cada encontro que ainda não tiver a sua
+    const {data:sessoesTurma} = await sb.from('sessoes').select('id,data').eq('turma_id', turmaId).order('data');
+    for (const sess of (sessoesTurma||[])) {
+      if (!docsMap['lista_presenca'+''+sess.id]) {
+        showLoading(`Gerando lista de presença de ${formatarData(sess.data)}...`);
+        await gerarListaPresenca(turmaId, sess.id);
+      }
     }
 
     // Gerar certificado coletivo se pendente
-    if (!docsMap['certificado_coletivo']) {
+    if (!docsMap['certificado_coletivo'+'']) {
       showLoading('Gerando certificado coletivo...');
       await gerarCertificadoColetivo(turmaId);
     }
 
-    // Gerar certificados individuais pendentes
+    // Gerar certificados individuais pendentes — só para quem tem presença
+    // em 100% dos encontros. Quem não é elegível é pulado silenciosamente
+    // aqui (o resumo de quem ficou de fora já aparece na tela de documentos).
+    let pulados = 0;
     for (const p of participantes) {
-      if (!docsMap['certificado_individual'+p.colaborador_id]) {
+      if (!elegiveis.has(p.colaborador_id)) { pulados++; continue; }
+      if (!docsMap['certificado_individual'+p.colaborador_id+'']) {
         showLoading(`Gerando certificado de ${escapeHtml(p.colaboradores?.nome||'participante')}...`);
         await gerarCertificadoIndividual(turmaId, p.colaborador_id);
       }
+    }
+
+    if (pulados > 0) {
+      showToast(`${pulados} participante(s) não têm presença em todos os encontros e não receberam certificado.`, 'info', 6000);
     }
 
     // Agora envia por e-mail (esconde o loading antes, para o modal de
@@ -14290,10 +14456,20 @@ async function gerarTodosCertificados(turmaId) {
   const {data:t} = await sb.from('turmas')
     .select('turma_participantes(colaborador_id)').eq('id',turmaId).single();
   const participantes = t?.turma_participantes||[];
+  // Só gera para quem tem presença em 100% dos encontros — quem faltou em
+  // algum dia é pulado (contabilizado e avisado no final, não falha silenciosa).
+  const elegiveis = await _participantesElegiveisCertificado(turmaId);
+  let gerados = 0, pulados = 0;
   for (const p of participantes) {
+    if (!elegiveis.has(p.colaborador_id)) { pulados++; continue; }
     await gerarCertificadoIndividual(turmaId, p.colaborador_id);
+    gerados++;
     await new Promise(r => setTimeout(r, 500));
   }
+  if (pulados > 0) {
+    showToast(`${gerados} certificado(s) gerado(s). ${pulados} participante(s) não têm presença em todos os encontros e não receberam certificado.`, gerados>0?'info':'error', 7000);
+  }
+  return {gerados, pulados};
 }
 
 // ============================================================
