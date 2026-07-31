@@ -510,7 +510,13 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
     <div class="login-sub">Acesse sua conta para continuar</div>
     <div class="login-error" id="loginError"></div>
     <div class="field"><label for="loginEmail">E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email" inputmode="email"></div>
-    <div class="field"><label for="loginPass">Senha</label><input type="password" id="loginPass" placeholder="..." autocomplete="current-password"></div>
+    <div class="field">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <label for="loginPass" style="margin-bottom:0">Senha</label>
+        <span onclick="abrirRecuperacaoSenhaLogin()" style="font-size:12px;color:var(--blue);cursor:pointer;font-weight:600">Esqueceu sua senha?</span>
+      </div>
+      <input type="password" id="loginPass" placeholder="..." autocomplete="current-password">
+    </div>
     <button class="btn-primary" id="loginBtn" onclick="fazerLogin()">Entrar</button>
     <div class="login-footer">Toledo Labs · Treinamentos NR · 2026</div>
     <div style="text-align:center;margin-top:10px;font-size:11px">
@@ -2101,6 +2107,53 @@ async function fazerLogin() {
     err.textContent = e.message || 'E-mail ou senha incorretos.';
     err.classList.add('show');
     btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+// Recuperação de senha a partir da tela de login (usuário ainda não
+// autenticado — diferente de enviarRecuperacaoSenha(), usada em Minha
+// Conta, que já sabe o e-mail pela sessão). Reaproveita o mesmo mecanismo
+// (sb.auth.resetPasswordForEmail + o listener de PASSWORD_RECOVERY já
+// existente) — só muda a origem do e-mail, que aqui vem digitado.
+function abrirRecuperacaoSenhaLogin() {
+  const emailAtual = document.getElementById('loginEmail')?.value.trim() || '';
+  abrirModal('Recuperar senha', `
+    <div style="font-size:12px;color:var(--text-2, #64748B);line-height:1.6;margin-bottom:12px">
+      Informe seu e-mail de acesso. Se ele estiver cadastrado, você recebe um link para criar uma nova senha.
+    </div>
+    <div class="field" style="margin-bottom:0"><label>E-mail</label>
+      <input type="email" id="recLoginEmail" placeholder="seu@email.com" value="${emailAtual.replace(/"/g,'&quot;')}" autocomplete="email" inputmode="email"></div>
+  `, `
+    <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+    <button class="btn btn-navy" id="btnEnviarRecLogin" onclick="_enviarRecuperacaoSenhaLogin()">Enviar link</button>
+  `);
+}
+
+async function _enviarRecuperacaoSenhaLogin() {
+  const email = document.getElementById('recLoginEmail')?.value.trim();
+  const btn   = document.getElementById('btnEnviarRecLogin');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showToast('Informe um e-mail válido','error');
+    return;
+  }
+  try {
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    // Propositalmente não diferenciamos "e-mail não cadastrado" de sucesso
+    // real — mostrar mensagens diferentes permitiria descobrir quais
+    // e-mails têm conta no sistema. Só um erro de limite de tentativas
+    // (que não revela se a conta existe) é mostrado de forma específica.
+    if (error && /rate limit/i.test(error.message||'')) {
+      throw new Error('Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.');
+    }
+    fecharModal();
+    showToast('Se esse e-mail estiver cadastrado, você vai receber um link de recuperação em instantes.', 'success', 7000);
+  } catch(e) {
+    showToast(e.message || 'Erro ao solicitar recuperação de senha', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enviar link';
   }
 }
 
@@ -11405,26 +11458,33 @@ async function renderConta() {
   setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Minha conta</div>`);
   fabOcultar();
 
-  let secaoAssinatura = '';
+  // Só um resumo leve aqui (não busca a URL assinada nem o registro completo
+  // do certificado) — os detalhes só são carregados quando o instrutor entra
+  // na sub-tela renderContaDocumentos(), evitando consultas desnecessárias
+  // toda vez que Minha Conta é aberta.
+  let linhaDocumentos = '';
   if (u.perfil === 'instrutor') {
-    let certHtml = '', assinHtml = '';
+    let temCert = false;
     try {
-      const {data:cert} = await sb.from('certificados_digitais').select('*').eq('usuario_id', u.id).maybeSingle();
-      certHtml = _htmlCardCertificadoDigital(cert);
-    } catch(e) { console.warn('Não foi possível carregar certificado digital:', e.message); }
-    try {
-      let previewUrl = '';
-      if (u.assinatura_path) {
-        const {data:urlData} = await sb.storage.from('assinaturas-instrutor').createSignedUrl(u.assinatura_path, 300);
-        previewUrl = urlData?.signedUrl || '';
-      }
-      assinHtml = _htmlCardAssinaturaInstrutor(previewUrl);
-    } catch(e) { console.warn('Não foi possível carregar assinatura digitalizada:', e.message); }
+      const {data:cert} = await sb.from('certificados_digitais').select('id').eq('usuario_id', u.id).maybeSingle();
+      temCert = !!cert;
+    } catch(e) { console.warn('Não foi possível checar certificado digital:', e.message); }
+    const temAssinatura = !!u.assinatura_path;
+    const qtd = (temAssinatura?1:0) + (temCert?1:0);
+    const statusTxt = qtd === 0 ? 'Nenhum item cadastrado' : qtd === 1 ? '1 de 2 itens cadastrados' : '2 itens cadastrados';
 
-    secaoAssinatura = `
-      <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 10px">Assinatura eletrônica dos documentos</div>
-      ${assinHtml}
-      ${certHtml}`;
+    linhaDocumentos = `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:12px">📄 Documentos do instrutor</div>
+      <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="renderContaDocumentos()">
+        <div style="width:34px;height:34px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">✍️</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Assinatura e certificado digital</div>
+          <div style="font-size:11px;color:${qtd>0?'var(--green)':'var(--text-3)'};margin-top:1px">${statusTxt}</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>`;
   }
 
   const corP = corPerfil(u.perfil);
@@ -11448,16 +11508,10 @@ async function renderConta() {
 
     <div class="card" style="margin-bottom:12px">
       <div class="card-title" style="margin-bottom:12px">👤 Dados pessoais</div>
-      <div class="field" style="margin-bottom:10px"><label>Nome completo</label><input type="text" id="editNome" value="${escapeHtml(u.nome)}"></div>
-      <div class="field" style="margin-bottom:0">
-        <label>E-mail</label>
-        <input type="email" id="editEmail" value="${escapeHtml(u.email||'')}" readonly style="background:var(--gray-50);color:var(--text-3);cursor:not-allowed">
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px">O e-mail não pode ser alterado pois é o identificador do usuário.</div>
-      </div>
-      <button class="btn btn-navy" style="width:100%;margin-top:14px" onclick="salvarConta()">Salvar alterações</button>
+      <div class="field" style="margin-bottom:0"><label>Nome completo</label><input type="text" id="editNome" value="${escapeHtml(u.nome)}"></div>
     </div>
 
-    ${secaoAssinatura}
+    ${linhaDocumentos}
 
     <div class="card" style="margin-bottom:12px">
       <div class="card-title" style="margin-bottom:2px">🛡️ Segurança</div>
@@ -11491,8 +11545,52 @@ async function renderConta() {
       </div>
     </div>
 
+    <div class="detail-actions" style="margin-bottom:16px">
+      <button class="btn btn-navy" onclick="salvarConta()">Salvar alterações</button>
+    </div>
+
     <button class="btn btn-outline" style="width:100%;color:var(--red-text);border-color:#FECACA;background:var(--red-l)" onclick="fazerLogout()">🚪 Sair do sistema</button>
     <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:6px">Encerra sua sessão apenas neste dispositivo</div>
+
+    </div>`);
+}
+
+// Sub-tela de Minha Conta (só Instrutor): assinatura digitalizada + certificado
+// digital. Extraída da tela principal em 2026-07-30 para deixar Minha Conta
+// mais curta — mesmo padrão de "tela principal enxuta + sub-tela dedicada"
+// usado por sistemas como GitHub/Google nas configurações de conta.
+async function renderContaDocumentos() {
+  const u = usuarioAtual;
+  setMobileHeader(`<div class="mh-greeting">Minha conta</div><div class="mh-name">Documentos do instrutor</div>`);
+  fabOcultar();
+
+  let certHtml = '', assinHtml = '';
+  try {
+    const {data:cert} = await sb.from('certificados_digitais').select('*').eq('usuario_id', u.id).maybeSingle();
+    certHtml = _htmlCardCertificadoDigital(cert);
+  } catch(e) { console.warn('Não foi possível carregar certificado digital:', e.message); }
+  try {
+    let previewUrl = '';
+    if (u.assinatura_path) {
+      const {data:urlData} = await sb.storage.from('assinaturas-instrutor').createSignedUrl(u.assinatura_path, 300);
+      previewUrl = urlData?.signedUrl || '';
+    }
+    assinHtml = _htmlCardAssinaturaInstrutor(previewUrl);
+  } catch(e) { console.warn('Não foi possível carregar assinatura digitalizada:', e.message); }
+
+  setConteudo(`
+    <div class="detail-page">
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="conta">${ICONS.back} Voltar</button>
+    </div>
+
+    <div style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
+      Usadas automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir.
+    </div>
+
+    ${assinHtml}
+    ${certHtml}
 
     </div>`);
 }
@@ -11607,7 +11705,7 @@ async function uploadAssinaturaInstrutor(inputEl) {
 
     usuarioAtual.assinatura_path = path;
     showToast('Assinatura cadastrada com sucesso!','success');
-    await renderConta();
+    await renderContaDocumentos();
   } catch(e) {
     showToast(e.message||'Erro ao enviar assinatura','error');
   } finally { hideLoading(); inputEl.value=''; }
@@ -11624,7 +11722,7 @@ async function removerAssinaturaInstrutor() {
     if (error) throw error;
     usuarioAtual.assinatura_path = null;
     showToast('Assinatura removida.','success');
-    await renderConta();
+    await renderContaDocumentos();
   } catch(e) {
     showToast(e.message||'Erro ao remover assinatura','error');
   } finally { hideLoading(); }
@@ -11902,7 +12000,7 @@ async function _salvarCertificadoDigital() {
     delete window._certPendente;
     fecharModal();
     showToast('Certificado digital cadastrado com sucesso!','success');
-    await renderConta();
+    await renderContaDocumentos();
   } catch(e) {
     showToast(e.message||'Erro ao salvar certificado','error');
     btn.disabled = false; btn.textContent = 'Confirmar e salvar';
