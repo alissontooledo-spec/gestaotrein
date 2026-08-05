@@ -12825,7 +12825,7 @@ const _avBase  = (topMM, sizePt) => topMM + (sizePt/2.83465) * 0.75;
 //            instrutorCargo, instrutorEspec, instrutorCredencial, nrNum,
 //            codigoShort, rodape }
 function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
-  doc.addImage(bgDataUrl, 'PNG', 0, 0, W, H);
+  doc.addImage(bgDataUrl, 'JPEG', 0, 0, W, H);
 
   const cx = _avMM_W(0.56, W);
   const maxW = _avMM_W((0.955-0.06)*0.80, W);
@@ -12973,7 +12973,7 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
 //            instrutorNome, instrutorCargo, instrutorEspec, instrutorCredencial,
 //            nrNum, codigoShort, rodape }
 function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
-  doc.addImage(bgDataUrl, 'PNG', 0, 0, W, H);
+  doc.addImage(bgDataUrl, 'JPEG', 0, 0, W, H);
   const GREEN_DARK=[31,101,71], GOLD=[250,185,40], BLACK=[30,30,30], GRAY=[95,95,95];
   const cx = _avMM_W(0.56,W);
   const maxW = _avMM_W((0.955-0.06)*0.80, W);
@@ -13058,7 +13058,7 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
   doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...GREEN_DARK);
   doc.text('CERTIFICADO COLETIVO', ml+lw+_avMM_W(0.025,W), top+3.2);
   doc.setFont('times','normal'); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
-  doc.text(pdfSafe(`${campos.empresa}  ·  CNPJ ${campos.cnpj}`,80), ml+lw+_avMM_W(0.025,W), top+6.8);
+  doc.text(`${pdfSafe(campos.empresa,60)}  ·  CNPJ ${pdfSafe(campos.cnpj,25)}`, ml+lw+_avMM_W(0.025,W), top+6.8);
   doc.setFontSize(7.5);
   doc.text(`Cod: ${campos.codigoShort}`, mr, top+2.2, {align:'right'});
   doc.text(`Página ${pagina} de ${totalPaginas}`, mr, top+6.2, {align:'right'});
@@ -13248,7 +13248,7 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutor,40), cxS, sigY+3, {align:'center'});
   doc.setFont('times','normal'); doc.setFontSize(7); doc.setTextColor(...GRAY);
-  doc.text(pdfSafe(`${campos.instrutorCargo||''} — Instrutor Responsável`,70), cxS, sigY+6.6, {align:'center'});
+  doc.text(pdfSafe(campos.instrutorCargo ? `${campos.instrutorCargo} — Instrutor Responsável` : 'Instrutor Responsável',70), cxS, sigY+6.6, {align:'center'});
 
   doc.setFontSize(6.5);
   doc.text('AVANTESeg  ·  toledolabs.com.br/validar', ml, _avMM_H(0.978,H));
@@ -13387,7 +13387,7 @@ function _recortarArteFundo(arte, xFrac, yFrac, wFrac, hFrac) {
 // Retorna null se a URL não puder ser lida — nesse caso o chamador cai no
 // layout padrão fixo, exatamente como se cert_nivel_personalizacao fosse
 // 'padrao'.
-async function carregarArteFundoOrgPDF(url) {
+async function carregarArteFundoOrgPDF(url, opts) {
   if (!url) return null;
   try {
     const img = await new Promise((resolve, reject) => {
@@ -13401,6 +13401,18 @@ async function carregarArteFundoOrgPDF(url) {
     c.width = img.naturalWidth || 1; c.height = img.naturalHeight || 1;
     const ctx = c.getContext('2d');
     ctx.drawImage(img, 0, 0, c.width, c.height);
+    // opts.format === 'jpeg': usado só para fundos de página inteira sem
+    // transparência (ex.: capas Avanteseg). canvas.toDataURL('image/png')
+    // sempre grava um canal alfa (RGBA), mesmo quando a imagem original é
+    // opaca (modo RGB) — e o jsPDF embute esse alfa como uma imagem extra
+    // (soft mask) sem nenhuma compressão real, inflando o PDF final em
+    // dezenas de MB para uma arte de fundo de poucas centenas de KB. JPEG
+    // não tem canal alfa e usa compressão DCT, resolvendo os dois problemas.
+    // Não é o padrão porque quebraria a transparência de logos (RGBA de
+    // verdade), que continuam usando PNG.
+    if (opts?.format === 'jpeg') {
+      return { dataUrl: c.toDataURL('image/jpeg', opts.quality ?? 0.9), w: c.width, h: c.height, canvas: c };
+    }
     return { dataUrl: c.toDataURL('image/png'), w: c.width, h: c.height, canvas: c };
   } catch(e) { return null; }
 }
@@ -13560,7 +13572,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
 
     const _isAvanteseg = (t.organizacoes?.id === AVANTESEG_ORG_ID || t.organizacoes?.id === AVANTESEG_ORG_ID_TESTE) && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
     const {jsPDF} = window.jspdf;
-    const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+    const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4', compress:true});
     const W = 210, H = 297;
     const mg = 14;
 
@@ -13923,7 +13935,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
       doc.text('Aluno', cxA, ry+22, {align:'center'});
     };
 
-    const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+    const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4', compress:true});
 
     // ════════════════════════════════
     // PÁGINA 1 - CAPA (Modelo B, ou arte própria da organização — Fase 3)
@@ -13934,7 +13946,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const _arteCapa = _arteCertificadoOrg(t.organizacoes);
     const _arteCapaImg = _arteCapa ? await carregarArteFundoOrgPDF(_arteCapa.url) : null;
     if (_isAvanteseg) {
-      const _bgAvanteseg = await carregarArteFundoOrgPDF(MODELOS_BASE_CERTIFICADO.avanteseg.capaUrl);
+      const _bgAvanteseg = await carregarArteFundoOrgPDF(MODELOS_BASE_CERTIFICADO.avanteseg.capaUrl, {format:'jpeg', quality:0.9});
       desenharCapaIndividualAvanteseg(doc, _bgAvanteseg?.dataUrl, {
         nome: nomePart,
         cpf: s(col.cpf || '', 20),
@@ -14035,7 +14047,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         ch: `${ch}h`,
         periodoTexto: `Conclusão: ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         validadeTexto: fmtVal,
-        itensConteudo: cpBlocos && cpBlocos.length ? cpBlocos.map(b=>s(b,140)) : [],
+        itensConteudo: cpBlocos && cpBlocos.length ? cpBlocos.map(b=>s(b.texto,140)) : [],
         codigoShort,
         qrDataUrl: qrData,
         emitidoTexto: `Emitido em ${fmtDataExtensoPDF(dataLocalISO())}`,
@@ -14327,7 +14339,7 @@ async function gerarCertificadoColetivo(turmaId) {
     const BLUE  = [29,78,216];
     const GRAYLT = [248,250,252];
 
-    const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+    const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4', compress:true});
 
     // ════════════════════════════════
     // PÁGINA 1 - CAPA COLETIVA (ou arte própria da organização — Fase 3)
@@ -14341,7 +14353,7 @@ async function gerarCertificadoColetivo(turmaId) {
       // No registro de modelos, o campo "versoUrl" do modelo avanteseg guarda
       // a arte de fundo da CAPA do coletivo (nome reaproveitado do padrão
       // capaUrl/versoUrl já existente — ver MODELOS_BASE_CERTIFICADO.avanteseg).
-      const _bgAvantesegCol = await carregarArteFundoOrgPDF(MODELOS_BASE_CERTIFICADO.avanteseg.versoUrl);
+      const _bgAvantesegCol = await carregarArteFundoOrgPDF(MODELOS_BASE_CERTIFICADO.avanteseg.versoUrl, {format:'jpeg', quality:0.9});
       desenharCapaColetivoAvanteseg(doc, _bgAvantesegCol?.dataUrl, {
         empresa: nomeEmpSafe0,
         cnpj: s(t.clientes?.cnpj || 'não informado', 25),
@@ -14466,7 +14478,7 @@ async function gerarCertificadoColetivo(turmaId) {
       const AV_PART_POR_PAGINA = 18;
       const totalPaginasAv = Math.max(1, Math.ceil(participantes.length / AV_PART_POR_PAGINA));
       const emitidoTextoAv = `Emitido em ${fmtDataExtensoPDF(dataLocalISO())}`;
-      const cpBlocosAv = cpBlocos && cpBlocos.length ? cpBlocos.map(b=>s(b,140)) : [];
+      const cpBlocosAv = cpBlocos && cpBlocos.length ? cpBlocos.map(b=>s(b.texto,140)) : [];
       for (let pgv = 1; pgv <= totalPaginasAv; pgv++) {
         if (pgv > 1) doc.addPage('a4','landscape');
         const fatiaPart = participantes
