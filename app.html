@@ -13150,6 +13150,17 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.line(cxA-lineW/2, sigY, cxA+lineW/2, sigY);
   doc.line(cxI-lineW/2, sigY, cxI+lineW/2, sigY);
 
+  // Assinatura digitalizada (imagem), quando cadastrada — desenhada por
+  // cima da linha, mesmo padrão já usado no modelo padrão do sistema
+  // (helper desenharAssinaturaImagemPDF, ver rodapeNavy em
+  // gerarCertificadoIndividual). Bug corrigido em 2026-08: a capa da
+  // Avanteseg nunca chamava esse helper — só imprimia o nome sob a linha
+  // em branco — por isso a assinatura cadastrada no perfil do instrutor
+  // nunca aparecia no PDF, em qualquer conta usada pra gerar (não era um
+  // problema de permissão/RLS, era o desenho da capa mesmo).
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaAluno, cxA, sigY, lineW*0.8, _avMM_H(0.045,H));
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxI, sigY, lineW*0.8, _avMM_H(0.045,H));
+
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
   doc.text(nome, cxA, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
@@ -13364,6 +13375,9 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   const lineW = _avMM_W(0.22,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cx-lineW/2, sigY, cx+lineW/2, sigY);
+  // Assinatura digitalizada (imagem) — mesmo bug/correção da capa
+  // individual (ver comentário em desenharCapaIndividualAvanteseg).
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW*0.8, _avMM_H(0.045,H));
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutorNome,40), cx, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
@@ -14459,6 +14473,12 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         instrutorCargo: s(instFormacao, 50),
         instrutorEspec: s(instEspec, 50),
         instrutorCredencial: instCredencialCpf,
+        // 2026-08: faltava passar as imagens de assinatura pra capa da
+        // Avanteseg — as variáveis já existiam no escopo (carregadas lá em
+        // cima), só nunca tinham sido encaminhadas pra esta chamada. Era a
+        // causa raiz da assinatura "cadastrada mas não aparece no PDF".
+        imgAssinaturaInstrutor,
+        imgAssinaturaAluno,
         nrNum,
         codigoShort,
         rodape: t.organizacoes?.cert_texto_rodape || undefined,
@@ -14883,6 +14903,10 @@ async function gerarCertificadoColetivo(turmaId) {
         instrutorCargo: s(instFormacao, 50),
         instrutorEspec: s(instEspec, 50),
         instrutorCredencial: instCredencialCpf,
+        // 2026-08: mesma correção da capa individual — faltava passar a
+        // imagem da assinatura (variável já existia no escopo). Coletivo
+        // não tem assinatura de aluno (documento sem assinatura individual).
+        imgAssinaturaInstrutor,
         nrNum,
         codigoShort,
         rodape: t.organizacoes?.cert_texto_rodape || undefined,
