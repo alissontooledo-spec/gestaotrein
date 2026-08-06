@@ -12831,37 +12831,45 @@ const _avBase  = (topMM, sizePt) => topMM + (sizePt/2.83465) * 0.75;
 // na fonte certa (normal/negrito) e monta as linhas manualmente, centralizando
 // cada linha. Retorna a posição Y (baseline) logo após a última linha.
 function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineHeight, fontFamily, corNormal, corDestaque) {
-  const palavras = [];
-  segmentos.forEach(seg => {
-    pdfSafe(seg.texto, 200).split(' ').forEach(w => { if (w) palavras.push({ texto: w, negrito: seg.negrito }); });
-  });
   const medir = (texto, negrito) => {
     doc.setFont(fontFamily, negrito ? 'bold' : 'normal');
     doc.setFontSize(fontSize);
     return doc.getTextWidth(texto);
   };
-  const espaco = medir(' ', false);
+  // Cada token já leva o espaço colado no final (2026-08: antes media um
+  // " " isolado à parte e somava a largura na hora de desenhar — em algumas
+  // combinações de fonte/versão do jsPDF isso mede como 0 e as palavras
+  // saem coladas, ex. "AVANTESegcertifica". Medindo/desenhando a palavra
+  // JUNTO com o espaço (uma única string, um único doc.text) o jsPDF cuida
+  // do espaçamento internamente e não depende de medir espaço em branco sozinho.
+  const tokens = [];
+  segmentos.forEach((seg, si) => {
+    const palavrasSeg = pdfSafe(seg.texto, 200).split(' ').filter(Boolean);
+    palavrasSeg.forEach((w, wi) => {
+      const ultimoToken = si === segmentos.length-1 && wi === palavrasSeg.length-1;
+      tokens.push({ texto: ultimoToken ? w : w+' ', negrito: seg.negrito });
+    });
+  });
   const linhas = [];
   let linhaAtual = [], larguraAtual = 0;
-  palavras.forEach(p => {
-    const largP = medir(p.texto, p.negrito);
-    const largComEspaco = larguraAtual > 0 ? larguraAtual + espaco + largP : largP;
-    if (largComEspaco > maxWidth && linhaAtual.length) {
-      linhas.push({ palavras: linhaAtual, largura: larguraAtual });
-      linhaAtual = [p]; larguraAtual = largP;
+  tokens.forEach(t => {
+    const largT = medir(t.texto, t.negrito);
+    if (larguraAtual + largT > maxWidth && linhaAtual.length) {
+      linhas.push({ tokens: linhaAtual, largura: larguraAtual });
+      linhaAtual = [t]; larguraAtual = largT;
     } else {
-      linhaAtual.push(p); larguraAtual = largComEspaco;
+      linhaAtual.push(t); larguraAtual += largT;
     }
   });
-  if (linhaAtual.length) linhas.push({ palavras: linhaAtual, largura: larguraAtual });
+  if (linhaAtual.length) linhas.push({ tokens: linhaAtual, largura: larguraAtual });
   let y = yBase0;
   linhas.forEach(linha => {
     let x = cx - linha.largura/2;
-    linha.palavras.forEach(p => {
-      const largP = medir(p.texto, p.negrito);
-      doc.setTextColor(...(p.negrito ? corDestaque : corNormal));
-      doc.text(p.texto, x, y);
-      x += largP + espaco;
+    linha.tokens.forEach(t => {
+      const largT = medir(t.texto, t.negrito);
+      doc.setTextColor(...(t.negrito ? corDestaque : corNormal));
+      doc.text(t.texto, x, y);
+      x += largT;
     });
     y += lineHeight;
   });
@@ -12929,7 +12937,8 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.line(cxA-lineW/2, sigY, cxA+lineW/2, sigY);
   doc.line(cxI-lineW/2, sigY, cxI+lineW/2, sigY);
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
+  // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
+  doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
   doc.text(nome, cxA, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
   doc.text(pdfSafe(campos.instrutorNome,40), cxI, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
 
@@ -13089,7 +13098,13 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
 
   doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.032,H)); doc.setTextColor(...GREEN_DARK);
   const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,90), maxW*0.85);
-  let yCurso = Math.max(_avMM_H(0.495,H), yAposFrase + _avMM_H(0.020,H));
+  // 2026-08: removido o piso fixo de 0.495H — ele foi calibrado pro layout
+  // antigo (nome da empresa grande em Great Vibes) e, com a frase corrida
+  // mais compacta, sobrava um vão grande e constante antes do nome do curso
+  // (reportado mais de uma vez). Agora o título do curso começa logo depois
+  // da frase, com um respiro fixo pequeno — encolhe ou cresce junto com o
+  // número de linhas da frase (nome de empresa curto x longo).
+  let yCurso = yAposFrase + _avMM_H(0.018,H);
   linhasCurso.forEach(ln => { doc.text(ln, cx, _avBase(yCurso, _avPT_H(0.032,H)), {align:'center'}); yCurso += _avMM_H(0.040,H); });
 
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.023,H)); doc.setTextColor(...BLACK);
@@ -13111,7 +13126,8 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   const lineW = _avMM_W(0.22,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cx-lineW/2, sigY, cx+lineW/2, sigY);
-  doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
+  // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
+  doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutorNome,40), cx, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...GRAY);
   if (campos.instrutorCargo) doc.text(pdfSafe(campos.instrutorCargo,50), cx, _avBase(sigY+_avMM_H(0.036,H), _avPT_H(0.021,H)), {align:'center'});
@@ -13303,6 +13319,18 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.text(`AVANTESeg  ·  Encontro ${campos.encontroIdx} de ${campos.encontroTotal}`, (ml+mr)/2, y, {align:'center'});
   y += 8;
 
+  // Faixa "Empresa" (2026-08, a pedido do Alisson) — antes só aparecia o
+  // CNPJ na grade (campo "CNPJ Cliente"), sem a razão social. Faixa própria
+  // em destaque, acima da grade de dados, pra identificar a empresa de
+  // primeira vista sem precisar decorar o CNPJ.
+  const empBarH = 9;
+  doc.setFillColor(...GREEN_DARK); doc.rect(ml, y, mr-ml, empBarH, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(...GOLD_RIBBON);
+  doc.text('EMPRESA', ml+3, y+3.6);
+  doc.setFont('times','bold'); doc.setFontSize(9.5); doc.setTextColor(...WHITE);
+  doc.text(pdfSafe(campos.empresa||'-',60), ml+3, y+7.4);
+  y += empBarH + 3;
+
   // grade de dados (2 linhas × 3 colunas)
   const gridRows = [
     [['Data', campos.data], ['Instrutor', campos.instrutor], ['Carga horária', campos.ch]],
@@ -13346,8 +13374,21 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
     doc.text(pdfSafe(p.nome,44), colNome, ty);
     doc.text(pdfSafe(p.cpf,20), colCpf, ty);
     let assinado = false;
-    if (p.assinaturaDataUrl) {
-      try { doc.addImage(p.assinaturaDataUrl,'PNG', colSig, y+1.5, (mr-2)-colSig, rowH-3); assinado = true; } catch(e){}
+    if (p.assinatura && p.assinatura.dataUrl) {
+      // Encaixa preservando a proporção original (2026-08) — antes esticava
+      // pra preencher a célula toda, ignorando a proporção real do traço;
+      // dependendo de como o aluno assinava (largo/baixo ou alto/estreito),
+      // saía visualmente distorcida. Centralizado na célula, no maior
+      // tamanho que caiba sem esticar.
+      try {
+        const cellW = (mr-2)-colSig, cellH = rowH-4;
+        const ratio = p.assinatura.w / p.assinatura.h;
+        let iw = cellW, ih = cellW/ratio;
+        if (ih > cellH) { ih = cellH; iw = cellH*ratio; }
+        const ix = colSig + (cellW-iw)/2, iy = y + (rowH-ih)/2;
+        doc.addImage(p.assinatura.dataUrl, 'PNG', ix, iy, iw, ih);
+        assinado = true;
+      } catch(e){}
     }
     if (!assinado) {
       doc.setDrawColor(210,228,218); doc.setLineWidth(0.2);
@@ -13736,31 +13777,48 @@ async function gerarListaPresenca(turmaId, sessaoId) {
       const participantesAv = [];
       for (const p of (t.turma_participantes||[])) {
         const pr = presMapAv[p.colaborador_id];
-        let assinaturaDataUrl = null;
+        // Guarda também w/h da imagem (2026-08) — sem isso a assinatura era
+        // esticada pra caber na célula da tabela ignorando a proporção
+        // original, ficando "estranha" dependendo de como o aluno assinou
+        // (traço largo e baixo vs. alto e estreito). Mesmo padrão já usado
+        // em carregarAssinaturaAlunoPDF/carregarAssinaturaInstrutorPDF.
+        let assinatura = null;
         if (pr?.assinatura_path) {
           try {
             const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(pr.assinatura_path, 60);
-            if (urlData?.signedUrl) assinaturaDataUrl = await carregarImagemComoDataURL(urlData.signedUrl);
+            if (urlData?.signedUrl) {
+              const dataUrl = await carregarImagemComoDataURL(urlData.signedUrl);
+              if (dataUrl) {
+                const dim = await new Promise(resolve => {
+                  const img = new Image();
+                  img.onload = () => resolve({w: img.naturalWidth||1, h: img.naturalHeight||1});
+                  img.onerror = () => resolve(null);
+                  img.src = dataUrl;
+                });
+                if (dim) assinatura = { dataUrl, w: dim.w, h: dim.h };
+              }
+            }
           } catch(e) {}
         }
         participantesAv.push({
           nome: pdfSafe(p.colaboradores?.nome||'',44),
           cpf: pdfSafe(p.colaboradores?.cpf||'-',20),
-          assinaturaDataUrl,
+          assinatura,
         });
       }
       // Geometria fixa de desenharFichaPresencaAvanteseg (A4 retrato 210×297mm):
-      // moldura + cabeçalho + grade de dados ocupam ~90mm do topo, sobrando
-      // espaço para 10 linhas de participante de 15mm cada antes do bloco de
-      // assinatura do instrutor + rodapé. Se a função de desenho mudar essa
-      // geometria, este valor precisa acompanhar a mudança.
-      const AV_FICHA_MAX_ROWS = 10;
+      // moldura + cabeçalho + faixa "Empresa" + grade de dados ocupam ~91mm
+      // do topo, sobrando espaço para 8 linhas de participante de 15mm cada
+      // antes do bloco de assinatura do instrutor + rodapé (2026-08: caiu de
+      // 10 pra 8 depois de acrescentar a faixa "Empresa"). Se a função de
+      // desenho mudar essa geometria, este valor precisa acompanhar a mudança.
+      const AV_FICHA_MAX_ROWS = 8;
       const totalPaginasFicha = Math.max(1, Math.ceil(participantesAv.length / AV_FICHA_MAX_ROWS));
       for (let pgf = 1; pgf <= totalPaginasFicha; pgf++) {
         if (pgf > 1) doc.addPage('a4','portrait');
         const fatiaP = participantesAv
           .slice((pgf-1)*AV_FICHA_MAX_ROWS, pgf*AV_FICHA_MAX_ROWS)
-          .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf, assinaturaDataUrl: p.assinaturaDataUrl }));
+          .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf, assinatura: p.assinatura }));
         desenharFichaPresencaAvanteseg(doc, {
           curso: pdfSafe(t.catalogo?.nome||'Treinamento',70),
           encontroIdx: indiceEncontro+1,
@@ -13769,6 +13827,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
           instrutor,
           ch: `${t.catalogo?.carga_horaria||'-'}h`,
           local,
+          empresa: t.clientes?.nome||'não informada',
           cnpjCliente: t.clientes?.cnpj||'-',
           protocolo,
           participantes: fatiaP,
