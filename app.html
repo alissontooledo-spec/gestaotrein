@@ -13170,8 +13170,18 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   // em branco — por isso a assinatura cadastrada no perfil do instrutor
   // nunca aparecia no PDF, em qualquer conta usada pra gerar (não era um
   // problema de permissão/RLS, era o desenho da capa mesmo).
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaAluno, cxA, sigY, lineW*0.8, _avMM_H(0.045,H));
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxI, sigY, lineW*0.8, _avMM_H(0.045,H));
+  // Tamanho aumentado (2026-08-06, a pedido do Alisson depois do teste real):
+  // a caixa antiga (0.8×lineW por 0.045H ≈ 47×9mm) deixava a assinatura
+  // pequena demais pra ser lida — em vários instrutores/alunos a imagem
+  // acabava ficando bem menor que a linha, quase imperceptível no
+  // certificado impresso/em tela. Aumentada para 1×lineW por 0.075H (≈59×16mm)
+  // — mesma lógica de _avMM_H/_avMM_W já usada em todo o resto do layout,
+  // então escala junto com o tamanho da página. A proporção da imagem
+  // continua preservada por desenharAssinaturaImagemPDF (nunca distorce);
+  // isto só aumenta a caixa máxima disponível. Há espaço de sobra entre a
+  // linha de assinatura e o parágrafo acima (verificado no PNG de fundo).
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaAluno, cxA, sigY, lineW, _avMM_H(0.075,H));
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxI, sigY, lineW, _avMM_H(0.075,H));
 
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
@@ -13388,8 +13398,10 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cx-lineW/2, sigY, cx+lineW/2, sigY);
   // Assinatura digitalizada (imagem) — mesmo bug/correção da capa
-  // individual (ver comentário em desenharCapaIndividualAvanteseg).
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW*0.8, _avMM_H(0.045,H));
+  // individual (ver comentário em desenharCapaIndividualAvanteseg). Caixa
+  // aumentada (2026-08-06) pelo mesmo motivo e na mesma proporção da capa
+  // individual — ver comentário lá.
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW, _avMM_H(0.075,H));
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutorNome,40), cx, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
@@ -13680,8 +13692,11 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   // desenharAssinaturaImagemPDF, então a assinatura cadastrada nunca aparecia
   // na Ficha de Presença da Avanteseg, mesmo com o arquivo corretamente
   // cadastrado e acessível (mesmo padrão já usado no modelo padrão do sistema
-  // e nas capas de certificado da Avanteseg).
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxS, sigY, lineW*0.8, 8);
+  // e nas capas de certificado da Avanteseg). Caixa aumentada no mesmo dia,
+  // depois do teste real (estava pequena demais nas 3 telas) — de 48×8mm
+  // para 60×14mm; há espaço de sobra acima da linha (a tabela de
+  // participantes termina bem antes desta faixa, ver comentário mais acima).
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxS, sigY, lineW, 14);
   doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutor,40), cxS, sigY+3.5, {align:'center'});
   doc.setFont('times','normal'); doc.setFontSize(7); doc.setTextColor(...GRAY);
