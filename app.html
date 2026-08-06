@@ -5541,11 +5541,14 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
       </select></div>
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Identificação profissional <span style="font-weight:400;text-transform:none">(exibida no certificado)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:10px">
-        <div class="field" style="margin:0"><label>Sigla do conselho</label><input type="text" id="mUsrSiglaConselho" value="${u?.sigla_conselho||''}" placeholder="Ex: CREA, COREN"></div>
-        <div class="field" style="margin:0"><label>Registro</label><input type="text" id="mUsrConselho" value="${u?.conselho_classe||''}" placeholder="Ex: CREA-SC 109085-1"></div>
+      <div class="field"><label>Formação</label><input type="text" id="mUsrFormacao" value="${escapeHtml(u?.formacao||'')}" placeholder="Ex: Bacharel em Engenharia de Segurança do Trabalho"></div>
+      <div class="field"><label>Especialidade</label><input type="text" id="mUsrEspecialidade" value="${escapeHtml(u?.especialidade||'')}" placeholder="Ex: Engenheiro de Segurança do Trabalho"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px;margin-bottom:10px">
+        <div class="field" style="margin:0"><label>Sigla do conselho</label><input type="text" id="mUsrSiglaConselho" value="${escapeHtml(u?.sigla_conselho||'')}" placeholder="Ex: CREA, COREN"></div>
+        <div class="field" style="margin:0"><label>UF</label><input type="text" id="mUsrUfRegistro" value="${escapeHtml(u?.uf_registro||'')}" placeholder="Ex: SC" maxlength="2" style="text-transform:uppercase"></div>
+        <div class="field" style="margin:0"><label>Registro</label><input type="text" id="mUsrConselho" value="${escapeHtml(u?.conselho_classe||'')}" placeholder="Ex: 109085-1"></div>
       </div>
-      <div class="field"><label>Especialidade</label><input type="text" id="mUsrEspecialidade" value="${u?.especialidade||''}" placeholder="Ex: Engenheiro de Segurança do Trabalho"></div>
+      <div class="field" style="margin:0"><label>CPF</label><input type="text" id="mUsrCpf" value="${escapeHtml(u?.cpf||'')}" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>
     </div>
     ${u && u.perfil !== 'provedor' ? `
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
@@ -5647,12 +5650,15 @@ async function salvarUsuarioOrg() {
   const sigla_conselho  = document.getElementById('mUsrSiglaConselho')?.value.trim()||null;
   const conselho_classe = document.getElementById('mUsrConselho')?.value.trim()||null;
   const especialidade   = document.getElementById('mUsrEspecialidade')?.value.trim()||null;
+  const formacao        = document.getElementById('mUsrFormacao')?.value.trim()||null;
+  const uf_registro     = document.getElementById('mUsrUfRegistro')?.value.trim().toUpperCase()||null;
+  const cpf             = document.getElementById('mUsrCpf')?.value.trim()||null;
   if (!nome) { showToast('Nome é obrigatório', 'error'); return; }
 
   try {
     setBtnModalLoading(true);
     const { error } = await sb.from('usuarios').update({
-      nome, perfil, sigla_conselho, conselho_classe, especialidade,
+      nome, perfil, sigla_conselho, conselho_classe, especialidade, formacao, uf_registro, cpf,
     }).eq('id', usuarioId);
     if (error) throw error;
     fecharModal();
@@ -5672,6 +5678,9 @@ async function criarUsuarioOrg() {
   const sigla_conselho  = document.getElementById('mUsrSiglaConselho')?.value.trim()||null;
   const conselho_classe = document.getElementById('mUsrConselho')?.value.trim()||null;
   const especialidade   = document.getElementById('mUsrEspecialidade')?.value.trim()||null;
+  const formacao        = document.getElementById('mUsrFormacao')?.value.trim()||null;
+  const uf_registro     = document.getElementById('mUsrUfRegistro')?.value.trim().toUpperCase()||null;
+  const cpf             = document.getElementById('mUsrCpf')?.value.trim()||null;
   if (!nome||!email||!senha) { showToast('Preencha todos os campos','error'); return; }
   if (senha.length<6) { showToast('Senha deve ter no mínimo 6 caracteres','error'); return; }
   // ── Guard Starter: limite de usuários ativos por plano ──
@@ -5690,13 +5699,13 @@ async function criarUsuarioOrg() {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/criar-usuario`,{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`,'apikey':SUPABASE_KEY},
-      body:JSON.stringify({nome,email,senha,perfil,org_id:_modalCurrentId,sigla_conselho,conselho_classe,especialidade}),
+      body:JSON.stringify({nome,email,senha,perfil,org_id:_modalCurrentId,sigla_conselho,conselho_classe,especialidade,formacao,uf_registro,cpf}),
     });
     const resultado = await res.json();
     if (!res.ok) throw new Error(resultado.error||'Erro ao criar usuário');
     // Salvar campos profissionais diretamente na tabela usuarios
-    if (resultado.userId && (sigla_conselho||conselho_classe||especialidade)) {
-      await sb.from('usuarios').update({sigla_conselho,conselho_classe,especialidade}).eq('id',resultado.userId);
+    if (resultado.userId && (sigla_conselho||conselho_classe||especialidade||formacao||uf_registro||cpf)) {
+      await sb.from('usuarios').update({sigla_conselho,conselho_classe,especialidade,formacao,uf_registro,cpf}).eq('id',resultado.userId);
     }
     fecharModal(); showToast(`${nome} criado com sucesso!`,'success');
   } catch(e) {
@@ -11630,12 +11639,14 @@ function verUsuarioEquipe(id) {
           <span style="font-size:13px;color:var(--text-2)">E-mail</span>
           <span style="font-size:13px;font-weight:500;color:var(--navy)">${escapeHtml(u.email||'—')}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0${(u.conselho_classe||u.especialidade)?';border-bottom:1px solid var(--border)':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0${(u.conselho_classe||u.especialidade||u.formacao||u.cpf)?';border-bottom:1px solid var(--border)':''}">
           <span style="font-size:13px;color:var(--text-2)">Perfil de acesso</span>
           <span style="font-size:13px;font-weight:500;color:var(--navy);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
         </div>
-        ${u.conselho_classe?`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text-2)">Conselho de classe</span><span style="font-size:13px;font-weight:500;color:var(--navy)">${u.sigla_conselho?u.sigla_conselho+' — ':''} ${u.conselho_classe}</span></div>`:''}
-        ${u.especialidade?`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0"><span style="font-size:13px;color:var(--text-2)">Especialidade</span><span style="font-size:13px;font-weight:500;color:var(--navy)">${u.especialidade}</span></div>`:''}
+        ${u.formacao?`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text-2)">Formação</span><span style="font-size:13px;font-weight:500;color:var(--navy);text-align:right">${escapeHtml(u.formacao)}</span></div>`:''}
+        ${u.especialidade?`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text-2)">Especialidade</span><span style="font-size:13px;font-weight:500;color:var(--navy);text-align:right">${escapeHtml(u.especialidade)}</span></div>`:''}
+        ${u.conselho_classe?`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text-2)">Conselho de classe</span><span style="font-size:13px;font-weight:500;color:var(--navy)">${escapeHtml(u.sigla_conselho?u.sigla_conselho+(u.uf_registro?'-'+u.uf_registro:'')+' — ':'')}${escapeHtml(u.conselho_classe)}</span></div>`:''}
+        ${u.cpf?`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0"><span style="font-size:13px;color:var(--text-2)">CPF</span><span style="font-size:13px;font-weight:500;color:var(--navy)">${escapeHtml(u.cpf)}</span></div>`:''}
       </div>
 
       ${podeMgr && u.id !== usuarioAtual.id ? `
@@ -11677,6 +11688,28 @@ async function renderConta() {
   // do certificado) — os detalhes só são carregados quando o instrutor entra
   // na sub-tela renderContaDocumentos(), evitando consultas desnecessárias
   // toda vez que Minha Conta é aberta.
+  // 2026-08, a pedido do Alisson: o instrutor sentia falta de conseguir
+  // preencher os próprios dados profissionais (antes só o Administrador
+  // conseguia, pelo modal de Equipe) — esses campos aparecem no certificado
+  // que ele mesmo emite, então faz sentido ele conseguir manter atualizado
+  // sem depender do Administrador.
+  let cardIdProfissional = '';
+  if (u.perfil === 'instrutor') {
+    cardIdProfissional = `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:2px">🎓 Identificação profissional</div>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Exibida nos certificados que você emitir.</div>
+      <div class="field"><label>Formação</label><input type="text" id="editFormacao" value="${escapeHtml(u.formacao||'')}" placeholder="Ex: Bacharel em Engenharia de Segurança do Trabalho"></div>
+      <div class="field"><label>Especialidade</label><input type="text" id="editEspecialidade" value="${escapeHtml(u.especialidade||'')}" placeholder="Ex: Engenheiro de Segurança do Trabalho"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px;margin-bottom:10px">
+        <div class="field" style="margin:0"><label>Sigla do conselho</label><input type="text" id="editSiglaConselho" value="${escapeHtml(u.sigla_conselho||'')}" placeholder="Ex: CREA"></div>
+        <div class="field" style="margin:0"><label>UF</label><input type="text" id="editUfRegistro" value="${escapeHtml(u.uf_registro||'')}" placeholder="Ex: SC" maxlength="2" style="text-transform:uppercase"></div>
+        <div class="field" style="margin:0"><label>Registro</label><input type="text" id="editConselhoClasse" value="${escapeHtml(u.conselho_classe||'')}" placeholder="Ex: 109085-1"></div>
+      </div>
+      <div class="field" style="margin:0"><label>CPF</label><input type="text" id="editCpf" value="${escapeHtml(u.cpf||'')}" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>
+    </div>`;
+  }
+
   let linhaDocumentos = '';
   if (u.perfil === 'instrutor') {
     let temCert = false;
@@ -11726,6 +11759,7 @@ async function renderConta() {
       <div class="field" style="margin-bottom:0"><label>Nome completo</label><input type="text" id="editNome" value="${escapeHtml(u.nome)}"></div>
     </div>
 
+    ${cardIdProfissional}
     ${linhaDocumentos}
 
     <div class="card" style="margin-bottom:12px">
@@ -11801,7 +11835,7 @@ async function renderContaDocumentos() {
     </div>
 
     <div style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
-      Usadas automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir.
+      A assinatura digitalizada é usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir. O certificado digital fica guardado aqui pra você não precisar procurá-lo depois, mas <strong>ainda não é aplicado automaticamente aos documentos</strong> — hoje ele só fica registrado.
     </div>
 
     ${assinHtml}
@@ -12041,10 +12075,28 @@ async function _confirmarNovaSenhaRecuperacao() {
 async function salvarConta() {
   const nome = _getElVisible('editNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
+  // Campos de identificação profissional só existem no DOM pra Instrutor
+  // (ver cardIdProfissional em renderConta) — os demais perfis não têm
+  // esses inputs, então os _getElVisible(...) abaixo voltam null e o
+  // dado correspondente não entra no update (mantém o que já estava).
+  const dados = {nome};
+  const formacao        = _getElVisible('editFormacao')?.value.trim();
+  const especialidade   = _getElVisible('editEspecialidade')?.value.trim();
+  const sigla_conselho  = _getElVisible('editSiglaConselho')?.value.trim();
+  const uf_registro     = _getElVisible('editUfRegistro')?.value.trim().toUpperCase();
+  const conselho_classe = _getElVisible('editConselhoClasse')?.value.trim();
+  const cpf             = _getElVisible('editCpf')?.value.trim();
+  if (document.getElementById('editFormacao') || document.getElementById('editEspecialidade')) {
+    Object.assign(dados, {
+      formacao: formacao||null, especialidade: especialidade||null,
+      sigla_conselho: sigla_conselho||null, uf_registro: uf_registro||null,
+      conselho_classe: conselho_classe||null, cpf: cpf||null,
+    });
+  }
   try {
-    const {error} = await sb.from('usuarios').update({nome}).eq('id',usuarioAtual.id);
+    const {error} = await sb.from('usuarios').update(dados).eq('id',usuarioAtual.id);
     if (error) throw error;
-    usuarioAtual.nome = nome;
+    Object.assign(usuarioAtual, dados);
     document.getElementById('sidebarAvatar').textContent = iniciais(nome);
     document.getElementById('sidebarNome').textContent   = nome;
     showToast('Dados atualizados!','success');
@@ -12074,7 +12126,7 @@ function _htmlCardCertificadoDigital(cert) {
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">🔐 Certificado Digital (ICP-Brasil)</div>
       <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
-        Cadastre seu certificado digital A1 para assinar eletronicamente os certificados e listas de presença que você emitir, com validade jurídica. Sem certificado cadastrado, a assinatura convencional continua sendo usada normalmente.
+        Cadastre aqui o seu certificado digital A1. <strong>Importante:</strong> por enquanto isso só guarda o certificado (fica registrado com você) — ele ainda não é usado para assinar eletronicamente os documentos gerados. A assinatura que aparece hoje nos certificados e listas de presença é sempre a assinatura digitalizada (imagem), cadastrada abaixo.
       </p>
       <button class="btn btn-navy btn-sm" onclick="abrirModalCertificadoDigital()">📄 Cadastrar certificado digital</button>
     </div>`;
@@ -14185,7 +14237,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -14220,8 +14272,18 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // Dados profissionais do instrutor para o certificado
     const instConselho  = ag?.usuarios?.conselho_classe||'';
     const instSigla     = ag?.usuarios?.sigla_conselho||'';
+    const instUf        = ag?.usuarios?.uf_registro||'';
     const instEspec     = ag?.usuarios?.especialidade||'';
-    const instCredencial = instConselho ? pdfSafe(`${instSigla?instSigla+' ':''} ${instConselho}`.trim()) : '';
+    const instFormacao  = ag?.usuarios?.formacao||'';
+    const instCpf       = ag?.usuarios?.cpf||'';
+    // 2026-08, a pedido do Alisson: UF entrou como campo próprio (antes só
+    // dava pra embutir no texto livre de "Registro") — junta na sigla
+    // (ex.: "CREA-SC") em vez de ficar solta.
+    const instCredencial = instConselho ? pdfSafe(`${instSigla?instSigla+(instUf?'-'+instUf:'')+' ':''}${instConselho}`.trim()) : '';
+    // CPF do instrutor no certificado — a pedido do Alisson (2026-08-06),
+    // sempre junto da credencial (ou sozinho, se não houver credencial).
+    const instCpfTxt = instCpf ? `CPF ${instCpf}` : '';
+    const instCredencialCpf = [instCredencial, instCpfTxt].filter(Boolean).join(' · ');
     const ch        = t.catalogo?.carga_horaria || 0;
     const nomeT     = t.catalogo?.nome || 'Treinamento';
     const valMeses  = t.catalogo?.validade_meses || 12;
@@ -14300,7 +14362,12 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
       doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
       doc.text(s(nomeInstrutor,32), cxI, ry+17, {align:'center'});
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text('Instrutor Responsavel', cxI, ry+22, {align:'center'});
+      // 2026-08: mostra credencial+CPF quando disponível (fecha sobre
+      // instCredencialCpf do escopo externo — este helper só é chamado
+      // dentro de gerarCertificadoIndividual); mantém o texto genérico como
+      // fallback pra não ficar em branco quando o instrutor não tem esses
+      // dados cadastrados.
+      doc.text(instCredencialCpf || 'Instrutor Responsavel', cxI, ry+22, {align:'center'});
 
       doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
       doc.line(cxA-32, ry+12, cxA+32, ry+12);
@@ -14331,12 +14398,14 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         ch: `${ch}h`,
         periodoTexto: `Realizado em ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         instrutorNome: s(instrutor, 40),
-        // Nao ha campo de "cargo" do instrutor no sistema hoje (so
-        // conselho_classe/sigla_conselho e especialidade) -- por isso so a
-        // especialidade e a credencial aparecem, igual ao resto do app.
-        instrutorCargo: undefined,
+        // 2026-08: o slot "instrutorCargo" (sempre em branco antes, o
+        // sistema não tinha campo de cargo do instrutor) agora mostra a
+        // Formação — reaproveita a mesma linha em vez de crescer o bloco de
+        // assinatura pra 4 linhas (o espaço já é calibrado pra 3). Credencial
+        // ganhou o CPF junto (ver instCredencialCpf, a pedido do Alisson).
+        instrutorCargo: s(instFormacao, 50),
         instrutorEspec: s(instEspec, 50),
-        instrutorCredencial: instCredencial,
+        instrutorCredencial: instCredencialCpf,
         nrNum,
         codigoShort,
         rodape: t.organizacoes?.cert_texto_rodape || undefined,
@@ -14553,11 +14622,14 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, p_c2x+p_c2w/2, p_sigY, 24, 7);
     doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
     doc.text(s(instrutor,32), p_c2x+p_c2w/2, p_sigY+5, {align:'center'});
-    if (instCredencial) {
+    if (instCredencialCpf) {
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(instCredencial, p_c2x+p_c2w/2, p_sigY+10, {align:'center'});
-      if (instEspec) {
-        doc.setFontSize(6); doc.text(pdfSafe(instEspec,44), p_c2x+p_c2w/2, p_sigY+15, {align:'center'});
+      doc.text(instCredencialCpf, p_c2x+p_c2w/2, p_sigY+10, {align:'center'});
+      // Formação + Especialidade combinadas numa linha só (espaço já é
+      // apertado nesta área) — a pedido do Alisson, 2026-08.
+      const instDescProf = [instFormacao, instEspec].filter(Boolean).join(' — ');
+      if (instDescProf) {
+        doc.setFontSize(6); doc.text(pdfSafe(instDescProf,50), p_c2x+p_c2w/2, p_sigY+15, {align:'center'});
       }
     } else {
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
@@ -14649,7 +14721,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -14671,8 +14743,18 @@ async function gerarCertificadoColetivo(turmaId) {
     const instrutor     = ag?.usuarios?.nome || '';
     const instConselho  = ag?.usuarios?.conselho_classe||'';
     const instSigla     = ag?.usuarios?.sigla_conselho||'';
+    const instUf        = ag?.usuarios?.uf_registro||'';
     const instEspec     = ag?.usuarios?.especialidade||'';
-    const instCredencial = instConselho ? pdfSafe(`${instSigla?instSigla+' ':''} ${instConselho}`.trim()) : '';
+    const instFormacao  = ag?.usuarios?.formacao||'';
+    const instCpf       = ag?.usuarios?.cpf||'';
+    // 2026-08, a pedido do Alisson: UF entrou como campo próprio (antes só
+    // dava pra embutir no texto livre de "Registro") — junta na sigla
+    // (ex.: "CREA-SC") em vez de ficar solta.
+    const instCredencial = instConselho ? pdfSafe(`${instSigla?instSigla+(instUf?'-'+instUf:'')+' ':''}${instConselho}`.trim()) : '';
+    // CPF do instrutor no certificado — a pedido do Alisson (2026-08-06),
+    // sempre junto da credencial (ou sozinho, se não houver credencial).
+    const instCpfTxt = instCpf ? `CPF ${instCpf}` : '';
+    const instCredencialCpf = [instCredencial, instCpfTxt].filter(Boolean).join(' · ');
     // Só entram no certificado coletivo os participantes com presença em
     // 100% dos encontros — quem faltou em algum dia não é considerado
     // concluinte e fica de fora da lista impressa no documento.
@@ -14743,9 +14825,11 @@ async function gerarCertificadoColetivo(turmaId) {
         periodoTexto: fmtPeriodoRealizacaoPDF(t.sessoes),
         nParticipantes: participantes.length,
         instrutorNome: s(instrutor, 40),
-        instrutorCargo: undefined,
+        // Mesmo reaproveitamento do slot "Cargo" -> Formação, e credencial
+        // com CPF junto — ver comentário equivalente em gerarCertificadoIndividual.
+        instrutorCargo: s(instFormacao, 50),
         instrutorEspec: s(instEspec, 50),
-        instrutorCredencial: instCredencial,
+        instrutorCredencial: instCredencialCpf,
         nrNum,
         codigoShort,
         rodape: t.organizacoes?.cert_texto_rodape || undefined,
@@ -14831,8 +14915,8 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.setFontSize(8); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
     doc.text(s(instrutor,40), W/2, fy+17, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    if (instCredencial) {
-      doc.text(instCredencial, W/2, fy+22, {align:'center'});
+    if (instCredencialCpf) {
+      doc.text(instCredencialCpf, W/2, fy+22, {align:'center'});
     } else {
       doc.text('Instrutor Responsavel', W/2, fy+22, {align:'center'});
     }
@@ -14957,11 +15041,12 @@ async function gerarCertificadoColetivo(turmaId) {
     desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, p_c1x+p_c1w/2, p_sigYc, 26, 9);
     doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
     doc.text(s(instrutor,28), p_c1x+p_c1w/2, p_sigYc+5, {align:'center'});
-    if (instCredencial) {
+    if (instCredencialCpf) {
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-      doc.text(instCredencial, p_c1x+p_c1w/2, p_sigYc+10, {align:'center'});
-      if (instEspec) {
-        doc.setFontSize(6); doc.text(pdfSafe(instEspec,40), p_c1x+p_c1w/2, p_sigYc+15, {align:'center'});
+      doc.text(instCredencialCpf, p_c1x+p_c1w/2, p_sigYc+10, {align:'center'});
+      const instDescProf = [instFormacao, instEspec].filter(Boolean).join(' — ');
+      if (instDescProf) {
+        doc.setFontSize(6); doc.text(pdfSafe(instDescProf,50), p_c1x+p_c1w/2, p_sigYc+15, {align:'center'});
       }
     } else {
       doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
