@@ -8527,8 +8527,15 @@ async function salvarTurma() {
       } catch(e2) { console.warn('Não foi possível vincular a pendência à turma criada:', e2.message); }
     }
     window._turmaOrigemConfId = null;
-    fecharModal(); showToast(_modalCurrentId?'Turma atualizada!':'Turma criada!','success');
-    await renderTurmas();
+    const eraCriacao = !_modalCurrentId;
+    fecharModal(); showToast(eraCriacao?'Turma criada!':'Turma atualizada!','success');
+    // 2026-08, a pedido do Alisson: ao CRIAR uma turma nova, abre direto a
+    // tela da turma (agendamento + participantes) em vez de voltar pra lista
+    // e exigir mais um clique no card recém-criado — elimina um passo do
+    // fluxo. Em edição, mantém o comportamento de sempre (volta pra lista),
+    // já que editar normalmente é feito a partir de lá.
+    if (eraCriacao) { await verTurma(salva[0].id); }
+    else { await renderTurmas(); }
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
 
