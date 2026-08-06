@@ -12827,50 +12827,69 @@ const _avBase  = (topMM, sizePt) => topMM + (sizePt/2.83465) * 0.75;
 // dentro do mesmo texto corrido (ex.: nome da empresa + CNPJ em destaque no
 // meio de uma frase, 2026-08 — a pedido do Alisson, no lugar do nome solto
 // em Great Vibes na capa do coletivo, que destoava do resto do parágrafo).
-// jsPDF não tem rich text nativo: quebra o texto em palavras, mede cada uma
-// na fonte certa (normal/negrito) e monta as linhas manualmente, centralizando
-// cada linha. Retorna a posição Y (baseline) logo após a última linha.
+// jsPDF não tem rich text nativo. 2026-08, 2ª versão: a 1ª versão montava
+// a quebra de linha "na mão", palavra por palavra, e ainda saiu colado
+// ("AVANTESegcertifica") — sinal de que medir string+espaço isolado não é
+// confiável nesse ambiente. Esta versão evita esse ponto frágil por completo:
+// usa doc.splitTextToSize (a mesma função já usada em todo o resto do app
+// pra quebrar linha, testada e confiável) sobre o texto puro pra decidir
+// ONDE quebrar, e só depois localiza os trechos em negrito dentro de cada
+// linha já quebrada, medindo sempre trechos de texto normais (nunca um
+// espaço isolado) pra posicionar. Retorna a posição Y (baseline) logo após
+// a última linha.
 function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineHeight, fontFamily, corNormal, corDestaque) {
-  const medir = (texto, negrito) => {
-    doc.setFont(fontFamily, negrito ? 'bold' : 'normal');
-    doc.setFontSize(fontSize);
-    return doc.getTextWidth(texto);
-  };
-  // Cada token já leva o espaço colado no final (2026-08: antes media um
-  // " " isolado à parte e somava a largura na hora de desenhar — em algumas
-  // combinações de fonte/versão do jsPDF isso mede como 0 e as palavras
-  // saem coladas, ex. "AVANTESegcertifica". Medindo/desenhando a palavra
-  // JUNTO com o espaço (uma única string, um único doc.text) o jsPDF cuida
-  // do espaçamento internamente e não depende de medir espaço em branco sozinho.
-  const tokens = [];
-  segmentos.forEach((seg, si) => {
-    const palavrasSeg = pdfSafe(seg.texto, 200).split(' ').filter(Boolean);
-    palavrasSeg.forEach((w, wi) => {
-      const ultimoToken = si === segmentos.length-1 && wi === palavrasSeg.length-1;
-      tokens.push({ texto: ultimoToken ? w : w+' ', negrito: seg.negrito });
+  doc.setFont(fontFamily, 'normal');
+  doc.setFontSize(fontSize);
+  const partes = segmentos.map(s => pdfSafe(s.texto, 200));
+  const textoPuro = partes.join(' ');
+  const linhas = doc.splitTextToSize(textoPuro, maxWidth);
+
+  // Intervalos [inicio,fim) de textoPuro que pertencem a um segmento em negrito
+  const intervalosNegrito = [];
+  { let pos = 0;
+    segmentos.forEach((s, i) => {
+      const t = partes[i];
+      if (s.negrito) intervalosNegrito.push([pos, pos + t.length]);
+      pos += t.length + 1; // +1 = espaço que junta os segmentos no join(' ')
     });
-  });
-  const linhas = [];
-  let linhaAtual = [], larguraAtual = 0;
-  tokens.forEach(t => {
-    const largT = medir(t.texto, t.negrito);
-    if (larguraAtual + largT > maxWidth && linhaAtual.length) {
-      linhas.push({ tokens: linhaAtual, largura: larguraAtual });
-      linhaAtual = [t]; larguraAtual = largT;
-    } else {
-      linhaAtual.push(t); larguraAtual += largT;
-    }
-  });
-  if (linhaAtual.length) linhas.push({ tokens: linhaAtual, largura: larguraAtual });
+  }
+  const ehNegrito = (posGlobal) => intervalosNegrito.some(([a,b]) => posGlobal>=a && posGlobal<b);
+
   let y = yBase0;
-  linhas.forEach(linha => {
-    let x = cx - linha.largura/2;
-    linha.tokens.forEach(t => {
-      const largT = medir(t.texto, t.negrito);
-      doc.setTextColor(...(t.negrito ? corDestaque : corNormal));
-      doc.text(t.texto, x, y);
-      x += largT;
+  let cursor = 0;
+  linhas.forEach(linhaTexto => {
+    const inicio = textoPuro.indexOf(linhaTexto, cursor);
+    const base = inicio >= 0 ? inicio : cursor;
+
+    // separa a linha em trechos consecutivos com o mesmo negrito
+    const runs = [];
+    let i = 0;
+    while (i < linhaTexto.length) {
+      const neg = ehNegrito(base + i);
+      let j = i;
+      while (j < linhaTexto.length && ehNegrito(base + j) === neg) j++;
+      runs.push({ texto: linhaTexto.slice(i, j), negrito: neg });
+      i = j;
+    }
+
+    // largura total (pra centralizar) — mede cada trecho já com sua fonte
+    let largura = 0;
+    runs.forEach(r => {
+      doc.setFont(fontFamily, r.negrito ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      largura += doc.getTextWidth(r.texto);
     });
+
+    let x = cx - largura/2;
+    runs.forEach(r => {
+      doc.setFont(fontFamily, r.negrito ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      doc.setTextColor(...(r.negrito ? corDestaque : corNormal));
+      doc.text(r.texto, x, y);
+      x += doc.getTextWidth(r.texto);
+    });
+
+    cursor = base + linhaTexto.length;
     y += lineHeight;
   });
   return y;
@@ -13087,7 +13106,10 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // curso, dentro da mesma frase (a fonte Great Vibes segue exclusiva do
   // nome do aluno no certificado individual).
   const fraseSize = _avPT_H(0.026,H);
-  const fraseY0 = _avBase(_avMM_H(0.300,H), fraseSize);
+  // 0.300H -> 0.318H (4ª rodada): o título "CERTIFICADO COLETIVO", que faz
+  // parte do PNG de fundo, desceu um pouco (a pedido do Alisson); a frase
+  // acompanha pra manter o mesmo respiro visual entre título e texto.
+  const fraseY0 = _avBase(_avMM_H(0.318,H), fraseSize);
   const yAposFrase = _avParagrafoMisto(doc, [
     { texto: 'A AVANTESeg certifica que a empresa', negrito: false },
     { texto: `${campos.empresa},`, negrito: true },
@@ -13109,7 +13131,12 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
 
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.023,H)); doc.setTextColor(...BLACK);
   const linhasDesc = doc.splitTextToSize(pdfSafe(campos.descricao,260), maxW*0.78);
-  let yDesc = Math.max(_avMM_H(0.555,H), yCurso+_avMM_H(0.015,H));
+  // 2026-08 (4ª rodada): mesmo problema do piso do yCurso — o piso fixo de
+  // 0.555H era calibrado pro layout antigo e, com o título do curso agora
+  // começando mais cedo, criava um vão grande e constante antes da descrição
+  // (reportado no print como "espaçamento excessivo"). Removido; a descrição
+  // agora começa logo depois do título do curso, com respiro fixo pequeno.
+  let yDesc = yCurso + _avMM_H(0.015,H);
   const lhDesc = _avMM_H(0.036,H);
   linhasDesc.forEach(ln => { doc.text(ln, cx, _avBase(yDesc, _avPT_H(0.023,H)), {align:'center'}); yDesc += lhDesc; });
 
