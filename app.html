@@ -12635,6 +12635,7 @@ function pdfSafe(v, maxLen) {
     .replace(/[\u201C\u201D]/g, '"')      // aspas duplas curvas
     .replace(/\u2026/g, '...')            // elipse
     .replace(/[\u2022\u25CF]/g, '-')      // marcador de lista (bullet)
+    .replace(/\u00B7/g, '-')              // ponto medio (separador de credencial+CPF do instrutor) \u2014 mesma classe do bug do indicador ordinal abaixo: nao e letra acentuada, virava "?" no PDF
     .replace(/\u00A0/g, ' ')              // espaço não separável
     .replace(/º/g, 'o').replace(/ª/g, 'a') // indicador ordinal (1º,
     // nº, 2ª) — não é letra acentuada (NFD não separa) nem caía nas trocas
@@ -13154,10 +13155,27 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.text(nome, cxA, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
   doc.text(pdfSafe(campos.instrutorNome,40), cxI, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
 
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...GRAY);
-  if (campos.instrutorCargo) doc.text(pdfSafe(campos.instrutorCargo,50), cxI, _avBase(sigY+_avMM_H(0.036,H), _avPT_H(0.021,H)), {align:'center'});
-  if (campos.instrutorEspec) doc.text(pdfSafe(campos.instrutorEspec,50), cxI, _avBase(sigY+_avMM_H(0.058,H), _avPT_H(0.021,H)), {align:'center'});
-  if (campos.instrutorCredencial) doc.text(pdfSafe(campos.instrutorCredencial,50), cxI, _avBase(sigY+_avMM_H(0.080,H), _avPT_H(0.021,H)), {align:'center'});
+  // Identificação profissional do instrutor — empilhada dinamicamente
+  // (2026-08, a pedido do Alisson: reportou hierarquia/espaçamento ruim).
+  // Antes eram 3 linhas em offsets fixos (cargo/especialidade/credencial);
+  // quando um campo do meio ficava vazio (comum — nem todo instrutor tem
+  // os 3 preenchidos), a linha seguinte não subia pra preencher o vão,
+  // deixando um buraco no meio do bloco. Agora: formação+especialidade
+  // viram uma única linha (times italic, um pouco maior — descrição),
+  // credencial+CPF vira uma segunda linha em versalete pequeno (helvetica,
+  // cinza mais claro — como uma legenda/rodapé), e só desenha as linhas
+  // que existem, sempre coladas uma na outra.
+  let _yInstrI = sigY + _avMM_H(0.037,H);
+  const _descProfI = [campos.instrutorCargo, campos.instrutorEspec].filter(Boolean).join(' — ');
+  if (_descProfI) {
+    doc.setFont('times','italic'); doc.setFontSize(_avPT_H(0.022,H)); doc.setTextColor(...GRAY);
+    doc.text(pdfSafe(_descProfI,60), cxI, _avBase(_yInstrI, _avPT_H(0.022,H)), {align:'center'});
+    _yInstrI += _avMM_H(0.026,H);
+  }
+  if (campos.instrutorCredencial) {
+    doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.016,H)); doc.setTextColor(135,135,135);
+    doc.text(pdfSafe(campos.instrutorCredencial,60).toUpperCase(), cxI, _avBase(_yInstrI, _avPT_H(0.016,H)), {align:'center'});
+  }
 
   // selo NR — desenhado 100% em código, canto superior direito (2026-08).
   // Antes dependia de um anel fixo no PNG de fundo (canto inferior esquerdo,
@@ -13349,10 +13367,19 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutorNome,40), cx, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...GRAY);
-  if (campos.instrutorCargo) doc.text(pdfSafe(campos.instrutorCargo,50), cx, _avBase(sigY+_avMM_H(0.036,H), _avPT_H(0.021,H)), {align:'center'});
-  if (campos.instrutorEspec) doc.text(pdfSafe(campos.instrutorEspec,50), cx, _avBase(sigY+_avMM_H(0.058,H), _avPT_H(0.021,H)), {align:'center'});
-  if (campos.instrutorCredencial) doc.text(pdfSafe(campos.instrutorCredencial,50), cx, _avBase(sigY+_avMM_H(0.080,H), _avPT_H(0.021,H)), {align:'center'});
+  // Identificação profissional do instrutor — mesmo tratamento dinâmico do
+  // certificado individual (ver comentário na função irmã, desenharCapaIndividualAvanteseg).
+  let _yInstrC = sigY + _avMM_H(0.037,H);
+  const _descProfC = [campos.instrutorCargo, campos.instrutorEspec].filter(Boolean).join(' — ');
+  if (_descProfC) {
+    doc.setFont('times','italic'); doc.setFontSize(_avPT_H(0.022,H)); doc.setTextColor(...GRAY);
+    doc.text(pdfSafe(_descProfC,60), cx, _avBase(_yInstrC, _avPT_H(0.022,H)), {align:'center'});
+    _yInstrC += _avMM_H(0.026,H);
+  }
+  if (campos.instrutorCredencial) {
+    doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.016,H)); doc.setTextColor(135,135,135);
+    doc.text(pdfSafe(campos.instrutorCredencial,60).toUpperCase(), cx, _avBase(_yInstrC, _avPT_H(0.016,H)), {align:'center'});
+  }
 
   // Selo NR — mesmo tratamento do certificado individual (círculo desenhado
   // em código, canto superior direito; ver comentário na função irmã).
@@ -13625,7 +13652,11 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutor,40), cxS, sigY+3.5, {align:'center'});
   doc.setFont('times','normal'); doc.setFontSize(7); doc.setTextColor(...GRAY);
-  doc.text(pdfSafe(campos.instrutorCargo ? `${campos.instrutorCargo} — Instrutor Responsável` : 'Instrutor Responsável',70), cxS, sigY+7.2, {align:'center'});
+  // 2026-08: campos.instrutorCargo aqui já vem pronto (formação/especialidade
+  // + credencial/CPF combinados numa linha única, montados em gerarListaPresenca)
+  // — antes vinha sempre undefined, então a ficha nunca mostrava mais do que
+  // o nome do instrutor, mesmo com o cadastro completo.
+  doc.text(pdfSafe(campos.instrutorCargo || 'Instrutor Responsável',80), cxS, sigY+7.2, {align:'center'});
 
   const fy = H-mg-4-14;
   doc.setFillColor(...GOLD_RIBBON); doc.rect(mg, fy-1.6, W-mg*2, 1.6, 'F');
@@ -13947,7 +13978,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
   try {
     if (!sessaoId) throw new Error('Encontro não informado — não é possível gerar a ficha de presença.');
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path,conselho_classe,sigla_conselho,uf_registro,especialidade,formacao,cpf)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — a ficha de presença ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -13974,6 +14005,25 @@ async function gerarListaPresenca(turmaId, sessaoId) {
 
     const ag = sessoesOrdenadas[indiceEncontro];
     const instrutor = pdfSafe(ag?.usuarios?.nome||'-');
+    // Dados profissionais do instrutor na ficha de presença (2026-08, a
+    // pedido do Alisson) — antes a query nem buscava essas colunas, então
+    // o rodapé sempre caía no texto genérico "Instrutor Responsavel"
+    // mesmo com o cadastro do instrutor completo. Mesma lógica de
+    // gerarCertificadoIndividual/gerarCertificadoColetivo.
+    const instConselho = ag?.usuarios?.conselho_classe||'';
+    const instSigla     = ag?.usuarios?.sigla_conselho||'';
+    const instUf        = ag?.usuarios?.uf_registro||'';
+    const instEspec     = ag?.usuarios?.especialidade||'';
+    const instFormacao  = ag?.usuarios?.formacao||'';
+    const instCpf       = ag?.usuarios?.cpf||'';
+    const instCredencial = instConselho ? pdfSafe(`${instSigla?instSigla+(instUf?'-'+instUf:'')+' ':''}${instConselho}`.trim()) : '';
+    const instCpfTxt = instCpf ? `CPF ${instCpf}` : '';
+    const instCredencialCpf = [instCredencial, instCpfTxt].filter(Boolean).join(' · ');
+    // Linha única (o espaço do rodapé da ficha só comporta uma linha de
+    // legenda sob o nome do instrutor, diferente do certificado) juntando
+    // formação/especialidade + credencial/CPF, com fallback pro texto
+    // genérico quando o instrutor não tem nenhum desses dados cadastrados.
+    const instDescCompletaFicha = [[instFormacao, instEspec].filter(Boolean).join(' — '), instCredencialCpf].filter(Boolean).join('  |  ');
     const dataAula = ag?.data ? fmtDataExtensoPDF(ag.data) : '-';
     const local = pdfSafe(ag?.local||t.local||'-');
     const infoEncontro = sessoesOrdenadas.length > 1 ? `Encontro ${indiceEncontro+1} de ${sessoesOrdenadas.length}` : '';
@@ -14051,7 +14101,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
           cnpjCliente: t.clientes?.cnpj||'-',
           protocolo,
           participantes: fatiaP,
-          instrutorCargo: undefined,
+          instrutorCargo: instDescCompletaFicha,
           logoAvantesegDataUrl: _logoAvantesegFicha?.dataUrl,
         }, W, H);
       }
@@ -14208,7 +14258,10 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','bold');
     doc.text(instrutor, W/2, sigLineY+4, {align:'center'});
     doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-    doc.text('Instrutor Responsavel', W/2, sigLineY+7.5, {align:'center'});
+    // 2026-08: mostra formação/especialidade + credencial/CPF do instrutor
+    // quando cadastrados (instDescCompletaFicha, montado no início da
+    // função) — antes era sempre o texto genérico, mesmo com o cadastro completo.
+    doc.text(pdfSafe(instDescCompletaFicha || 'Instrutor Responsavel',80), W/2, sigLineY+7.5, {align:'center'});
 
     doc.setFillColor(...NAVY);
     doc.rect(mg, fy, W-mg*2, 14, 'F');
