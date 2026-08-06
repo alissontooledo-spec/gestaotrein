@@ -12977,14 +12977,22 @@ function _temaDocumentoOrg(org) {
 
 const AVANTESEG_ORG_ID = 'fa9bff9d-5c75-415c-86b2-feeaaf43fe5c'; // AVANTESEG CURSOS TREINAMENTOS CORPORATIVOS E COMERCIO LTDA
 // 2026-08-06: a liberação temporária "AVANTESEG_ORG_ID_TESTE" (permitia a
-// Toledo SST também disparar o modelo Avanteseg, usada só para testar antes
-// do go-live) foi removida daqui e dos 3 pontos que a usavam. Era, por
-// desenho, um segundo organização_id capaz de acionar o modelo/arte
-// exclusivos da Avanteseg — a causa raiz do risco de vazamento de template
-// entre organizações relatado nesta correção. A partir de agora só o ID real
-// da Avanteseg (acima) aciona esse modelo; nenhuma outra organização pode
-// fazê-lo, em código, independentemente do que estiver gravado em
-// organizacoes.cert_modelo_base_id.
+// Toledo SST também disparar o modelo Avanteseg) foi removida mais cedo
+// nesta mesma data como correção de causa raiz de um bug de isolamento
+// multi-tenant (ver changelog). Poucas horas depois, a pedido explícito do
+// Alisson, foi REINTRODUZIDA de propósito — os testes de go-live da
+// Avanteseg vão rodar na base da Toledo SST, e o pedido é que os documentos
+// gerados lá saiam com o layout/template EXATO da Avanteseg (as funções de
+// desenho exclusivas dela, não o sistema genérico de "arte personalizada").
+// Diferente da versão anterior, agora é uma lista fechada e nomeada
+// (ORGS_TESTE_MODELO_AVANTESEG), para deixar claro que é excepcional e
+// deliberada, não um esquecimento.
+// AÇÃO OBRIGATÓRIA: remover esta lista (voltar a checar só AVANTESEG_ORG_ID
+// nos 3 pontos que a usam) assim que os testes na Toledo SST terminarem —
+// avisar quando isso acontecer.
+const ORGS_TESTE_MODELO_AVANTESEG = [
+  '51b8f758-39af-4612-bef7-fdd1f225a950', // TOLEDO SST — ambiente de teste do go-live Avanteseg (2026-08-06)
+];
 // Versão dos assets de imagem da Avanteseg (2026-08, 4ª rodada de ajustes de
 // layout) — anexada como "?v=N" nas URLs dos PNGs de fundo/logo abaixo só pra
 // forçar o navegador a buscar o arquivo novo em vez de usar uma cópia em
@@ -14012,7 +14020,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     const indiceEncontro = sessoesOrdenadas.findIndex(s => s.id === sessaoId);
     if (indiceEncontro === -1) throw new Error('Este encontro não foi encontrado nesta turma.');
 
-    const _isAvanteseg = t.organizacoes?.id === AVANTESEG_ORG_ID && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
+    const _isAvanteseg = (t.organizacoes?.id === AVANTESEG_ORG_ID || ORGS_TESTE_MODELO_AVANTESEG.includes(t.organizacoes?.id)) && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4', compress:true});
     const W = 210, H = 297;
@@ -14470,7 +14478,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
     const nomePart = s(col.nome,60);
-    const _isAvanteseg = t.organizacoes?.id === AVANTESEG_ORG_ID && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
+    const _isAvanteseg = (t.organizacoes?.id === AVANTESEG_ORG_ID || ORGS_TESTE_MODELO_AVANTESEG.includes(t.organizacoes?.id)) && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
     const _arteCapa = _arteCertificadoOrg(t.organizacoes);
     const _arteCapaImg = _arteCapa ? await carregarArteFundoOrgPDF(_arteCapa.url) : null;
     if (_isAvanteseg) {
@@ -14899,7 +14907,7 @@ async function gerarCertificadoColetivo(turmaId) {
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
     const nomeEmpSafe0 = s(nomeEmp,45);
-    const _isAvanteseg = t.organizacoes?.id === AVANTESEG_ORG_ID && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
+    const _isAvanteseg = (t.organizacoes?.id === AVANTESEG_ORG_ID || ORGS_TESTE_MODELO_AVANTESEG.includes(t.organizacoes?.id)) && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
     const _arteCapaCol = _arteCertificadoOrg(t.organizacoes);
     const _arteCapaColImg = _arteCapaCol ? await carregarArteFundoOrgPDF(_arteCapaCol.url) : null;
     if (_isAvanteseg) {
