@@ -12837,17 +12837,20 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
     _avBase(_avMM_H(0.335,H), _avPT_H(0.030,H)), {align:'center'});
 
   // nome do aluno — Great Vibes, encolhe se for muito longo (mesma lógica do protótipo)
+  // Tamanho reduzido (2026-08): 0.135/0.15H deixava o nome desproporcional
+  // (~80-90pt), dominando a página. 0.065/0.075H aproxima o peso visual de
+  // uma assinatura em destaque, sem sufocar o resto do layout.
   _registrarFonteAvanteseg(doc);
   doc.setFont('GreatVibes','normal'); doc.setTextColor(...GOLD);
   const nome = pdfSafe(campos.nome, 60);
-  let nomeSize = _avPT_H(0.135,H);
+  let nomeSize = _avPT_H(0.065,H);
   doc.setFontSize(nomeSize);
   let nomeW = doc.getTextWidth(nome);
   const nomeMaxW = maxW*0.9;
   while (nomeW > nomeMaxW && nomeSize > 12) { nomeSize -= 1.5; doc.setFontSize(nomeSize); nomeW = doc.getTextWidth(nome); }
   if (nomeW < maxW*0.55) {
-    // nome curto: usa fonte maior, até o teto de 0.15H (igual ao protótipo)
-    let nomeSize2 = _avPT_H(0.15,H); doc.setFontSize(nomeSize2); let nomeW2 = doc.getTextWidth(nome);
+    // nome curto: usa fonte maior, até o teto de 0.075H
+    let nomeSize2 = _avPT_H(0.075,H); doc.setFontSize(nomeSize2); let nomeW2 = doc.getTextWidth(nome);
     const nomeMaxW2 = maxW*0.75;
     while (nomeW2 > nomeMaxW2 && nomeSize2 > 12) { nomeSize2 -= 1.5; doc.setFontSize(nomeSize2); nomeW2 = doc.getTextWidth(nome); }
     nomeSize = nomeSize2;
@@ -12883,12 +12886,21 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   if (campos.instrutorEspec) doc.text(pdfSafe(campos.instrutorEspec,50), cxI, _avBase(sigY+_avMM_H(0.058,H), _avPT_H(0.021,H)), {align:'center'});
   if (campos.instrutorCredencial) doc.text(pdfSafe(campos.instrutorCredencial,50), cxI, _avBase(sigY+_avMM_H(0.080,H), _avPT_H(0.021,H)), {align:'center'});
 
-  // selo NR — o anel já está no PNG de fundo (canto inferior esquerdo); aqui só o número
+  // selo NR — desenhado 100% em código, canto superior direito (2026-08).
+  // Antes dependia de um anel fixo no PNG de fundo (canto inferior esquerdo,
+  // removido dos assets bg-avanteseg-capa-*.png) e só desenhava o texto por
+  // cima dele; se o curso não tivesse "NR-XX" no nome (ex.: "Curso de
+  // Manuseio de Produtos Quimicos", cuja NR só aparece na descrição), o anel
+  // ficava vazio. Agora o selo inteiro (círculo + texto) só existe quando
+  // nrNum é encontrado (ver nrMatch, que agora também busca na descrição).
   if (campos.nrNum) {
-    const cxNR = _avMM_W(0.115,W), cyNR = _avMM_H(0.775,H);
+    const cxNR = _avMM_W(0.855,W), cyNR = _avMM_H(0.135,H), rNR = 10;
+    doc.setFillColor(...GOLD); doc.circle(cxNR, cyNR, rNR, 'F');
+    doc.setDrawColor(...GREEN_DARK); doc.setLineWidth(0.7); doc.circle(cxNR, cyNR, rNR, 'S');
+    doc.setDrawColor(255,255,255); doc.setLineWidth(0.35); doc.circle(cxNR, cyNR, rNR*0.72, 'S');
     doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
-    doc.setFontSize(11); doc.text('NR', cxNR, cyNR-2.2, {align:'center'});
-    doc.setFontSize(23); doc.text(pdfSafe(String(campos.nrNum),4), cxNR, cyNR+4.2, {align:'center'});
+    doc.setFontSize(9); doc.text('NR', cxNR, cyNR-2.6, {align:'center'});
+    doc.setFontSize(17); doc.text(pdfSafe(String(campos.nrNum),4), cxNR, cyNR+4.4, {align:'center'});
   }
 
   // código de validação + rodapé personalizado
@@ -12932,25 +12944,42 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
   linhasCurso.forEach(ln => { doc.text(ln, cx, _avBase(y,_avPT_H(0.044,H)), {align:'center'}); y += lhCurso; });
   y += _avMM_H(0.035,H);
 
-  // coluna esquerda (empresa/aluno/cargo/período/válido até) e direita (CPF/CNPJ/CH)
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
-  const linhasEsq = [`Empresa: ${campos.empresa}`, `Aluno: ${campos.nome}`];
-  if (campos.cargo) linhasEsq.push(`Cargo: ${campos.cargo}`);
-  linhasEsq.push(campos.periodoTexto, `Válido até: ${campos.validadeTexto}.`);
-  const linhasDir = [`CPF: ${campos.cpf || 'não informado'}`, `CNPJ: ${campos.cnpjEmpresa||'-'}`, `CH: ${campos.ch}`];
+  // coluna esquerda (empresa/aluno/cargo/período/válido até) e direita
+  // (CPF/CNPJ/CH) — 2026-08: antes eram frases corridas em times normal
+  // ("Empresa: Toledo SST"), estilo diferente do resto do sistema Avanteseg
+  // (verso do coletivo e ficha de presença já usavam rótulo em versalete +
+  // valor em destaque). Padronizado aqui para o mesmo sistema: rótulo
+  // helvetica bold pequeno/cinza, valor times bold preto.
+  const _campoAv = (x, yPos, label, valor) => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.0135,H)); doc.setTextColor(140,158,148);
+    doc.text(label.toUpperCase(), x, _avBase(yPos, _avPT_H(0.0135,H)));
+    doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...BLACK);
+    doc.text(pdfSafe(String(valor||'-'),70), x, _avBase(yPos+_avMM_H(0.021,H), _avPT_H(0.021,H)));
+  };
+  const periodoValor = pdfSafe(campos.periodoTexto,70).replace(/^Realizado em\s*/i,'');
+  const camposEsq = [['Empresa', campos.empresa], ['Aluno', campos.nome]];
+  if (campos.cargo) camposEsq.push(['Cargo', campos.cargo]);
+  camposEsq.push(['Realizado em', periodoValor], ['Válido até', campos.validadeTexto]);
+  const camposDir = [['CPF', campos.cpf || 'não informado'], ['CNPJ', campos.cnpjEmpresa||'-'], ['CH', campos.ch]];
   let yy = y;
-  linhasEsq.forEach(ln => { doc.text(pdfSafe(ln,70), ml, _avBase(yy,_avPT_H(0.024,H))); yy += _avMM_H(0.033,H); });
+  camposEsq.forEach(([label,valor]) => { _campoAv(ml, yy, label, valor); yy += _avMM_H(0.043,H); });
   let yy2 = y;
-  linhasDir.forEach(ln => { doc.text(pdfSafe('| '+ln,70), cx+_avMM_W(0.05,W), _avBase(yy2,_avPT_H(0.024,H))); yy2 += _avMM_H(0.033,H); });
-  y = Math.max(yy,yy2) + _avMM_H(0.025,H);
+  camposDir.forEach(([label,valor]) => { _campoAv(cx+_avMM_W(0.05,W), yy2, label, valor); yy2 += _avMM_H(0.043,H); });
+  y = Math.max(yy,yy2) + _avMM_H(0.015,H);
 
   // caixa CONTEÚDO
   const boxY0 = y, boxY1 = _avMM_H(0.80,H);
   doc.setDrawColor(...GREEN_BRIGHT); doc.setLineWidth(0.6);
   doc.rect(ml, boxY0, mr-ml, boxY1-boxY0);
-  doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.028,H)); doc.setTextColor(...BLACK);
-  doc.text('CONTEÚDO', ml+_avMM_W(0.02,W), _avBase(boxY0+_avMM_H(0.02,H), _avPT_H(0.028,H)));
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.019,H));
+  // Título no mesmo estilo (helvetica bold + fio dourado) já usado nos
+  // rótulos de seção do verso do certificado coletivo — antes era times
+  // bold simples, destoando do resto da identidade Avanteseg.
+  const _contTitX = ml+_avMM_W(0.02,W), _contTitY = boxY0+_avMM_H(0.02,H);
+  doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.020,H)); doc.setTextColor(...GREEN_DARK);
+  doc.text('CONTEÚDO PROGRAMÁTICO', _contTitX, _avBase(_contTitY, _avPT_H(0.020,H)));
+  doc.setDrawColor(...GOLD); doc.setLineWidth(0.5);
+  doc.line(_contTitX, _contTitY+_avMM_H(0.010,H), _contTitX+18, _contTitY+_avMM_H(0.010,H));
+  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.019,H)); doc.setTextColor(...BLACK);
   let iy = boxY0+_avMM_H(0.075,H);
   (campos.itensConteudo||[]).forEach((it,idx) => {
     doc.text(pdfSafe(`${idx+1}. ${it}`,110), ml+_avMM_W(0.035,W), _avBase(iy,_avPT_H(0.019,H)));
@@ -12982,14 +13011,16 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.text(pdfSafe('A AVANTESeg certifica que a empresa abaixo capacitou sua equipe no curso de',100), cx,
     _avBase(_avMM_H(0.278,H), _avPT_H(0.024,H)), {align:'center'});
 
+  // Tamanho reduzido (2026-08), mesmo ajuste do certificado individual —
+  // 0.115/0.13H (~68-77pt) ficava desproporcional.
   _registrarFonteAvanteseg(doc);
   doc.setFont('GreatVibes','normal'); doc.setTextColor(...GOLD);
   const empresa = pdfSafe(campos.empresa,60);
-  let empSize = _avPT_H(0.115,H); doc.setFontSize(empSize); let empW = doc.getTextWidth(empresa);
+  let empSize = _avPT_H(0.058,H); doc.setFontSize(empSize); let empW = doc.getTextWidth(empresa);
   const empMaxW = maxW*0.85;
   while (empW > empMaxW && empSize > 12) { empSize -= 1.5; doc.setFontSize(empSize); empW = doc.getTextWidth(empresa); }
   if (empW < maxW*0.55) {
-    let empSize2 = _avPT_H(0.13,H); doc.setFontSize(empSize2); let empW2 = doc.getTextWidth(empresa);
+    let empSize2 = _avPT_H(0.068,H); doc.setFontSize(empSize2); let empW2 = doc.getTextWidth(empresa);
     const empMaxW2 = maxW*0.7;
     while (empW2 > empMaxW2 && empSize2 > 12) { empSize2 -= 1.5; doc.setFontSize(empSize2); empW2 = doc.getTextWidth(empresa); }
     empSize = empSize2;
@@ -13010,9 +13041,12 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   const lhDesc = _avMM_H(0.036,H);
   linhasDesc.forEach(ln => { doc.text(ln, cx, _avBase(yDesc, _avPT_H(0.023,H)), {align:'center'}); yDesc += lhDesc; });
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.0165,H)); doc.setTextColor(...GREEN_DARK);
+  // times bold (era helvetica bold) — era a única linha em fonte sans na
+  // capa, destoando do resto (subtítulo, CNPJ, curso e descrição, todos em
+  // times); padronizado para o mesmo family da capa.
+  doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.0175,H)); doc.setTextColor(...GREEN_DARK);
   const fatos = `Realizado em ${campos.periodoTexto}   |   Carga horária: ${campos.ch}   |   ${campos.nParticipantes} participantes`;
-  doc.text(pdfSafe(fatos,120), cx, _avBase(yDesc+_avMM_H(0.020,H), _avPT_H(0.0165,H)), {align:'center'});
+  doc.text(pdfSafe(fatos,120), cx, _avBase(yDesc+_avMM_H(0.020,H), _avPT_H(0.0175,H)), {align:'center'});
 
   // assinatura — só a do instrutor (documento coletivo, sem assinatura individual)
   const zbot = _avMM_H(0.925,H);
@@ -13027,11 +13061,16 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   if (campos.instrutorEspec) doc.text(pdfSafe(campos.instrutorEspec,50), cx, _avBase(sigY+_avMM_H(0.058,H), _avPT_H(0.021,H)), {align:'center'});
   if (campos.instrutorCredencial) doc.text(pdfSafe(campos.instrutorCredencial,50), cx, _avBase(sigY+_avMM_H(0.080,H), _avPT_H(0.021,H)), {align:'center'});
 
+  // Selo NR — mesmo tratamento do certificado individual (círculo desenhado
+  // em código, canto superior direito; ver comentário na função irmã).
   if (campos.nrNum) {
-    const cxNR = _avMM_W(0.115,W), cyNR = _avMM_H(0.775,H);
+    const cxNR = _avMM_W(0.855,W), cyNR = _avMM_H(0.135,H), rNR = 10;
+    doc.setFillColor(...GOLD); doc.circle(cxNR, cyNR, rNR, 'F');
+    doc.setDrawColor(...GREEN_DARK); doc.setLineWidth(0.7); doc.circle(cxNR, cyNR, rNR, 'S');
+    doc.setDrawColor(255,255,255); doc.setLineWidth(0.35); doc.circle(cxNR, cyNR, rNR*0.72, 'S');
     doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
-    doc.setFontSize(10); doc.text('NR', cxNR, cyNR-2.0, {align:'center'});
-    doc.setFontSize(21); doc.text(pdfSafe(String(campos.nrNum),4), cxNR, cyNR+3.9, {align:'center'});
+    doc.setFontSize(9); doc.text('NR', cxNR, cyNR-2.6, {align:'center'});
+    doc.setFontSize(17); doc.text(pdfSafe(String(campos.nrNum),4), cxNR, cyNR+4.4, {align:'center'});
   }
 
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.016,H)); doc.setTextColor(...GRAY);
@@ -13159,45 +13198,60 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
 
 // ─────────────────────── FICHA DE PRESENÇA ───────────────────────
 // campos = { curso, encontroIdx, encontroTotal, data, instrutor, ch, local,
-//            cnpjCliente, protocolo, participantes (array {n,nome,cpf}),
+//            cnpjCliente, protocolo, participantes (array {n,nome,cpf,assinaturaDataUrl}),
 //            instrutorCargo, logoAvantesegDataUrl }
+// Redesenhada em 2026-08 para o mesmo nível de acabamento do modelo padrão
+// do sistema (moldura dupla + cantos em destaque, faixas sólidas de
+// cabeçalho/rodapé) — mantendo a identidade verde/dourado da Avanteseg em
+// vez do navy/âmbar padrão. A versão anterior era visualmente "solta" (sem
+// moldura, cabeçalho e rodapé só com texto) perto do modelo de referência
+// usado pelas demais organizações. Também corrige o bug em que a coluna
+// "Assinatura" nunca mostrava a assinatura do aluno mesmo quando ele
+// assinou durante a aula — a imagem (campos.participantes[].assinaturaDataUrl)
+// agora é carregada pelo chamador (gerarFichaPresenca) e embutida aqui.
 function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
-  const GREEN_DARK=[31,101,71], GREEN_BRIGHT=[0,130,70], GOLD_RIBBON=[240,177,37], BLACK=[30,30,30], GRAY=[95,95,95];
-  const ml = _avMM_W(0.055,W), mr = _avMM_W(0.945,W), top = _avMM_H(0.032,H);
+  const GREEN_DARK=[31,101,71], GREEN_BRIGHT=[0,130,70], GOLD_RIBBON=[240,177,37], BLACK=[30,30,30], GRAY=[95,95,95], WHITE=[255,255,255];
+  const mg = _avMM_W(0.057,W);
+  const ml = mg+4, mr = W-mg-4;
 
-  const lw = _avMM_W(0.125,W), lh = lw*(137/819);
-  if (campos.logoAvantesegDataUrl) { try { doc.addImage(campos.logoAvantesegDataUrl,'PNG', ml, top, lw, lh); } catch(e){} }
+  // moldura dupla externa + cantos em destaque (mesmo padrão do modelo
+  // padrão do sistema, em verde/dourado no lugar de navy/âmbar)
+  doc.setDrawColor(...GREEN_DARK); doc.setLineWidth(1.0);
+  doc.rect(mg-4, mg-4, W-(mg-4)*2, H-(mg-4)*2, 'S');
+  doc.setDrawColor(...GREEN_DARK); doc.setLineWidth(0.3);
+  doc.rect(mg-2, mg-2, W-(mg-2)*2, H-(mg-2)*2, 'S');
+  const cs = 7;
+  doc.setDrawColor(...GOLD_RIBBON); doc.setLineWidth(1.3);
+  doc.line(mg-4, mg-4+cs, mg-4, mg-4); doc.line(mg-4, mg-4, mg-4+cs, mg-4);
+  doc.line(W-mg+4-cs, mg-4, W-mg+4, mg-4); doc.line(W-mg+4, mg-4, W-mg+4, mg-4+cs);
+  doc.line(mg-4, H-mg+4-cs, mg-4, H-mg+4); doc.line(mg-4, H-mg+4, mg-4+cs, H-mg+4);
+  doc.line(W-mg+4-cs, H-mg+4, W-mg+4, H-mg+4); doc.line(W-mg+4, H-mg+4, W-mg+4, H-mg+4-cs);
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...GREEN_DARK);
-  doc.text('FICHA DE PRESENÇA', mr, top+2.4, {align:'right'});
-  doc.setFont('times','normal'); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
-  doc.text(pdfSafe(campos.protocolo,40), mr, top+6.8, {align:'right'});
+  // cabeçalho: faixa verde sólida + logo + título (equivalente ao header
+  // navy do modelo padrão)
+  doc.setFillColor(...GREEN_DARK); doc.rect(mg, mg, W-mg*2, 24, 'F');
+  doc.setFillColor(...GOLD_RIBBON); doc.rect(mg, mg+24, W-mg*2, 1.6, 'F');
+  const lw = 30, lh = lw*(137/819);
+  if (campos.logoAvantesegDataUrl) { try { doc.addImage(campos.logoAvantesegDataUrl,'PNG', ml, mg+(24-lh)/2, lw, lh); } catch(e){} }
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...WHITE);
+  doc.text('FICHA DE PRESENÇA', mr, mg+10, {align:'right'});
+  doc.setFont('times','normal'); doc.setFontSize(7.5); doc.setTextColor(220,232,225);
+  doc.text(pdfSafe(campos.protocolo,40), mr, mg+16, {align:'right'});
 
-  const barY = top+lh+_avMM_H(0.018,H);
-  const nSeg = 24;
-  for (let i=0;i<nSeg;i++) {
-    const t = i/nSeg;
-    const r = Math.round(GREEN_BRIGHT[0]+(GOLD_RIBBON[0]-GREEN_BRIGHT[0])*t);
-    const g = Math.round(GREEN_BRIGHT[1]+(GOLD_RIBBON[1]-GREEN_BRIGHT[1])*t);
-    const b = Math.round(GREEN_BRIGHT[2]+(GOLD_RIBBON[2]-GREEN_BRIGHT[2])*t);
-    doc.setDrawColor(r,g,b); doc.setLineWidth(0.6);
-    doc.line(ml+(mr-ml)*t, barY, ml+(mr-ml)*(t+1/nSeg), barY);
-  }
-
-  let y = barY + _avMM_H(0.038,H);
+  let y = mg+24+1.6+9;
   doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...GREEN_DARK);
   doc.text(pdfSafe(campos.curso.toUpperCase(),70), (ml+mr)/2, y, {align:'center'});
-  y += _avMM_H(0.050,H);
+  y += 6;
   doc.setFont('times','normal'); doc.setFontSize(8.5); doc.setTextColor(...GRAY);
   doc.text(`AVANTESeg  ·  Encontro ${campos.encontroIdx} de ${campos.encontroTotal}`, (ml+mr)/2, y, {align:'center'});
-  y += _avMM_H(0.050,H);
+  y += 8;
 
   // grade de dados (2 linhas × 3 colunas)
   const gridRows = [
     [['Data', campos.data], ['Instrutor', campos.instrutor], ['Carga horária', campos.ch]],
     [['Local', campos.local], ['CNPJ Cliente', campos.cnpjCliente], ['Protocolo', campos.protocolo]],
   ];
-  const gridRowH = _avMM_H(0.056,H);
+  const gridRowH = 11;
   doc.setFillColor(240,247,243); doc.rect(ml, y, mr-ml, gridRowH*2, 'F');
   doc.setDrawColor(210,228,218); doc.setLineWidth(0.2); doc.rect(ml, y, mr-ml, gridRowH*2);
   gridRows.forEach((row, ri) => {
@@ -13205,54 +13259,65 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
     row.forEach(([label,value], ci) => {
       const x = ml + colW*ci + 3;
       const yRow = y + gridRowH*ri;
-      doc.setFont('helvetica','bold'); doc.setFontSize(5.6); doc.setTextColor(140,158,148);
+      doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(...GREEN_DARK);
       doc.text(label.toUpperCase(), x, yRow+gridRowH*0.35);
-      doc.setFont('times','bold'); doc.setFontSize(8.8); doc.setTextColor(...BLACK);
-      doc.text(pdfSafe(String(value||'-'),36), x, yRow+gridRowH*0.72);
+      doc.setFont('times','bold'); doc.setFontSize(9); doc.setTextColor(...BLACK);
+      doc.text(pdfSafe(String(value||'-'),36), x, yRow+gridRowH*0.75);
     });
   });
-  y += gridRowH*2 + _avMM_H(0.036,H);
+  y += gridRowH*2 + 7;
 
-  // tabela de presença — cabeçalho em versalete + fio (não bloco sólido)
-  const colN = ml+_avMM_W(0.012,W), colNome = ml+_avMM_W(0.045,W), colCpf = ml+_avMM_W(0.50,W), colSig = ml+_avMM_W(0.73,W);
-  doc.setFont('helvetica','bold'); doc.setFontSize(5.6); doc.setTextColor(140,158,148);
-  doc.text('Nº', colN, y);
-  doc.text('PARTICIPANTE', colNome, y);
-  doc.text('CPF', colCpf, y);
-  doc.text('ASSINATURA', colSig, y);
-  y += _avMM_H(0.024,H);
-  doc.setDrawColor(...GREEN_BRIGHT); doc.setLineWidth(0.5); doc.line(ml, y, mr, y);
-  y += _avMM_H(0.012,H);
+  // tabela de presença — cabeçalho em faixa sólida (mesmo peso visual do
+  // modelo padrão, em vez do fio fino usado antes) + zebra nas linhas
+  const colN = ml+3, colNome = ml+12, colCpf = ml+(mr-ml)*0.50, colSig = ml+(mr-ml)*0.70;
+  doc.setFillColor(...GREEN_DARK); doc.rect(ml, y, mr-ml, 7, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...WHITE);
+  doc.text('Nº', colN, y+4.6);
+  doc.text('PARTICIPANTE', colNome, y+4.6);
+  doc.text('CPF', colCpf, y+4.6);
+  doc.text('ASSINATURA', colSig, y+4.6);
+  y += 7;
 
-  const rowH = _avMM_H(0.054,H);
-  const maxRows = Math.floor((_avMM_H(0.905,H) - y) / rowH);
+  const rowH = 15;
+  const maxRows = Math.floor((H-mg-4-38 - y) / rowH);
   (campos.participantes||[]).slice(0, maxRows).forEach((p, i) => {
-    if (i % 2 === 1) { doc.setFillColor(244,249,246); doc.rect(ml, y, mr-ml, rowH, 'F'); }
+    doc.setFillColor(i%2===1?244:255, i%2===1?249:255, i%2===1?246:255); doc.rect(ml, y, mr-ml, rowH, 'F');
+    doc.setDrawColor(220,232,225); doc.setLineWidth(0.15); doc.rect(ml, y, mr-ml, rowH, 'S');
     doc.setFont('times','normal'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
     const ty = y + rowH*0.42;
     doc.text(String(p.n), colN, ty);
     doc.text(pdfSafe(p.nome,44), colNome, ty);
     doc.text(pdfSafe(p.cpf,20), colCpf, ty);
-    doc.setDrawColor(210,228,218); doc.setLineWidth(0.2);
-    doc.line(colSig, y+rowH*0.76, mr-2, y+rowH*0.76);
+    let assinado = false;
+    if (p.assinaturaDataUrl) {
+      try { doc.addImage(p.assinaturaDataUrl,'PNG', colSig, y+1.5, (mr-2)-colSig, rowH-3); assinado = true; } catch(e){}
+    }
+    if (!assinado) {
+      doc.setDrawColor(210,228,218); doc.setLineWidth(0.2);
+      doc.line(colSig, y+rowH*0.76, mr-2, y+rowH*0.76);
+    }
     y += rowH;
   });
-  doc.setDrawColor(210,228,218); doc.line(ml, y, mr, y);
 
-  // assinatura do instrutor + rodapé
-  const sigY = _avMM_H(0.945,H);
-  const lineW = _avMM_W(0.22,W);
-  const cxS = (ml+mr)/2;
+  // assinatura do instrutor + rodapé sólido (mesmo peso visual do modelo padrão)
+  const sigY = H-mg-4-24;
+  const lineW = 60, cxS = (ml+mr)/2;
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cxS-lineW/2, sigY, cxS+lineW/2, sigY);
   doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
-  doc.text(pdfSafe(campos.instrutor,40), cxS, sigY+3, {align:'center'});
+  doc.text(pdfSafe(campos.instrutor,40), cxS, sigY+3.5, {align:'center'});
   doc.setFont('times','normal'); doc.setFontSize(7); doc.setTextColor(...GRAY);
-  doc.text(pdfSafe(campos.instrutorCargo ? `${campos.instrutorCargo} — Instrutor Responsável` : 'Instrutor Responsável',70), cxS, sigY+6.6, {align:'center'});
+  doc.text(pdfSafe(campos.instrutorCargo ? `${campos.instrutorCargo} — Instrutor Responsável` : 'Instrutor Responsável',70), cxS, sigY+7.2, {align:'center'});
 
-  doc.setFontSize(6.5);
-  doc.text('AVANTESeg  ·  toledolabs.com.br/validar', ml, _avMM_H(0.978,H));
-  doc.text(pdfSafe(campos.protocolo,40), mr, _avMM_H(0.978,H), {align:'right'});
+  const fy = H-mg-4-14;
+  doc.setFillColor(...GOLD_RIBBON); doc.rect(mg, fy-1.6, W-mg*2, 1.6, 'F');
+  doc.setFillColor(...GREEN_DARK); doc.rect(mg, fy, W-mg*2, 14, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...GOLD_RIBBON);
+  doc.text('AVANTESeg', ml, fy+6);
+  doc.setFont('times','normal'); doc.setFontSize(6.5); doc.setTextColor(220,232,225);
+  doc.text('toledolabs.com.br/validar', ml, fy+10.5);
+  doc.setTextColor(...WHITE);
+  doc.text(pdfSafe(campos.protocolo,40), mr, fy+8, {align:'right'});
 }
 
 const CAMPOS_OBRIGATORIOS_CERTIFICADO = [
@@ -13319,11 +13384,14 @@ const MODELOS_BASE_CERTIFICADO = {
     id: 'avanteseg',
     nome: 'Avanteseg',
     descricao: 'Identidade visual exclusiva da Avanteseg — fita diagonal verde/dourada, moldura em degradê e nome em caligrafia.',
-    // Caminhos "flat", na raiz do site (mesma convenção real hoje usada por
-    // modelo-classico-capa.png/modelo-moderno-capa.png — o site NÃO tem uma
-    // pasta assets/certificados/, apesar do comentário antigo acima sugerir).
-    capaUrl:  'bg-avanteseg-capa-individual.png',
-    versoUrl: 'bg-avanteseg-capa-coletivo.png',
+    // 2026-08: movidos para pasta própria (organização do repositório, a
+    // pedido do Alisson) — assets/certificados/avanteseg/. Antes ficavam
+    // soltos na raiz do site (bg-avanteseg-capa-individual.png etc.), mesma
+    // convenção "flat" que classico/moderno ainda usam hoje (o repositório
+    // não tem de fato uma pasta assets/certificados/ para eles — só a
+    // Avanteseg foi organizada nesta rodada).
+    capaUrl:  'assets/certificados/avanteseg/capa-individual.png',
+    versoUrl: 'assets/certificados/avanteseg/capa-coletivo.png',
     layout: null, // não usado — ver comentário acima
   },
 };
@@ -13599,23 +13667,43 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
 
     if (_isAvanteseg) {
-      const _logoAvantesegFicha = await carregarArteFundoOrgPDF('avanteseg-logo-transparente.png');
-      const participantesAv = (t.turma_participantes||[]).map(p => ({
-        nome: pdfSafe(p.colaboradores?.nome||'',44),
-        cpf: pdfSafe(p.colaboradores?.cpf||'-',20),
-      }));
+      const _logoAvantesegFicha = await carregarArteFundoOrgPDF('assets/certificados/avanteseg/logo-transparente.png');
+      // Assinatura do aluno capturada na execução da aula (2026-08): esta
+      // consulta não existia aqui antes, então a coluna "Assinatura" da
+      // ficha Avanteseg sempre saía em branco mesmo quando o aluno assinou.
+      // Mesma fonte usada pelo modelo padrão do sistema — tabela `presencas`
+      // filtrada pelo encontro certo (sessao_id), bucket Storage "assinaturas".
+      const {data:presencasAv} = await sb.from('presencas').select('*').eq('sessao_id', sessaoId);
+      const presMapAv = {};
+      (presencasAv||[]).forEach(pr => { presMapAv[pr.colaborador_id] = pr; });
+      const participantesAv = [];
+      for (const p of (t.turma_participantes||[])) {
+        const pr = presMapAv[p.colaborador_id];
+        let assinaturaDataUrl = null;
+        if (pr?.assinatura_path) {
+          try {
+            const {data:urlData} = await sb.storage.from('assinaturas').createSignedUrl(pr.assinatura_path, 60);
+            if (urlData?.signedUrl) assinaturaDataUrl = await carregarImagemComoDataURL(urlData.signedUrl);
+          } catch(e) {}
+        }
+        participantesAv.push({
+          nome: pdfSafe(p.colaboradores?.nome||'',44),
+          cpf: pdfSafe(p.colaboradores?.cpf||'-',20),
+          assinaturaDataUrl,
+        });
+      }
       // Geometria fixa de desenharFichaPresencaAvanteseg (A4 retrato 210×297mm):
-      // cabeçalho + grade de dados ocupam ~100mm do topo, sobrando espaço para
-      // 10 linhas de participante de 16mm cada antes do bloco de assinatura.
-      // Se a função de desenho mudar essa geometria, este valor precisa
-      // acompanhar a mudança.
+      // moldura + cabeçalho + grade de dados ocupam ~90mm do topo, sobrando
+      // espaço para 10 linhas de participante de 15mm cada antes do bloco de
+      // assinatura do instrutor + rodapé. Se a função de desenho mudar essa
+      // geometria, este valor precisa acompanhar a mudança.
       const AV_FICHA_MAX_ROWS = 10;
       const totalPaginasFicha = Math.max(1, Math.ceil(participantesAv.length / AV_FICHA_MAX_ROWS));
       for (let pgf = 1; pgf <= totalPaginasFicha; pgf++) {
         if (pgf > 1) doc.addPage('a4','portrait');
         const fatiaP = participantesAv
           .slice((pgf-1)*AV_FICHA_MAX_ROWS, pgf*AV_FICHA_MAX_ROWS)
-          .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf }));
+          .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf, assinaturaDataUrl: p.assinaturaDataUrl }));
         desenharFichaPresencaAvanteseg(doc, {
           curso: pdfSafe(t.catalogo?.nome||'Treinamento',70),
           encontroIdx: indiceEncontro+1,
@@ -13871,7 +13959,11 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const urlValid    = `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
     const qrData      = await gerarQRCodeDataURL(urlValid);
 
-    const nrMatch = nomeT.match(/NR[\s\-]*(\d+)/i);
+    // Busca também na descrição/conteúdo programático (2026-08) — antes só
+    // olhava o nome do curso, então cursos como "Curso de Manuseio de
+    // Produtos Quimicos" (cuja NR-26 só aparece na descrição) nunca
+    // encontravam número, deixando o selo NR vazio.
+    const nrMatch = `${nomeT} ${t.catalogo?.descricao||''} ${t.catalogo?.conteudo_programatico||''}`.match(/NR[\s\-]*(\d+)/i);
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
     // Sanitiza texto - remove caracteres de controle que quebram o jsPDF
@@ -14036,7 +14128,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     // ════════════════════════════════════════════════════════
     doc.addPage('a4','landscape');
     if (_isAvanteseg) {
-      const _logoAvanteseg = await carregarArteFundoOrgPDF('avanteseg-logo-transparente.png');
+      const _logoAvanteseg = await carregarArteFundoOrgPDF('assets/certificados/avanteseg/logo-transparente.png');
       desenharVersoIndividualAvanteseg(doc, {
         nome: nomePart,
         cpf: s(col.cpf || '', 20),
@@ -14321,7 +14413,11 @@ async function gerarCertificadoColetivo(turmaId) {
     const urlValid    = `https://www.toledolabs.com.br/validar.html?codigo=${codigo}`;
     const qrData      = await gerarQRCodeDataURL(urlValid);
 
-    const nrMatch = nomeT.match(/NR[\s\-]*(\d+)/i);
+    // Busca também na descrição/conteúdo programático (2026-08) — antes só
+    // olhava o nome do curso, então cursos como "Curso de Manuseio de
+    // Produtos Quimicos" (cuja NR-26 só aparece na descrição) nunca
+    // encontravam número, deixando o selo NR vazio.
+    const nrMatch = `${nomeT} ${t.catalogo?.descricao||''} ${t.catalogo?.conteudo_programatico||''}`.match(/NR[\s\-]*(\d+)/i);
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
     const s = (v, max) => pdfSafe(v, max);
@@ -14471,7 +14567,7 @@ async function gerarCertificadoColetivo(turmaId) {
     // ════════════════════════════════════════════════════════
     doc.addPage('a4','landscape');
     if (_isAvanteseg) {
-      const _logoAvantesegCol = await carregarArteFundoOrgPDF('avanteseg-logo-transparente.png');
+      const _logoAvantesegCol = await carregarArteFundoOrgPDF('assets/certificados/avanteseg/logo-transparente.png');
       // Verso do coletivo é paginado: 18 participantes/página é a capacidade
       // segura da coluna 3 do layout de 3 colunas (ver comentário na própria
       // desenharVersoColetivoAvanteseg, no módulo Avanteseg).
