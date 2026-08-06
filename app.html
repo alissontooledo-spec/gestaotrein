@@ -12451,6 +12451,10 @@ function pdfSafe(v, maxLen) {
     .replace(/\u2026/g, '...')            // elipse
     .replace(/[\u2022\u25CF]/g, '-')      // marcador de lista (bullet)
     .replace(/\u00A0/g, ' ')              // espaço não separável
+    .replace(/º/g, 'o').replace(/ª/g, 'a') // indicador ordinal (1º,
+    // nº, 2ª) — não é letra acentuada (NFD não separa) nem caía nas trocas
+    // acima; sem isso virava "?" em qualquer PDF do sistema (achado nos
+    // documentos da Avanteseg, mas afeta qualquer organização com "º"/"ª")
     // IMPORTANTE: preserva quebras de linha (\n). O filtro anterior [^\x20-\x7E]
     // também apagava \n (não é um char imprimível ASCII) e o substituía por "?",
     // destruindo a estrutura de parágrafos/itens de lista que htmlParaTextoPlano()
@@ -12819,6 +12823,51 @@ const _avPT_W  = (frac, W) => frac * W * 2.83465;    // idem, calibrado como fra
 // protótipo em Python/PIL) — esta função aproxima a conversão topo→base.
 const _avBase  = (topMM, sizePt) => topMM + (sizePt/2.83465) * 0.75;
 
+// Desenha um "parágrafo" centralizado com trechos em negrito/cor diferente
+// dentro do mesmo texto corrido (ex.: nome da empresa + CNPJ em destaque no
+// meio de uma frase, 2026-08 — a pedido do Alisson, no lugar do nome solto
+// em Great Vibes na capa do coletivo, que destoava do resto do parágrafo).
+// jsPDF não tem rich text nativo: quebra o texto em palavras, mede cada uma
+// na fonte certa (normal/negrito) e monta as linhas manualmente, centralizando
+// cada linha. Retorna a posição Y (baseline) logo após a última linha.
+function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineHeight, fontFamily, corNormal, corDestaque) {
+  const palavras = [];
+  segmentos.forEach(seg => {
+    pdfSafe(seg.texto, 200).split(' ').forEach(w => { if (w) palavras.push({ texto: w, negrito: seg.negrito }); });
+  });
+  const medir = (texto, negrito) => {
+    doc.setFont(fontFamily, negrito ? 'bold' : 'normal');
+    doc.setFontSize(fontSize);
+    return doc.getTextWidth(texto);
+  };
+  const espaco = medir(' ', false);
+  const linhas = [];
+  let linhaAtual = [], larguraAtual = 0;
+  palavras.forEach(p => {
+    const largP = medir(p.texto, p.negrito);
+    const largComEspaco = larguraAtual > 0 ? larguraAtual + espaco + largP : largP;
+    if (largComEspaco > maxWidth && linhaAtual.length) {
+      linhas.push({ palavras: linhaAtual, largura: larguraAtual });
+      linhaAtual = [p]; larguraAtual = largP;
+    } else {
+      linhaAtual.push(p); larguraAtual = largComEspaco;
+    }
+  });
+  if (linhaAtual.length) linhas.push({ palavras: linhaAtual, largura: larguraAtual });
+  let y = yBase0;
+  linhas.forEach(linha => {
+    let x = cx - linha.largura/2;
+    linha.palavras.forEach(p => {
+      const largP = medir(p.texto, p.negrito);
+      doc.setTextColor(...(p.negrito ? corDestaque : corNormal));
+      doc.text(p.texto, x, y);
+      x += largP + espaco;
+    });
+    y += lineHeight;
+  });
+  return y;
+}
+
 // ─────────────────────── CAPA — CERTIFICADO INDIVIDUAL ───────────────────────
 // bgDataUrl = PNG de fundo (fita/moldura/logo/título — sem texto dinâmico).
 // campos = { nome, cpf, empresa, curso, ch, periodoTexto, instrutorNome,
@@ -12858,14 +12907,17 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.text(nome, cx, _avBase(_avMM_H(0.385,H), nomeSize), {align:'center'});
 
   // parágrafo (CPF, empresa, curso, carga horária, período) — piso absoluto em
-  // 0.62H: a fita verde (no PNG de fundo) termina em ~0.60H, então o parágrafo
-  // nunca pode começar antes disso (era a causa da sobreposição corrigida antes).
+  // 0.53H (2026-08: reduzido de 0.62H — esse valor foi calibrado para o nome
+  // em Great Vibes grande demais da versão anterior; com o nome menor, sobrava
+  // um vão grande entre o nome e este parágrafo). Conferido pixel a pixel no
+  // PNG de fundo: a fita verde/dourada não passa de ~0.51H na borda esquerda
+  // do bloco de texto (x≈0.20W), então 0.53H ainda tem margem de segurança.
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.028,H)); doc.setTextColor(...BLACK);
   const corpo = `CPF número ${campos.cpf || 'não informado'}, da empresa ${campos.empresa}, ` +
     `concluiu com aproveitamento o Curso de ${campos.curso}, com carga horária total de ${campos.ch}. ${campos.periodoTexto}`;
   const linhasCorpo = doc.splitTextToSize(pdfSafe(corpo,300), maxW*0.92);
   const lhCorpo = _avMM_H(0.044,H);
-  let yCorpo = _avMM_H(0.62,H);
+  let yCorpo = _avMM_H(0.53,H);
   linhasCorpo.forEach(ln => { doc.text(ln, cx, _avBase(yCorpo, _avPT_H(0.028,H)), {align:'center'}); yCorpo += lhCorpo; });
 
   // assinaturas — aluno (esquerda) e instrutor (direita, com cargo/especialidade/credencial)
@@ -12951,14 +13003,14 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
   // valor em destaque). Padronizado aqui para o mesmo sistema: rótulo
   // helvetica bold pequeno/cinza, valor times bold preto.
   const _campoAv = (x, yPos, label, valor) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.0135,H)); doc.setTextColor(140,158,148);
-    doc.text(label.toUpperCase(), x, _avBase(yPos, _avPT_H(0.0135,H)));
+    doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.015,H)); doc.setTextColor(140,158,148);
+    doc.text(label.toUpperCase(), x, _avBase(yPos, _avPT_H(0.015,H)));
     doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...BLACK);
     doc.text(pdfSafe(String(valor||'-'),70), x, _avBase(yPos+_avMM_H(0.021,H), _avPT_H(0.021,H)));
   };
   const periodoValor = pdfSafe(campos.periodoTexto,70).replace(/^Realizado em\s*/i,'');
+  // Cargo removido (2026-08, a pedido do Alisson) — não é necessário no documento.
   const camposEsq = [['Empresa', campos.empresa], ['Aluno', campos.nome]];
-  if (campos.cargo) camposEsq.push(['Cargo', campos.cargo]);
   camposEsq.push(['Realizado em', periodoValor], ['Válido até', campos.validadeTexto]);
   const camposDir = [['CPF', campos.cpf || 'não informado'], ['CNPJ', campos.cnpjEmpresa||'-'], ['CH', campos.ch]];
   let yy = y;
@@ -12975,14 +13027,24 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
   // rótulos de seção do verso do certificado coletivo — antes era times
   // bold simples, destoando do resto da identidade Avanteseg.
   const _contTitX = ml+_avMM_W(0.02,W), _contTitY = boxY0+_avMM_H(0.02,H);
-  doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.020,H)); doc.setTextColor(...GREEN_DARK);
-  doc.text('CONTEÚDO PROGRAMÁTICO', _contTitX, _avBase(_contTitY, _avPT_H(0.020,H)));
+  const _contTitFS = _avPT_H(0.020,H);
+  const _contTitBase = _avBase(_contTitY, _contTitFS);
+  doc.setFont('helvetica','bold'); doc.setFontSize(_contTitFS); doc.setTextColor(...GREEN_DARK);
+  doc.text('CONTEÚDO PROGRAMÁTICO', _contTitX, _contTitBase);
+  // Fio dourado logo ABAIXO da linha de base do texto (2026-08: antes usava
+  // uma posição de referência de topo, não a base — o fio ficava cruzando o
+  // meio das letras, parecendo um erro de tachado/riscado. Corrigido.
   doc.setDrawColor(...GOLD); doc.setLineWidth(0.5);
-  doc.line(_contTitX, _contTitY+_avMM_H(0.010,H), _contTitX+18, _contTitY+_avMM_H(0.010,H));
+  doc.line(_contTitX, _contTitBase+1.4, _contTitX+22, _contTitBase+1.4);
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.019,H)); doc.setTextColor(...BLACK);
   let iy = boxY0+_avMM_H(0.075,H);
+  // Evita numerar de novo quando o item já vem numerado do cadastro (ex.:
+  // conteúdo digitado como "1º Riscos Ambientais", "2º NR-06" etc.) — antes
+  // sempre prefixava "1. ", "2. ", duplicando a numeração nesses casos.
+  const _jaNumerado = /^\s*\d+\s*[.\)ºª]/;
   (campos.itensConteudo||[]).forEach((it,idx) => {
-    doc.text(pdfSafe(`${idx+1}. ${it}`,110), ml+_avMM_W(0.035,W), _avBase(iy,_avPT_H(0.019,H)));
+    const item = _jaNumerado.test(it) ? it : `${idx+1}. ${it}`;
+    doc.text(pdfSafe(item,110), ml+_avMM_W(0.035,W), _avBase(iy,_avPT_H(0.019,H)));
     iy += _avMM_H(0.032,H);
   });
 
@@ -13007,32 +13069,27 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   const cx = _avMM_W(0.56,W);
   const maxW = _avMM_W((0.955-0.06)*0.80, W);
 
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
-  doc.text(pdfSafe('A AVANTESeg certifica que a empresa abaixo capacitou sua equipe no curso de',100), cx,
-    _avBase(_avMM_H(0.278,H), _avPT_H(0.024,H)), {align:'center'});
-
-  // Tamanho reduzido (2026-08), mesmo ajuste do certificado individual —
-  // 0.115/0.13H (~68-77pt) ficava desproporcional.
-  _registrarFonteAvanteseg(doc);
-  doc.setFont('GreatVibes','normal'); doc.setTextColor(...GOLD);
-  const empresa = pdfSafe(campos.empresa,60);
-  let empSize = _avPT_H(0.058,H); doc.setFontSize(empSize); let empW = doc.getTextWidth(empresa);
-  const empMaxW = maxW*0.85;
-  while (empW > empMaxW && empSize > 12) { empSize -= 1.5; doc.setFontSize(empSize); empW = doc.getTextWidth(empresa); }
-  if (empW < maxW*0.55) {
-    let empSize2 = _avPT_H(0.068,H); doc.setFontSize(empSize2); let empW2 = doc.getTextWidth(empresa);
-    const empMaxW2 = maxW*0.7;
-    while (empW2 > empMaxW2 && empSize2 > 12) { empSize2 -= 1.5; doc.setFontSize(empSize2); empW2 = doc.getTextWidth(empresa); }
-    empSize = empSize2;
-  }
-  doc.text(empresa, cx, _avBase(_avMM_H(0.330,H), empSize), {align:'center'});
-
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.019,H)); doc.setTextColor(...GRAY);
-  doc.text(`CNPJ ${campos.cnpj}`, cx, _avBase(_avMM_H(0.445,H), _avPT_H(0.019,H)), {align:'center'});
+  // Frase única integrando saudação + nome da empresa + CNPJ (2026-08, a
+  // pedido do Alisson): antes o nome da empresa aparecia solto, em Great
+  // Vibes dourado, com o CNPJ numa linha cinza separada abaixo — nome de
+  // empresa (às vezes com "LTDA", siglas etc.) não lê bem em caligrafia do
+  // jeito que o nome de uma pessoa lê no certificado individual. Agora entra
+  // como texto corrido, nome+CNPJ em negrito na mesma cor do título do
+  // curso, dentro da mesma frase (a fonte Great Vibes segue exclusiva do
+  // nome do aluno no certificado individual).
+  const fraseSize = _avPT_H(0.026,H);
+  const fraseY0 = _avBase(_avMM_H(0.300,H), fraseSize);
+  const yAposFrase = _avParagrafoMisto(doc, [
+    { texto: 'A AVANTESeg certifica que a empresa', negrito: false },
+    { texto: `${campos.empresa},`, negrito: true },
+    { texto: 'CNPJ', negrito: false },
+    { texto: `${campos.cnpj},`, negrito: true },
+    { texto: 'capacitou sua equipe no curso de', negrito: false },
+  ], cx, fraseY0, maxW*0.86, fraseSize, _avMM_H(0.042,H), 'times', BLACK, GREEN_DARK);
 
   doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.032,H)); doc.setTextColor(...GREEN_DARK);
   const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,90), maxW*0.85);
-  let yCurso = _avMM_H(0.495,H);
+  let yCurso = Math.max(_avMM_H(0.495,H), yAposFrase + _avMM_H(0.020,H));
   linhasCurso.forEach(ln => { doc.text(ln, cx, _avBase(yCurso, _avPT_H(0.032,H)), {align:'center'}); yCurso += _avMM_H(0.040,H); });
 
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.023,H)); doc.setTextColor(...BLACK);
@@ -13044,9 +13101,9 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // times bold (era helvetica bold) — era a única linha em fonte sans na
   // capa, destoando do resto (subtítulo, CNPJ, curso e descrição, todos em
   // times); padronizado para o mesmo family da capa.
-  doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.0175,H)); doc.setTextColor(...GREEN_DARK);
+  doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.019,H)); doc.setTextColor(...GREEN_DARK);
   const fatos = `Realizado em ${campos.periodoTexto}   |   Carga horária: ${campos.ch}   |   ${campos.nParticipantes} participantes`;
-  doc.text(pdfSafe(fatos,120), cx, _avBase(yDesc+_avMM_H(0.020,H), _avPT_H(0.0175,H)), {align:'center'});
+  doc.text(pdfSafe(fatos,120), cx, _avBase(yDesc+_avMM_H(0.020,H), _avPT_H(0.019,H)), {align:'center'});
 
   // assinatura — só a do instrutor (documento coletivo, sem assinatura individual)
   const zbot = _avMM_H(0.925,H);
@@ -13124,7 +13181,7 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
   doc.line(ml+totalW*0.695, colTop, ml+totalW*0.695, _avMM_H(0.86,H));
 
   const sectionLabel = (x, y, texto) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(6.6); doc.setTextColor(...GREEN_DARK);
+    doc.setFont('helvetica','bold'); doc.setFontSize(6.9); doc.setTextColor(...GREEN_DARK);
     doc.text(texto.toUpperCase(), x, y);
     doc.setDrawColor(...GOLD_RIBBON); doc.setLineWidth(0.5);
     doc.line(x, y+1.3, x+9, y+1.3);
@@ -13141,7 +13198,7 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
     const camposList = [['Empresa', campos.empresa], ['Realizado em', campos.periodoTexto],
       ['Carga horária', campos.ch], ['Válido até', campos.validadeTexto], ['Instrutor', campos.instrutorNome]];
     camposList.forEach(([label,value]) => {
-      doc.setFont('helvetica','bold'); doc.setFontSize(5.8); doc.setTextColor(140,158,148);
+      doc.setFont('helvetica','bold'); doc.setFontSize(6.3); doc.setTextColor(140,158,148);
       doc.text(label.toUpperCase(), c1x0, y); y += 3.3;
       doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
       doc.text(pdfSafe(String(value||'-'),44), c1x0, y); y += 5.6;
@@ -13164,7 +13221,7 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
   // ---- coluna 3: PARTICIPANTES (continua entre páginas) ----
   let y3 = colTop;
   sectionLabel(c3x0, y3, `Participantes (${campos.totalParticipantes})`); y3 += _avMM_H(0.045,H);
-  doc.setFont('helvetica','bold'); doc.setFontSize(5.5); doc.setTextColor(140,158,148);
+  doc.setFont('helvetica','bold'); doc.setFontSize(6.0); doc.setTextColor(140,158,148);
   doc.text('Nº', c3x0, y3);
   doc.text('NOME / CPF', c3x0+4, y3);
   y3 += 2.2;
@@ -13176,7 +13233,7 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
     doc.text(String(p.n), c3x0, y3);
     doc.text(pdfSafe(p.nome,42), c3x0+4, y3);
     y3 += 3.4;
-    doc.setFontSize(6.2); doc.setTextColor(...GRAY);
+    doc.setFontSize(6.8); doc.setTextColor(...GRAY);
     doc.text(pdfSafe(p.cpf,20), c3x0+4, y3);
     y3 += 4.2;
   });
