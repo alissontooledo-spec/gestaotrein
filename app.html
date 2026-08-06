@@ -2222,7 +2222,12 @@ async function fazerLogout() {
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'conta',l:'Minha conta',icon:'user'}],
   administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
-  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  // 2026-08: adicionado 'relatorios' — já estava referenciado em
+  // NAV_BOTTOM.comercial (atalho do rodapé mobile) mas não existia aqui,
+  // então o item nunca aparecia de verdade e o Comercial não conseguia
+  // acessar Relatórios nem digitando a URL (_perfilTemAcesso bloqueava).
+  // Achado durante a validação de perfis antes do go-live da Avanteseg.
+  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 const NAV_BOTTOM = {
@@ -8107,17 +8112,97 @@ function filtrarTurmas() {
   if (s) trocarAbaTurmas(s);
 }
 
+// ============================================================
+// CONSULTA DE EVIDÊNCIAS E ANOTAÇÕES POR ENCONTRO (2026-08)
+// ------------------------------------------------------------
+// A pedido do Alisson: antes disso, as fotos de evidência e as anotações
+// do instrutor (ambas por sessão/encontro, ver `sessoes.anotacoes_instrutor`
+// e a tabela `evidencias`) eram gravadas normalmente mas não tinham NENHUMA
+// tela de consulta depois — nem para o Administrador olhar um treinamento
+// específico, nem para o próprio Instrutor rever o que registrou. Os dados
+// já existiam no banco; faltava só a leitura. Usado em dois lugares:
+// verTurma (Admin/Comercial, card "Agendamentos") e verHistoricoTurma
+// (Instrutor, card "Evidências"). Só leitura — não edita nada aqui.
+window._sessoesEvidCache = {};
+
+function _registrarSessoesEvidCache(agendamentos) {
+  (agendamentos||[]).forEach(ag => {
+    window._sessoesEvidCache[ag.id] = {
+      anotacoes: ag.anotacoes_instrutor || '',
+      evidencias: ag.evidencias || [],
+      urlsCarregadas: false,
+    };
+  });
+}
+
+// Botão "Evidências e anotações" de um encontro — só aparece quando há algo
+// pra mostrar (evita poluir agendamentos futuros/vazios).
+function _htmlBotaoEvidenciasSessao(ag) {
+  const dados = window._sessoesEvidCache[ag.id];
+  if (!dados || (!dados.anotacoes && !dados.evidencias.length)) return '';
+  const n = dados.evidencias.length;
+  return `
+    <button class="btn btn-outline btn-sm" data-action="toggleEvidenciasSessao" data-id="${ag.id}">
+      📷 Evidências e anotações${n?` (${n})`:''}
+    </button>
+    <div id="evidSessao-${ag.id}" style="display:none;margin-top:10px"></div>`;
+}
+
+async function toggleEvidenciasSessao(sessaoId) {
+  const painel = _getElVisible(`evidSessao-${sessaoId}`);
+  if (!painel) return;
+  const aberto = painel.style.display !== 'none';
+  if (aberto) { painel.style.display = 'none'; return; }
+  painel.style.display = 'block';
+  const dados = window._sessoesEvidCache[sessaoId];
+  if (!dados) { painel.innerHTML = ''; return; }
+  if (!dados.urlsCarregadas) {
+    painel.innerHTML = `<div style="font-size:13px;color:var(--text-3);padding:8px 0">Carregando...</div>`;
+    try {
+      await Promise.all(dados.evidencias.map(async ev => {
+        const {data} = await sb.storage.from('evidencias').createSignedUrl(ev.arquivo_path, 900);
+        ev.urlSigned = data?.signedUrl || '';
+      }));
+      dados.urlsCarregadas = true;
+    } catch(e) { /* segue com o que tiver — mostra as que carregaram */ }
+  }
+  painel.innerHTML = _htmlPainelEvidenciasSessao(dados);
+}
+
+function _htmlPainelEvidenciasSessao(dados) {
+  const notas = dados.anotacoes
+    ? `<div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Anotações do instrutor</div>
+       <div style="font-size:13px;color:var(--text-1);line-height:1.5;margin-bottom:${dados.evidencias.length?'12px':'0'}">${escapeHtml(dados.anotacoes)}</div>`
+    : '';
+  const fotos = dados.evidencias.length ? `
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Fotos (${dados.evidencias.length})</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${dados.evidencias.map(ev=>ev.urlSigned?`
+        <a href="${ev.urlSigned}" target="_blank" rel="noopener" title="${escapeHtml(ev.tipo||'Evidência')}${ev.criado_em?' · '+formatarData(ev.criado_em):''}">
+          <img src="${ev.urlSigned}" style="width:76px;height:76px;object-fit:cover;border-radius:8px;border:1px solid var(--border)" loading="lazy">
+        </a>`:`<div style="width:76px;height:76px;border-radius:8px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-3)">erro</div>`
+      ).join('')}
+    </div>` : '';
+  if (!notas && !fotos) return `<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nada registrado neste encontro.</div>`;
+  return `<div style="background:var(--gray-50);border-radius:var(--r-md);padding:12px">${notas}${fotos}</div>`;
+}
+
 async function verTurma(id) {
   fabOcultar();
   showLoading('Carregando turma...');
   try {
     const {data:rows,error} = await sb.from('turmas')
-      .select('*,clientes(*),catalogo(*),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(*))')
+      .select('*,clientes(*),catalogo(*),sessoes(*,usuarios(nome),evidencias(*)),turma_participantes(*,colaboradores(*))')
       .eq('id',id).limit(1);
     if (error) throw error;
     if (!rows||!rows.length) throw new Error('Turma não encontrada ou sem permissão de acesso.');
     const t = rows[0];
     const agendamentos = (t.sessoes||[]).sort((a,b)=>a.data>b.data?1:-1);
+    // Cache leve (fotos ainda sem URL assinada — só na hora de abrir o
+    // painel, ver toggleEvidenciasSessao) pra tela de consulta de
+    // evidências/anotações por encontro, tanto no card de Agendamentos
+    // (Admin/Comercial) quanto no card de Encontros (Instrutor).
+    _registrarSessoesEvidCache(agendamentos);
     const participantes= t.turma_participantes||[];
     const podeMgr      = ['administrador','comercial'].includes(usuarioAtual.perfil);
     const st           = t.status||'agendada';
@@ -8280,7 +8365,8 @@ async function verTurma(id) {
               ${podeEditar?`<button class="btn btn-navy btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
               <button class="btn btn-outline btn-sm" data-action="excluirAgendamento" data-id="${ag.id}" data-extra="${id}" style="color:var(--red);border-color:var(--red)">Excluir</button>`:``}
             </div>
-          </div>`).join('')}
+          </div>
+          ${_htmlBotaoEvidenciasSessao(ag)?`<div style="padding:0 0 10px 42px">${_htmlBotaoEvidenciasSessao(ag)}</div>`:''}`).join('')}
         ${podeEditar?`<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addAgendamento" data-id="${id}">+ Adicionar agendamento</button>`:``}
       </div>
 
@@ -9433,13 +9519,13 @@ async function verHistoricoTurma(turmaId) {
   showLoading('Carregando histórico...');
   try {
     const {data:t,error} = await sb.from('turmas')
-      .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*),turma_participantes(*,colaboradores(nome,cpf,cargo)),evidencias(*)')
+      .select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(*,evidencias(*)),turma_participantes(*,colaboradores(nome,cpf,cargo))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
     const participantes = t.turma_participantes||[];
     const agendamentos  = (t.sessoes||[]).filter(s=>s.instrutor_id===usuarioAtual.id||true).sort((a,b)=>a.data>b.data?1:-1);
-    const evidencias    = t.evidencias||[];
+    _registrarSessoesEvidCache(agendamentos);
     const nomeT  = t.catalogo?.nome||'Treinamento';
     const nomeC  = t.clientes?.nome||'—';
     const ch     = t.catalogo?.carga_horaria||'—';
@@ -9461,9 +9547,23 @@ async function verHistoricoTurma(turmaId) {
           </div>`;
         }).join('');
 
-    const htmlEvidencias = evidencias.length===0
-      ? `<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhuma evidência anexada.</div>`
-      : `<div style="font-size:13px;color:var(--text-2);padding:8px 0">${evidencias.length} evidência${evidencias.length!==1?'s':''} registrada${evidencias.length!==1?'s':''}.</div>`;
+    // Lista por encontro (2026-08) — antes mostrava só uma contagem, sem
+    // dar acesso às fotos nem às anotações de fato escritas pelo instrutor
+    // durante a execução (ver comentário em _registrarSessoesEvidCache).
+    const temAlgumaEvidencia = agendamentos.some(ag => {
+      const d = window._sessoesEvidCache[ag.id];
+      return d && (d.anotacoes || d.evidencias.length);
+    });
+    const htmlEvidencias = !temAlgumaEvidencia
+      ? `<div style="font-size:13px;color:var(--text-3);padding:8px 0">Nenhuma evidência ou anotação registrada.</div>`
+      : agendamentos.map((ag,i) => {
+          const btn = _htmlBotaoEvidenciasSessao(ag);
+          if (!btn) return '';
+          return `<div style="padding:9px 0;${i<agendamentos.length-1?'border-bottom:1px solid var(--border)':''}">
+            <div style="font-size:13px;font-weight:500;color:var(--text-1);margin-bottom:8px">${formatarData(ag.data)}</div>
+            ${btn}
+          </div>`;
+        }).join('');
 
     hideLoading();
     setConteudo(`
@@ -10223,14 +10323,39 @@ function _htmlListaEvidencias(evidencias) {
       </div>`).join('') + '</div>';
 }
 
+// Redimensiona/recomprime uma foto (File/Blob) no navegador antes do upload
+// de evidência (2026-08, a pedido do Alisson — plano do Supabase tem
+// storage limitado e fotos de celular saem sem nenhuma compressão, 3-5MB
+// cada). Reduz para no máx. 1600px no lado maior + JPEG qualidade 0.75 —
+// cai pra ~200-400KB sem perda perceptível pra fins de evidência. Nunca
+// bloqueia o registro por causa disso: qualquer falha (API não suportada,
+// erro de decodificação etc.) cai de volta pro arquivo original.
+async function _comprimirImagemEvidencia(file, maxDim=1600, qualidade=0.75) {
+  if (!file.type || !file.type.startsWith('image/')) return file;
+  if (file.size < 300*1024) return file; // já pequena — não vale reprocessar
+  try {
+    const bitmap = await createImageBitmap(file);
+    const escala = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * escala));
+    const h = Math.max(1, Math.round(bitmap.height * escala));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', qualidade));
+    if (!blob || blob.size >= file.size) return file; // não ajudou, mantém original
+    return blob;
+  } catch(e) { return file; }
+}
+
 async function adicionarEvidencia(input, tipo) {
-  const file = input.files[0];
-  if (!file) return;
+  const arquivoOriginal = input.files[0];
+  if (!arquivoOriginal) return;
   const turmaId  = window._execTurmaId;
   const sessaoId = window._execSessaoId;
   if (!sessaoId) { showToast('Agendamento não encontrado. Verifique se há um agendamento vinculado a você nesta turma.','error'); return; }
+  const file = await _comprimirImagemEvidencia(arquivoOriginal);
 
-  const ext  = file.type.split('/')[1]||'jpg';
+  const ext  = file.type==='image/jpeg' ? 'jpg' : (file.type.split('/')[1]||'jpg');
   const uuid = crypto.randomUUID();
   const path = `${usuarioAtual.org_id}/${turmaId}/${uuid}.${ext}`;
   const reg = {tipo:'evidencia', turmaId, sessaoId, orgId:usuarioAtual.org_id, tipoEvidencia:tipo, path, blob:file, contentType:file.type, instrutorId:usuarioAtual.id, criado_em:new Date().toISOString()};
@@ -12162,6 +12287,7 @@ document.addEventListener('click', function(e) {
     case 'abrirDocumentos':           renderDocumentosTurma(id); break;
     case 'iniciarExecucaoSessao':     iniciarExecucaoSessao(id, el.dataset.sessao); break;
     case 'abrirExecucaoSessao':       abrirExecucaoSessao(id, el.dataset.sessao); break;
+    case 'toggleEvidenciasSessao':    toggleEvidenciasSessao(id); break;
     // Execução
     case 'iniciarExecucao':       iniciarExecucao(id); break;
     case 'abrirExecucao':         abrirExecucao(id); break;
