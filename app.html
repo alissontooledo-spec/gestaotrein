@@ -13232,11 +13232,24 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
     doc.setFontSize(17); doc.text(pdfSafe(String(campos.nrNum),4), cxNR, cyNR+4.4, {align:'center'});
   }
 
-  // código de validação + rodapé personalizado
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.016,H)); doc.setTextColor(...GRAY);
-  doc.text(`Cod: ${campos.codigoShort}  ·  toledolabs.com.br/validar`, cx, _avBase(zbot+_avMM_H(0.018,H), _avPT_H(0.016,H)), {align:'center'});
-  doc.setFontSize(_avPT_H(0.0145,H));
-  doc.text(pdfSafe(campos.rodape || 'Este certificado é válido em todo o território nacional.',110), cx, _avBase(zbot+_avMM_H(0.040,H), _avPT_H(0.0145,H)), {align:'center'});
+  // Código de validação — reduzido a uma linha única e discreta (2026-08-06,
+  // a pedido do Alisson): antes eram 2 linhas (código+URL, e embaixo o aviso
+  // legal padrão ou a mensagem institucional customizada), ocupando espaço
+  // logo abaixo do bloco de assinatura — no coletivo, ficava visualmente
+  // colado na credencial do instrutor. A URL e o aviso legal completo já
+  // estão no verso (ver desenharVersoIndividualAvanteseg/Coletivo, token +
+  // link de validação); repetir aqui era redundante. Mantido só o código
+  // curto — é a âncora mínima de validação para quem só tiver a capa em mãos
+  // (impressa, foto, corte de página), sem o peso visual das 2 linhas.
+  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.014,H)); doc.setTextColor(...GRAY);
+  doc.text(`Cód: ${campos.codigoShort}`, cx, _avBase(zbot+_avMM_H(0.020,H), _avPT_H(0.014,H)), {align:'center'});
+  // Mensagem institucional customizada (plano Enterprise, cert_texto_rodape)
+  // só aparece quando a organização de fato configurou uma — sem fallback
+  // genérico (esse texto genérico é o que foi removido daqui).
+  if (campos.rodape) {
+    doc.setFontSize(_avPT_H(0.0125,H));
+    doc.text(pdfSafe(campos.rodape,110), cx, _avBase(zbot+_avMM_H(0.038,H), _avPT_H(0.0125,H)), {align:'center'});
+  }
 }
 
 // ─────────────────────── VERSO — CERTIFICADO INDIVIDUAL ───────────────────────
@@ -13436,10 +13449,16 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
     doc.setFontSize(17); doc.text(pdfSafe(String(campos.nrNum),4), cxNR, cyNR+4.4, {align:'center'});
   }
 
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.016,H)); doc.setTextColor(...GRAY);
-  doc.text(`Cod: ${campos.codigoShort}  ·  toledolabs.com.br/validar`, cx, _avBase(zbot+_avMM_H(0.018,H), _avPT_H(0.016,H)), {align:'center'});
-  doc.setFontSize(_avPT_H(0.0145,H));
-  doc.text(pdfSafe(campos.rodape || 'Este certificado é válido em todo o território nacional.',110), cx, _avBase(zbot+_avMM_H(0.040,H), _avPT_H(0.0145,H)), {align:'center'});
+  // Código de validação reduzido a uma linha única — mesma correção e mesmo
+  // motivo da capa individual (ver comentário completo em
+  // desenharCapaIndividualAvanteseg); aqui era o ponto mais crítico, porque
+  // ficava colado na credencial do instrutor.
+  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.014,H)); doc.setTextColor(...GRAY);
+  doc.text(`Cód: ${campos.codigoShort}`, cx, _avBase(zbot+_avMM_H(0.020,H), _avPT_H(0.014,H)), {align:'center'});
+  if (campos.rodape) {
+    doc.setFontSize(_avPT_H(0.0125,H));
+    doc.text(pdfSafe(campos.rodape,110), cx, _avBase(zbot+_avMM_H(0.038,H), _avPT_H(0.0125,H)), {align:'center'});
+  }
 }
 
 // ─────────────────────── VERSO — CERTIFICADO COLETIVO (3 colunas) ───────────────────────
@@ -13455,15 +13474,19 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
   const GREEN_DARK=[31,101,71], GREEN_BRIGHT=[0,130,70], GOLD_RIBBON=[240,177,37], BLACK=[30,30,30], GRAY=[95,95,95];
   const ml = _avMM_W(0.055,W), mr = _avMM_W(0.945,W), top = _avMM_H(0.04,H);
 
+  // Fontes aumentadas em todo o verso (2026-08-06, a pedido do Alisson,
+  // pensando em impressão em escala 100% — o que "passa" na tela pode ficar
+  // ilegível no papel). Cabeçalho: 9→11 (título), 7,5→8,5 (subtítulo e
+  // código/página).
   const lw = _avMM_W(0.10,W), lh = lw*(137/819);
   if (campos.logoAvantesegDataUrl) { try { doc.addImage(campos.logoAvantesegDataUrl,'PNG', ml, top, lw, lh); } catch(e){} }
-  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...GREEN_DARK);
-  doc.text('CERTIFICADO COLETIVO', ml+lw+_avMM_W(0.025,W), top+3.2);
-  doc.setFont('times','normal'); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
-  doc.text(`${pdfSafe(campos.empresa,60)}  ·  CNPJ ${pdfSafe(campos.cnpj,25)}`, ml+lw+_avMM_W(0.025,W), top+6.8);
-  doc.setFontSize(7.5);
-  doc.text(`Cod: ${campos.codigoShort}`, mr, top+2.2, {align:'right'});
-  doc.text(`Página ${pagina} de ${totalPaginas}`, mr, top+6.2, {align:'right'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...GREEN_DARK);
+  doc.text('CERTIFICADO COLETIVO', ml+lw+_avMM_W(0.025,W), top+3.6);
+  doc.setFont('times','normal'); doc.setFontSize(8.5); doc.setTextColor(...GRAY);
+  doc.text(`${pdfSafe(campos.empresa,60)}  ·  CNPJ ${pdfSafe(campos.cnpj,25)}`, ml+lw+_avMM_W(0.025,W), top+7.6);
+  doc.setFontSize(8.5);
+  doc.text(`Cod: ${campos.codigoShort}`, mr, top+2.6, {align:'right'});
+  doc.text(`Página ${pagina} de ${totalPaginas}`, mr, top+6.8, {align:'right'});
 
   // barra de acento degradê verde→dourado (aproximação: alguns segmentos de cor)
   const barY = _avMM_H(0.112,H);
@@ -13486,76 +13509,87 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
   doc.line(ml+totalW*0.31, colTop, ml+totalW*0.31, _avMM_H(0.86,H));
   doc.line(ml+totalW*0.695, colTop, ml+totalW*0.695, _avMM_H(0.86,H));
 
+  // Rótulos de seção: 6,9→8pt, sublinhado um pouco mais longo para acompanhar.
   const sectionLabel = (x, y, texto) => {
-    doc.setFont('helvetica','bold'); doc.setFontSize(6.9); doc.setTextColor(...GREEN_DARK);
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...GREEN_DARK);
     doc.text(texto.toUpperCase(), x, y);
     doc.setDrawColor(...GOLD_RIBBON); doc.setLineWidth(0.5);
-    doc.line(x, y+1.3, x+9, y+1.3);
+    doc.line(x, y+1.5, x+10, y+1.5);
   };
 
   // ---- coluna 1: TREINAMENTO ---- (só na página 1 — nas seguintes fica em branco)
+  // Título do curso: 10→12pt; rótulos de campo: 6,3→7,3pt; valores: 8,5→9,5pt
+  // (a informação mais importante da coluna, por isso o maior salto relativo).
   if (pagina === 1) {
     let y = colTop;
     sectionLabel(c1x0, y, 'Treinamento'); y += _avMM_H(0.050,H);
-    doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(...GREEN_DARK);
+    doc.setFont('times','bold'); doc.setFontSize(12); doc.setTextColor(...GREEN_DARK);
     const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,60), c1x1-c1x0);
-    linhasCurso.forEach(ln => { doc.text(ln, c1x0, y); y += 4.3; });
-    y += 3;
+    linhasCurso.forEach(ln => { doc.text(ln, c1x0, y); y += 5.0; });
+    y += 3.2;
     const camposList = [['Empresa', campos.empresa], ['Realizado em', campos.periodoTexto],
       ['Carga horária', campos.ch], ['Válido até', campos.validadeTexto], ['Instrutor', campos.instrutorNome]];
     camposList.forEach(([label,value]) => {
-      doc.setFont('helvetica','bold'); doc.setFontSize(6.3); doc.setTextColor(140,158,148);
-      doc.text(label.toUpperCase(), c1x0, y); y += 3.3;
-      doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
-      doc.text(pdfSafe(String(value||'-'),44), c1x0, y); y += 5.6;
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.3); doc.setTextColor(140,158,148);
+      doc.text(label.toUpperCase(), c1x0, y); y += 3.8;
+      doc.setFont('times','bold'); doc.setFontSize(9.5); doc.setTextColor(...BLACK);
+      doc.text(pdfSafe(String(value||'-'),44), c1x0, y); y += 6.4;
     });
   }
 
-  // ---- coluna 2: CONTEÚDO PROGRAMÁTICO ---- (só na página 1)
+  // ---- coluna 2: CONTEÚDO PROGRAMÁTICO ---- (só na página 1) — 8,5→9,5pt
   if (pagina === 1) {
     let y2 = colTop;
     sectionLabel(c2x0, y2, 'Conteúdo Programático'); y2 += _avMM_H(0.050,H);
-    doc.setFont('times','normal'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
+    doc.setFont('times','normal'); doc.setFontSize(9.5); doc.setTextColor(...BLACK);
     (campos.itensConteudo||[]).forEach(it => {
       const linhas = doc.splitTextToSize(pdfSafe(it,90), (c2x1-c2x0)-4.5);
       doc.setFillColor(...GOLD_RIBBON); doc.circle(c2x0+1.1, y2-1.1, 0.7, 'F');
-      linhas.forEach((ln,j) => { doc.text(ln, c2x0+4.5, y2); y2 += 4.1; });
-      y2 += 0.8;
+      linhas.forEach((ln,j) => { doc.text(ln, c2x0+4.5, y2); y2 += 4.6; });
+      y2 += 1.0;
     });
   }
 
   // ---- coluna 3: PARTICIPANTES (continua entre páginas) ----
+  // Cabeçalho da tabela: 6,0→7,3pt; nome: 7,2→8,7pt; CPF: 6,8→7,8pt.
+  // Linha por participante: 7,6mm→9,2mm (acompanha o aumento de fonte) — por
+  // isso a capacidade por página (AV_PART_POR_PAGINA, no chamador em
+  // gerarCertificadoColetivo) caiu de 18 para 14: com a fonte maior, 18
+  // linhas não cabem mais no espaço disponível da coluna sem estourar o
+  // limite inferior (~0,86H, onde termina o divisor vertical) — reduzir a
+  // capacidade evita isso. Recalculado com a mesma folga de segurança que já
+  // existia antes (conferido: 14 linhas cabem com folga, 15 não).
   let y3 = colTop;
   sectionLabel(c3x0, y3, `Participantes (${campos.totalParticipantes})`); y3 += _avMM_H(0.045,H);
-  doc.setFont('helvetica','bold'); doc.setFontSize(6.0); doc.setTextColor(140,158,148);
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.3); doc.setTextColor(140,158,148);
   doc.text('Nº', c3x0, y3);
   doc.text('NOME / CPF', c3x0+4, y3);
-  y3 += 2.2;
+  y3 += 2.6;
   doc.setDrawColor(...GREEN_BRIGHT); doc.setLineWidth(0.45); doc.line(c3x0, y3, mr, y3);
-  y3 += 2.4;
+  y3 += 2.8;
   doc.setFont('times','normal');
   (campos.participantesPagina||[]).forEach(p => {
-    doc.setFontSize(7.2); doc.setTextColor(...BLACK);
+    doc.setFontSize(8.7); doc.setTextColor(...BLACK);
     doc.text(String(p.n), c3x0, y3);
     doc.text(pdfSafe(p.nome,42), c3x0+4, y3);
-    y3 += 3.4;
-    doc.setFontSize(6.8); doc.setTextColor(...GRAY);
+    y3 += 4.0;
+    doc.setFontSize(7.8); doc.setTextColor(...GRAY);
     doc.text(pdfSafe(p.cpf,20), c3x0+4, y3);
-    y3 += 4.2;
+    y3 += 5.2;
   });
 
-  // ---- rodapé de validação (só na última página) ----
+  // ---- rodapé de validação (só na última página) ---- 7→8pt
   if (pagina === totalPaginas) {
     const footY = _avMM_H(0.885,H);
     doc.setDrawColor(220,232,225); doc.setLineWidth(0.2); doc.line(ml, footY, mr, footY);
     const qr = _avMM_H(0.075,H);
     const qrX = mr-qr, qrY = footY+2.6;
     if (campos.qrDataUrl) { try { doc.addImage(campos.qrDataUrl,'PNG', qrX, qrY, qr, qr); } catch(e){} }
-    doc.setFont('times','normal'); doc.setFontSize(7); doc.setTextColor(...BLACK);
-    doc.text(`Token: ${campos.codigoShort}`, ml, footY+6.2);
+    doc.setFont('times','normal'); doc.setFontSize(8); doc.setTextColor(...BLACK);
+    doc.text(`Token: ${campos.codigoShort}`, ml, footY+6.6);
     doc.setTextColor(...GRAY);
-    doc.text('toledolabs.com.br/validar', ml, footY+10.5);
-    doc.text(pdfSafe(campos.emitidoTexto || 'Emitido eletronicamente. Validade jurídica conforme legislação vigente.',110), ml, footY+14.8);
+    doc.text('toledolabs.com.br/validar', ml, footY+11.0);
+    doc.text(pdfSafe(campos.emitidoTexto || 'Emitido eletronicamente. Validade jurídica conforme legislação vigente.',110), ml, footY+15.4);
   }
 }
 
@@ -15061,10 +15095,12 @@ async function gerarCertificadoColetivo(turmaId) {
     doc.addPage('a4','landscape');
     if (_isAvanteseg) {
       const _logoAvantesegCol = await carregarArteFundoOrgPDF(`assets/certificados/avanteseg/logo-transparente.png?v=${AVANTESEG_ASSETS_V}`);
-      // Verso do coletivo é paginado: 18 participantes/página é a capacidade
-      // segura da coluna 3 do layout de 3 colunas (ver comentário na própria
-      // desenharVersoColetivoAvanteseg, no módulo Avanteseg).
-      const AV_PART_POR_PAGINA = 18;
+      // Verso do coletivo é paginado: 14 participantes/página é a capacidade
+      // segura da coluna 3 do layout de 3 colunas (baixou de 18 para 14 em
+      // 2026-08-06, junto com o aumento de fonte do verso — linha por
+      // participante cresceu de 7,6mm para 9,2mm; ver comentário completo
+      // na própria desenharVersoColetivoAvanteseg, no módulo Avanteseg).
+      const AV_PART_POR_PAGINA = 14;
       const totalPaginasAv = Math.max(1, Math.ceil(participantes.length / AV_PART_POR_PAGINA));
       const emitidoTextoAv = `Emitido em ${fmtDataExtensoPDF(dataLocalISO())}`;
       const cpBlocosAv = cpBlocos && cpBlocos.length ? cpBlocos.map(b=>s(b.texto,140)) : [];
