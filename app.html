@@ -2018,6 +2018,7 @@ function fabAcao() { if (fabCallback) fabCallback(); }
 // Paginação reutilizável — usada em Catálogo, Organizações e
 // na lista de usuários da tela de detalhes da Organização.
 // ============================================================
+let _paginaHistorico = 1, _porPaginaHistorico = 10, _historicoOrdem = 'desc';
 function _paginarLista(lista, pagina, porPagina) {
   const total = lista.length;
   const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
@@ -9399,34 +9400,35 @@ async function renderHistorico() {
   // Filtros ativos
   const clientesSet = [...new Set(lista.map(g=>g.turma.clientes?.nome).filter(Boolean))].sort();
   const treinamentosSet = [...new Set(lista.map(g=>g.turma.catalogo?.nome).filter(Boolean))].sort();
+  // Anos com treinamentos concluídos — referência é a sessão mais recente de
+  // cada turma (mesmo campo usado na ordenação padrão da lista), para que o
+  // filtro de ano seja coerente com "mais recentes primeiro".
+  const anosSet = [...new Set(lista.map(g=>(g.sessoes[0]?.data||'').slice(0,4)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
 
   const cliOpts = clientesSet.map(n=>`<option value="${n}">${n}</option>`).join('');
   const catOpts = treinamentosSet.map(n=>`<option value="${n}">${n}</option>`).join('');
+  const anoOpts = anosSet.map(a=>`<option value="${a}">${a}</option>`).join('');
+
+  // Página/ordenação resetam a cada entrada na tela; tamanho de página fica
+  // como preferência do usuário entre visitas (mesmo padrão de Catálogo/Organizações).
+  _paginaHistorico = 1;
+  _historicoOrdem = 'desc';
+  const listaOrdenada = lista.slice().sort((a,b)=>{
+    const da = a.sessoes[0]?.data||'', db = b.sessoes[0]?.data||'';
+    return _historicoOrdem==='asc' ? da.localeCompare(db) : db.localeCompare(da);
+  });
+  const { itens: itensPagina, totalPaginas, paginaAtual, total } = _paginarLista(listaOrdenada, _paginaHistorico, _porPaginaHistorico);
+  _paginaHistorico = paginaAtual;
 
   const htmlItems = lista.length===0
     ? `<div class="empty" style="padding:40px 20px"><div class="empty-icon">📋</div><div class="empty-title">Nenhum treinamento concluído</div><div class="empty-sub">Seu histórico aparecerá aqui após finalizar os primeiros treinamentos.</div></div>`
-    : lista.map(g=>{
-        const t    = g.turma;
-        const nomeT = t.catalogo?.nome||'Treinamento';
-        const nomeC = t.clientes?.nome||'—';
-        const nPart = t.turma_participantes?.length||0;
-        const ch    = t.catalogo?.carga_horaria||0;
-        const datas = g.sessoes.map(s=>formatarData(s.data));
-        const primeiraData = g.sessoes[g.sessoes.length-1]?.data||'';
-        const local = g.sessoes[0]?.local||'—';
-        return `
-        <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verHistoricoTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-          <div style="width:42px;height:42px;border-radius:10px;background:rgba(5,150,105,.1);color:#059669;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${ch}h</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
-            <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeC} · ${formatarData(primeiraData)} · ${nPart} aluno${nPart!==1?'s':''}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            <span class="badge badge-green">Concluída</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-        </div>`;
-      }).join('');
+    : itensPagina.map(_htmlHistoricoItem).join('');
+
+  const htmlPag = (lista.length===0) ? '' : _htmlPaginacao({
+    totalPaginas, paginaAtual, porPagina: _porPaginaHistorico, total,
+    onPageChange: '_historicoIrPagina', onPageSizeChange: '_historicoAlterarPorPagina',
+    opcoesPorPagina: [10, 20, 50]
+  });
 
   setConteudo(`
     <div class="stats-grid" style="margin-bottom:20px">
@@ -9464,11 +9466,104 @@ async function renderHistorico() {
       <select id="filtHistCat" style="flex:1;min-width:140px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarHistorico()">
         <option value="">Todos os treinamentos</option>${catOpts}
       </select>
+      <select id="filtHistAno" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarHistorico()">
+        <option value="">Todos os anos</option>${anoOpts}
+      </select>
+      <select id="filtHistOrdem" style="flex:1;min-width:170px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_historicoAlternarOrdem()">
+        <option value="desc" selected>Mais recentes primeiro</option>
+        <option value="asc">Mais antigas primeiro</option>
+      </select>
       <button class="btn btn-outline btn-sm" onclick="limparFiltrosHistorico()">Limpar</button>
     </div>
 
     <div class="card" style="padding:0" id="listaHistorico">${htmlItems}</div>
+    <div id="paginacaoHistorico">${htmlPag}</div>
   `);
+}
+
+// Item da lista de histórico — extraído em função própria para ser reutilizado
+// tanto no primeiro render quanto nas atualizações de filtro/ordenação/página
+// (antes esse HTML estava duplicado entre renderHistorico e filtrarHistorico).
+function _htmlHistoricoItem(g) {
+  const t    = g.turma;
+  const nomeT = t.catalogo?.nome||'Treinamento';
+  const nomeC = t.clientes?.nome||'—';
+  const nPart = t.turma_participantes?.length||0;
+  const ch    = t.catalogo?.carga_horaria||0;
+  const primeiraData = g.sessoes[g.sessoes.length-1]?.data||'';
+  return `
+  <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verHistoricoTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+    <div style="width:42px;height:42px;border-radius:10px;background:rgba(5,150,105,.1);color:#059669;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${ch}h</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeC} · ${formatarData(primeiraData)} · ${nPart} aluno${nPart!==1?'s':''}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+      <span class="badge badge-green">Concluída</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>`;
+}
+
+// Aplica filtros (cliente/treinamento/ano) + ordenação sobre window._historicoLista,
+// devolvendo a lista já pronta para paginar. Não lê a página atual — quem chama
+// decide se reseta a página (novo filtro/ordem) ou mantém (troca de página).
+function _historicoListaProcessada() {
+  const cli = _getElVisible('filtHistCli')?.value||'';
+  const cat = _getElVisible('filtHistCat')?.value||'';
+  const ano = _getElVisible('filtHistAno')?.value||'';
+  const lista = window._historicoLista||[];
+  const filtrada = lista.filter(g=>{
+    const nomeC = g.turma.clientes?.nome||'';
+    const nomeT = g.turma.catalogo?.nome||'';
+    const anoRef = (g.sessoes[0]?.data||'').slice(0,4);
+    return (!cli || nomeC===cli) && (!cat || nomeT===cat) && (!ano || anoRef===ano);
+  });
+  filtrada.sort((a,b)=>{
+    const da = a.sessoes[0]?.data||'', db = b.sessoes[0]?.data||'';
+    return _historicoOrdem==='asc' ? da.localeCompare(db) : db.localeCompare(da);
+  });
+  return filtrada;
+}
+
+// Redesenha a lista + a barra de paginação a partir do estado atual de
+// filtros/ordenação/página. Usa _getElVisible para funcionar tanto no
+// container desktop quanto no mobile (ver comentário histórico abaixo).
+function _historicoRenderLista() {
+  const filtrada = _historicoListaProcessada();
+  const elLista = _getElVisible('listaHistorico');
+  const elPag = _getElVisible('paginacaoHistorico');
+  if (!elLista) return;
+  if (!filtrada.length) {
+    elLista.innerHTML = `<div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado</div><div class="empty-sub">Tente outros filtros.</div></div>`;
+    if (elPag) elPag.innerHTML = '';
+    return;
+  }
+  const { itens, totalPaginas, paginaAtual, total } = _paginarLista(filtrada, _paginaHistorico, _porPaginaHistorico);
+  _paginaHistorico = paginaAtual;
+  elLista.innerHTML = itens.map(_htmlHistoricoItem).join('');
+  if (elPag) {
+    elPag.innerHTML = _htmlPaginacao({
+      totalPaginas, paginaAtual, porPagina: _porPaginaHistorico, total,
+      onPageChange: '_historicoIrPagina', onPageSizeChange: '_historicoAlterarPorPagina',
+      opcoesPorPagina: [10, 20, 50]
+    });
+  }
+}
+
+function _historicoIrPagina(p) {
+  _paginaHistorico = p;
+  _historicoRenderLista();
+}
+function _historicoAlterarPorPagina(v) {
+  _porPaginaHistorico = parseInt(v,10)||10;
+  _paginaHistorico = 1;
+  _historicoRenderLista();
+}
+function _historicoAlternarOrdem() {
+  _historicoOrdem = _getElVisible('filtHistOrdem')?.value||'desc';
+  _paginaHistorico = 1;
+  _historicoRenderLista();
 }
 
 function filtrarHistorico() {
@@ -9477,41 +9572,8 @@ function filtrarHistorico() {
   // o primeiro do DOM (o de desktop), que fica invisível/parado no mobile —
   // por isso os filtros e o botão "Limpar" pareciam não fazer nada no
   // celular: liam sempre o <select> escondido, nunca o que o usuário via.
-  const cli = _getElVisible('filtHistCli')?.value||'';
-  const cat = _getElVisible('filtHistCat')?.value||'';
-  const lista = window._historicoLista||[];
-  const filtrada = lista.filter(g=>{
-    const nomeC = g.turma.clientes?.nome||'';
-    const nomeT = g.turma.catalogo?.nome||'';
-    return (!cli || nomeC===cli) && (!cat || nomeT===cat);
-  });
-  const el = _getElVisible('listaHistorico');
-  if (!el) return;
-  if (!filtrada.length) {
-    el.innerHTML = `<div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado</div><div class="empty-sub">Tente outros filtros.</div></div>`;
-    return;
-  }
-  const hoje = window._agendaHoje||dataLocalISO();
-  el.innerHTML = filtrada.map(g=>{
-    const t    = g.turma;
-    const nomeT = t.catalogo?.nome||'Treinamento';
-    const nomeC = t.clientes?.nome||'—';
-    const nPart = t.turma_participantes?.length||0;
-    const ch    = t.catalogo?.carga_horaria||0;
-    const primeiraData = g.sessoes[g.sessoes.length-1]?.data||'';
-    return `
-    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verHistoricoTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-      <div style="width:42px;height:42px;border-radius:10px;background:rgba(5,150,105,.1);color:#059669;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${ch}h</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
-        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeC} · ${formatarData(primeiraData)} · ${nPart} aluno${nPart!==1?'s':''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span class="badge badge-green">Concluída</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
-      </div>
-    </div>`;
-  }).join('');
+  _paginaHistorico = 1;
+  _historicoRenderLista();
 }
 
 function limparFiltrosHistorico() {
@@ -9519,9 +9581,15 @@ function limparFiltrosHistorico() {
   // não sempre o primeiro do DOM.
   const sc = _getElVisible('filtHistCli');
   const st = _getElVisible('filtHistCat');
+  const sa = _getElVisible('filtHistAno');
+  const so = _getElVisible('filtHistOrdem');
   if (sc) sc.value='';
   if (st) st.value='';
-  filtrarHistorico();
+  if (sa) sa.value='';
+  if (so) so.value='desc';
+  _historicoOrdem = 'desc';
+  _paginaHistorico = 1;
+  _historicoRenderLista();
 }
 
 async function verHistoricoTurma(turmaId) {
