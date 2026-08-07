@@ -5526,6 +5526,29 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
     u = data;
   }
 
+  // Documentos do instrutor (assinatura digitalizada) — liberado para
+  // Provedor/Administrador cadastrarem/gerenciarem em nome do instrutor
+  // (a pedido do Alisson, 2026-08-06; ver 06-Changelog/2026-08-06.md).
+  // O certificado digital ICP-Brasil (.pfx/.p12 + PIN) fica de fora
+  // deliberadamente: continua só na tela do próprio instrutor, porque o
+  // termo de aceite do sistema declara o instrutor como único titular e
+  // responsável pela guarda do PIN.
+  let blocoDocumentosInstrutor = '';
+  if (u && u.perfil === 'instrutor') {
+    let previewUrl = '';
+    if (u.assinatura_path) {
+      try {
+        const {data:urlData} = await sb.storage.from('assinaturas-instrutor').createSignedUrl(u.assinatura_path, 300);
+        previewUrl = urlData?.signedUrl || '';
+      } catch(e) { console.warn('Não foi possível carregar assinatura digitalizada:', e.message); }
+    }
+    blocoDocumentosInstrutor = `
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Documentos do instrutor</div>
+      ${_htmlCardAssinaturaInstrutor(previewUrl, u.id, 'modal')}
+    </div>`;
+  }
+
   const campoSenha = u ? '' : `
     <div class="field"><label>Senha provisória *</label><input type="password" id="mUsrSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O usuário poderá alterar após o primeiro acesso.</div></div>`;
 
@@ -5551,6 +5574,7 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
       </div>
       <div class="field" style="margin:0"><label>CPF</label><input type="text" id="mUsrCpf" value="${escapeHtml(u?.cpf||'')}" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>
     </div>
+    ${blocoDocumentosInstrutor}
     ${u && u.perfil !== 'provedor' ? `
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Segurança</div>
@@ -11892,7 +11916,7 @@ async function renderContaDocumentos() {
       const {data:urlData} = await sb.storage.from('assinaturas-instrutor').createSignedUrl(u.assinatura_path, 300);
       previewUrl = urlData?.signedUrl || '';
     }
-    assinHtml = _htmlCardAssinaturaInstrutor(previewUrl);
+    assinHtml = _htmlCardAssinaturaInstrutor(previewUrl, u.id, 'conta');
   } catch(e) { console.warn('Não foi possível carregar assinatura digitalizada:', e.message); }
 
   setConteudo(`
@@ -11916,14 +11940,25 @@ async function renderContaDocumentos() {
 // alternativa simples ao certificado digital A1. Quando cadastrada, é usada
 // automaticamente nos certificados individual, coletivo e na ficha de
 // presença, sem precisar de mais nenhuma acao do instrutor.
-function _htmlCardAssinaturaInstrutor(previewUrl) {
+//
+// targetId identifica DE QUEM é a assinatura sendo exibida/gerenciada — por
+// padrão é o próprio usuário logado (uso em Minha Conta), mas Provedor e
+// Administrador também reaproveitam este card dentro do modal de editar
+// usuário (abrirModalUsuarioOrg) para cadastrar a assinatura em nome de um
+// instrutor (ver 06-Changelog/2026-08-06.md). origem diz pra onde a tela
+// deve atualizar depois de enviar/remover: 'conta' (Minha Conta, recarrega
+// renderContaDocumentos) ou 'modal' (reabre o próprio modal de edição).
+function _htmlCardAssinaturaInstrutor(previewUrl, targetId, origem) {
+  const idAttr = escapeHtml(targetId);
+  const origemAttr = escapeHtml(origem);
+  const textoUso = origem === 'modal'
+    ? 'Usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que este instrutor emitir.'
+    : 'Usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir.';
   if (previewUrl) {
     return `
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">✍️ Assinatura digitalizada</div>
-      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
-        Usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir.
-      </p>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">${textoUso}</p>
       <div style="display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px">
         <img src="${previewUrl}" alt="Assinatura" style="height:38px;max-width:140px;object-fit:contain;background:#fff;border-radius:4px;padding:2px">
         <div style="font-size:12px;color:var(--green);font-weight:600">✓ Cadastrada</div>
@@ -11931,24 +11966,36 @@ function _htmlCardAssinaturaInstrutor(previewUrl) {
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <label class="btn btn-outline btn-sm" style="text-align:center;cursor:pointer;margin:0">
           ↻ Trocar imagem
-          <input type="file" accept="image/png,image/jpeg" style="display:none" onchange="uploadAssinaturaInstrutor(this)">
+          <input type="file" accept="image/png,image/jpeg" style="display:none" onchange="uploadAssinaturaInstrutor(this,'${idAttr}','${origemAttr}')">
         </label>
-        <button class="btn btn-danger btn-sm" onclick="removerAssinaturaInstrutor()">Remover</button>
+        <button class="btn btn-danger btn-sm" onclick="removerAssinaturaInstrutor('${idAttr}','${origemAttr}')">Remover</button>
       </div>
     </div>`;
   }
+  const textoIntro = origem === 'modal'
+    ? 'Alternativa simples ao certificado digital A1: envie uma foto ou digitalização da assinatura em papel deste instrutor. Ela passa a ser usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que ele emitir — sem precisar de certificado digital.'
+    : 'Alternativa simples ao certificado digital A1: envie uma foto ou digitalização da sua assinatura em papel. Ela passa a ser usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir — sem precisar de certificado digital.';
   return `
     <div class="card" style="margin-bottom:12px">
       <div class="card-title">✍️ Assinatura digitalizada</div>
-      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
-        Alternativa simples ao certificado digital A1: envie uma foto ou digitalização da sua assinatura em papel. Ela passa a ser usada automaticamente nos certificados, no certificado coletivo e na ficha de presença que você emitir — sem precisar de certificado digital.
-      </p>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">${textoIntro}</p>
       <label class="btn btn-navy btn-sm" style="text-align:center;cursor:pointer;margin:0">
         📷 Enviar imagem da assinatura
-        <input type="file" accept="image/png,image/jpeg" style="display:none" onchange="uploadAssinaturaInstrutor(this)">
+        <input type="file" accept="image/png,image/jpeg" style="display:none" onchange="uploadAssinaturaInstrutor(this,'${idAttr}','${origemAttr}')">
       </label>
       <div style="font-size:11px;color:var(--text-3);margin-top:8px">PNG ou JPG, fundo claro, até 2MB.</div>
     </div>`;
+}
+
+// Quem pode gerenciar (enviar/trocar/remover) a assinatura digitalizada de
+// `targetId`: o próprio dono sempre pode; Provedor e Administrador também
+// podem gerenciar a de um instrutor (Provedor: qualquer organização;
+// Administrador: só dentro da própria organização, reforçado de verdade
+// pela policy de Storage — esta checagem aqui é só a primeira linha de
+// defesa, na UI).
+function _permiteGerenciarAssinaturaInstrutor(targetId) {
+  if (targetId === usuarioAtual.id) return true;
+  return usuarioAtual.perfil === 'provedor' || usuarioAtual.perfil === 'administrador';
 }
 
 // Recebe o <input type=file>, converte a imagem para PNG (garante
@@ -11976,9 +12023,12 @@ function _removerFundoClaroCanvas(ctx, w, h) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-async function uploadAssinaturaInstrutor(inputEl) {
+async function uploadAssinaturaInstrutor(inputEl, targetId, origem) {
+  targetId = targetId || usuarioAtual.id;
+  origem = origem || 'conta';
   const file = inputEl.files?.[0];
   if (!file) return;
+  if (!_permiteGerenciarAssinaturaInstrutor(targetId)) { showToast('Você não tem permissão para alterar a assinatura deste usuário.','error'); inputEl.value=''; return; }
   if (!file.type.startsWith('image/')) { showToast('Selecione um arquivo de imagem (PNG ou JPG).','error'); inputEl.value=''; return; }
   if (file.size > 2*1024*1024) { showToast('A imagem deve ter no máximo 2MB.','error'); inputEl.value=''; return; }
 
@@ -12013,33 +12063,44 @@ async function uploadAssinaturaInstrutor(inputEl) {
       reader.readAsDataURL(file);
     });
 
-    const path = `${usuarioAtual.id}.png`;
+    const path = `${targetId}.png`;
     const {error:upErr} = await sb.storage.from('assinaturas-instrutor').upload(path, blobPng, {upsert:true, contentType:'image/png'});
     if (upErr) throw upErr;
 
-    const {error:dbErr} = await sb.from('usuarios').update({assinatura_path: path}).eq('id', usuarioAtual.id);
+    const {error:dbErr} = await sb.from('usuarios').update({assinatura_path: path}).eq('id', targetId);
     if (dbErr) throw dbErr;
 
-    usuarioAtual.assinatura_path = path;
+    if (targetId === usuarioAtual.id) usuarioAtual.assinatura_path = path;
     showToast('Assinatura cadastrada com sucesso!','success');
-    await renderContaDocumentos();
+    if (origem === 'modal') await abrirModalUsuarioOrg(_modalCurrentId, targetId);
+    else await renderContaDocumentos();
   } catch(e) {
     showToast(e.message||'Erro ao enviar assinatura','error');
   } finally { hideLoading(); inputEl.value=''; }
 }
 
-async function removerAssinaturaInstrutor() {
-  const ok = await confirmarAcao('Deseja remover sua assinatura digitalizada? Os próximos documentos voltarão a usar a assinatura convencional (nome + linha).', 'Remover assinatura', true);
+async function removerAssinaturaInstrutor(targetId, origem) {
+  targetId = targetId || usuarioAtual.id;
+  origem = origem || 'conta';
+  if (!_permiteGerenciarAssinaturaInstrutor(targetId)) { showToast('Você não tem permissão para remover a assinatura deste usuário.','error'); return; }
+  const ok = await confirmarAcao('Deseja remover esta assinatura digitalizada? Os próximos documentos voltarão a usar a assinatura convencional (nome + linha).', 'Remover assinatura', true);
   if (!ok) return;
   showLoading('Removendo assinatura...');
   try {
-    const path = usuarioAtual.assinatura_path;
+    let path = null;
+    if (targetId === usuarioAtual.id) {
+      path = usuarioAtual.assinatura_path;
+    } else {
+      const {data:uAlvo} = await sb.from('usuarios').select('assinatura_path').eq('id',targetId).single();
+      path = uAlvo?.assinatura_path || null;
+    }
     if (path) await sb.storage.from('assinaturas-instrutor').remove([path]);
-    const {error} = await sb.from('usuarios').update({assinatura_path:null}).eq('id', usuarioAtual.id);
+    const {error} = await sb.from('usuarios').update({assinatura_path:null}).eq('id', targetId);
     if (error) throw error;
-    usuarioAtual.assinatura_path = null;
+    if (targetId === usuarioAtual.id) usuarioAtual.assinatura_path = null;
     showToast('Assinatura removida.','success');
-    await renderContaDocumentos();
+    if (origem === 'modal') await abrirModalUsuarioOrg(_modalCurrentId, targetId);
+    else await renderContaDocumentos();
   } catch(e) {
     showToast(e.message||'Erro ao remover assinatura','error');
   } finally { hideLoading(); }
