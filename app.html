@@ -13196,32 +13196,46 @@ function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineH
     const inicio = textoPuro.indexOf(linhaTexto, cursor);
     const base = inicio >= 0 ? inicio : cursor;
 
-    // separa a linha em trechos consecutivos com o mesmo negrito
-    const runs = [];
-    let i = 0;
-    while (i < linhaTexto.length) {
-      const neg = ehNegrito(base + i);
-      let j = i;
-      while (j < linhaTexto.length && ehNegrito(base + j) === neg) j++;
-      runs.push({ texto: linhaTexto.slice(i, j), negrito: neg });
-      i = j;
-    }
+    // Palavra por palavra — NUNCA uma "run" com espaço embutido na borda.
+    // 2026-08: a versão anterior agrupava a linha em trechos consecutivos do
+    // mesmo negrito/normal, o que colocava o espaço que separa negrito de
+    // normal DENTRO do trecho normal adjacente (ex.: "...empresa " com
+    // espaço no final, antes de começar o trecho em negrito "Toledo SST,").
+    // Isso saiu colado no teste real ("empresaToledo SST,CNPJ...") porque
+    // doc.getTextWidth() do jsPDF não conta a largura de um espaço que fica
+    // na BORDA da string medida — o próximo trecho avançava sem o espaço.
+    // A correção mede e desenha cada PALAVRA isoladamente (nunca um espaço
+    // dentro da string medida) e soma manualmente a largura de um espaço
+    // entre cada par de palavras.
+    const palavras = linhaTexto.split(' ').filter(w => w.length > 0);
+    let offsetBusca = 0;
+    const tokens = palavras.map(palavra => {
+      const posNaLinha = linhaTexto.indexOf(palavra, offsetBusca);
+      offsetBusca = posNaLinha + palavra.length;
+      return { texto: palavra, negrito: ehNegrito(base + posNaLinha) };
+    });
 
-    // largura total (pra centralizar) — mede cada trecho já com sua fonte
+    doc.setFont(fontFamily, 'normal');
+    doc.setFontSize(fontSize);
+    const largEspaco = doc.getTextWidth(' ');
+
+    // largura total (pra centralizar) — mede cada palavra já com sua fonte
+    // + um espaço entre cada par de palavras.
     let largura = 0;
-    runs.forEach(r => {
-      doc.setFont(fontFamily, r.negrito ? 'bold' : 'normal');
+    tokens.forEach((t, idx) => {
+      doc.setFont(fontFamily, t.negrito ? 'bold' : 'normal');
       doc.setFontSize(fontSize);
-      largura += doc.getTextWidth(r.texto);
+      largura += doc.getTextWidth(t.texto);
+      if (idx < tokens.length - 1) largura += largEspaco;
     });
 
     let x = cx - largura/2;
-    runs.forEach(r => {
-      doc.setFont(fontFamily, r.negrito ? 'bold' : 'normal');
+    tokens.forEach(t => {
+      doc.setFont(fontFamily, t.negrito ? 'bold' : 'normal');
       doc.setFontSize(fontSize);
-      doc.setTextColor(...(r.negrito ? corDestaque : corNormal));
-      doc.text(r.texto, x, y);
-      x += doc.getTextWidth(r.texto);
+      doc.setTextColor(...(t.negrito ? corDestaque : corNormal));
+      doc.text(t.texto, x, y);
+      x += doc.getTextWidth(t.texto) + largEspaco;
     });
 
     cursor = base + linhaTexto.length;
@@ -13421,21 +13435,39 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
   // (verso do coletivo e ficha de presença já usavam rótulo em versalete +
   // valor em destaque). Padronizado aqui para o mesmo sistema: rótulo
   // helvetica bold pequeno/cinza, valor times bold preto.
-  const _campoAv = (x, yPos, label, valor) => {
+  // maxWidth é opcional: quando informado, o valor quebra em várias linhas
+  // em vez de estourar a coluna. 2026-08: nomes de empresa longos (ex.:
+  // "CIDMED SERVICOS DE MEDICINA E SEGURANCA OCUPACIONAL LTDA") desenhavam
+  // a string inteira numa linha só, sem limite nenhum de largura — invadia
+  // visualmente a coluna da direita, sobrepondo o rótulo/valor de CPF.
+  // Retorna a altura total ocupada (rótulo + N linhas de valor) para quem
+  // chama poder empilhar o próximo campo sem sobrepor um valor que quebrou.
+  const _campoAv = (x, yPos, label, valor, maxWidth) => {
     doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.015,H)); doc.setTextColor(140,158,148);
     doc.text(label.toUpperCase(), x, _avBase(yPos, _avPT_H(0.015,H)));
     doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...BLACK);
-    doc.text(pdfSafe(String(valor||'-'),70), x, _avBase(yPos+_avMM_H(0.021,H), _avPT_H(0.021,H)));
+    const valorTxt = pdfSafe(String(valor||'-'),70);
+    const linhasValor = maxWidth ? doc.splitTextToSize(valorTxt, maxWidth) : [valorTxt];
+    const lhValor = _avMM_H(0.027,H);
+    let vy = yPos+_avMM_H(0.021,H);
+    linhasValor.forEach(ln => { doc.text(ln, x, _avBase(vy, _avPT_H(0.021,H))); vy += lhValor; });
+    return _avMM_H(0.021,H) + linhasValor.length*lhValor;
   };
   const periodoValor = pdfSafe(campos.periodoTexto,70).replace(/^Realizado em\s*/i,'');
   // Cargo removido (2026-08, a pedido do Alisson) — não é necessário no documento.
   const camposEsq = [['Empresa', campos.empresa], ['Aluno', campos.nome]];
   camposEsq.push(['Realizado em', periodoValor], ['Válido até', campos.validadeTexto]);
   const camposDir = [['CPF', campos.cpf || 'não informado'], ['CNPJ', campos.cnpjEmpresa||'-'], ['CH', campos.ch]];
+  // Larguras disponíveis de cada coluna, com uma folga antes da coluna
+  // vizinha começar — é o que faltava pra limitar a quebra de linha acima.
+  const colDirX = cx+_avMM_W(0.05,W);
+  const largColEsq = colDirX - ml - _avMM_W(0.02,W);
+  const largColDir = mr - colDirX;
+  const alturaMinLinha = _avMM_H(0.043,H);
   let yy = y;
-  camposEsq.forEach(([label,valor]) => { _campoAv(ml, yy, label, valor); yy += _avMM_H(0.043,H); });
+  camposEsq.forEach(([label,valor]) => { const usada = _campoAv(ml, yy, label, valor, largColEsq); yy += Math.max(alturaMinLinha, usada+_avMM_H(0.012,H)); });
   let yy2 = y;
-  camposDir.forEach(([label,valor]) => { _campoAv(cx+_avMM_W(0.05,W), yy2, label, valor); yy2 += _avMM_H(0.043,H); });
+  camposDir.forEach(([label,valor]) => { const usada = _campoAv(colDirX, yy2, label, valor, largColDir); yy2 += Math.max(alturaMinLinha, usada+_avMM_H(0.012,H)); });
   y = Math.max(yy,yy2) + _avMM_H(0.015,H);
 
   // caixa CONTEÚDO
