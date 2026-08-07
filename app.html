@@ -668,6 +668,8 @@ let _paginaCatalogo = 1, _porPaginaCatalogo = 20, _catalogoListaFiltrada = [], _
 let _paginaOrgs = 1, _porPaginaOrgs = 20, _orgsListaFiltrada = [];
 let _orgsSelecionadas = new Set(); // ids selecionados para ações em lote na tela Organizações
 let _paginaUsuariosOrg = 1, _porPaginaUsuariosOrg = 20, _usuariosOrgAtual = [], _usuariosOrgFiltrado = [];
+let _paginaClientes = 1, _porPaginaClientes = 20, _clientesListaFiltrada = [];
+let _paginaColabs = 1, _porPaginaColabs = 20, _colabsListaFiltrada = [];
 
 // ============================================================
 // PLANOS — helpers de acesso
@@ -5760,6 +5762,8 @@ async function renderClientes() {
   const {data,error} = await sb.from('clientes').select('*').eq('org_id',usuarioAtual.org_id).order('nome');
   if (error) throw error;
   _clientesCache = data||[];
+  _clientesListaFiltrada = _clientesCache;
+  _paginaClientes = 1;
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Clientes</div>`);
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   if (podeCriar) fabMostrar(()=>abrirModalCliente());
@@ -5783,15 +5787,72 @@ async function renderClientes() {
         <div class="stat-sub">Pausados</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
-      <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarClientes(this.value)">
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+      <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="aplicarFiltrosClientes()">
       ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoClientes()" style="white-space:nowrap">⬆ Importar</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoSOC('clientes')" style="white-space:nowrap">📄 Importar do SOC</button>`:''}
     </div>
-    <div class="card" style="padding:0" id="listaClientes">${_htmlListaClientes(_clientesCache)}</div>`);
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <select id="filtroClienteStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosClientes()">
+        <option value="">Todos os status</option>
+        <option value="ativo">Ativos</option>
+        <option value="inativo">Inativos</option>
+      </select>
+      <select id="ordenarClientes" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosClientes()">
+        <option value="nome_asc">Nome (A-Z)</option>
+        <option value="nome_desc">Nome (Z-A)</option>
+      </select>
+    </div>
+    <div class="card" style="padding:0" id="listaClientes">${_renderClientesListaPaginada()}</div>`);
+}
+
+function _renderClientesListaPaginada() {
+  const { itens, totalPaginas, paginaAtual, total } = _paginarLista(_clientesListaFiltrada, _paginaClientes, _porPaginaClientes);
+  _paginaClientes = paginaAtual;
+  return _htmlListaClientes(itens) + _htmlPaginacao({
+    totalPaginas, paginaAtual, porPagina: _porPaginaClientes, total,
+    onPageChange: '_irPaginaClientes', onPageSizeChange: '_alterarPorPaginaClientes'
+  });
+}
+function _irPaginaClientes(p) {
+  _paginaClientes = p;
+  _setElBoth('listaClientes', _renderClientesListaPaginada());
+}
+function _alterarPorPaginaClientes(v) {
+  _porPaginaClientes = parseInt(v, 10) || 20;
+  _paginaClientes = 1;
+  _setElBoth('listaClientes', _renderClientesListaPaginada());
+}
+// Substitui a antiga filtrarClientes(q) — agora também considera status e
+// ordenação, e sempre volta pra página 1 (senão o usuário pode ficar "preso"
+// numa página que deixou de existir depois de filtrar). Usa _getElVisible
+// (não document.getElementById) porque setConteudo escreve o mesmo HTML em
+// desktop e mobile ao mesmo tempo — mesmo padrão já usado em Organizações.
+function aplicarFiltrosClientes() {
+  const busca  = (_getElVisible('buscaCliente')?.value || '').toLowerCase().trim();
+  const status = _getElVisible('filtroClienteStatus')?.value || '';
+  const ordem  = _getElVisible('ordenarClientes')?.value || 'nome_asc';
+
+  let r = _clientesCache;
+  if (busca)              r = r.filter(c => c.nome.toLowerCase().includes(busca) || (c.cnpj||'').includes(busca));
+  if (status === 'ativo')   r = r.filter(c => c.ativo);
+  if (status === 'inativo') r = r.filter(c => !c.ativo);
+
+  r = [...r].sort((a,b) => ordem === 'nome_desc' ? b.nome.localeCompare(a.nome) : a.nome.localeCompare(b.nome));
+
+  _clientesListaFiltrada = r;
+  _paginaClientes = 1;
+  _setElBoth('listaClientes', _renderClientesListaPaginada());
 }
 
 function _htmlListaClientes(lista) {
-  if (!lista.length) return `<div class="empty" style="padding:32px 20px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhum cliente cadastrado</div><div class="empty-sub">Cadastre a primeira empresa-cliente.</div></div>`;
+  if (!lista.length) {
+    // Distingue "organização sem nenhum cliente" de "busca/filtro sem
+    // resultado" — mostrar "cadastre o primeiro cliente" quando na
+    // verdade já existem clientes, só não bateram com o filtro, confundia.
+    return _clientesCache.length > 0
+      ? `<div class="empty" style="padding:32px 20px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado encontrado</div><div class="empty-sub">Tente ajustar a busca ou os filtros.</div></div>`
+      : `<div class="empty" style="padding:32px 20px"><div class="empty-icon">🏢</div><div class="empty-title">Nenhum cliente cadastrado</div><div class="empty-sub">Cadastre a primeira empresa-cliente.</div></div>`;
+  }
   const CORES = ['#1E2A4A','#059669','#1D4ED8','#D97706','#7C3AED','#DC2626'];
   return lista.map((c,i)=>{
     const cor = CORES[i % CORES.length];
@@ -5937,12 +5998,6 @@ async function _carregarOportunidadesComerciais(clienteId, todasNrs) {
   } catch(e) {
     _setElBoth('oportunidadesBox', `<div style="font-size:13px;color:var(--text-3)">Não foi possível calcular oportunidades comerciais agora.</div>`);
   }
-}
-
-function filtrarClientes(q) {
-  const f = q.toLowerCase().trim();
-  const r = f ? _clientesCache.filter(c=>c.nome.toLowerCase().includes(f)||(c.cnpj||'').includes(f)) : _clientesCache;
-  _setElBoth('listaClientes', _htmlListaClientes(r));
 }
 
 function menuCliente(btn, id) {
@@ -6162,6 +6217,8 @@ async function _fetchTodosColaboradores(orgId, selectCols) {
 async function renderColaboradores() {
   const data = await _fetchTodosColaboradores(usuarioAtual.org_id, '*');
   _colabsCache = data||[];
+  _colabsListaFiltrada = _colabsCache;
+  _paginaColabs = 1;
   if (!_clientesCache.length) {
     const {data:clis} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = clis||[];
@@ -6192,20 +6249,48 @@ async function renderColaboradores() {
         <div class="stat-sub">a vincular</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
-      <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarColabs(this.value)">
-      <select id="filtroColabEmpresa" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarColabs(_getElVisible('buscaColab')?.value||'')">
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+      <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="aplicarFiltrosColabs()">
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacao()" style="white-space:nowrap">⬆ Importar</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoSOC('colaboradores')" style="white-space:nowrap">📄 Importar do SOC</button>`:''}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <select id="filtroColabEmpresa" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosColabs()">
         <option value="">Todas as empresas</option>
         <option value="__sem__">Sem empresa vinculada</option>
         ${cliOptsFiltro}
       </select>
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacao()" style="white-space:nowrap">⬆ Importar</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoSOC('colaboradores')" style="white-space:nowrap">📄 Importar do SOC</button>`:''}
+      <select id="ordenarColabs" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosColabs()">
+        <option value="nome_asc">Nome (A-Z)</option>
+        <option value="nome_desc">Nome (Z-A)</option>
+      </select>
     </div>
-    <div class="card" style="padding:0" id="listaColabs">${_htmlListaColabs(_colabsCache)}</div>`);
+    <div class="card" style="padding:0" id="listaColabs">${_renderColabsListaPaginada()}</div>`);
+}
+
+function _renderColabsListaPaginada() {
+  const { itens, totalPaginas, paginaAtual, total } = _paginarLista(_colabsListaFiltrada, _paginaColabs, _porPaginaColabs);
+  _paginaColabs = paginaAtual;
+  return _htmlListaColabs(itens) + _htmlPaginacao({
+    totalPaginas, paginaAtual, porPagina: _porPaginaColabs, total,
+    onPageChange: '_irPaginaColabs', onPageSizeChange: '_alterarPorPaginaColabs'
+  });
+}
+function _irPaginaColabs(p) {
+  _paginaColabs = p;
+  _setElBoth('listaColabs', _renderColabsListaPaginada());
+}
+function _alterarPorPaginaColabs(v) {
+  _porPaginaColabs = parseInt(v, 10) || 20;
+  _paginaColabs = 1;
+  _setElBoth('listaColabs', _renderColabsListaPaginada());
 }
 
 function _htmlListaColabs(lista) {
-  if (!lista.length) return `<div class="empty" style="padding:32px 20px"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador</div><div class="empty-sub">Cadastre os colaboradores das empresas-clientes.</div></div>`;
+  if (!lista.length) {
+    return _colabsCache.length > 0
+      ? `<div class="empty" style="padding:32px 20px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado encontrado</div><div class="empty-sub">Tente ajustar a busca ou os filtros.</div></div>`
+      : `<div class="empty" style="padding:32px 20px"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador</div><div class="empty-sub">Cadastre os colaboradores das empresas-clientes.</div></div>`;
+  }
   const CORES_BG  = ['rgba(30,42,74,.1)','rgba(5,150,105,.1)','rgba(245,158,11,.1)','rgba(29,78,216,.1)','rgba(124,58,237,.1)'];
   const CORES_FG  = ['#1E2A4A','#059669','#D97706','#1D4ED8','#7C3AED'];
   return lista.map((c,i)=>{
@@ -6375,14 +6460,24 @@ function _colabTreinosAlterarPorPagina(v) {
   _setElBoth('treinosColabMiolo', _htmlTreinosColabMiolo());
 }
 
-function filtrarColabs(q) {
-  const f = (q||'').toLowerCase().trim();
+// Substitui a antiga filtrarColabs(q) — agora também ordena e sempre volta
+// pra página 1 ao mudar qualquer filtro (mesmo padrão de aplicarFiltrosClientes/
+// aplicarFiltrosOrgs).
+function aplicarFiltrosColabs() {
+  const busca     = (_getElVisible('buscaColab')?.value || '').toLowerCase().trim();
   const filtroEmp = _getElVisible('filtroColabEmpresa')?.value || '';
+  const ordem     = _getElVisible('ordenarColabs')?.value || 'nome_asc';
+
   let r = _colabsCache;
   if (filtroEmp === '__sem__') r = r.filter(c=>!c.cliente_id);
   else if (filtroEmp) r = r.filter(c=>c.cliente_id === filtroEmp);
-  if (f) r = r.filter(c=>c.nome.toLowerCase().includes(f)||(c.cpf||'').includes(f));
-  _setElBoth('listaColabs', _htmlListaColabs(r));
+  if (busca) r = r.filter(c=>c.nome.toLowerCase().includes(busca)||(c.cpf||'').includes(busca));
+
+  r = [...r].sort((a,b) => ordem === 'nome_desc' ? b.nome.localeCompare(a.nome) : a.nome.localeCompare(b.nome));
+
+  _colabsListaFiltrada = r;
+  _paginaColabs = 1;
+  _setElBoth('listaColabs', _renderColabsListaPaginada());
 }
 
 async function abrirModalColab(id=null) {
