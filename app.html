@@ -13217,7 +13217,15 @@ function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineH
 
     doc.setFont(fontFamily, 'normal');
     doc.setFontSize(fontSize);
-    const largEspaco = doc.getTextWidth(' ');
+    // NUNCA medir um espaço isolado (doc.getTextWidth(' ')) — é exatamente
+    // essa medição que causa o bug (jsPDF não conta a largura de um espaço
+    // sozinho/na borda de uma string medida, o que já colou palavras aqui
+    // antes MESMO depois da correção anterior, que ainda fazia essa mesma
+    // medição isolada). Em vez disso, mede a diferença entre duas strings
+    // reais com o espaço no MEIO ("a a" menos "aa") — um espaço interno,
+    // cercado de caracteres, é medido corretamente pelo jsPDF (é assim que
+    // todo o resto do app desenha texto normal sem esse bug).
+    const largEspaco = doc.getTextWidth('a a') - doc.getTextWidth('aa');
 
     // largura total (pra centralizar) — mede cada palavra já com sua fonte
     // + um espaço entre cada par de palavras.
@@ -13694,7 +13702,18 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
       doc.setFont('helvetica','bold'); doc.setFontSize(7.3); doc.setTextColor(140,158,148);
       doc.text(label.toUpperCase(), c1x0, y); y += 3.8;
       doc.setFont('times','bold'); doc.setFontSize(9.5); doc.setTextColor(...BLACK);
-      doc.text(pdfSafe(String(value||'-'),44), c1x0, y); y += 6.4;
+      // 2026-08-06: valor desenhava numa linha só, truncado em 44 caracteres
+      // (contagem de caracteres, não largura real) — uma razão social longa
+      // (ex.: "CIDMED SERVICOS DE MEDICINA E SEGURANCA OCUPACIONAL LTDA")
+      // já vinha cortada em "...OCUP" pelo truncamento E, mesmo cortada,
+      // ainda era larga demais pra coluna, invadindo visualmente a coluna
+      // do Conteúdo Programático ao lado. Corrigido pro mesmo padrão já
+      // usado no verso individual: quebra em várias linhas pela largura
+      // real da coluna (nunca mais corta o nome da empresa/instrutor —
+      // um certificado não pode exibir uma razão social incompleta).
+      const linhasValor = doc.splitTextToSize(pdfSafe(String(value||'-'),200), c1x1-c1x0);
+      linhasValor.forEach((ln,idx) => doc.text(ln, c1x0, y+idx*4.3));
+      y += 6.4 + Math.max(0, linhasValor.length-1)*4.3;
     });
   }
 
@@ -15123,7 +15142,17 @@ async function gerarCertificadoColetivo(turmaId) {
     // PÁGINA 1 - CAPA COLETIVA (ou arte própria da organização — Fase 3)
     // ════════════════════════════════
     doc.setFillColor(...WHITE); doc.rect(0,0,W,H,'F');
-    const nomeEmpSafe0 = s(nomeEmp,45);
+    // 2026-08-06: era truncado em 45 caracteres AQUI, na origem, antes de
+    // chegar em qualquer função de desenho — uma razão social um pouco mais
+    // longa (ex.: "CIDMED SERVICOS DE MEDICINA E SEGURANCA OCUPACIONAL
+    // LTDA") já chegava cortada ("...OCUPA") tanto na capa quanto no verso,
+    // mesmo depois de as duas funções de desenho passarem a quebrar/ajustar
+    // a largura corretamente — a quebra de linha não tem como recuperar um
+    // pedaço do nome que já foi cortado antes de chegar nela. Elevado para
+    // um teto bem folgado (200): as funções de desenho já lidam com nomes
+    // longos quebrando em várias linhas, então o corte aqui só precisa
+    // existir como rede de segurança extrema, não como limite prático.
+    const nomeEmpSafe0 = s(nomeEmp,200);
     const _isAvanteseg = (t.organizacoes?.id === AVANTESEG_ORG_ID || ORGS_TESTE_MODELO_AVANTESEG.includes(t.organizacoes?.id)) && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
     const _arteCapaCol = _arteCertificadoOrg(t.organizacoes);
     const _arteCapaColImg = _arteCapaCol ? await carregarArteFundoOrgPDF(_arteCapaCol.url) : null;
