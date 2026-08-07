@@ -13196,54 +13196,67 @@ function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineH
     const inicio = textoPuro.indexOf(linhaTexto, cursor);
     const base = inicio >= 0 ? inicio : cursor;
 
-    // Palavra por palavra — NUNCA uma "run" com espaço embutido na borda.
-    // 2026-08: a versão anterior agrupava a linha em trechos consecutivos do
-    // mesmo negrito/normal, o que colocava o espaço que separa negrito de
-    // normal DENTRO do trecho normal adjacente (ex.: "...empresa " com
-    // espaço no final, antes de começar o trecho em negrito "Toledo SST,").
-    // Isso saiu colado no teste real ("empresaToledo SST,CNPJ...") porque
-    // doc.getTextWidth() do jsPDF não conta a largura de um espaço que fica
-    // na BORDA da string medida — o próximo trecho avançava sem o espaço.
-    // A correção mede e desenha cada PALAVRA isoladamente (nunca um espaço
-    // dentro da string medida) e soma manualmente a largura de um espaço
-    // entre cada par de palavras.
-    const palavras = linhaTexto.split(' ').filter(w => w.length > 0);
-    let offsetBusca = 0;
-    const tokens = palavras.map(palavra => {
-      const posNaLinha = linhaTexto.indexOf(palavra, offsetBusca);
-      offsetBusca = posNaLinha + palavra.length;
-      return { texto: palavra, negrito: ehNegrito(base + posNaLinha) };
-    });
+    // Agrupa a linha em TRECHOS (runs) consecutivos do mesmo negrito/normal
+    // — cada run é desenhado numa ÚNICA chamada doc.text(), deixando o
+    // jsPDF espaçar nativamente as palavras DENTRO do trecho (é assim que
+    // todo o resto do app desenha texto de várias palavras sem nenhum
+    // problema — nunca houve bug de espaço dentro de uma chamada só). O
+    // único ponto realmente frágil é a COSTURA entre dois trechos de
+    // estilos diferentes — por isso cada run é "aparado" (nunca fica com
+    // espaço na ponta) e a lacuna entre um run e o próximo é sempre
+    // inserida manualmente, medida pela diferença de larguras ("a a" menos
+    // "aa": espaço no MEIO de uma string real, nunca isolado/na borda).
+    //
+    // 2026-08-06, 3ª tentativa: as duas correções anteriores (tokenizar por
+    // PALAVRA — com ou sem medir o espaço isoladamente) na prática
+    // pioraram o problema: colocaram TODA junção palavra-a-palavra na
+    // categoria frágil (posição calculada manualmente por soma de
+    // larguras), inclusive as que já funcionavam perfeitamente antes
+    // (dentro do mesmo estilo, numa única chamada nativa do jsPDF — ex.:
+    // "AVANTESeg certifica", que nunca teve problema até eu "corrigir" isso
+    // pra desenhar palavra por palavra). O bug real sempre foi só na
+    // costura entre negrito/normal; reduzir as costuras manuais ao mínimo
+    // necessário (só nas transições de estilo, não em toda palavra da
+    // frase) resolve sem reintroduzir o problema original.
+    const runsRaw = [];
+    { let i = 0;
+      while (i < linhaTexto.length) {
+        const neg = ehNegrito(base + i);
+        let j = i;
+        while (j < linhaTexto.length && ehNegrito(base + j) === neg) j++;
+        runsRaw.push({ texto: linhaTexto.slice(i, j), negrito: neg });
+        i = j;
+      }
+    }
+    const runs = runsRaw.map(r => ({ texto: r.texto.trim(), negrito: r.negrito })).filter(r => r.texto.length > 0);
 
     doc.setFont(fontFamily, 'normal');
     doc.setFontSize(fontSize);
-    // NUNCA medir um espaço isolado (doc.getTextWidth(' ')) — é exatamente
-    // essa medição que causa o bug (jsPDF não conta a largura de um espaço
-    // sozinho/na borda de uma string medida, o que já colou palavras aqui
-    // antes MESMO depois da correção anterior, que ainda fazia essa mesma
-    // medição isolada). Em vez disso, mede a diferença entre duas strings
-    // reais com o espaço no MEIO ("a a" menos "aa") — um espaço interno,
-    // cercado de caracteres, é medido corretamente pelo jsPDF (é assim que
-    // todo o resto do app desenha texto normal sem esse bug).
+    // NUNCA medir um espaço isolado (doc.getTextWidth(' ')) — jsPDF não
+    // conta direito a largura de um espaço sozinho/na borda de uma string
+    // medida. Mede a diferença entre duas strings reais com o espaço no
+    // MEIO ("a a" menos "aa") — espaço interno, cercado de caracteres, é
+    // medido corretamente (é assim que o resto do app desenha texto normal
+    // sem esse bug).
     const largEspaco = doc.getTextWidth('a a') - doc.getTextWidth('aa');
 
-    // largura total (pra centralizar) — mede cada palavra já com sua fonte
-    // + um espaço entre cada par de palavras.
+    // largura total (pra centralizar) — mede cada run já com sua fonte
+    // + uma lacuna entre cada par de runs.
     let largura = 0;
-    tokens.forEach((t, idx) => {
-      doc.setFont(fontFamily, t.negrito ? 'bold' : 'normal');
+    runs.forEach((r, idx) => {
+      doc.setFont(fontFamily, r.negrito ? 'bold' : 'normal');
       doc.setFontSize(fontSize);
-      largura += doc.getTextWidth(t.texto);
-      if (idx < tokens.length - 1) largura += largEspaco;
+      largura += doc.getTextWidth(r.texto);
+      if (idx < runs.length - 1) largura += largEspaco;
     });
 
     let x = cx - largura/2;
-    tokens.forEach(t => {
-      doc.setFont(fontFamily, t.negrito ? 'bold' : 'normal');
+    runs.forEach(r => {
+      doc.setFont(fontFamily, r.negrito ? 'bold' : 'normal');
       doc.setFontSize(fontSize);
-      doc.setTextColor(...(t.negrito ? corDestaque : corNormal));
-      doc.text(t.texto, x, y);
-      x += doc.getTextWidth(t.texto) + largEspaco;
+      doc.setTextColor(...(r.negrito ? corDestaque : corNormal));
+      doc.text(r.texto, x, y);
+      x += doc.getTextWidth(r.texto) + largEspaco;
     });
 
     cursor = base + linhaTexto.length;
