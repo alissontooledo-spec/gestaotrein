@@ -23,6 +23,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.8/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
+<!-- SheetJS — usado só pelo import "Modelo 1" do SOC (colaboradores), para ler .xlsx no navegador sem servidor -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
 <style>
@@ -5781,9 +5783,9 @@ async function renderClientes() {
         <div class="stat-sub">Pausados</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
-      <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarClientes(this.value)">
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoClientes()" style="white-space:nowrap">⬆ Importar</button>`:''}
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+      <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarClientes(this.value)">
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoClientes()" style="white-space:nowrap">⬆ Importar</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoSOC('clientes')" style="white-space:nowrap">📄 Importar do SOC</button>`:''}
     </div>
     <div class="card" style="padding:0" id="listaClientes">${_htmlListaClientes(_clientesCache)}</div>`);
 }
@@ -6197,7 +6199,7 @@ async function renderColaboradores() {
         <option value="__sem__">Sem empresa vinculada</option>
         ${cliOptsFiltro}
       </select>
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacao()" style="white-space:nowrap">⬆ Importar</button>`:''}
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacao()" style="white-space:nowrap">⬆ Importar</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoSOC('colaboradores')" style="white-space:nowrap">📄 Importar do SOC</button>`:''}
     </div>
     <div class="card" style="padding:0" id="listaColabs">${_htmlListaColabs(_colabsCache)}</div>`);
 }
@@ -9100,6 +9102,315 @@ async function executarImportacao() {
   } catch(e) {
     setBtnModalLoading(false);
     showToast(e.message||'Erro ao importar','error');
+  }
+}
+
+// ============================================================
+// IMPORTAÇÃO — SOC "Modelo 1" (opção E da análise em
+// 01-Requisitos/integracao-soc-avanteseg.md). Bloco 100% isolado: não
+// reaproveita nem altera nenhuma função da importação CSV acima (nomes de
+// função e de variável globais prefixados com "_soc"/"SOC" só para este
+// fluxo). Lê o relatório nativo do SOC (.xlsx), reconhece o layout pelo
+// cabeçalho automaticamente e extrai só nome/CPF/cargo do colaborador e
+// razão social/CNPJ da empresa — as ~110 colunas restantes do arquivo (RG,
+// endereço, estado civil, remuneração etc.) são descartadas na leitura e
+// nunca chegam a ser gravadas ou retidas.
+// ============================================================
+
+// Normaliza um texto de cabeçalho para comparação: remove acentos, baixa
+// caixa, remove pontuação comum nos cabeçalhos do SOC (. - /) e colapsa
+// espaços. Ex.: "Cod.Unid" -> "codunid", "E-mail" -> "email".
+function _socNormalizarTexto(s) {
+  return String(s||'')
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase()
+    .replace(/[.\-/]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+// Cada campo tem uma lista de "apelidos" possíveis (cabeçalho já
+// normalizado), em ordem de preferência. Match é sempre EXATO — evita que
+// "cnpj" capture por engano a coluna "CNPJ Unidade", por exemplo.
+// Empresa tem 2 apelidos porque, num arquivo real testado, o SOC preenche
+// só a coluna "...Unid." por funcionário (ex.: "Razão Social Unid.",
+// "CNPJ Unidade") e deixa "Razão Social"/"CNPJ" em branco linha a linha —
+// por isso colMap guarda TODAS as colunas que baterem (não só a 1ª) e a
+// leitura de cada linha tenta cada uma, na ordem, até achar valor.
+const _SOC_CAMPOS_MODELO1 = {
+  empresaNome: ['razao social', 'razao social unid'],
+  empresaCnpj: ['cnpj', 'cnpj unidade'],
+  nome:        ['nome funcionario'],
+  cpf:         ['cpf'],
+  cargo:       ['nome cargo'],
+  matricula:   ['matricula'],
+  situacao:    ['situacao'],
+  email:       ['email'],
+  telefone:    ['telefone celular','telefone comercial','tel'],
+};
+
+// Colunas "âncora" usadas só para localizar a linha de cabeçalho dentro do
+// arquivo (o Modelo 1 sempre tem uma linha de título antes do cabeçalho de
+// verdade — ver seção 3D da análise).
+const _SOC_ANCORAS_CABECALHO = ['razao social','cnpj','nome funcionario','cpf','matricula','situacao'];
+
+function _socDetectarCabecalho(linhas) {
+  const limite = Math.min(linhas.length, 10);
+  for (let i = 0; i < limite; i++) {
+    const normalizadas = (linhas[i]||[]).map(_socNormalizarTexto);
+    const acertos = _SOC_ANCORAS_CABECALHO.filter(a => normalizadas.includes(a)).length;
+    if (acertos >= 3) {
+      const colMap = {};
+      for (const [campo, apelidos] of Object.entries(_SOC_CAMPOS_MODELO1)) {
+        const indices = [];
+        for (const apelido of apelidos) {
+          const idx = normalizadas.indexOf(apelido);
+          if (idx >= 0 && !indices.includes(idx)) indices.push(idx);
+        }
+        if (indices.length) colMap[campo] = indices;
+      }
+      return {linhaIndex: i, colMap};
+    }
+  }
+  return null;
+}
+
+function _socFormatarCpf(digits) {
+  const d = String(digits||'').replace(/\D/g,'');
+  return d.length===11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4') : d;
+}
+function _socFormatarCnpj(digits) {
+  const d = String(digits||'').replace(/\D/g,'');
+  return d.length===14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5') : d;
+}
+
+let _socImportRows = [];      // colaboradores válidos, prontos para gravar
+let _socImportErros = [];     // {linha, motivo} — linhas ignoradas
+let _socImportEmpresas = [];  // {nome, cnpjDigits, existente, clienteId}
+// De onde o modal foi aberto ('colaboradores' ou 'clientes') — usado só
+// para saber qual tela recarregar ao final (evita "pular" de tela sem o
+// usuário ter clicado em nenhum item de navegação). A importação em si
+// grava exatamente igual, não importa de onde foi aberta.
+let _socImportOrigem = 'colaboradores';
+
+function abrirModalImportacaoSOC(origem = 'colaboradores') {
+  _socImportOrigem = origem;
+  abrirModal('Importar do SOC (Modelo 1)', `
+    <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.6">
+      <div style="font-weight:600;margin-bottom:4px">Como importar:</div>
+      1. No SOC, exporte o relatório <strong>Modelo 1</strong> da empresa desejada<br>
+      2. Selecione o arquivo (.xlsx) abaixo — não precisa editar nada nele<br>
+      3. Confira o resumo abaixo e confirme
+    </div>
+    <div class="field"><label>Arquivo do SOC (Modelo 1) *</label>
+      <input type="file" id="mImpSocArquivo" accept=".xlsx,.xls" style="width:100%;padding:9px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit"></div>
+    <div id="mImpSocPreview" style="margin-top:8px;font-size:13px;color:var(--text-2)"></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="executarImportacaoSOC()" disabled>Importar</button>`);
+  document.getElementById('mImpSocArquivo').addEventListener('change', previewImportacaoSOC);
+}
+
+function _socHtmlErros() {
+  if (!_socImportErros.length) return '';
+  return `<div style="background:var(--amber-l);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--amber-text)">
+    <div style="font-weight:600;margin-bottom:4px">${_socImportErros.length} linha${_socImportErros.length!==1?'s':''} ignorada${_socImportErros.length!==1?'s':''} — inconsistência encontrada:</div>
+    ${_socImportErros.slice(0,5).map(er=>`<div>Linha ${er.linha}: ${escapeHtml(er.motivo)}</div>`).join('')}
+    ${_socImportErros.length>5?`<div>+ ${_socImportErros.length-5} mais...</div>`:''}
+  </div>`;
+}
+
+async function previewImportacaoSOC(e) {
+  const file = e.target.files[0];
+  const preview = document.getElementById('mImpSocPreview');
+  _socImportRows = []; _socImportErros = []; _socImportEmpresas = [];
+  const btn = document.getElementById('btnSalvarModal');
+  if (btn) btn.disabled = true;
+  if (!file) return;
+  if (typeof XLSX === 'undefined') {
+    preview.innerHTML = '<span style="color:var(--red)">Não foi possível carregar o leitor de planilhas. Recarregue a página e tente de novo.</span>';
+    return;
+  }
+  preview.innerHTML = '<span style="color:var(--text-3)">Lendo arquivo...</span>';
+  try {
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, {type:'array'});
+    // Prioriza uma aba cujo nome comece com "Modelo" (padrão do SOC); senão,
+    // usa a primeira aba do arquivo.
+    const nomeAba = wb.SheetNames.find(n => /^modelo/i.test(n.trim())) || wb.SheetNames[0];
+    const ws = wb.Sheets[nomeAba];
+    if (!ws) throw new Error('Arquivo sem nenhuma aba de dados.');
+    const linhas = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:''});
+    if (!linhas.length) throw new Error('Arquivo vazio.');
+
+    const cab = _socDetectarCabecalho(linhas);
+    if (!cab) {
+      preview.innerHTML = '<span style="color:var(--red)">Não foi possível reconhecer este arquivo como o relatório Modelo 1 do SOC. Confira se é o arquivo certo, exportado sem alterações.</span>';
+      return;
+    }
+    const faltando = ['empresaNome','empresaCnpj','nome','cpf'].filter(c => cab.colMap[c] === undefined);
+    if (faltando.length) {
+      preview.innerHTML = `<span style="color:var(--red)">O arquivo foi reconhecido como Modelo 1, mas faltam colunas essenciais no cabeçalho. Confira se exportou o relatório completo, sem remover colunas.</span>`;
+      return;
+    }
+
+    const dados = linhas.slice(cab.linhaIndex + 1);
+    const porCpf = new Map(); // dedup dentro do próprio arquivo — última ocorrência de cada CPF vence
+    const empresasMap = new Map(); // cnpjDigits -> {nome, cnpjDigits}
+    let linhasComConteudo = 0;
+
+    dados.forEach((linha, i) => {
+      if (!linha || !linha.some(v => String(v||'').trim())) return; // linha em branco, não conta
+      linhasComConteudo++;
+      const numeroLinha = cab.linhaIndex + 2 + i; // linha real na planilha (1-based)
+      // Tenta cada coluna candidata do campo, em ordem, até achar uma
+      // preenchida nesta linha (ver comentário em _SOC_CAMPOS_MODELO1).
+      const g = campo => {
+        const idxs = cab.colMap[campo];
+        if (!idxs) return '';
+        for (const idx of idxs) { const v = String(linha[idx]||'').trim(); if (v) return v; }
+        return '';
+      };
+
+      const nome = g('nome');
+      const cpfDigits = g('cpf').replace(/\D/g,'');
+      const empresaNome = g('empresaNome');
+      const cnpjDigits = g('empresaCnpj').replace(/\D/g,'');
+
+      if (!nome) { _socImportErros.push({linha:numeroLinha, motivo:'Nome do funcionário em branco'}); return; }
+      if (cpfDigits.length !== 11 || /^(\d)\1{10}$/.test(cpfDigits)) {
+        _socImportErros.push({linha:numeroLinha, motivo:`CPF inválido ou em branco ("${g('cpf')||'—'}")`}); return;
+      }
+      if (!empresaNome || cnpjDigits.length !== 14) {
+        _socImportErros.push({linha:numeroLinha, motivo:'Empresa (razão social/CNPJ) em branco ou inválida'}); return;
+      }
+
+      if (!empresasMap.has(cnpjDigits)) empresasMap.set(cnpjDigits, {nome:empresaNome, cnpjDigits});
+
+      porCpf.set(cpfDigits, {
+        nome, cpfDigits,
+        cargo: g('cargo') || null,
+        situacao: g('situacao') || '',
+        email: g('email') || null,
+        telefone: g('telefone') || null,
+        empresaCnpjDigits: cnpjDigits,
+      });
+    });
+
+    _socImportRows = [...porCpf.values()];
+    const duplicadosNoArquivo = linhasComConteudo - _socImportRows.length - _socImportErros.length;
+
+    if (!_socImportRows.length) {
+      preview.innerHTML = `<span style="color:var(--red)">Nenhuma linha válida encontrada.</span>` + _socHtmlErros();
+      return;
+    }
+
+    // Checagem ao vivo do que já existe na organização — não depende de
+    // cache (evita contagem errada numa 2ª importação na mesma sessão) e
+    // compara sempre por dígitos, já que CPF/CNPJ podem estar salvos com ou
+    // sem formatação a depender de como o registro foi cadastrado antes.
+    const [cliRes, colabsExistentes] = await Promise.all([
+      sb.from('clientes').select('id,nome,cnpj').eq('org_id', usuarioAtual.org_id),
+      _fetchTodosColaboradores(usuarioAtual.org_id, 'id,cpf'),
+    ]);
+    if (cliRes.error) throw cliRes.error;
+
+    const clientesPorCnpjDigits = new Map((cliRes.data||[]).map(c => [(c.cnpj||'').replace(/\D/g,''), c]));
+    const cpfsExistentes = new Set((colabsExistentes||[]).map(c => (c.cpf||'').replace(/\D/g,'')));
+
+    _socImportEmpresas = [...empresasMap.values()].map(emp => ({
+      ...emp,
+      existente: clientesPorCnpjDigits.has(emp.cnpjDigits),
+      clienteId: clientesPorCnpjDigits.get(emp.cnpjDigits)?.id || null,
+    }));
+
+    const empresasNovas = _socImportEmpresas.filter(e=>!e.existente).length;
+    const empresasExistentes = _socImportEmpresas.length - empresasNovas;
+    const colaboradoresNovos = _socImportRows.filter(r=>!cpfsExistentes.has(r.cpfDigits)).length;
+    const colaboradoresAtualizados = _socImportRows.length - colaboradoresNovos;
+
+    // Não sabemos o significado exato dos códigos de situação do Modelo 1
+    // (variam por parametrização do cliente no SOC) — por isso não
+    // filtramos automaticamente por eles, só avisamos quando há mais de um
+    // valor distinto no arquivo, como sinal de possível mistura de
+    // ativos/inativos que vale a pena conferir.
+    const situacoesMap = {};
+    _socImportRows.forEach(r => { const s = r.situacao.trim(); if (s) situacoesMap[s] = (situacoesMap[s]||0)+1; });
+    const situacoesDistintas = Object.entries(situacoesMap);
+
+    preview.innerHTML = `
+      <div style="background:var(--green-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">
+        <div style="font-weight:600;color:var(--green-text);margin-bottom:6px">Resumo da importação</div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.7">
+          🏢 ${_socImportEmpresas.length} empresa${_socImportEmpresas.length!==1?'s':''} — ${empresasNovas} nova${empresasNovas!==1?'s':''}, ${empresasExistentes} já cadastrada${empresasExistentes!==1?'s':''}<br>
+          👤 ${_socImportRows.length} colaborador${_socImportRows.length!==1?'es':''} — ${colaboradoresNovos} novo${colaboradoresNovos!==1?'s':''}, ${colaboradoresAtualizados} atualização${colaboradoresAtualizados!==1?'ões':'ão'}
+        </div>
+      </div>
+      ${duplicadosNoArquivo>0?`<div style="font-size:12px;color:var(--amber-text);margin-bottom:8px">${duplicadosNoArquivo} linha(s) com CPF repetido dentro do próprio arquivo — só a última ocorrência de cada CPF foi considerada.</div>`:''}
+      ${situacoesDistintas.length>1?`<div style="font-size:12px;color:var(--amber-text);margin-bottom:8px">Mais de uma situação encontrada no arquivo (campo "Situação" do SOC): ${situacoesDistintas.map(([s,n])=>`${escapeHtml(s)} (${n})`).join(', ')} — confira se é isso que você espera antes de confirmar.</div>`:''}
+      ${_socHtmlErros()}
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto;margin-top:8px">
+        ${_socImportRows.slice(0,5).map(r =>
+          `<div style="display:flex;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px">
+             <span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.nome)}</span>
+             <span style="color:var(--text-3)">${_socFormatarCpf(r.cpfDigits)}</span>
+           </div>`).join('')}
+        ${_socImportRows.length > 5 ? `<div style="padding:7px 12px;font-size:12px;color:var(--text-3)">+ ${_socImportRows.length-5} mais...</div>` : ''}
+      </div>`;
+
+    if (btn) btn.disabled = false;
+  } catch(err) {
+    preview.innerHTML = `<span style="color:var(--red)">${escapeHtml(err.message||'Erro ao ler o arquivo.')}</span>`;
+  }
+}
+
+async function executarImportacaoSOC() {
+  if (!_socImportRows.length) { showToast('Selecione um arquivo válido do SOC','error'); return; }
+  try {
+    setBtnModalLoading(true);
+
+    // 1) Empresas novas primeiro — colaboradores dependem do cliente_id
+    const empresasNovas = _socImportEmpresas.filter(e=>!e.existente);
+    if (empresasNovas.length) {
+      const payloadEmpresas = empresasNovas.map(emp => ({nome:emp.nome, cnpj:_socFormatarCnpj(emp.cnpjDigits), org_id:usuarioAtual.org_id, ativo:true}));
+      const {data: criadas, error: eIns} = await sb.from('clientes').insert(payloadEmpresas).select('id,cnpj');
+      if (eIns) throw eIns;
+      (criadas||[]).forEach(c => {
+        const emp = _socImportEmpresas.find(e => e.cnpjDigits === (c.cnpj||'').replace(/\D/g,''));
+        if (emp) emp.clienteId = c.id;
+      });
+    }
+
+    const faltouCliente = _socImportEmpresas.some(e => !e.clienteId);
+    if (faltouCliente) throw new Error('Não foi possível confirmar o cadastro de uma ou mais empresas — nenhum colaborador foi importado. Tente novamente.');
+
+    const clienteIdPorCnpj = new Map(_socImportEmpresas.map(e => [e.cnpjDigits, e.clienteId]));
+
+    // 2) Colaboradores — upsert por (org_id, cpf), mesmo padrão já usado na
+    // importação CSV (executarImportacao, acima) e já validado em produção.
+    const payloadColabs = _socImportRows.map(r => ({
+      nome: r.nome,
+      cpf: _socFormatarCpf(r.cpfDigits),
+      cargo: r.cargo,
+      email: r.email,
+      telefone: r.telefone,
+      cliente_id: clienteIdPorCnpj.get(r.empresaCnpjDigits) || null,
+      org_id: usuarioAtual.org_id,
+    }));
+    const {data: salvos, error: eUp} = await sb.from('colaboradores')
+      .upsert(payloadColabs, {onConflict:'org_id,cpf', ignoreDuplicates:false}).select('id');
+    if (eUp) throw eUp;
+
+    const qtd = salvos?.length || payloadColabs.length;
+    fecharModal();
+    showToast(`${qtd} colaborador${qtd!==1?'es':''} importado${qtd!==1?'s':''} do SOC (${empresasNovas.length} empresa${empresasNovas.length!==1?'s':''} nova${empresasNovas.length!==1?'s':''})!`, 'success');
+    _clientesCache = []; // força recarregar (com as empresas novas) na próxima tela que precisar
+    // Atualiza a MESMA tela de onde o import foi aberto — nunca "pula" o
+    // usuário para uma tela diferente da que ele estava vendo.
+    if (_socImportOrigem === 'clientes') await renderClientes();
+    else await renderColaboradores();
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message || 'Erro ao importar do SOC', 'error');
   }
 }
 
