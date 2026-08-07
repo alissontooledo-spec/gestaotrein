@@ -13581,14 +13581,23 @@ const _avBase  = (topMM, sizePt) => topMM + (sizePt/2.83465) * 0.75;
 function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineHeight, fontFamily, corNormal, corDestaque) {
   doc.setFont(fontFamily, 'normal');
   doc.setFontSize(fontSize);
-  const partes = segmentos.map(s => pdfSafe(s.texto, 200));
+  // Descarta segmentos vazios ANTES de montar o texto corrido (2026-08) —
+  // um segmento com texto vazio (ex.: campo opcional não preenchido) fazia
+  // o join(' ') colocar dois espaços seguidos na fronteira ("Texto antes  texto
+  // depois"), pego num teste de regressão desta correção. Filtrando aqui,
+  // na origem, o problema nem chega a existir mais adiante — nenhuma lógica
+  // de junção/negrito precisa lidar com um segmento "fantasma".
+  const segmentosValidos = segmentos
+    .map(s => ({ ...s, texto: pdfSafe(s.texto, 200) }))
+    .filter(s => s.texto.length > 0);
+  const partes = segmentosValidos.map(s => s.texto);
   const textoPuro = partes.join(' ');
   const linhas = doc.splitTextToSize(textoPuro, maxWidth);
 
   // Intervalos [inicio,fim) de textoPuro que pertencem a um segmento em negrito
   const intervalosNegrito = [];
   { let pos = 0;
-    segmentos.forEach((s, i) => {
+    segmentosValidos.forEach((s, i) => {
       const t = partes[i];
       if (s.negrito) intervalosNegrito.push([pos, pos + t.length]);
       pos += t.length + 1; // +1 = espaço que junta os segmentos no join(' ')
@@ -13606,24 +13615,25 @@ function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineH
     // — cada run é desenhado numa ÚNICA chamada doc.text(), deixando o
     // jsPDF espaçar nativamente as palavras DENTRO do trecho (é assim que
     // todo o resto do app desenha texto de várias palavras sem nenhum
-    // problema — nunca houve bug de espaço dentro de uma chamada só). O
-    // único ponto realmente frágil é a COSTURA entre dois trechos de
-    // estilos diferentes — por isso cada run é "aparado" (nunca fica com
-    // espaço na ponta) e a lacuna entre um run e o próximo é sempre
-    // inserida manualmente, medida pela diferença de larguras ("a a" menos
-    // "aa": espaço no MEIO de uma string real, nunca isolado/na borda).
+    // problema — nunca houve bug de espaço dentro de uma chamada só).
     //
-    // 2026-08-06, 3ª tentativa: as duas correções anteriores (tokenizar por
-    // PALAVRA — com ou sem medir o espaço isoladamente) na prática
-    // pioraram o problema: colocaram TODA junção palavra-a-palavra na
-    // categoria frágil (posição calculada manualmente por soma de
-    // larguras), inclusive as que já funcionavam perfeitamente antes
-    // (dentro do mesmo estilo, numa única chamada nativa do jsPDF — ex.:
-    // "AVANTESeg certifica", que nunca teve problema até eu "corrigir" isso
-    // pra desenhar palavra por palavra). O bug real sempre foi só na
-    // costura entre negrito/normal; reduzir as costuras manuais ao mínimo
-    // necessário (só nas transições de estilo, não em toda palavra da
-    // frase) resolve sem reintroduzir o problema original.
+    // 2026-08-07, causa raiz encontrada (4ª rodada — as 3 anteriores
+    // tentaram calibrar a MEDIDA de um espaço "sintético" inserido entre
+    // runs: espaço isolado, depois "a a" menos "aa", nenhuma bateu de forma
+    // confiável com a largura real que o jsPDF usa ao desenhar, e o defeito
+    // sempre voltava — às vezes pior, às vezes só em certas frases). A causa
+    // real: essa medida sintética nunca deveria ter existido. O texto de
+    // CADA linha (linhaTexto, vindo de doc.splitTextToSize) já contém os
+    // espaços de verdade entre TODAS as palavras, inclusive nas bordas
+    // negrito/normal — só é preciso NÃO apagar esse espaço ao fatiar em
+    // runs. Antes, cada run era "aparado" (.trim()) e um espaço calculado à
+    // parte era inserido manualmente — se essa medida calculada não batesse
+    // EXATAMENTE com a largura real do espaço na fonte/tamanho usados, as
+    // palavras coladas ("empresaCIDMED", "LTDA,CNPJ") era o resultado direto.
+    // Agora: nenhum trim, nenhuma medida de espaço à parte — o espaço na
+    // borda de um run (sempre do lado do run NORMAL, nunca isolado) fica
+    // dentro do próprio run, medido pelo mesmo doc.getTextWidth() usado pra
+    // tudo o mais no app — nunca precisa "adivinhar" a largura de um espaço.
     const runsRaw = [];
     { let i = 0;
       while (i < linhaTexto.length) {
@@ -13634,26 +13644,18 @@ function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineH
         i = j;
       }
     }
-    const runs = runsRaw.map(r => ({ texto: r.texto.trim(), negrito: r.negrito })).filter(r => r.texto.length > 0);
+    // Só descarta runs genuinamente vazios (pode acontecer numa borda exata
+    // de linha) — preserva espaços internos/laterais tal como vieram.
+    const runs = runsRaw.filter(r => r.texto.length > 0);
 
-    doc.setFont(fontFamily, 'normal');
-    doc.setFontSize(fontSize);
-    // NUNCA medir um espaço isolado (doc.getTextWidth(' ')) — jsPDF não
-    // conta direito a largura de um espaço sozinho/na borda de uma string
-    // medida. Mede a diferença entre duas strings reais com o espaço no
-    // MEIO ("a a" menos "aa") — espaço interno, cercado de caracteres, é
-    // medido corretamente (é assim que o resto do app desenha texto normal
-    // sem esse bug).
-    const largEspaco = doc.getTextWidth('a a') - doc.getTextWidth('aa');
-
-    // largura total (pra centralizar) — mede cada run já com sua fonte
-    // + uma lacuna entre cada par de runs.
+    // largura total (pra centralizar) — soma da largura de cada run, já
+    // incluindo os espaços que vieram dentro dele. Nenhuma lacuna extra
+    // somada à parte.
     let largura = 0;
-    runs.forEach((r, idx) => {
+    runs.forEach(r => {
       doc.setFont(fontFamily, r.negrito ? 'bold' : 'normal');
       doc.setFontSize(fontSize);
       largura += doc.getTextWidth(r.texto);
-      if (idx < runs.length - 1) largura += largEspaco;
     });
 
     let x = cx - largura/2;
@@ -13662,7 +13664,7 @@ function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineH
       doc.setFontSize(fontSize);
       doc.setTextColor(...(r.negrito ? corDestaque : corNormal));
       doc.text(r.texto, x, y);
-      x += doc.getTextWidth(r.texto) + largEspaco;
+      x += doc.getTextWidth(r.texto);
     });
 
     cursor = base + linhaTexto.length;
@@ -13724,8 +13726,19 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   linhasCorpo.forEach(ln => { doc.text(ln, cx, _avBase(yCorpo, _avPT_H(0.028,H)), {align:'center'}); yCorpo += lhCorpo; });
 
   // assinaturas — aluno (esquerda) e instrutor (direita, com cargo/especialidade/credencial)
+  // 2026-08: mesma correção aplicada em desenharCapaColetivoAvanteseg (ver
+  // comentário completo lá) — esta função tem o mesmo padrão de bug latente:
+  // "corpo" (parágrafo com CPF, empresa, curso, carga horária e período,
+  // todos textos de tamanho variável) podia crescer e empurrar yCorpo para
+  // perto de um sigY antes fixo, colando parágrafo e assinatura em nomes de
+  // empresa/curso longos. Não fazia parte dos prints reportados desta vez,
+  // mas é o mesmo código-fonte do bug corrigido — corrigido por prevenção,
+  // com a mesma fórmula (piso de respiro mínimo + teto de segurança).
   const zbot = _avMM_H(0.925,H);
-  const sigY = zbot - _avMM_H(0.115,H);
+  const corpoFimY = yCorpo;
+  const sigYBase = zbot - _avMM_H(0.115,H);
+  const gapMinimo = _avMM_H(0.028,H);
+  const sigY = Math.min(Math.max(sigYBase, corpoFimY + gapMinimo), zbot - _avMM_H(0.08,H));
   const lineW = _avMM_W(0.20,W);
   const cxA = cx - _avMM_W(0.235,W), cxI = cx + _avMM_W(0.235,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
@@ -13998,8 +14011,26 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.text(pdfSafe(fatos,120), cx, _avBase(yDesc+_avMM_H(0.020,H), _avPT_H(0.019,H)), {align:'center'});
 
   // assinatura — só a do instrutor (documento coletivo, sem assinatura individual)
+  // 2026-08 (correção de bug reportado com print): antes sigY era um valor
+  // fixo, ancorado só na base da página (zbot) — totalmente independente de
+  // yDesc, que cresce quando a descrição do curso (texto livre, tamanho
+  // variável por curso) quebra em mais linhas. Com descrição longa, a linha
+  // "Realizado em... Carga horária..." descia (por causa do yDesc maior) mas
+  // a assinatura não acompanhava, colando as duas. Agora sigY respeita 2
+  // regras ao mesmo tempo: (1) nunca fica mais alto que o layout padrão
+  // (sigYBase, mesma posição de antes quando a descrição é curta) — evita
+  // afastar a assinatura à toa em cursos com descrição curta; (2) nunca fica
+  // a menos de gapMinimo abaixo da linha de fatos (fatosY) — garante respiro
+  // mesmo com descrição longa. Um teto (zbot-0.08H) evita que, em descrições
+  // muito longas, a assinatura seja empurrada de encontro ao nome/cargo/
+  // credencial do instrutor ou ao código de validação no rodapé — o espaço
+  // entre sigY e zbot precisa caber assinatura+nome+cargo+credencial, que
+  // hoje ocupam ~0.063H, então 0.08H de teto mínimo ainda sobra folga.
   const zbot = _avMM_H(0.925,H);
-  const sigY = zbot - _avMM_H(0.115,H);
+  const fatosY = yDesc + _avMM_H(0.020,H);
+  const sigYBase = zbot - _avMM_H(0.115,H);
+  const gapMinimo = _avMM_H(0.028,H);
+  const sigY = Math.min(Math.max(sigYBase, fatosY + gapMinimo), zbot - _avMM_H(0.08,H));
   const lineW = _avMM_W(0.22,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cx-lineW/2, sigY, cx+lineW/2, sigY);
@@ -14205,6 +14236,35 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
 // "Assinatura" nunca mostrava a assinatura do aluno mesmo quando ele
 // assinou durante a aula — a imagem (campos.participantes[].assinaturaDataUrl)
 // agora é carregada pelo chamador (gerarFichaPresenca) e embutida aqui.
+// Geometria da tabela de participantes da Ficha de Presença Avanteseg (A4
+// retrato) — extraída pra uma função só (2026-08, correção de causa raiz).
+// Antes, o desenho (abaixo) calculava seu próprio maxRows dinamicamente a
+// partir da posição real de desenho, mas o paginador da chamada
+// (gerarListaPresenca) tinha um "AV_FICHA_MAX_ROWS = 8" fixo, digitado à
+// mão, sem nenhuma ligação de código com esse cálculo — só um comentário
+// pedindo pra lembrar de atualizar os dois juntos. Se a geometria acima da
+// tabela (moldura, cabeçalho, faixa "Empresa", grade de dados) ou a altura
+// de linha (rowH) mudassem só de um lado, o paginador cortava/reservava
+// linhas a mais ou a menos sem nenhum aviso — sintoma exatamente igual ao
+// reportado ("assinatura cortada"), mesmo a matemática de encaixe/
+// centralização da imagem em si estando correta. Agora as duas pontas (o
+// desenho da ficha e o paginador da chamada) usam esta função como única
+// fonte de verdade — nunca mais podem divergir uma da outra.
+// rowH aumentado de 15 para 18mm (mais respiro vertical pra assinatura,
+// pedido explícito do Alisson) — y0 é a soma cumulativa das alturas de tudo
+// que é desenhado acima da tabela em desenharFichaPresencaAvanteseg, na
+// mesma ordem: faixa do cabeçalho (24) + friso dourado (1.6) + respiro (9)
+// + título do curso (6) + subtítulo "encontro X de Y" (8) + faixa "Empresa"
+// (9+3) + grade de dados 2×11mm + respiro (11*2+7) + faixa de cabeçalho da
+// tabela (7). Conferido conferindo a soma real de "y" no código abaixo.
+function _avFichaGeometriaTabela(W, H) {
+  const mg = _avMM_W(0.057, W);
+  const rowH = 18;
+  const y0 = mg + 24 + 1.6 + 9 + 6 + 8 + (9+3) + (11*2+7) + 7;
+  const maxRows = Math.max(1, Math.floor((H-mg-4-38 - y0) / rowH));
+  return { mg, rowH, y0, maxRows };
+}
+
 function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   const GREEN_DARK=[31,101,71], GREEN_BRIGHT=[0,130,70], GOLD_RIBBON=[240,177,37], BLACK=[30,30,30], GRAY=[95,95,95], WHITE=[255,255,255];
   const mg = _avMM_W(0.057,W);
@@ -14286,8 +14346,7 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.text('ASSINATURA', colSig, y+4.6);
   y += 7;
 
-  const rowH = 15;
-  const maxRows = Math.floor((H-mg-4-38 - y) / rowH);
+  const { rowH, maxRows } = _avFichaGeometriaTabela(W, H);
   (campos.participantes||[]).slice(0, maxRows).forEach((p, i) => {
     doc.setFillColor(i%2===1?244:255, i%2===1?249:255, i%2===1?246:255); doc.rect(ml, y, mr-ml, rowH, 'F');
     doc.setDrawColor(220,232,225); doc.setLineWidth(0.15); doc.rect(ml, y, mr-ml, rowH, 'S');
@@ -14304,11 +14363,25 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
       // saía visualmente distorcida. Centralizado na célula, no maior
       // tamanho que caiba sem esticar.
       try {
-        const cellW = (mr-2)-colSig, cellH = rowH-4;
-        const ratio = p.assinatura.w / p.assinatura.h;
+        // Pequena margem de segurança (2026-08) dentro da célula — antes a
+        // imagem podia ocupar a célula até a última fração de milímetro da
+        // borda (só a borda externa em -2/-4); matematicamente nunca
+        // estourava, mas encostando na borda do quadro, um traço de
+        // assinatura mais grosso na ponta PARECE cortado a olho nu, mesmo
+        // sem estar. Com padX/padY sempre sobra um respiro visível.
+        const padX = 2, padY = 2;
+        const cellW = (mr-2)-colSig-padX, cellH = rowH-4-padY;
+        const ratio = (p.assinatura.w||1) / (p.assinatura.h||1);
         let iw = cellW, ih = cellW/ratio;
         if (ih > cellH) { ih = cellH; iw = cellH*ratio; }
-        const ix = colSig + (cellW-iw)/2, iy = y + (rowH-ih)/2;
+        // Guarda defensiva (2026-08): w/h poderiam vir 0/NaN/Infinity em
+        // algum caso extremo (ex.: imagem corrompida) — antes isso passaria
+        // direto pro addImage com dimensão inválida, podendo desenhar algo
+        // ilegível em vez de simplesmente cair no traço em branco de "não
+        // assinado". Agora, se a dimensão calculada não for um número
+        // finito e positivo, trata como se não houvesse assinatura.
+        if (!isFinite(iw) || !isFinite(ih) || iw <= 0 || ih <= 0) throw new Error('dimensão de assinatura inválida');
+        const ix = colSig + padX/2 + (cellW-iw)/2, iy = y + (rowH-ih)/2;
         doc.addImage(p.assinatura.dataUrl, 'PNG', ix, iy, iw, ih);
         assinado = true;
       } catch(e){}
@@ -14764,13 +14837,15 @@ async function gerarListaPresenca(turmaId, sessaoId) {
           assinatura,
         });
       }
-      // Geometria fixa de desenharFichaPresencaAvanteseg (A4 retrato 210×297mm):
-      // moldura + cabeçalho + faixa "Empresa" + grade de dados ocupam ~91mm
-      // do topo, sobrando espaço para 8 linhas de participante de 15mm cada
-      // antes do bloco de assinatura do instrutor + rodapé (2026-08: caiu de
-      // 10 pra 8 depois de acrescentar a faixa "Empresa"). Se a função de
-      // desenho mudar essa geometria, este valor precisa acompanhar a mudança.
-      const AV_FICHA_MAX_ROWS = 8;
+      // 2026-08 (correção de causa raiz): antes este valor era um "8" fixo,
+      // digitado à mão, independente do cálculo real feito dentro de
+      // desenharFichaPresencaAvanteseg — bastava a geometria do desenho
+      // mudar (moldura, cabeçalho, faixa "Empresa", grade de dados, altura
+      // de linha) para os dois lados divergirem sem nenhum aviso, cortando
+      // silenciosamente participantes da lista. Agora vem da mesma função
+      // (_avFichaGeometriaTabela) usada pelo próprio desenho — os dois
+      // pontos nunca mais podem ficar fora de sincronia.
+      const AV_FICHA_MAX_ROWS = _avFichaGeometriaTabela(W, H).maxRows;
       const totalPaginasFicha = Math.max(1, Math.ceil(participantesAv.length / AV_FICHA_MAX_ROWS));
       for (let pgf = 1; pgf <= totalPaginasFicha; pgf++) {
         if (pgf > 1) doc.addPage('a4','portrait');
