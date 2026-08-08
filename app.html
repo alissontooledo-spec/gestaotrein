@@ -9698,20 +9698,41 @@ async function _socWsSelecionarEmpresa(codigo) {
   }
 }
 
+// SOC não documenta uma lista fechada de valores para o campo SITUACAO
+// (diferente do Modelo 1, que usa códigos de 1 letra sem significado
+// documentado — ver changelog 2026-08-07). Por isso o filtro de status
+// (2026-08-08, a pedido do Alisson: só importar quem está Ativo) é por
+// "lista negra" de palavras — exclui quem bate com um termo conhecido de
+// inatividade — em vez de "lista branca" só aceitando um valor exato de
+// "ativo": se o SOC usar uma palavra diferente da esperada pra indicar
+// ativo, ninguém ativo some da lista por engano. O risco fica só do lado
+// contrário (uma situação desconhecida rara continuar aparecendo) — e
+// mesmo nesse caso o usuário ainda vê a lista final e pode desmarcar à
+// mão antes de confirmar a importação.
+function _socFuncionarioPareceInativo(situacao) {
+  const s = String(situacao||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+  if (!s) return false; // sem informação de situação — não descarta por precaução
+  return ['inativo','demitido','desligado','afastado','ferias','licenca','suspenso','cancelado','transferido','aviso previo','rescisao','rescindido'].some(p => s.includes(p));
+}
+
 function _socWsAbrirTelaFuncionarios() {
-  // Mesma validação de CPF já usada no parser da planilha (Modelo 1) —
-  // linhas sem nome ou com CPF inválido/em branco não entram na lista, pra
-  // não travar a gravação depois.
-  const validos = _socWsFuncionarios.filter(f => {
+  // Filtro de situação primeiro (só ativos — ver _socFuncionarioPareceInativo
+  // acima), depois a mesma validação de CPF já usada no parser da planilha
+  // (Modelo 1) — linhas sem nome ou com CPF inválido/em branco não entram
+  // na lista, pra não travar a gravação depois.
+  const semInativos = _socWsFuncionarios.filter(f => !_socFuncionarioPareceInativo(f.situacao));
+  const inativos = _socWsFuncionarios.length - semInativos.length;
+  const validos = semInativos.filter(f => {
     const cpfDigits = String(f.cpf||'').replace(/\D/g,'');
     return f.nome && cpfDigits.length === 11 && !/^(\d)\1{10}$/.test(cpfDigits);
   });
-  const invalidos = _socWsFuncionarios.length - validos.length;
+  const invalidos = semInativos.length - validos.length;
   _socWsSelecionados = new Set(validos.map(f => String(f.codigo ?? f.cpf)));
 
   abrirModal(`Funcionários — ${escapeHtml(_socWsEmpresaSelecionada?.nome||'')}`, `
     <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">
-      ${validos.length} funcionário${validos.length!==1?'s':''} encontrado${validos.length!==1?'s':''} nesta empresa, todos pré-selecionados.
+      ${validos.length} funcionário${validos.length!==1?'s':''} ativo${validos.length!==1?'s':''} encontrado${validos.length!==1?'s':''} nesta empresa, todos pré-selecionados.
+      ${inativos>0?`<br><span style="color:var(--text-3)">${inativos} ignorado${inativos!==1?'s':''} por estar inativo/desligado/afastado no SOC.</span>`:''}
       ${invalidos>0?`<br><span style="color:var(--amber-text)">${invalidos} ignorado${invalidos!==1?'s':''} por nome ou CPF inválido/em branco.</span>`:''}
     </div>
     <div style="display:flex;gap:8px;margin-bottom:8px">
