@@ -2090,14 +2090,15 @@ const ICONS = {
   phone:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>`,
   pin:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
   target:  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+  edit:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
 };
 
 // Botão de ação secundária com ícone em "badge" circular antes do texto
 // (2026-08, reorganização da barra de ações de Clientes/Colaboradores, a
 // pedido do Alisson — as ações de importação estavam pouco visíveis, meio
 // "camufladas" na barra). Usado por renderClientes/renderColaboradores.
-function _btnAcaoBadge(iconeSvg, texto, onclick, corTexto = 'var(--text-1)', corBadgeFundo = 'var(--blue-l)', corBadgeIcone = 'var(--blue-text)') {
-  return `<button class="btn btn-sm" onclick="${onclick}" style="background:var(--gray-100);color:${corTexto};white-space:nowrap;padding:6px 12px 6px 6px">
+function _btnAcaoBadge(iconeSvg, texto, onclick, corTexto = 'var(--text-1)', corBadgeFundo = 'var(--blue-l)', corBadgeIcone = 'var(--blue-text)', corFundoBtn = 'var(--gray-100)') {
+  return `<button class="btn btn-sm" onclick="${onclick}" style="background:${corFundoBtn};color:${corTexto};white-space:nowrap;padding:6px 12px 6px 6px">
     <span style="width:22px;height:22px;border-radius:50%;background:${corBadgeFundo};color:${corBadgeIcone};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${iconeSvg}</span>
     ${texto}
   </button>`;
@@ -3088,7 +3089,7 @@ async function verOrgProvedor(orgId) {
     <!-- Ações — todas concentradas aqui na tela de detalhes (item 3) -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
       <button class="btn btn-outline" onclick="abrirModalOrg('${orgId}')">✎ Editar organização</button>
-      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">+ Criar usuário</button>
+      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">${ICONS.userplus} Criar usuário</button>
       <button class="btn btn-outline" onclick="carregarCatalogoModeloOrgUI('${orgId}')">📚 Carregar catálogo modelo</button>
       ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}')">🔧 Acessar como administrador</button>` : ''}
       <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
@@ -4588,7 +4589,7 @@ function _renderOrgsLista(orgs) {
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="aplicarFiltrosOrgs()">
       <button class="btn btn-outline" onclick="exportarPortfolioCSV()">⬇ CSV</button>
-      <button class="btn btn-navy" onclick="abrirModalOrg()">${ICONS.plus} Nova</button>
+      <button class="btn btn-navy" onclick="abrirModalOrg()">${ICONS.building} Nova</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <select id="filtroOrgStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosOrgs()">
@@ -5829,11 +5830,10 @@ async function renderClientes() {
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
       <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="aplicarFiltrosClientes()">
       ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.userplus} Novo cadastro</button>
-        ${_btnAcaoBadge(ICONS.upload,'Importar clientes','abrirModalImportacaoClientes()')}
-        ${_btnAcaoBadge(ICONS.upload,'Importar colaboradores','abrirModalImportacao()')}
-        ${_btnAcaoBadge(ICONS.filesheet,'Importar modelo 1',"abrirModalImportacaoSOC('clientes')")}`:''}
+        ${_btnAcaoBadge(ICONS.upload,'Importar CSV','abrirModalImportarCSV()')}
+        ${_btnAcaoBadge(ICONS.filesheet,'Importar modelo 1',"abrirModalImportacaoSOC('clientes')")}
+        ${usuarioAtual.orgSocIntegracaoAtiva ? _btnAcaoBadge(ICONS.search,'Buscar no SOC',"_socWsAbrirModal('clientes')",'var(--green-text)','var(--green)','#fff','var(--green-l)') : ''}`:''}
     </div>
-    ${podeCriar && usuarioAtual.orgSocIntegracaoAtiva ? _faixaBuscarSoc("_socWsAbrirModal('clientes')") : ''}
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <select id="filtroClienteStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosClientes()">
         <option value="">Todos os status</option>
@@ -5971,7 +5971,7 @@ function verCliente(id) {
         </div>
         ${podeMgr?`
         <div class="detail-actions">
-          <button class="btn btn-navy" data-action="editarCliente" data-id="${c.id}">${ICONS.plus} Editar dados</button>
+          <button class="btn btn-navy" data-action="editarCliente" data-id="${c.id}">${ICONS.edit} Editar dados</button>
           <button class="btn btn-outline" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar cliente':'Reativar cliente'}</button>
         </div>`:''}
       </div>
@@ -6136,6 +6136,32 @@ async function toggleCliente(id) {
 }
 
 // ── Importação em massa de clientes (CSV) ──
+// Botao unico "Importar CSV" (2026-08-08, a pedido do Alisson) — substitui
+// os dois botoes separados "Importar clientes"/"Importar colaboradores" na
+// barra de Clientes. So um passo de escolha antes: reaproveita 100% a
+// logica ja existente e testada em producao de cada importacao
+// (abrirModalImportacaoClientes / abrirModalImportacao), sem duplicar nada
+// da logica de upload/preview/upsert.
+function abrirModalImportarCSV() {
+  abrirModal('Importar CSV', `
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:14px">Escolha o que você quer importar:</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-outline" style="justify-content:flex-start;padding:14px;text-align:left" onclick="fecharModal();abrirModalImportacaoClientes()">
+        <div>
+          <div style="font-weight:600;font-size:14px">Clientes</div>
+          <div style="font-size:12px;color:var(--text-3);font-weight:400">Empresas atendidas pela sua organização</div>
+        </div>
+      </button>
+      <button class="btn btn-outline" style="justify-content:flex-start;padding:14px;text-align:left" onclick="fecharModal();abrirModalImportacao()">
+        <div>
+          <div style="font-weight:600;font-size:14px">Colaboradores</div>
+          <div style="font-size:12px;color:var(--text-3);font-weight:400">Funcionários/alunos vinculados a um cliente</div>
+        </div>
+      </button>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
+}
+
 function abrirModalImportacaoClientes() {
   abrirModal('Importar clientes', `
     <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.6">
@@ -6659,7 +6685,7 @@ async function renderCatalogo() {
         <option value="reciclagem">Reciclagem</option>
       </select>
       ${podeMgr ? `<button class="btn btn-outline" onclick="carregarCatalogoModeloUI()" title="Adiciona os treinamentos do catálogo modelo que ainda não existem no seu catálogo">${ICONS.book} Catálogo modelo</button>` : ''}
-      ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>` : ''}
+      ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.book} Novo</button>` : ''}
     </div>
 
     <div class="card" style="padding:0" id="listaCatalogo">${_renderCatalogoListaPaginada()}</div>`);
@@ -6789,7 +6815,7 @@ function verCatalogo(id) {
 
     ${podeMgr ? `
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-navy" data-action="editarCatalogo" data-id="${t.id}">${ICONS.plus} Editar</button>
+      <button class="btn btn-navy" data-action="editarCatalogo" data-id="${t.id}">${ICONS.edit} Editar</button>
       <button class="btn btn-outline" onclick="duplicarCatalogo('${t.id}')" title="Criar uma cópia deste treinamento">⧉ Duplicar</button>
       ${isArq
         ? `<button class="btn btn-outline" data-action="desarquivarCatalogo" data-id="${t.id}">↩ Restaurar</button>`
@@ -7391,7 +7417,7 @@ function _htmlPainelDetalheConf(x, aba) {
   const acoesHtml = !podeGerenciar ? '' : (tratada
     ? `<button class="btn btn-outline" data-action="reabrirPendencia" data-id="${x.id}" style="width:100%;justify-content:center">Reabrir pendência</button>`
     : `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-        ${x.sugestaoId ? `<button class="btn btn-amber" data-action="agendarReciclagem" data-id="${x.id}" style="justify-content:center">${ICONS.plus} Criar nova turma</button>
+        ${x.sugestaoId ? `<button class="btn btn-amber" data-action="agendarReciclagem" data-id="${x.id}" style="justify-content:center">${ICONS.clip} Criar nova turma</button>
         <button class="btn btn-outline" data-action="adicionarEmTurmaExistente" data-id="${x.id}" style="justify-content:center">Adicionar em turma existente</button>` : ''}
         <button class="btn btn-outline" data-action="abrirTreinoExternoConf" data-id="${x.id}" style="justify-content:center">Registrar treinamento externo</button>
       </div>
@@ -8157,7 +8183,7 @@ async function renderTurmas(abaInicial) {
         ${_turmaTabHtml('concluida','Concluídas',nCo,abaAtiva)}
         ${_turmaTabHtml('cancelada','Canceladas',nCa,abaAtiva)}
       </div>
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.plus} Nova turma</button>`:''}
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.clip} Nova turma</button>`:''}
     </div>
     <div style="margin-bottom:14px;position:relative;max-width:360px">
       <input type="text" id="turmasBuscaInput" placeholder="Buscar por curso, empresa ou protocolo (TRN-...)"
@@ -8545,7 +8571,7 @@ async function verTurma(id) {
             </div>
           </div>
           ${_htmlBotaoEvidenciasSessao(ag)?`<div style="padding:0 0 10px 42px">${_htmlBotaoEvidenciasSessao(ag)}</div>`:''}`).join('')}
-        ${podeEditar?`<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addAgendamento" data-id="${id}">+ Adicionar agendamento</button>`:``}
+        ${podeEditar?`<button class="btn btn-outline btn-sm" style="margin-top:12px" data-action="addAgendamento" data-id="${id}">${ICONS.cal} Adicionar agendamento</button>`:``}
       </div>
 
       <div class="card" style="margin-bottom:16px">
@@ -8562,7 +8588,7 @@ async function verTurma(id) {
             ${podeEditar?`<button class="btn btn-ghost btn-sm" style="padding:4px;color:var(--red)" data-action="removerParticipante" data-id="${p.id}" data-turma="${id}" title="Remover participante">✕</button>`:''}
           </div>`).join('')}
         ${podeEditar?`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" data-action="addParticipante" data-id="${id}" data-cli="${t.cliente_id||''}">+ Adicionar participante</button>
+          <button class="btn btn-outline btn-sm" data-action="addParticipante" data-id="${id}" data-cli="${t.cliente_id||''}">${ICONS.userplus} Adicionar participante</button>
         </div>`:''}
       </div>
       </div>
@@ -8625,7 +8651,7 @@ async function abrirModalTurma(id=null, preSel=null) {
     <div class="field">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <label style="margin:0">Cliente *</label>
-        ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.plus} Novo cliente</button>`:''}
+        ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.userplus} Novo cliente</button>`:''}
       </div>
       <select id="mTurCli" ${travado?'disabled':''} onchange="_autoPreencherLocalTurma()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:${travado?'var(--gray-50)':'var(--surface)'};color:${travado?'var(--text-2)':'var(--text-1)'};outline:none">
         <option value="">Selecione o cliente...</option>${cliOpts}
@@ -9025,7 +9051,7 @@ async function abrirModalAddParticipante(turmaId, clienteId) {
   abrirModal('Adicionar participante', `
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <input type="text" id="buscaPartModal" placeholder="Buscar por nome ou CPF..." oninput="filtrarPartModal(this.value)" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none">
-      <button class="btn btn-outline btn-sm" data-action="cadastroRapidoColab" title="Cadastrar novo colaborador">+ Novo</button>
+      <button class="btn btn-outline btn-sm" data-action="cadastroRapidoColab" title="Cadastrar novo colaborador">${ICONS.userplus} Novo</button>
     </div>
     <div id="listaPartModal" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
       ${_htmlPartModal(window._partDisp)}
@@ -9043,7 +9069,7 @@ function _htmlPartModal(lista) {
   const outros = clienteId ? lista.filter(c=>c.cliente_id && c.cliente_id!==clienteId) : [];
   const mostrarOutras = !!window._partMostrarOutras;
   const visiveis = mostrarOutras ? lista : mesmos;
-  if (!visiveis.length && !outros.length) return `<div class="empty" style="padding:24px"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador disponível</div><div class="empty-sub">Clique em "+ Novo" para cadastrar.</div></div>`;
+  if (!visiveis.length && !outros.length) return `<div class="empty" style="padding:24px"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador disponível</div><div class="empty-sub">Clique em "Novo" para cadastrar.</div></div>`;
   const itens = visiveis.map(c=>`
     <div class="list-item" style="padding:10px 12px;cursor:pointer" data-action="selecionarPart" data-col="${c.id}">
       <div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:11px;font-weight:700;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">${iniciais(c.nome)}</div>
@@ -12398,7 +12424,7 @@ async function renderEquipe() {
           ? `<span style="color:var(--amber-text);background:var(--amber-l);border:1px solid var(--amber);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600">Starter · máx. ${limitePlano('maxUsuarios')} usuários ativos</span>`
           : `<span class="badge badge-navy">${usuarioAtual.orgPlano==='enterprise'?'Enterprise':'Pro'} · usuários ilimitados</span>`}
       </div>
-      <button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.plus} Novo usuário</button>
+      <button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.userplus} Novo usuário</button>
     </div>
 
     <div class="card" style="padding:0">${gruposHtml}</div>
@@ -12456,7 +12482,7 @@ function verUsuarioEquipe(id) {
 
       ${podeMgr && u.id !== usuarioAtual.id ? `
       <div class="detail-actions">
-        <button class="btn btn-navy" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}','${u.id}')">${ICONS.plus} Editar usuário</button>
+        <button class="btn btn-navy" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}','${u.id}')">${ICONS.edit} Editar usuário</button>
         <button class="btn btn-outline" data-action="toggleUsuarioEquipe" data-id="${u.id}">${u.ativo?'Inativar':'Reativar'}</button>
       </div>`:''}
       </div>
