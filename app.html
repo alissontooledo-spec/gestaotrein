@@ -17119,13 +17119,23 @@ async function exportarRelatorioComparativoPDF() {
   window.addEventListener('offline', _updateOnlineStatus);
   _updateOnlineStatus();
 
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js').catch(function(err){
-        console.warn('Falha ao registrar service worker:', err);
-      });
-    });
-  }
+  // Removido o registro de service worker (2026-08-08, a pedido do
+  // Alisson) — nunca existiu um sw.js real de cache mantido junto deste
+  // projeto (nenhum arquivo desses no repositório/KB, só essa chamada de
+  // registro "solta"), então a tentativa falhava com 404 sempre que o
+  // app.html era aberto num domínio sem esse arquivo — incluindo o preview
+  // de arquivo do Claude, que é onde o aviso capturado no print aparecia
+  // (note o domínio do erro: claudeusercontent.com, não o domínio real de
+  // produção). O aviso não bloqueava nada (só um console.warn), mas por
+  // ser um código incompleto sem nenhum ganho funcional hoje (o app não
+  // depende de cache offline pra funcionar — só o banner acima, que usa só
+  // os eventos online/offline do navegador, sem service worker nenhum),
+  // a forma definitiva de garantir que esse aviso nunca mais apareça, em
+  // nenhum ambiente, é remover a tentativa de registro em vez de tentar
+  // "consertar" um arquivo que nunca existiu. Se um cache offline de
+  // verdade for necessário no futuro, isso vira um projeto à parte: criar
+  // um sw.js real com uma estratégia de cache definida e publicá-lo junto
+  // do app.html na hospedagem de produção.
 })();
 </script>
 </body>
