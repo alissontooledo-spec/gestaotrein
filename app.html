@@ -1306,11 +1306,12 @@ async function iniciarModoSuporte(orgId) {
       orgLogoUrl:  usuarioAtual.orgLogoUrl,
       orgCorPrimaria:    usuarioAtual.orgCorPrimaria,
       orgCertAplicarCor: usuarioAtual.orgCertAplicarCor,
+      orgSocIntegracaoAtiva: usuarioAtual.orgSocIntegracaoAtiva,
     };
 
     // Buscar dados da org para simular o perfil de administrador
     const { data: org } = await sb.from('organizacoes')
-      .select('nome,plano,ativo,logo_url,cor_primaria,cert_aplicar_cor_documentos')
+      .select('nome,plano,ativo,logo_url,cor_primaria,cert_aplicar_cor_documentos,soc_integracao_ativa')
       .eq('id', orgId).single();
 
     // Assumir identidade de administrador da org
@@ -1323,6 +1324,7 @@ async function iniciarModoSuporte(orgId) {
     usuarioAtual.orgLogoUrl = org?.logo_url || null;
     usuarioAtual.orgCorPrimaria = org?.cor_primaria || null;
     usuarioAtual.orgCertAplicarCor = !!org?.cert_aplicar_cor_documentos;
+    usuarioAtual.orgSocIntegracaoAtiva = !!org?.soc_integracao_ativa;
 
     // Ativar flags de suporte
     _suporteAtivo   = true;
@@ -1369,6 +1371,7 @@ async function encerrarModoSuporte(silencioso = false) {
   usuarioAtual.orgLogoUrl = estado.orgLogoUrl || null;
   usuarioAtual.orgCorPrimaria    = estado.orgCorPrimaria    || null;
   usuarioAtual.orgCertAplicarCor = estado.orgCertAplicarCor || false;
+  usuarioAtual.orgSocIntegracaoAtiva = estado.orgSocIntegracaoAtiva || false;
 
   // Limpar flags
   _suporteAtivo   = false;
@@ -2078,12 +2081,44 @@ const ICONS = {
   logout:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
   back:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>`,
   plus:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  userplus:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>`,
+  upload:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  filesheet:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
+  search:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
   support: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 00-10 10v3a2 2 0 002 2h1a1 1 0 001-1v-4a1 1 0 00-1-1H4a8 8 0 0116 0h-1a1 1 0 00-1 1v4a1 1 0 001 1h1a2 2 0 002-2v-3A10 10 0 0012 2z"/><path d="M8 20a2 2 0 002 2h4a2 2 0 002-2v-1H8z"/></svg>`,
   mail:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>`,
   phone:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>`,
   pin:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
   target:  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
 };
+
+// Botão de ação secundária com ícone em "badge" circular antes do texto
+// (2026-08, reorganização da barra de ações de Clientes/Colaboradores, a
+// pedido do Alisson — as ações de importação estavam pouco visíveis, meio
+// "camufladas" na barra). Usado por renderClientes/renderColaboradores.
+function _btnAcaoBadge(iconeSvg, texto, onclick, corTexto = 'var(--text-1)', corBadgeFundo = 'var(--blue-l)', corBadgeIcone = 'var(--blue-text)') {
+  return `<button class="btn btn-sm" onclick="${onclick}" style="background:var(--gray-100);color:${corTexto};white-space:nowrap;padding:6px 12px 6px 6px">
+    <span style="width:22px;height:22px;border-radius:50%;background:${corBadgeFundo};color:${corBadgeIcone};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${iconeSvg}</span>
+    ${texto}
+  </button>`;
+}
+
+// Faixa de destaque separada (não é um botão na fila) — usada só pelo
+// "Buscar no SOC" (busca ao vivo via Web Service), pedido explícito do
+// Alisson pra ter destaque suficiente pra ser fácil de localizar, mesmo
+// entre as outras ações da tela.
+function _faixaBuscarSoc(onclick) {
+  return `<div onclick="${onclick}" style="cursor:pointer;background:var(--green);border-radius:var(--r-md);padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.18);display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">${ICONS.search}</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#fff">Buscar no SOC</div>
+        <div style="font-size:12px;color:var(--green-l)">Empresas e funcionários, direto do SOC, sem planilha</div>
+      </div>
+    </div>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>`;
+}
 
 // ============================================================
 // AUTENTICAÇÃO
@@ -2165,7 +2200,7 @@ async function _enviarRecuperacaoSenhaLogin() {
 async function entrarNoApp() {
   // Provedor não tem org — acesso sempre liberado
   if (usuarioAtual.perfil !== 'provedor' && usuarioAtual.org_id) {
-    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome,trial_fim,logo_url,cor_primaria,cert_aplicar_cor_documentos').eq('id',usuarioAtual.org_id).single();
+    const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome,trial_fim,logo_url,cor_primaria,cert_aplicar_cor_documentos,soc_integracao_ativa').eq('id',usuarioAtual.org_id).single();
     if (org && !org.ativo) {
       document.getElementById('bloqueadoMsg').textContent =
         'Sua assinatura está vencida ou foi cancelada. Entre em contato para regularizar e continuar usando o sistema.';
@@ -2183,6 +2218,10 @@ async function entrarNoApp() {
     // já carregada junto (ex.: relatório comparativo do Administrador)
     usuarioAtual.orgCorPrimaria = org?.cor_primaria || null;
     usuarioAtual.orgCertAplicarCor = !!org?.cert_aplicar_cor_documentos;
+    // Só decide se mostra o botão "Buscar no SOC" (busca ao vivo via Web
+    // Service) — nenhuma credencial trafega até aqui, elas ficam só na
+    // Edge Function soc-integracao (ver migration-soc-integracao-webservice.sql).
+    usuarioAtual.orgSocIntegracaoAtiva = !!org?.soc_integracao_ativa;
   }
   showScreen('screenApp');
   configurarNavegacao();
@@ -5789,8 +5828,12 @@ async function renderClientes() {
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
       <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="aplicarFiltrosClientes()">
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoClientes()" style="white-space:nowrap">⬆ Importar</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoSOC('clientes')" style="white-space:nowrap">📄 Importar do SOC</button>`:''}
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.userplus} Novo cadastro</button>
+        ${_btnAcaoBadge(ICONS.upload,'Importar clientes','abrirModalImportacaoClientes()')}
+        ${_btnAcaoBadge(ICONS.upload,'Importar colaboradores','abrirModalImportacao()')}
+        ${_btnAcaoBadge(ICONS.filesheet,'Importar modelo 1',"abrirModalImportacaoSOC('clientes')")}`:''}
     </div>
+    ${podeCriar && usuarioAtual.orgSocIntegracaoAtiva ? _faixaBuscarSoc("_socWsAbrirModal('clientes')") : ''}
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <select id="filtroClienteStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosClientes()">
         <option value="">Todos os status</option>
@@ -6251,7 +6294,11 @@ async function renderColaboradores() {
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
       <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="aplicarFiltrosColabs()">
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.plus} Novo</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacao()" style="white-space:nowrap">⬆ Importar</button><button class="btn btn-outline btn-sm" onclick="abrirModalImportacaoSOC('colaboradores')" style="white-space:nowrap">📄 Importar do SOC</button>`:''}
+      <!-- 2026-08: importação (CSV, Modelo 1 SOC, Buscar no SOC) centralizada
+      na tela Clientes — a pedido do Alisson, pra não ter a mesma ação
+      "Importar" duplicada com nomes ambíguos em duas telas. Colaboradores
+      fica só com o cadastro manual. -->
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.userplus} Novo cadastro</button>`:''}
     </div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <select id="filtroColabEmpresa" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosColabs()">
@@ -9193,7 +9240,13 @@ async function executarImportacao() {
     }
     fecharModal();
     showToast(`${totalOk} colaboradores importados com sucesso!`,'success');
-    await renderColaboradores();
+    // 2026-08: o botão "Importar colaboradores" saiu da tela Colaboradores e
+    // passou a existir só em Clientes (reorganização da barra de ações, a
+    // pedido do Alisson) — antes recarregava sempre renderColaboradores(),
+    // que "pulava" o usuário pra uma tela diferente da que ele estava
+    // vendo. Agora recarrega Clientes, de onde esta importação sempre é
+    // aberta.
+    await renderClientes();
   } catch(e) {
     setBtnModalLoading(false);
     showToast(e.message||'Erro ao importar','error');
@@ -9286,9 +9339,12 @@ let _socImportEmpresas = [];  // {nome, cnpjDigits, existente, clienteId}
 // para saber qual tela recarregar ao final (evita "pular" de tela sem o
 // usuário ter clicado em nenhum item de navegação). A importação em si
 // grava exatamente igual, não importa de onde foi aberta.
-let _socImportOrigem = 'colaboradores';
+// 2026-08: passou a ser aberto só a partir de Clientes (reorganização da
+// barra de ações) — o parâmetro/origem "colaboradores" continua suportado
+// no código (não removido) só por segurança, caso volte a ser necessário.
+let _socImportOrigem = 'clientes';
 
-function abrirModalImportacaoSOC(origem = 'colaboradores') {
+function abrirModalImportacaoSOC(origem = 'clientes') {
   _socImportOrigem = origem;
   abrirModal('Importar do SOC (Modelo 1)', `
     <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.6">
@@ -9466,7 +9522,12 @@ async function executarImportacaoSOC() {
     // 1) Empresas novas primeiro — colaboradores dependem do cliente_id
     const empresasNovas = _socImportEmpresas.filter(e=>!e.existente);
     if (empresasNovas.length) {
-      const payloadEmpresas = empresasNovas.map(emp => ({nome:emp.nome, cnpj:_socFormatarCnpj(emp.cnpjDigits), org_id:usuarioAtual.org_id, ativo:true}));
+      // soc_codigo_empresa só vem preenchido quando a origem é a busca ao
+      // vivo (_socWs*) — a importação da planilha Modelo 1 nunca grava esse
+      // código (fora de escopo daquela entrega, ver seção 3D/9 da análise
+      // em 01-Requisitos/integracao-soc-avanteseg.md), então fica null nesse
+      // caso, normalmente.
+      const payloadEmpresas = empresasNovas.map(emp => ({nome:emp.nome, cnpj:_socFormatarCnpj(emp.cnpjDigits), org_id:usuarioAtual.org_id, ativo:true, soc_codigo_empresa: emp.socCodigoEmpresa || null}));
       const {data: criadas, error: eIns} = await sb.from('clientes').insert(payloadEmpresas).select('id,cnpj');
       if (eIns) throw eIns;
       (criadas||[]).forEach(c => {
@@ -9490,6 +9551,10 @@ async function executarImportacaoSOC() {
       telefone: r.telefone,
       cliente_id: clienteIdPorCnpj.get(r.empresaCnpjDigits) || null,
       org_id: usuarioAtual.org_id,
+      // Mesma observação do payloadEmpresas acima: só vêm preenchidos
+      // quando a origem é a busca ao vivo no SOC.
+      soc_codigo_funcionario: r.soc_codigo_funcionario || null,
+      soc_matricula: r.soc_matricula || null,
     }));
     const {data: salvos, error: eUp} = await sb.from('colaboradores')
       .upsert(payloadColabs, {onConflict:'org_id,cpf', ignoreDuplicates:false}).select('id');
@@ -9506,6 +9571,218 @@ async function executarImportacaoSOC() {
   } catch(e) {
     setBtnModalLoading(false);
     showToast(e.message || 'Erro ao importar do SOC', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BUSCA AO VIVO NO SOC (Web Service "Exporta Dados") — opção C da análise
+// em 01-Requisitos/integracao-soc-avanteseg.md. Complementa (não substitui)
+// a importação da planilha Modelo 1 acima (opção E, já em produção): aqui o
+// comercial busca a empresa e os funcionários direto do SOC, sem precisar
+// exportar/subir arquivo nenhum. Só aparece para organizações com
+// usuarioAtual.orgSocIntegracaoAtiva=true (hoje, só a Avanteseg).
+//
+// Todo o código novo é 100% isolado até o passo de confirmação — a
+// gravação em si REAPROVEITA a mesma executarImportacaoSOC() acima: as
+// funções abaixo só populam _socImportEmpresas/_socImportRows no mesmo
+// formato que o parser da planilha já usa, e chamam a função de gravação
+// existente. Isso evita duplicar a lógica sensível de upsert (mesmo
+// princípio já aplicado nas correções de PDF desta sessão — uma função só
+// de gravação, nunca duas cópias que podem divergir).
+// ═══════════════════════════════════════════════════════════════════════
+
+// 2026-08: idem _socImportOrigem acima — só aberto a partir de Clientes.
+let _socWsOrigem = 'clientes';
+let _socWsEmpresas = [];             // lista crua devolvida por 'buscar_empresas'
+let _socWsEmpresaSelecionada = null;
+let _socWsFuncionarios = [];         // lista crua devolvida por 'buscar_funcionarios'
+let _socWsSelecionados = new Set();  // chaves (codigo ou cpf) dos funcionários marcados
+
+// Chama a Edge Function soc-integracao e extrai a mensagem de erro real do
+// corpo da resposta — mesmo padrão já usado para a Edge Function
+// enviar-documentos (ver gerarEmailDocumentos), porque o supabase-js só
+// traz "Edge Function returned a non-2xx status code" em resp.error.message
+// por padrão, sem o motivo de verdade.
+async function _socWsChamar(acao, extra = {}) {
+  const resp = await sb.functions.invoke('soc-integracao', {body: {acao, ...extra}});
+  if (resp.error) {
+    let detalhe = resp.error.message || 'Erro ao consultar o SOC';
+    try {
+      const ctx = resp.error.context;
+      if (ctx && typeof ctx.clone === 'function') {
+        const corpoJson = await ctx.clone().json().catch(() => null);
+        if (corpoJson) detalhe = corpoJson.error || corpoJson.message || detalhe;
+        else {
+          const corpoTxt = await ctx.clone().text().catch(() => null);
+          if (corpoTxt) detalhe = corpoTxt;
+        }
+      }
+    } catch(_) {}
+    throw new Error(detalhe);
+  }
+  if (resp.data?.error) throw new Error(resp.data.error);
+  return resp.data;
+}
+
+function _socWsAbrirModal(origem = 'clientes') {
+  _socWsOrigem = origem;
+  _socWsEmpresas = []; _socWsEmpresaSelecionada = null; _socWsFuncionarios = []; _socWsSelecionados = new Set();
+  abrirModal('Buscar no SOC', `
+    <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.6">
+      Busca ao vivo direto no SOC, sem precisar exportar planilha. Digite o nome ou CNPJ da empresa-cliente para localizá-la.
+    </div>
+    <div class="field"><label>Empresa (nome ou CNPJ)</label>
+      <input type="text" id="mSocWsBusca" placeholder="Digite para buscar..." style="width:100%;padding:9px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit" autocomplete="off"></div>
+    <div id="mSocWsResultado" style="margin-top:8px;max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
+  document.getElementById('mSocWsResultado').innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:13px">Carregando empresas do SOC...</div>';
+  document.getElementById('mSocWsBusca').addEventListener('input', _socWsFiltrarEmpresas);
+  _socWsCarregarEmpresas();
+}
+
+async function _socWsCarregarEmpresas() {
+  const box = document.getElementById('mSocWsResultado');
+  try {
+    const data = await _socWsChamar('buscar_empresas');
+    _socWsEmpresas = data?.empresas || [];
+    if (!_socWsEmpresas.length) {
+      box.innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:13px">Nenhuma empresa encontrada no SOC.</div>';
+      return;
+    }
+    _socWsFiltrarEmpresas();
+  } catch(e) {
+    box.innerHTML = `<div style="padding:14px;color:var(--red);font-size:13px;line-height:1.5">${escapeHtml(e.message||'Erro ao consultar o SOC.')}</div>`;
+  }
+}
+
+function _socWsFiltrarEmpresas() {
+  const termo = (document.getElementById('mSocWsBusca')?.value||'').trim().toLowerCase();
+  const termoDigits = termo.replace(/\D/g,'');
+  const box = document.getElementById('mSocWsResultado');
+  if (!box) return;
+  const filtradas = !termo ? _socWsEmpresas : _socWsEmpresas.filter(e =>
+    String(e.nome||'').toLowerCase().includes(termo) ||
+    (termoDigits && String(e.cnpj||'').replace(/\D/g,'').includes(termoDigits)));
+  if (!filtradas.length) {
+    box.innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:13px">Nenhuma empresa encontrada.</div>';
+    return;
+  }
+  box.innerHTML = filtradas.slice(0,50).map(e => `
+    <div class="list-item" style="cursor:pointer" onclick="_socWsSelecionarEmpresa('${escapeHtml(String(e.codigo))}')">
+      <div class="li-info"><div class="li-title">${escapeHtml(e.nome||'(sem nome)')}</div><div class="li-sub">${escapeHtml(e.cnpj||'CNPJ não informado')}</div></div>
+    </div>`).join('') +
+    (filtradas.length>50?`<div style="padding:8px 12px;font-size:12px;color:var(--text-3)">+ ${filtradas.length-50} mais — refine a busca</div>`:'');
+}
+
+async function _socWsSelecionarEmpresa(codigo) {
+  _socWsEmpresaSelecionada = _socWsEmpresas.find(e => String(e.codigo) === String(codigo));
+  if (!_socWsEmpresaSelecionada) return;
+  const box = document.getElementById('mSocWsResultado');
+  box.innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:13px">Carregando funcionários...</div>';
+  try {
+    const data = await _socWsChamar('buscar_funcionarios', {codigoEmpresa: codigo});
+    _socWsFuncionarios = data?.funcionarios || [];
+    _socWsAbrirTelaFuncionarios();
+  } catch(e) {
+    box.innerHTML = `<div style="padding:14px;color:var(--red);font-size:13px;line-height:1.5">${escapeHtml(e.message||'Erro ao consultar funcionários no SOC.')}</div>
+      <div style="padding:0 14px 14px"><button class="btn btn-outline btn-sm" onclick="_socWsAbrirModal('${_socWsOrigem}')">Voltar</button></div>`;
+  }
+}
+
+function _socWsAbrirTelaFuncionarios() {
+  // Mesma validação de CPF já usada no parser da planilha (Modelo 1) —
+  // linhas sem nome ou com CPF inválido/em branco não entram na lista, pra
+  // não travar a gravação depois.
+  const validos = _socWsFuncionarios.filter(f => {
+    const cpfDigits = String(f.cpf||'').replace(/\D/g,'');
+    return f.nome && cpfDigits.length === 11 && !/^(\d)\1{10}$/.test(cpfDigits);
+  });
+  const invalidos = _socWsFuncionarios.length - validos.length;
+  _socWsSelecionados = new Set(validos.map(f => String(f.codigo ?? f.cpf)));
+
+  abrirModal(`Funcionários — ${escapeHtml(_socWsEmpresaSelecionada?.nome||'')}`, `
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">
+      ${validos.length} funcionário${validos.length!==1?'s':''} encontrado${validos.length!==1?'s':''} nesta empresa, todos pré-selecionados.
+      ${invalidos>0?`<br><span style="color:var(--amber-text)">${invalidos} ignorado${invalidos!==1?'s':''} por nome ou CPF inválido/em branco.</span>`:''}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn btn-outline btn-sm" onclick="_socWsMarcarTodos(true)">Marcar todos</button>
+      <button class="btn btn-outline btn-sm" onclick="_socWsMarcarTodos(false)">Desmarcar todos</button>
+    </div>
+    <div id="mSocWsListaFunc" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+      ${validos.length ? validos.map(f => {
+        const chave = String(f.codigo ?? f.cpf);
+        return `<label class="list-item" style="cursor:pointer;display:flex;align-items:center;gap:10px">
+          <input type="checkbox" data-chave="${escapeHtml(chave)}" checked onchange="_socWsToggleFuncionario('${escapeHtml(chave)}', this.checked)">
+          <div class="li-info"><div class="li-title">${escapeHtml(f.nome||'')}</div><div class="li-sub">${escapeHtml(_socFormatarCpf(String(f.cpf||'').replace(/\D/g,'')))}${f.cargo?' · '+escapeHtml(f.cargo):''}</div></div>
+        </label>`;
+      }).join('') : '<div style="padding:14px;color:var(--text-3);font-size:13px">Nenhum funcionário válido encontrado.</div>'}
+    </div>`,
+    `<button class="btn btn-outline" onclick="_socWsAbrirModal('${_socWsOrigem}')">Voltar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="_socWsConfirmarImportacao()" ${validos.length?'':'disabled'}>Importar selecionados</button>`);
+}
+
+function _socWsMarcarTodos(marcar) {
+  document.querySelectorAll('#mSocWsListaFunc input[type=checkbox]').forEach(cb => {
+    cb.checked = marcar;
+    if (marcar) _socWsSelecionados.add(cb.dataset.chave); else _socWsSelecionados.delete(cb.dataset.chave);
+  });
+}
+
+function _socWsToggleFuncionario(chave, marcado) {
+  if (marcado) _socWsSelecionados.add(chave); else _socWsSelecionados.delete(chave);
+}
+
+async function _socWsConfirmarImportacao() {
+  const selecionados = _socWsFuncionarios.filter(f => _socWsSelecionados.has(String(f.codigo ?? f.cpf)));
+  if (!selecionados.length) { showToast('Selecione ao menos um funcionário.', 'error'); return; }
+  const emp = _socWsEmpresaSelecionada;
+  const cnpjDigits = String(emp?.cnpj||'').replace(/\D/g,'');
+  if (cnpjDigits.length !== 14) {
+    showToast('Esta empresa não tem um CNPJ válido cadastrado no SOC — não é possível importar. Confira o cadastro dela no SOC ou importe manualmente.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnSalvarModal');
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
+  try {
+    // Só precisa checar clientes aqui (pra saber se a empresa já existe ou
+    // vai ser criada) — diferente do preview da planilha, esta tela não
+    // mostra contagem de "colaboradores novos vs. atualizados" antes de
+    // confirmar, então não precisa buscar os CPFs existentes com
+    // antecedência; executarImportacaoSOC faz o upsert de qualquer forma
+    // (novo ou atualização, sem diferença de código).
+    const {data: clientesData, error: errCli} = await sb.from('clientes').select('id,nome,cnpj').eq('org_id', usuarioAtual.org_id);
+    if (errCli) throw errCli;
+    const clientesPorCnpjDigits = new Map((clientesData||[]).map(c => [(c.cnpj||'').replace(/\D/g,''), c]));
+
+    // Popula as MESMAS variáveis globais que o parser da planilha popula, no
+    // mesmo formato — e reaproveita executarImportacaoSOC() sem alterá-la,
+    // então qualquer correção futura na gravação vale para as duas origens
+    // automaticamente.
+    _socImportEmpresas = [{
+      nome: emp.nome || 'Empresa sem nome',
+      cnpjDigits,
+      existente: clientesPorCnpjDigits.has(cnpjDigits),
+      clienteId: clientesPorCnpjDigits.get(cnpjDigits)?.id || null,
+      socCodigoEmpresa: emp.codigo != null ? String(emp.codigo) : null,
+    }];
+    _socImportRows = selecionados.map(f => ({
+      nome: f.nome,
+      cpfDigits: String(f.cpf||'').replace(/\D/g,''),
+      cargo: f.cargo || null,
+      situacao: f.situacao || '',
+      email: null,
+      telefone: null,
+      empresaCnpjDigits: cnpjDigits,
+      soc_codigo_funcionario: f.codigo != null ? String(f.codigo) : null,
+      soc_matricula: f.matricula != null ? String(f.matricula) : null,
+    }));
+    _socImportOrigem = _socWsOrigem;
+    await executarImportacaoSOC();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Importar selecionados'; }
+    showToast(e.message || 'Erro ao preparar a importação.', 'error');
   }
 }
 
