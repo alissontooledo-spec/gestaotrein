@@ -2121,6 +2121,90 @@ function _faixaBuscarSoc(onclick) {
   </div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// COMBOBOX BUSCÁVEL (2026-08-08, a pedido do Alisson) — substitui um
+// <select> simples quando a lista de opções tende a crescer bastante
+// (Cliente e Treinamento no modal de Turma são os primeiros casos). Por
+// fora se comporta exatamente como um <select>: mantém um
+// <input type="hidden"> com o MESMO id que o campo tinha antes, então todo
+// código que já lia document.getElementById(id).value continua funcionando
+// sem precisar mudar (salvarTurma, _autoPreencherLocalTurma,
+// abrirModalClienteRapido etc.) — só a experiência de escolher a opção que
+// muda: um campo de texto que filtra a lista conforme o usuário digita, em
+// vez de rolar um <select> gigante.
+window._comboBuscavelDados = {};
+
+function _comboBuscavelHtml(id, placeholder, opcoes, valorInicial, desativado=false) {
+  const selecionada = opcoes.find(o => String(o.id) === String(valorInicial));
+  if (desativado) {
+    return `<div style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;background:var(--gray-50);color:var(--text-2)">${escapeHtml(selecionada?selecionada.nome:'—')}</div>
+      <input type="hidden" id="${id}" value="${valorInicial||''}">`;
+  }
+  return `<div class="combo-buscavel" style="position:relative">
+    <input type="text" id="${id}_busca" autocomplete="off" placeholder="${escapeHtml(placeholder)}" value="${selecionada?escapeHtml(selecionada.nome):''}"
+      oninput="_comboBuscavelFiltrar('${id}')" onfocus="_comboBuscavelAbrir('${id}')" onblur="_comboBuscavelBlur('${id}')" onkeydown="if(event.key==='Escape')this.blur()"
+      style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+    <input type="hidden" id="${id}" value="${valorInicial||''}">
+    <div id="${id}_lista" style="display:none;position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:0 4px 14px rgba(0,0,0,.12)"></div>
+  </div>`;
+}
+
+// Guarda a lista de opções {id,nome} e um callback opcional (ex.: pra
+// disparar o mesmo efeito que o onchange de um select disparava antes,
+// como o preenchimento automático do endereço em _autoPreencherLocalTurma).
+function _comboBuscavelRegistrar(id, opcoes, onSelect) {
+  window._comboBuscavelDados[id] = { opcoes, onSelect: onSelect||null };
+}
+
+function _comboBuscavelFiltrar(id) {
+  const termo = (document.getElementById(id+'_busca')?.value||'').trim().toLowerCase();
+  const dados = window._comboBuscavelDados[id];
+  const lista = document.getElementById(id+'_lista');
+  if (!dados || !lista) return;
+  const filtradas = !termo ? dados.opcoes : dados.opcoes.filter(o => String(o.nome||'').toLowerCase().includes(termo));
+  lista.innerHTML = !filtradas.length
+    ? '<div style="padding:10px 14px;font-size:13px;color:var(--text-3)">Nenhum resultado</div>'
+    : filtradas.slice(0,50).map(o => `<div style="padding:9px 14px;cursor:pointer;font-size:14px;color:var(--text-1)" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''" onmousedown="_comboBuscavelSelecionar('${id}','${String(o.id).replace(/'/g,"\\'")}')">${escapeHtml(o.nome||'')}</div>`).join('')
+      + (filtradas.length>50?`<div style="padding:8px 14px;font-size:12px;color:var(--text-3)">+ ${filtradas.length-50} mais — refine a busca</div>`:'');
+  lista.style.display = 'block';
+}
+
+function _comboBuscavelAbrir(id) { _comboBuscavelFiltrar(id); }
+
+function _comboBuscavelSelecionar(id, valorId) {
+  const dados = window._comboBuscavelDados[id];
+  if (!dados) return;
+  const opt = dados.opcoes.find(o => String(o.id) === String(valorId));
+  const hidden = document.getElementById(id);
+  const busca = document.getElementById(id+'_busca');
+  const lista = document.getElementById(id+'_lista');
+  if (hidden) hidden.value = valorId;
+  if (busca) busca.value = opt ? opt.nome : '';
+  if (lista) lista.style.display = 'none';
+  if (dados.onSelect) dados.onSelect(valorId);
+}
+
+// onmousedown (em vez de onclick) na opção garante que a seleção acontece
+// ANTES do blur do campo de busca fechar a lista — sem isso, o clique na
+// opção nunca chegaria a disparar, porque o blur já teria escondido a
+// lista primeiro.
+function _comboBuscavelBlur(id) {
+  setTimeout(() => {
+    const dados = window._comboBuscavelDados[id];
+    const hidden = document.getElementById(id);
+    const busca = document.getElementById(id+'_busca');
+    const lista = document.getElementById(id+'_lista');
+    if (lista) lista.style.display = 'none';
+    if (!dados || !hidden || !busca) return;
+    const opt = dados.opcoes.find(o => String(o.id) === String(hidden.value));
+    // Texto digitado não corresponde a nenhuma opção selecionada de fato —
+    // volta pro nome da última opção válida (ou limpa, se nenhuma foi
+    // escolhida ainda), pra não deixar o campo com um texto "órfão".
+    busca.value = opt ? opt.nome : '';
+    if (!opt) hidden.value = '';
+  }, 150);
+}
+
 // ============================================================
 // AUTENTICAÇÃO
 // ============================================================
@@ -8642,8 +8726,8 @@ async function abrirModalTurma(id=null, preSel=null) {
   // conferência, sem poder ser alterados.
   const travado = !!(preSel && preSel.travar);
   const podeCriarCliente = ['administrador','comercial'].includes(usuarioAtual.perfil) && !travado;
-  const cliOpts = _clientesCache.map(c=>`<option value="${c.id}" ${cliPreId===c.id?'selected':''}>${escapeHtml(c.nome)}</option>`).join('');
-  const catOpts = _catalogoCache.map(c=>`<option value="${c.id}" ${catPreId===c.id?'selected':''}>${escapeHtml(c.nome)}</option>`).join('');
+  const cliOpcoes = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
+  const catOpcoes = _catalogoCache.map(c=>({id:c.id, nome:c.nome}));
   abrirModal(t?'Editar turma':'Nova turma', `
     ${travado?`<div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2)">
       Esta turma está sendo agendada como reciclagem de uma pendência de Conformidade — empresa e treinamento vêm fixos, só para conferência, e não podem ser alterados aqui.
@@ -8653,14 +8737,10 @@ async function abrirModalTurma(id=null, preSel=null) {
         <label style="margin:0">Cliente *</label>
         ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.userplus} Novo cliente</button>`:''}
       </div>
-      <select id="mTurCli" ${travado?'disabled':''} onchange="_autoPreencherLocalTurma()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:${travado?'var(--gray-50)':'var(--surface)'};color:${travado?'var(--text-2)':'var(--text-1)'};outline:none">
-        <option value="">Selecione o cliente...</option>${cliOpts}
-      </select>
+      ${_comboBuscavelHtml('mTurCli', 'Buscar cliente por nome...', cliOpcoes, cliPreId, travado)}
     </div>
     <div class="field"><label>Treinamento *</label>
-      <select id="mTurCat" ${travado?'disabled':''} style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:${travado?'var(--gray-50)':'var(--surface)'};color:${travado?'var(--text-2)':'var(--text-1)'};outline:none">
-        <option value="">Selecione o treinamento...</option>${catOpts}
-      </select></div>
+      ${_comboBuscavelHtml('mTurCat', 'Buscar treinamento por nome...', catOpcoes, catPreId, travado)}</div>
     <div class="field">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <label style="margin:0">Local do treinamento</label>
@@ -8673,9 +8753,14 @@ async function abrirModalTurma(id=null, preSel=null) {
       <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.observacoes||'')}</textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
+  if (!travado) {
+    _comboBuscavelRegistrar('mTurCli', cliOpcoes, ()=>_autoPreencherLocalTurma());
+    _comboBuscavelRegistrar('mTurCat', catOpcoes, null);
+  }
   // Turma nova já nascendo com cliente pré-selecionado (ex.: "Agendar" a
-  // partir de uma pendência de Conformidade) — o onchange do select não
-  // dispara sozinho nesse caso, então preenche o Local manualmente aqui.
+  // partir de uma pendência de Conformidade) — o combobox buscável não
+  // dispara onSelect sozinho nesse caso (o valor já vem pronto no HTML),
+  // então preenche o Local manualmente aqui.
   if (!t && cliPreId) _autoPreencherLocalTurma();
 }
 
@@ -8773,7 +8858,7 @@ async function salvarClienteRapido() {
     fecharModal();
     showToast(`${nome} cadastrado!`,'success');
     await abrirModalTurma(turmaId||null);
-    setTimeout(()=>{ const sel = document.getElementById('mTurCli'); if(sel && data) { sel.value = data.id; _autoPreencherLocalTurma(); } },100);
+    setTimeout(()=>{ if (data) _comboBuscavelSelecionar('mTurCli', data.id); },100);
   } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
 }
 
