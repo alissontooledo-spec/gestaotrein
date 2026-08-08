@@ -9603,8 +9603,17 @@ let _socWsSelecionados = new Set();  // chaves (codigo ou cpf) dos funcionários
 // enviar-documentos (ver gerarEmailDocumentos), porque o supabase-js só
 // traz "Edge Function returned a non-2xx status code" em resp.error.message
 // por padrão, sem o motivo de verdade.
+//
+// orgId: manda sempre usuarioAtual.org_id. Para administrador/comercial
+// isso é ignorado no servidor (a Edge Function usa o org_id real do token,
+// nunca confia no que vier do body) — vai só por consistência. Mas é
+// ESSENCIAL para o Provedor testando via "Modo Suporte": o token de auth
+// continua sendo do Provedor, e iniciarModoSuporte() só troca
+// usuarioAtual.org_id no cliente (não troca o usuário logado de verdade) —
+// sem mandar esse orgId, a function não saberia qual organização o
+// Provedor está tentando consultar no SOC.
 async function _socWsChamar(acao, extra = {}) {
-  const resp = await sb.functions.invoke('soc-integracao', {body: {acao, ...extra}});
+  const resp = await sb.functions.invoke('soc-integracao', {body: {acao, orgId: usuarioAtual.org_id, ...extra}});
   if (resp.error) {
     let detalhe = resp.error.message || 'Erro ao consultar o SOC';
     try {
