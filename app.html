@@ -2122,16 +2122,29 @@ function _faixaBuscarSoc(onclick) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// COMBOBOX BUSCÁVEL (2026-08-08, a pedido do Alisson) — substitui um
-// <select> simples quando a lista de opções tende a crescer bastante
-// (Cliente e Treinamento no modal de Turma são os primeiros casos). Por
-// fora se comporta exatamente como um <select>: mantém um
-// <input type="hidden"> com o MESMO id que o campo tinha antes, então todo
-// código que já lia document.getElementById(id).value continua funcionando
-// sem precisar mudar (salvarTurma, _autoPreencherLocalTurma,
-// abrirModalClienteRapido etc.) — só a experiência de escolher a opção que
-// muda: um campo de texto que filtra a lista conforme o usuário digita, em
-// vez de rolar um <select> gigante.
+// COMBOBOX BUSCÁVEL (2026-08-08, a pedido do Alisson; revisado no mesmo
+// dia depois do primeiro feedback) — substitui um <select> simples quando
+// a lista de opções tende a crescer bastante (Cliente e Treinamento no
+// modal de Turma são os primeiros casos). Por fora se comporta exatamente
+// como um <select>: mantém um <input type="hidden"> com o MESMO id que o
+// campo tinha antes, então todo código que já lia
+// document.getElementById(id).value continua funcionando sem precisar
+// mudar (salvarTurma, _autoPreencherLocalTurma, abrirModalClienteRapido).
+//
+// Dois "modos" visuais pro mesmo campo, alternados sem re-renderizar nada
+// (só display:none/flex nos elementos já existentes):
+//   - "chip" — quando já tem algo selecionado: mostra o nome escolhido, só
+//     leitura, com um botão "×" pra limpar. Clicar no chip (fora do "×")
+//     entra no modo busca.
+//   - "busca" — campo de texto vazio (nunca precisa apagar nada na mão) +
+//     lista de resultados que filtra ao digitar.
+//
+// Ponto do feedback do Alisson que motivou a reescrita: a lista NÃO abre
+// mais sozinha quando o modal é criado — o autofocus que o abrirModal()
+// já faz no primeiro campo dispara um evento de foco, mas a lista só abre
+// em resposta a um clique de verdade (onclick), que o foco programático
+// não gera. É a forma mais simples de diferenciar "abriu a janela" de
+// "o usuário clicou no campo" sem precisar de nenhum estado extra.
 window._comboBuscavelDados = {};
 
 function _comboBuscavelHtml(id, placeholder, opcoes, valorInicial, desativado=false) {
@@ -2140,10 +2153,17 @@ function _comboBuscavelHtml(id, placeholder, opcoes, valorInicial, desativado=fa
     return `<div style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;background:var(--gray-50);color:var(--text-2)">${escapeHtml(selecionada?selecionada.nome:'—')}</div>
       <input type="hidden" id="${id}" value="${valorInicial||''}">`;
   }
+  const temValor = !!selecionada;
   return `<div class="combo-buscavel" style="position:relative">
-    <input type="text" id="${id}_busca" autocomplete="off" placeholder="${escapeHtml(placeholder)}" value="${selecionada?escapeHtml(selecionada.nome):''}"
-      oninput="_comboBuscavelFiltrar('${id}')" onfocus="_comboBuscavelAbrir('${id}')" onblur="_comboBuscavelBlur('${id}')" onkeydown="if(event.key==='Escape')this.blur()"
-      style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+    <div id="${id}_chip" style="display:${temValor?'flex':'none'};align-items:center;justify-content:space-between;gap:8px;width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;background:var(--surface);cursor:pointer" onclick="_comboBuscavelEditar('${id}')">
+      <span id="${id}_chipTexto" style="color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${selecionada?escapeHtml(selecionada.nome):''}</span>
+      <button type="button" onclick="event.stopPropagation();_comboBuscavelLimpar('${id}')" title="Remover seleção" aria-label="Remover seleção" style="background:none;border:none;cursor:pointer;color:var(--text-3);padding:2px;display:flex;flex-shrink:0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <input type="text" id="${id}_busca" autocomplete="off" placeholder="${escapeHtml(placeholder)}"
+      oninput="_comboBuscavelFiltrar('${id}')" onclick="_comboBuscavelAbrir('${id}')" onblur="_comboBuscavelBlur('${id}')" onkeydown="if(event.key==='Escape')this.blur()"
+      style="display:${temValor?'none':'block'};width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
     <input type="hidden" id="${id}" value="${valorInicial||''}">
     <div id="${id}_lista" style="display:none;position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:0 4px 14px rgba(0,0,0,.12)"></div>
   </div>`;
@@ -2169,17 +2189,47 @@ function _comboBuscavelFiltrar(id) {
   lista.style.display = 'block';
 }
 
+// Só chamada por um clique de verdade no campo de busca (onclick) — nunca
+// pelo autofocus do abrirModal() — de propósito, é essa a diferença que
+// evita a lista aparecer sozinha quando a janela abre.
 function _comboBuscavelAbrir(id) { _comboBuscavelFiltrar(id); }
+
+// Troca do modo "chip" pro modo "busca" — SEM apagar nada manualmente: o
+// campo de texto já nasce vazio, pronto pra digitar, e a lista completa
+// abre na hora (foi um clique deliberado do usuário).
+function _comboBuscavelEditar(id) {
+  const chip = document.getElementById(id+'_chip');
+  const busca = document.getElementById(id+'_busca');
+  if (chip) chip.style.display = 'none';
+  if (busca) { busca.style.display = 'block'; busca.value = ''; busca.focus(); }
+  _comboBuscavelFiltrar(id);
+}
+
+function _comboBuscavelLimpar(id) {
+  const hidden = document.getElementById(id);
+  if (hidden) hidden.value = '';
+  _comboBuscavelEditar(id);
+  const dados = window._comboBuscavelDados[id];
+  if (dados && dados.onSelect) dados.onSelect('');
+}
+
+function _comboBuscavelMostrarChip(id, nome) {
+  const chip = document.getElementById(id+'_chip');
+  const chipTexto = document.getElementById(id+'_chipTexto');
+  const busca = document.getElementById(id+'_busca');
+  if (chipTexto) chipTexto.textContent = nome || '';
+  if (chip) chip.style.display = nome ? 'flex' : 'none';
+  if (busca) busca.style.display = nome ? 'none' : 'block';
+}
 
 function _comboBuscavelSelecionar(id, valorId) {
   const dados = window._comboBuscavelDados[id];
   if (!dados) return;
   const opt = dados.opcoes.find(o => String(o.id) === String(valorId));
   const hidden = document.getElementById(id);
-  const busca = document.getElementById(id+'_busca');
-  const lista = document.getElementById(id+'_lista');
   if (hidden) hidden.value = valorId;
-  if (busca) busca.value = opt ? opt.nome : '';
+  _comboBuscavelMostrarChip(id, opt ? opt.nome : '');
+  const lista = document.getElementById(id+'_lista');
   if (lista) lista.style.display = 'none';
   if (dados.onSelect) dados.onSelect(valorId);
 }
@@ -2190,18 +2240,17 @@ function _comboBuscavelSelecionar(id, valorId) {
 // lista primeiro.
 function _comboBuscavelBlur(id) {
   setTimeout(() => {
-    const dados = window._comboBuscavelDados[id];
-    const hidden = document.getElementById(id);
-    const busca = document.getElementById(id+'_busca');
     const lista = document.getElementById(id+'_lista');
     if (lista) lista.style.display = 'none';
-    if (!dados || !hidden || !busca) return;
+    const hidden = document.getElementById(id);
+    const dados = window._comboBuscavelDados[id];
+    if (!hidden || !dados) return;
+    // Volta pro modo "chip" se já existe uma seleção válida (a nova, se o
+    // usuário escolheu uma, ou a antiga, se ele só clicou pra olhar e saiu
+    // sem trocar) — nesse segundo caso a seleção original nunca chegou a
+    // ser apagada de verdade, só ficou escondida atrás do campo de busca.
     const opt = dados.opcoes.find(o => String(o.id) === String(hidden.value));
-    // Texto digitado não corresponde a nenhuma opção selecionada de fato —
-    // volta pro nome da última opção válida (ou limpa, se nenhuma foi
-    // escolhida ainda), pra não deixar o campo com um texto "órfão".
-    busca.value = opt ? opt.nome : '';
-    if (!opt) hidden.value = '';
+    if (opt) _comboBuscavelMostrarChip(id, opt.nome);
   }, 150);
 }
 
