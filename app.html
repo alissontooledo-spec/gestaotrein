@@ -9339,10 +9339,18 @@ async function removerParticipante(presencaId, turmaId) {
   await verTurma(turmaId);
 }
 
-async function abrirModalAddParticipante(turmaId, clienteId) {
+// 2026-08-08 — reescrito a pedido do Alisson: antes, clicar num
+// colaborador da lista já adicionava ele na hora (um por vez). Agora é
+// seleção múltipla por checkbox + "Selecionar todos"/"Desmarcar todos" +
+// um botão "Adicionar (N)" que grava todos de uma vez — bem mais rápido
+// quando a turma tem muitos participantes. `preservarSelecao` existe só
+// para o retorno do cadastro rápido de colaborador (reabrirModalParticipante,
+// abaixo) não perder quem já estava marcado.
+async function abrirModalAddParticipante(turmaId, clienteId, preservarSelecao=false) {
   _modalCurrentId = turmaId;
   window._partCliId = clienteId;
   window._partMostrarOutras = false;
+  if (!preservarSelecao) window._partSelecionados = new Set();
   const todos = await _fetchTodosColaboradores(usuarioAtual.org_id, 'id,nome,cpf,cargo,cliente_id');
   const {data:jaAdicionados}= await sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId);
   const jaIds = new Set((jaAdicionados||[]).map(x=>x.colaborador_id));
@@ -9352,31 +9360,57 @@ async function abrirModalAddParticipante(turmaId, clienteId) {
       <input type="text" id="buscaPartModal" placeholder="Buscar por nome ou CPF..." oninput="filtrarPartModal(this.value)" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none">
       <button class="btn btn-outline btn-sm" data-action="cadastroRapidoColab" title="Cadastrar novo colaborador">${ICONS.userplus} Novo</button>
     </div>
-    <div id="listaPartModal" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <button type="button" onclick="selecionarTodosPart()" style="background:none;border:none;color:var(--blue-text,#1E40AF);font-size:12px;font-weight:500;cursor:pointer;padding:0">Selecionar todos</button>
+      <button type="button" onclick="desmarcarTodosPart()" style="background:none;border:none;color:var(--text-3);font-size:12px;font-weight:500;cursor:pointer;padding:0">Desmarcar todos</button>
+    </div>
+    <div id="listaPartModal" style="max-height:300px;overflow-y:auto;overflow-x:hidden;border:1px solid var(--border);border-radius:var(--r-md)">
       ${_htmlPartModal(window._partDisp)}
     </div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`);
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="_confirmarAdicionarParticipantes()">Adicionar <span id="partContagem">(0)</span></button>`);
+  _atualizarRodapePart();
 }
 
 // Mostra primeiro os colaboradores já vinculados à empresa da turma (e os
 // sem empresa nenhuma) — colaboradores de OUTRAS empresas ficam escondidos
 // atrás de uma ação explícita, para não misturar listas de organizações
 // com muitos clientes e milhares de colaboradores cadastrados.
+//
+// Correção 2026-08-08 (bug real reportado pelo Alisson, com print): a
+// lista tremia/pulava conforme o mouse passava por cima, com uma barra
+// aparecendo no fim dela. Causa raiz: a classe global `.list-item:hover`
+// usa `margin:0 -4px` (um truque de CSS pra deixar o fundo do hover
+// "sangrar" 4px além da borda do item) — mas este container não tinha
+// nenhum padding horizontal pra absorver esse sangramento, então cada
+// item passava a ocupar 8px A MAIS de largura no exato momento do hover,
+// disparando uma rolagem horizontal fantasma (a "barra" no fim da lista)
+// que aparecia e sumia a cada troca de item sob o mouse — daí o tremor.
+// Fix cirúrgico: `overflow-x:hidden` no container (linha abaixo, na
+// abertura do modal) — uma lista vertical nunca deveria rolar na
+// horizontal mesmo, então isso corta o sangramento sem mudar nada visual
+// do restante da lista nem tocar na classe `.list-item` global (usada em
+// telas por todo o sistema — não valia o risco de mexer nela).
 function _htmlPartModal(lista) {
   const clienteId = window._partCliId;
+  const sel = window._partSelecionados || (window._partSelecionados = new Set());
   const mesmos = clienteId ? lista.filter(c=>!c.cliente_id || c.cliente_id===clienteId) : lista;
   const outros = clienteId ? lista.filter(c=>c.cliente_id && c.cliente_id!==clienteId) : [];
   const mostrarOutras = !!window._partMostrarOutras;
   const visiveis = mostrarOutras ? lista : mesmos;
+  window._partVisiveisIds = visiveis.map(c=>c.id); // escopo de "Selecionar/Desmarcar todos"
   if (!visiveis.length && !outros.length) return `<div class="empty" style="padding:24px"><div class="empty-icon">👥</div><div class="empty-title">Nenhum colaborador disponível</div><div class="empty-sub">Clique em "Novo" para cadastrar.</div></div>`;
-  const itens = visiveis.map(c=>`
-    <div class="list-item" style="padding:10px 12px;cursor:pointer" data-action="selecionarPart" data-col="${c.id}">
+  const itens = visiveis.map(c=>{
+    const marcado = sel.has(c.id);
+    return `<div class="list-item" style="padding:10px 12px;cursor:pointer" onclick="toggleSelecaoParticipante('${c.id}')">
+      <input type="checkbox" id="partChk_${c.id}" ${marcado?'checked':''} onclick="event.stopPropagation()" onchange="toggleSelecaoParticipante('${c.id}', this.checked)" style="width:16px;height:16px;flex-shrink:0;cursor:pointer">
       <div class="li-icon" style="background:var(--green-l);color:var(--green);font-size:11px;font-weight:700;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center">${iniciais(c.nome)}</div>
       <div class="li-info">
         <div class="li-title">${escapeHtml(c.nome)}</div>
         <div class="li-sub">${c.cpf?'CPF '+c.cpf:'Sem CPF'}${c.cargo?' · '+c.cargo:''}${(mostrarOutras && c.cliente_id && c.cliente_id!==clienteId)?' · <span style="color:var(--amber-text)">outra empresa</span>':''}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   const linkOutras = (!mostrarOutras && outros.length) ? `
     <div style="padding:10px 12px;text-align:center;border-top:1px solid var(--border)">
       <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--text-2)" data-action="mostrarPartOutrasEmpresas">Mostrar mais ${outros.length} colaborador${outros.length!==1?'es':''} de outras empresas</button>
@@ -9393,6 +9427,81 @@ function filtrarPartModal(q) {
   const f = q.toLowerCase().trim();
   const r = f ? (window._partDisp||[]).filter(c=>c.nome.toLowerCase().includes(f)||(c.cpf||'').includes(f)) : (window._partDisp||[]);
   document.getElementById('listaPartModal').innerHTML = _htmlPartModal(r);
+}
+
+// Alterna a seleção de um colaborador — chamada tanto pelo clique na linha
+// inteira (sem 2º argumento, inverte o estado atual) quanto pelo onchange
+// do checkbox (com o novo estado já pronto em `this.checked`).
+function toggleSelecaoParticipante(colId, forcado) {
+  const sel = window._partSelecionados || (window._partSelecionados = new Set());
+  const novoEstado = forcado !== undefined ? forcado : !sel.has(colId);
+  if (novoEstado) sel.add(colId); else sel.delete(colId);
+  const cb = document.getElementById(`partChk_${colId}`);
+  if (cb) cb.checked = novoEstado;
+  _atualizarRodapePart();
+}
+
+// "Selecionar todos"/"Desmarcar todos" agem só sobre o que está visível
+// no momento (respeitando busca e o filtro de "outras empresas") — não
+// sobre colaboradores escondidos pelo filtro atual.
+function selecionarTodosPart() {
+  const sel = window._partSelecionados || (window._partSelecionados = new Set());
+  (window._partVisiveisIds||[]).forEach(id => sel.add(id));
+  document.getElementById('listaPartModal').innerHTML = _htmlPartModal(window._partDisp||[]);
+  _atualizarRodapePart();
+}
+function desmarcarTodosPart() {
+  const sel = window._partSelecionados || (window._partSelecionados = new Set());
+  (window._partVisiveisIds||[]).forEach(id => sel.delete(id));
+  document.getElementById('listaPartModal').innerHTML = _htmlPartModal(window._partDisp||[]);
+  _atualizarRodapePart();
+}
+
+function _atualizarRodapePart() {
+  const n = (window._partSelecionados||new Set()).size;
+  const contagem = document.getElementById('partContagem');
+  if (contagem) contagem.textContent = `(${n})`;
+  const btn = document.getElementById('btnSalvarModal');
+  if (btn) btn.disabled = n===0;
+}
+
+// Grava todos os selecionados numa única chamada — mesmo formato de dados
+// que o antigo fluxo "um por vez" (selecionarParticipante, mantida abaixo
+// sem uso, pra não mexer em código que já funcionava) já gravava,
+// só que em lote.
+async function _confirmarAdicionarParticipantes() {
+  const turmaId   = _modalCurrentId;
+  const clienteId = window._partCliId;
+  const ids = Array.from(window._partSelecionados||[]);
+  if (!turmaId || !ids.length) return;
+  try {
+    setBtnModalLoading(true);
+    const {data:cols} = await sb.from('colaboradores').select('id,nome,cargo,cliente_id').in('id', ids).eq('org_id', usuarioAtual.org_id);
+    const {data:cli} = clienteId ? await sb.from('clientes').select('nome').eq('id',clienteId).single() : {data:null};
+    const colMap = Object.fromEntries((cols||[]).map(c=>[c.id,c]));
+    const linhas = ids.map(id => ({
+      turma_id: turmaId,
+      colaborador_id: id,
+      org_id: usuarioAtual.org_id,
+      empresa_vinculo: cli?.nome || null,
+      cargo_vinculo: colMap[id]?.cargo || null,
+    }));
+    const {error} = await sb.from('turma_participantes').insert(linhas);
+    if (error) throw error;
+    // Mesmo vínculo automático de empresa que o fluxo de um-por-vez já
+    // fazia (selecionarParticipante) — só que em lote aqui.
+    const semEmpresaIds = (cols||[]).filter(c => clienteId && !c.cliente_id).map(c=>c.id);
+    if (semEmpresaIds.length) {
+      await sb.from('colaboradores').update({cliente_id: clienteId}).in('id', semEmpresaIds).eq('org_id', usuarioAtual.org_id);
+    }
+    showToast(`${ids.length} participante${ids.length!==1?'s':''} adicionado${ids.length!==1?'s':''}!`,'success');
+    window._partSelecionados = new Set();
+    fecharModal();
+    await verTurma(turmaId);
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.code==='23505'?'Um ou mais participantes já foram adicionados por outra pessoa — feche e abra de novo pra atualizar a lista':e.message||'Erro ao adicionar participantes','error');
+  }
 }
 
 async function selecionarParticipante(colId) {
@@ -9467,7 +9576,10 @@ async function reabrirModalParticipante() {
   const turmaId   = window._crTurmaId   || _modalCurrentId;
   const clienteId = window._crClienteId || window._partCliId;
   fecharModal();
-  await abrirModalAddParticipante(turmaId, clienteId);
+  // preservarSelecao=true — sem isso, quem já tinha marcado alguns
+  // colaboradores e clicou em "Novo" pra cadastrar mais um perdia a
+  // seleção anterior ao voltar (2026-08-08).
+  await abrirModalAddParticipante(turmaId, clienteId, true);
 }
 
 // ---- Importação de colaboradores ----
@@ -10648,13 +10760,39 @@ function _agEquipeRenderTimeline() {
   // criação rápida de turma pela Agenda).
   window._agEquipeJanelaAtual = {min, max};
 
+  // Régua de horas — corrigida em 2026-08-08 (feedback do Alisson: "8h"
+  // no início da régua aparecia cortado, só "h"). Causa: toda marca usava
+  // transform:translateX(-50%) pra centralizar o texto sobre o traço —
+  // funciona bem para marcas do meio, mas a primeira marca fica em 0% da
+  // área rolável, então metade do texto ("7"/"8", o número) era jogada
+  // pra FORA da área visível à esquerda, sem como rolar até lá pra ver.
+  // Fix: a primeira marca alinha à esquerda (sem centralizar) e a última
+  // alinha à direita — só as marcas do meio continuam centralizadas.
+  // Também: intervalo de 1h em vez de 2h quando a janela do dia é curta
+  // (≤8h), pra não ficar com poucas marcas numa faixa pequena.
+  const janelaHoras = totalMin/60;
+  const passoHoras  = janelaHoras > 8 ? 2 : 1;
   let regua = '';
-  for (let h = Math.ceil(min/60); h <= Math.floor(max/60); h += 2) {
+  for (let h = Math.ceil(min/60); h <= Math.floor(max/60); h += passoHoras) {
     const leftPct = ((h*60-min)/totalMin)*100;
-    regua += `<span style="position:absolute;left:${leftPct}%;transform:translateX(-50%);font-size:9px;color:var(--text-3)">${h}h</span>`;
+    const pos = leftPct<=0.5 ? 'left:0;transform:none'
+      : leftPct>=99.5 ? 'left:auto;right:0;transform:none'
+      : `left:${leftPct}%;transform:translateX(-50%)`;
+    regua += `<span style="position:absolute;${pos};font-size:9px;color:var(--text-3);white-space:nowrap">${h}h</span>`;
   }
+  // Linhas-guia verticais atrás das barras, na mesma posição das marcas da
+  // régua — ajuda a "ler" onde um compromisso começa/termina sem precisar
+  // ficar comparando com a régua de cabeça (pedido do Alisson: deixar a
+  // leitura mais fácil, principalmente pra horários quebrados tipo 08:30,
+  // 13:15).
+  const pxPorMarca = pxPorHora * passoHoras;
+  const gridBg = `background-image:repeating-linear-gradient(to right, var(--border) 0, var(--border) 1px, transparent 1px, transparent ${pxPorMarca}px)`;
 
-  const linhaAltura = 40;
+  // Altura de linha maior que antes (era 40px) pra caber um rótulo de
+  // horário sempre visível acima de cada bloco — não só no hover/title,
+  // que em tela de toque (mobile) nunca aparece. Sem isso não tinha como
+  // ler o horário exato de um compromisso no celular.
+  const linhaAltura = 54;
   const espacador = `<div style="height:6px"></div>`;
 
   // Clicar num espaço vazio da linha do instrutor abre a criação rápida de
@@ -10682,9 +10820,15 @@ function _agEquipeRenderTimeline() {
       const borda = s._conflito ? '2px solid var(--red)' : 'none';
       const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
       const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
-      const titulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${concluida?' · concluída':''}`;
-      return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
-        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:4px;bottom:4px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px"></div>`;
+      const rotulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''}`;
+      const titulo = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${concluida?' · concluída':''}`;
+      // Rótulo de horário (ex.: "08:30–10:00") sempre visível acima da
+      // barra — pointer-events:none pra não atrapalhar o clique na barra
+      // logo abaixo nem o clique-pra-criar da linha vazia.
+      const label = `<div style="position:absolute;left:${leftPct}%;top:2px;font-size:9px;color:var(--text-2);white-space:nowrap;pointer-events:none">${escapeHtml(rotulo)}</div>`;
+      const barra = `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:20px;height:30px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px"></div>`;
+      return label + barra;
     }).join('');
     return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma nova com ${escapeHtml(i.nome)}"
       style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;cursor:pointer">${blocos}</div>`;
@@ -10704,7 +10848,7 @@ function _agEquipeRenderTimeline() {
     <div style="overflow-x:auto;flex:1">
       <div style="min-width:${larguraTimeline}px;position:relative">
         <div style="position:relative;height:16px;margin-bottom:6px">${regua}</div>
-        ${linhas}
+        <div style="${gridBg}">${linhas}</div>
       </div>
     </div>
   </div>
