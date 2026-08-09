@@ -10402,76 +10402,53 @@ function _agendaFiltrarData(dataStr) {
 
 // ============================================================
 // AGENDA DA EQUIPE — administrador / comercial (2026-08-08)
+// Redesenhada em 2026-08-08 (Opção 1 escolhida pelo Alisson, ver
+// 01-Requisitos/agenda-instrutores-conflitos.md seção 12): linha do
+// tempo por instrutor, no estilo "scheduling assistant" (Outlook/Google
+// Calendar) e das ferramentas de escala de equipe (Float, Deputy,
+// Resource Guru) — cada instrutor é uma linha, o eixo horizontal é o
+// horário do dia, e os compromissos aparecem como blocos coloridos
+// posicionados proporcionalmente. Espaço em branco na linha = livre —
+// não precisa abrir nada pra enxergar disponibilidade.
 // ============================================================
-// Ver 01-Requisitos/agenda-instrutores-conflitos.md — implementa a
-// Solução 3 do documento de análise. Reaproveita a mesma linguagem
-// visual do calendário de "Minha Agenda" (renderAgenda, acima), mas:
-//   - mostra todos os instrutores da organização, com filtro por um
-//     deles específico (responde "esse instrutor está livre nesse dia?");
-//   - mostra um resumo de carga por instrutor no mês (responde "quem
-//     está mais livre pra receber uma turma nova?");
-//   - lista as turmas que ainda não têm nenhum agendamento (responde "o
-//     que falta agendar?");
-//   - se atualiza sozinha em segundo plano enquanto a tela está aberta,
-//     reduzindo o risco de dois comerciais não perceberem que alguém
-//     acabou de ocupar um horário. A garantia de verdade contra dois
-//     usuários gravando o mesmo horário é a constraint do banco (ver
-//     migration) — isto aqui só mantém a visão sempre fresca, sem
-//     precisar apertar F5.
 async function renderAgendaEquipe() {
   if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { renderEmBreve('Agenda da Equipe'); return; }
 
   window._agEquipeInstrutorSel = window._agEquipeInstrutorSel || '';
-  window._agEquipeDataSel = null;
-
-  const hoje = dataLocalISO();
-  const [anoHoje, mesHoje] = hoje.split('-').map(Number);
-  window._agEquipeMes  = mesHoje;
-  window._agEquipeAno  = anoHoje;
-  window._agEquipeHoje = hoje;
+  window._agEquipeHoje = dataLocalISO();
+  window._agEquipeData = window._agEquipeData || window._agEquipeHoje;
 
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Agenda da Equipe</div>`);
   fabOcultar();
 
   await _agEquipeCarregarDados();
 
-  const instrutores  = window._agEquipeInstrutores || [];
+  const instrutores   = window._agEquipeInstrutores || [];
   const optsInstrutor = instrutores.map(i=>`<option value="${i.id}" ${window._agEquipeInstrutorSel===i.id?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
 
   setConteudo(`
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <div style="font-size:13px;color:var(--text-3);max-width:480px">Veja a disponibilidade de todos os instrutores num só lugar antes de marcar uma turma nova.</div>
+      <div style="font-size:13px;color:var(--text-3);max-width:480px">Veja a disponibilidade de todos os instrutores lado a lado, num único horário do dia.</div>
       <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)"
         style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);min-width:200px">
         <option value="">Todos os instrutores</option>${optsInstrutor}
       </select>
     </div>
 
-    <div id="agEquipeWorkload" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+    <div id="agEquipeResumo" style="font-size:12px;color:var(--text-2);margin-bottom:10px"></div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden">
-      <div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
-        <button onclick="_agEquipeNavMes(-1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">‹</button>
-        <div id="agEquipeCalMes" style="font-size:14px;font-weight:600;color:#fff"></div>
-        <button onclick="_agEquipeNavMes(1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">›</button>
-      </div>
-      <div style="display:grid;grid-template-columns:auto 1fr;min-height:200px">
-        <div style="padding:12px 12px 12px 14px;border-right:1px solid var(--border)">
-          <div id="agEquipeCalGrid"></div>
-          <div style="display:flex;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
-            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
-              <div style="width:9px;height:9px;border-radius:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4)"></div>Com sessão
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
-              <div style="width:9px;height:9px;border-radius:3px;background:var(--navy)"></div>Hoje
-            </div>
-          </div>
+      <div style="background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <button onclick="_agEquipeNavDia(-1)" aria-label="Dia anterior" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">‹</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center">
+          <span id="agEquipeDataLabel" style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap"></span>
+          <input type="date" id="agEquipeDataInput" value="${window._agEquipeData}" onchange="_agEquipeIrParaData(this.value)"
+            style="border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:7px;padding:5px 8px;font-size:12px;font-family:inherit;color-scheme:dark">
+          <button onclick="_agEquipeIrParaHoje()" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;border-radius:7px;padding:5px 10px;font-size:12px;font-family:inherit">Hoje</button>
         </div>
-        <div id="agEquipeCalLista" style="padding:12px 14px;overflow-y:auto;max-height:280px">
-          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px" id="agEquipeCalListaHeader">Sessões do mês</div>
-          <div id="agEquipeCalListaBody"></div>
-        </div>
+        <button onclick="_agEquipeNavDia(1)" aria-label="Próximo dia" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">›</button>
       </div>
+      <div id="agEquipeTimeline" style="padding:14px"></div>
     </div>
 
     <div style="margin-top:20px">
@@ -10482,22 +10459,27 @@ async function renderAgendaEquipe() {
     </div>
   `);
 
-  _agEquipeRenderWorkload();
-  _agEquipeRenderCalendario();
+  _agEquipeRenderTimeline();
   _agEquipeRenderPendentes();
 
   if (window._agEquipePollId) clearInterval(window._agEquipePollId);
   window._agEquipePollId = setInterval(_agEquipeAtualizarSilenciosamente, 45000);
 }
 
+// Busca só as sessões DO DIA selecionado (não do mês inteiro como na
+// versão anterior) — mais leve e escala melhor conforme a base cresce,
+// já que sempre filtra por data específica (ver seção 8 da análise,
+// "Escalabilidade": nunca carregar tudo).
 async function _agEquipeCarregarDados() {
+  const data = window._agEquipeData;
   const [instrutores, sessoesResp, turmasResp] = await Promise.all([
     _carregarInstrutores(),
     sb.from('sessoes')
-      .select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,modalidade,cancelada,turmas(status,clientes(nome),catalogo(nome))')
+      .select('id,turma_id,hora_inicio,hora_fim,instrutor_id,cancelada,concluida,turmas(status,catalogo(nome),clientes(nome))')
       .eq('org_id', usuarioAtual.org_id)
+      .eq('data', data)
       .eq('cancelada', false)
-      .order('data', {ascending:true}),
+      .order('hora_inicio', {ascending:true}),
     sb.from('turmas')
       .select('id,status,created_at,clientes(nome),catalogo(nome),sessoes(id)')
       .eq('org_id', usuarioAtual.org_id)
@@ -10506,13 +10488,13 @@ async function _agEquipeCarregarDados() {
   ]);
 
   const instrutorNomeDe = Object.fromEntries((instrutores||[]).map(i=>[i.id,i.nome]));
-  const sessoes = (sessoesResp.data||[])
+  const sessoesDoDia = (sessoesResp.data||[])
     .filter(s => s.turmas && s.turmas.status !== 'cancelada')
-    .map(s => ({...s, instrutorNome: instrutorNomeDe[s.instrutor_id] || 'Instrutor não definido'}));
+    .map(s => ({...s, instrutorNome: s.instrutor_id ? (instrutorNomeDe[s.instrutor_id] || 'Instrutor removido') : null}));
 
-  window._agEquipeInstrutores      = instrutores || [];
-  window._agEquipeSessoes          = sessoes;
-  window._agEquipeTurmasPendentes  = (turmasResp.data||[]).filter(t => !(t.sessoes||[]).length);
+  window._agEquipeInstrutores     = instrutores || [];
+  window._agEquipeSessoesDoDia    = sessoesDoDia;
+  window._agEquipeTurmasPendentes = (turmasResp.data||[]).filter(t => !(t.sessoes||[]).length);
 }
 
 async function _agEquipeAtualizarSilenciosamente() {
@@ -10520,7 +10502,7 @@ async function _agEquipeAtualizarSilenciosamente() {
   // além do clearInterval feito em irPara ao trocar de página.
   if (paginaAtual !== 'agendaequipe') { clearInterval(window._agEquipePollId); window._agEquipePollId = null; return; }
   const assinatura = () => JSON.stringify([
-    (window._agEquipeSessoes||[]).map(s=>[s.id,s.data,s.hora_inicio,s.hora_fim,s.instrutor_id]),
+    (window._agEquipeSessoesDoDia||[]).map(s=>[s.id,s.hora_inicio,s.hora_fim,s.instrutor_id,s.concluida]),
     window._agEquipeTurmasPendentes?.length,
   ]);
   const antes = assinatura();
@@ -10528,19 +10510,12 @@ async function _agEquipeAtualizarSilenciosamente() {
     await _agEquipeCarregarDados();
   } catch(e) { console.warn('Agenda da equipe: falha ao atualizar em segundo plano', e.message); return; }
   if (antes === assinatura()) return; // nada mudou, evita re-render à toa
-  _agEquipeRenderWorkload();
-  _agEquipeRenderCalendario();
+  _agEquipeRenderTimeline();
   _agEquipeRenderPendentes();
-}
-
-function _agEquipeSessoesFiltradas() {
-  const sel = window._agEquipeInstrutorSel;
-  return sel ? (window._agEquipeSessoes||[]).filter(s=>s.instrutor_id===sel) : (window._agEquipeSessoes||[]);
 }
 
 function _agEquipeFiltrarInstrutor(instrutorId) {
   window._agEquipeInstrutorSel = instrutorId || '';
-  window._agEquipeDataSel = null;
   // Sincroniza o <select> nas duas cópias do DOM (desktop/mobile) — não dá
   // pra usar _setElBoth aqui (ele reescreve innerHTML, o que apagaria as
   // <option> do select); setar .value diretamente em cada cópia preserva
@@ -10549,130 +10524,178 @@ function _agEquipeFiltrarInstrutor(instrutorId) {
     const sel = body?.querySelector('#agEquipeFiltroInstrutor');
     if (sel) sel.value = window._agEquipeInstrutorSel;
   });
-  _agEquipeRenderWorkload();
-  _agEquipeRenderCalendario();
+  _agEquipeRenderTimeline();
 }
 
-function _agEquipeRenderWorkload() {
-  const el = _getElVisible('agEquipeWorkload');
-  if (!el) return;
-  const mes = window._agEquipeMes, ano = window._agEquipeAno;
-  const instrutores = window._agEquipeInstrutores || [];
-  if (!instrutores.length) {
-    const vazio = `<div style="font-size:12px;color:var(--text-3)">Nenhum instrutor ativo cadastrado ainda.</div>`;
-    el.innerHTML = vazio; _setElBoth('agEquipeWorkload', vazio); return;
-  }
-  const html = instrutores.map(i => {
-    const n = (window._agEquipeSessoes||[]).filter(s => {
-      if (s.instrutor_id !== i.id || !s.data) return false;
-      const [sy,sm] = s.data.split('-').map(Number);
-      return sy===ano && sm===mes;
-    }).length;
-    const ativo = window._agEquipeInstrutorSel === i.id;
-    return `<button onclick="_agEquipeFiltrarInstrutor('${ativo?'':i.id}')"
-      style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1.5px solid ${ativo?'var(--navy)':'var(--border)'};background:${ativo?'var(--navy)':'var(--surface)'};color:${ativo?'#fff':'var(--text-1)'};font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap">
-      ${escapeHtml(i.nome)} <span style="opacity:.75">· ${n} ${n===1?'sessão':'sessões'}</span>
-    </button>`;
-  }).join('');
-  el.innerHTML = html;
-  _setElBoth('agEquipeWorkload', html);
-}
-
-function _agEquipeRenderCalendario() {
-  const mes = window._agEquipeMes, ano = window._agEquipeAno, hoje = window._agEquipeHoje;
-  const nomesMeses = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const elMes  = _getElVisible('agEquipeCalMes');
-  const elGrid = _getElVisible('agEquipeCalGrid');
-  if (!elMes || !elGrid) return;
-  elMes.textContent = `${nomesMeses[mes-1]} ${ano}`;
-
-  const sessoesFiltro = _agEquipeSessoesFiltradas();
-  const contagemPorDia = {};
-  sessoesFiltro.forEach(s => { if (s.data) contagemPorDia[s.data] = (contagemPorDia[s.data]||0)+1; });
-
-  const primeiroDia = new Date(ano, mes-1, 1).getDay();
-  const diasNoMes   = new Date(ano, mes, 0).getDate();
-  const dow = ['D','S','T','Q','Q','S','S'];
-
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,30px);gap:2px;margin-bottom:4px">`;
-  html += dow.map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:3px 0">${d}</div>`).join('');
-  html += '</div>';
-  html += `<div style="display:grid;grid-template-columns:repeat(7,30px);gap:2px">`;
-  for (let i=0;i<primeiroDia;i++) html += `<div style="width:30px;height:30px"></div>`;
-  for (let d=1; d<=diasNoMes; d++) {
-    const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const n = contagemPorDia[dataStr] || 0;
-    const ehHoje = dataStr === hoje;
-    const ehSel  = window._agEquipeDataSel === dataStr;
-    let bg='transparent', color='var(--text-2)', fw='400', borda='none', cursor='default';
-    if (ehHoje) { bg='var(--navy)'; color='#fff'; fw='600'; }
-    if (n>0 && !ehHoje) { bg='rgba(245,158,11,.15)'; color='var(--navy)'; fw='600'; borda='1px solid rgba(245,158,11,.4)'; cursor='pointer'; }
-    if (ehSel && !ehHoje) borda='2px solid var(--navy)';
-    const marcador = n>1 ? `<div style="font-size:8px;font-weight:700;color:#B45309;line-height:1">${n}</div>` : (n===1 ? `<div style="width:4px;height:4px;background:var(--amber,#F59E0B);border-radius:50%;margin:1px auto 0"></div>` : '');
-    html += `<div onclick="${n>0?`_agEquipeFiltrarData('${dataStr}')`:''}"
-      style="width:30px;height:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;font-size:12px;font-weight:${fw};background:${bg};color:${color};cursor:${cursor};border:${borda}"
-    >${d}${marcador}</div>`;
-  }
-  html += '</div>';
-  elGrid.innerHTML = html;
-  _setElBoth('agEquipeCalGrid', html);
-  _agEquipeAtualizarLista(window._agEquipeDataSel || null);
-}
-
-function _agEquipeAtualizarLista(dataFiltro) {
-  const header = _getElVisible('agEquipeCalListaHeader');
-  const body   = _getElVisible('agEquipeCalListaBody');
-  if (!header || !body) return;
-  const mes = window._agEquipeMes, ano = window._agEquipeAno, hoje = window._agEquipeHoje;
-  let lista = _agEquipeSessoesFiltradas().filter(s => {
-    if (!s.data) return false;
-    if (dataFiltro) return s.data === dataFiltro;
-    const [sy,sm] = s.data.split('-').map(Number);
-    return sy===ano && sm===mes;
+function _agEquipeSincronizarDataInput() {
+  [document.getElementById('mainBody'), document.getElementById('mobileBody')].forEach(body => {
+    const inp = body?.querySelector('#agEquipeDataInput');
+    if (inp) inp.value = window._agEquipeData;
   });
-  lista.sort((a,b) => (a.data+(a.hora_inicio||'')).localeCompare(b.data+(b.hora_inicio||'')));
+}
 
-  const nm = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  header.textContent = dataFiltro
-    ? `${dataFiltro.split('-').reverse().join('/')} — ${lista.length} sessão(ões)`
-    : `${nm[mes-1]} ${ano} — ${lista.length} sessão(ões)`;
-  _setElBoth('agEquipeCalListaHeader', header.textContent);
+async function _agEquipeNavDia(delta) {
+  const [y,m,d] = window._agEquipeData.split('-').map(Number);
+  const dt = new Date(y, m-1, d + delta);
+  window._agEquipeData = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  _agEquipeSincronizarDataInput();
+  await _agEquipeCarregarDados();
+  _agEquipeRenderTimeline();
+  _agEquipeRenderPendentes();
+}
 
-  if (!lista.length) {
-    const vazio = `<div style="font-size:12px;color:var(--text-3);padding:16px 0;text-align:center">${dataFiltro?'Nenhuma sessão neste dia':'Nenhuma sessão neste mês'}</div>`;
-    body.innerHTML = vazio; _setElBoth('agEquipeCalListaBody', vazio); return;
+async function _agEquipeIrParaData(valor) {
+  if (!valor) return;
+  window._agEquipeData = valor;
+  _agEquipeSincronizarDataInput();
+  await _agEquipeCarregarDados();
+  _agEquipeRenderTimeline();
+  _agEquipeRenderPendentes();
+}
+
+function _agEquipeIrParaHoje() {
+  _agEquipeIrParaData(window._agEquipeHoje);
+}
+
+function _agEquipeMinutosDeHora(hhmmss) {
+  if (!hhmmss) return null;
+  const [h,m] = hhmmss.split(':').map(Number);
+  return h*60 + m;
+}
+
+// Janela de horas exibida na linha do tempo — padrão comercial (7h–20h),
+// mas alarga automaticamente se alguma sessão do dia começar antes ou
+// terminar depois disso, pra nunca cortar um compromisso de verdade fora
+// da tela.
+function _agEquipeJanela(sessoes) {
+  let min = 7*60, max = 20*60;
+  sessoes.forEach(s => {
+    const ini = _agEquipeMinutosDeHora(s.hora_inicio);
+    const fim = _agEquipeMinutosDeHora(s.hora_fim);
+    if (ini!=null) min = Math.min(min, Math.floor(ini/60)*60);
+    const fimEfetivo = fim!=null ? fim : (ini!=null ? ini+30 : null);
+    if (fimEfetivo!=null) max = Math.max(max, Math.ceil(fimEfetivo/60)*60);
+  });
+  if (max <= min) max = min + 60;
+  return {min, max};
+}
+
+// Renderiza a linha do tempo do dia selecionado: uma linha por instrutor,
+// blocos posicionados proporcionalmente ao horário. Marca em vermelho
+// qualquer sobreposição real encontrada entre sessões ainda pendentes
+// (sessões já concluídas sobrepostas ficam só em cinza, sem alarde — é
+// histórico, não um conflito ativo; mesmo critério da constraint do banco,
+// ver migration Parte 3).
+function _agEquipeRenderTimeline() {
+  const el     = _getElVisible('agEquipeTimeline');
+  const label  = _getElVisible('agEquipeDataLabel');
+  const resumo = _getElVisible('agEquipeResumo');
+  if (!el) return;
+
+  const diasSemana = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const [ay,am,ad] = window._agEquipeData.split('-').map(Number);
+  const dt = new Date(ay, am-1, ad);
+  const labelTexto = `${diasSemana[dt.getDay()]}, ${ad} de ${meses[am-1]}${window._agEquipeData===window._agEquipeHoje?' · hoje':''}`;
+  if (label) { label.textContent = labelTexto; }
+  _setElBoth('agEquipeDataLabel', labelTexto);
+
+  const sel = window._agEquipeInstrutorSel;
+  const instrutores = (window._agEquipeInstrutores||[]).filter(i => !sel || i.id===sel);
+
+  const sessoesPorInstrutor = {};
+  (window._agEquipeSessoesDoDia||[]).forEach(s => {
+    if (!s.instrutor_id) return;
+    (sessoesPorInstrutor[s.instrutor_id] = sessoesPorInstrutor[s.instrutor_id] || []).push(s);
+  });
+  const semInstrutor = (window._agEquipeSessoesDoDia||[]).filter(s => !s.instrutor_id).length;
+
+  const livres = instrutores.filter(i => !(sessoesPorInstrutor[i.id]||[]).length).length;
+  const resumoTexto = instrutores.length
+    ? `${livres} de ${instrutores.length} instrutor${instrutores.length===1?'':'es'} livre${livres===1?'':'s'} neste dia${semInstrutor?` · ${semInstrutor} sessão(ões) sem instrutor definido`:''}`
+    : 'Nenhum instrutor ativo cadastrado ainda.';
+  if (resumo) { resumo.textContent = resumoTexto; }
+  _setElBoth('agEquipeResumo', resumoTexto);
+
+  if (!instrutores.length) {
+    const vazio = `<div style="font-size:12px;color:var(--text-3);padding:20px 0;text-align:center">Cadastre instrutores em Equipe para usar a Agenda da Equipe.</div>`;
+    el.innerHTML = vazio; _setElBoth('agEquipeTimeline', vazio); return;
   }
 
-  const html = lista.map(s => {
-    const ehHoje  = s.data === hoje;
-    const hora    = s.hora_inicio ? s.hora_inicio.slice(0,5) + (s.hora_fim?'–'+s.hora_fim.slice(0,5):'') : 'horário não definido';
-    const dataFmt = s.data.split('-').reverse().join('/');
-    return `<div class="list-item" data-action="verTurma" data-id="${s.turma_id}" style="cursor:pointer;padding:8px 10px;background:${ehHoje?'rgba(245,158,11,.08)':'var(--gray-50,#F8FAFC)'};border:1px solid ${ehHoje?'rgba(245,158,11,.3)':'var(--border)'};border-radius:8px;margin-bottom:6px">
-      <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.turmas?.catalogo?.nome||'Treinamento')}</div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHtml(s.turmas?.clientes?.nome||'—')}</div>
-      <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
-        <span>${dataFmt} · ${hora}</span>
-        <span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:500;background:var(--blue-l,#EFF6FF);color:var(--blue-text,#2563EB)">${escapeHtml(s.instrutorNome)}</span>
+  // Marca conflitos reais: sobreposição entre duas sessões do mesmo
+  // instrutor onde pelo menos uma ainda não foi concluída.
+  Object.values(sessoesPorInstrutor).forEach(lista => {
+    lista.forEach(s => { s._conflito = false; });
+    for (let i=0;i<lista.length;i++) {
+      for (let j=i+1;j<lista.length;j++) {
+        const a=lista[i], b=lista[j];
+        const aIni=_agEquipeMinutosDeHora(a.hora_inicio), aFim=_agEquipeMinutosDeHora(a.hora_fim);
+        const bIni=_agEquipeMinutosDeHora(b.hora_inicio), bFim=_agEquipeMinutosDeHora(b.hora_fim);
+        if (aIni==null||aFim==null||bIni==null||bFim==null) continue;
+        const sobrepoe = aIni < bFim && bIni < aFim;
+        if (sobrepoe && (!a.concluida || !b.concluida)) { a._conflito = true; b._conflito = true; }
+      }
+    }
+  });
+
+  const todasVisiveis = instrutores.flatMap(i => sessoesPorInstrutor[i.id]||[]);
+  const {min, max} = _agEquipeJanela(todasVisiveis);
+  const totalMin = max - min;
+  const pxPorHora = 56;
+  const larguraTimeline = Math.max(360, Math.round((totalMin/60)*pxPorHora));
+
+  let regua = '';
+  for (let h = Math.ceil(min/60); h <= Math.floor(max/60); h += 2) {
+    const leftPct = ((h*60-min)/totalMin)*100;
+    regua += `<span style="position:absolute;left:${leftPct}%;transform:translateX(-50%);font-size:9px;color:var(--text-3)">${h}h</span>`;
+  }
+
+  const linhaAltura = 40;
+  const espacador = `<div style="height:6px"></div>`;
+
+  const linhas = instrutores.map(i => {
+    const sessoes = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+    if (!sessoes.length) {
+      return `<div style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;display:flex;align-items:center;justify-content:center">
+        <span style="font-size:10px;color:var(--text-3)">Livre o dia todo</span>
+      </div>`;
+    }
+    const blocos = sessoes.map(s => {
+      const ini = _agEquipeMinutosDeHora(s.hora_inicio);
+      if (ini==null) return '';
+      const fim = _agEquipeMinutosDeHora(s.hora_fim) ?? (ini+30);
+      const leftPct  = Math.max(0, ((ini-min)/totalMin)*100);
+      const widthPct = Math.max(2, ((fim-ini)/totalMin)*100);
+      const concluida = !!s.concluida;
+      const bg = s._conflito ? 'var(--red)' : (concluida ? 'var(--gray-400)' : 'var(--amber)');
+      const borda = s._conflito ? '2px solid var(--red)' : 'none';
+      const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
+      const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
+      const titulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${concluida?' · concluída':''}`;
+      return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:4px;bottom:4px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px"></div>`;
+    }).join('');
+    return `<div style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px">${blocos}</div>`;
+  }).join(espacador);
+
+  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;font-size:12px;color:var(--text-1);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.nome)}</div>`).join(espacador);
+
+  const html = `<div style="display:flex;gap:10px">
+    <div style="width:96px;flex-shrink:0;padding-top:22px">${nomes}</div>
+    <div style="overflow-x:auto;flex:1">
+      <div style="min-width:${larguraTimeline}px;position:relative">
+        <div style="position:relative;height:16px;margin-bottom:6px">${regua}</div>
+        ${linhas}
       </div>
-    </div>`;
-  }).join('');
-  body.innerHTML = html;
-  _setElBoth('agEquipeCalListaBody', html);
-}
-
-function _agEquipeNavMes(delta) {
-  let mes = window._agEquipeMes + delta, ano = window._agEquipeAno;
-  if (mes>12) { mes=1; ano++; }
-  if (mes<1)  { mes=12; ano--; }
-  window._agEquipeMes = mes; window._agEquipeAno = ano;
-  window._agEquipeDataSel = null;
-  _agEquipeRenderWorkload();
-  _agEquipeRenderCalendario();
-}
-
-function _agEquipeFiltrarData(dataStr) {
-  window._agEquipeDataSel = window._agEquipeDataSel === dataStr ? null : dataStr;
-  _agEquipeRenderCalendario();
+    </div>
+  </div>
+  <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-400)"></div>Já concluído</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
+  </div>`;
+  el.innerHTML = html;
+  _setElBoth('agEquipeTimeline', html);
 }
 
 function _agEquipeRenderPendentes() {
