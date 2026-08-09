@@ -9117,7 +9117,8 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
           style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
       </div>
     </div>
-    <div style="font-size:11px;color:var(--text-3);margin:-8px 0 14px">Sugerida automaticamente a partir da carga horária do curso (${cargaHoraria||'—'}h) — ajuste se precisar.</div>
+    <div style="font-size:11px;color:var(--text-3);margin:-8px 0 6px">Sugerida automaticamente a partir da carga horária do curso (${cargaHoraria||'—'}h) — ajuste se precisar.</div>
+    <div id="mAgFimAviso" style="margin:-2px 0 8px"></div>
     <div class="field"><label>Instrutor responsável</label>
       <select id="mAgInstrutor" onchange="_agVerificarConflito()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="">Selecione o instrutor...</option>${instOpts}
@@ -9148,18 +9149,41 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
 // Revivido em 2026-08-08 — ver seção 5 de
 // 01-Requisitos/agenda-instrutores-conflitos.md: a comparação de conflito
 // de horário só funciona de verdade com hora_fim preenchida.
+//
+// Correção 2026-08-08 (bug real de produção): a versão anterior fazia
+// "% (24*60)" quando início + carga horária ultrapassava a meia-noite —
+// isso "voltava" pra um horário mais cedo no MESMO dia (ex.: início 22:00
+// + carga 4h virava 02:00, que é antes de 22:00). O banco não aceita um
+// intervalo assim (hora_fim < hora_inicio no mesmo dia) e rejeitava com
+// "range lower bound must be less than or equal to range upper bound" —
+// um erro genérico do Postgres, nem chegava a ser a constraint de
+// conflito. Agora, se a carga horária não cabe no mesmo dia a partir do
+// horário de início, o campo fica em branco e mostra um aviso — o
+// usuário decide manualmente (ajustar o horário, ou registrar o
+// restante como outra sessão em outro dia, já que o sistema já suporta
+// múltiplas sessões por turma).
 function _agCalcularHoraFim() {
   if (window._agHoraFimManual) return;
   const ini = document.getElementById('mAgIni')?.value;
   const fimEl = document.getElementById('mAgFim');
+  const avisoEl = document.getElementById('mAgFimAviso');
   const ch = window._agCargaHoraria || 0;
   if (!ini || !fimEl || !ch) return;
   const [h,m] = ini.split(':').map(Number);
-  let totalMin = h*60 + m + Math.round(ch*60);
-  totalMin = totalMin % (24*60); // não deixa "vazar" pro dia seguinte na exibição
+  const totalMin = h*60 + m + Math.round(ch*60);
+  if (totalMin >= 24*60) {
+    fimEl.value = '';
+    if (avisoEl) avisoEl.innerHTML = `<div style="font-size:11px;color:var(--red);line-height:1.5">A carga horária (${ch}h) não cabe num único dia a partir desse horário de início. Informe a hora de término manualmente, ou registre o restante como outra sessão em outro dia.</div>`;
+    return;
+  }
+  if (avisoEl) avisoEl.innerHTML = '';
   fimEl.value = `${String(Math.floor(totalMin/60)).padStart(2,'0')}:${String(totalMin%60).padStart(2,'0')}`;
 }
-function _agHoraFimEditadaManual() { window._agHoraFimManual = true; }
+function _agHoraFimEditadaManual() {
+  window._agHoraFimManual = true;
+  const avisoEl = document.getElementById('mAgFimAviso');
+  if (avisoEl) avisoEl.innerHTML = '';
+}
 
 // Checagem de conflito AO VIVO (2026-08-08) — consulta as sessões do
 // instrutor escolhido nesse mesmo dia e avisa antes de salvar. É só a
@@ -9234,6 +9258,17 @@ async function salvarAgendamento() {
   if (!data) { showToast('Informe a data','error'); return; }
   const horaInicio = document.getElementById('mAgIni')?.value || null;
   if (!horaInicio) { showToast('Informe a hora de início','error'); return; }
+  const horaFim = document.getElementById('mAgFim')?.value || null;
+  // Validação que faltava (bug real encontrado em teste 2026-08-08): sem
+  // isso, uma Hora término preenchida antes ou igual à Hora início (seja
+  // por digitação manual ou por um cálculo automático mal comportado)
+  // chegava direto no banco e caía num erro genérico do Postgres ("range
+  // lower bound must be less than or equal to range upper bound") em vez
+  // de uma mensagem que o usuário entende.
+  if (horaFim && horaFim <= horaInicio) {
+    showToast('A hora de término deve ser depois da hora de início.','error');
+    return;
+  }
   // Segunda barreira (a primeira é o botão desabilitado) — cobre o caso de
   // o usuário disparar salvarAgendamento() por outro caminho.
   if (window._agTemConflito && usuarioAtual.perfil !== 'administrador') {
@@ -9245,7 +9280,7 @@ async function salvarAgendamento() {
     org_id:      usuarioAtual.org_id,
     data,
     hora_inicio: horaInicio,
-    hora_fim:    document.getElementById('mAgFim')?.value || null,
+    hora_fim:    horaFim,
     instrutor_id:document.getElementById('mAgInstrutor')?.value||null,
     modalidade:  document.getElementById('mAgMod')?.value||'presencial',
     local:       document.getElementById('mAgLocal')?.value.trim()||null,
