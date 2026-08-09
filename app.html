@@ -8601,7 +8601,7 @@ async function verTurma(id) {
     const html = usuarioAtual.perfil === 'instrutor' ? `
       <!-- ===== TELA INSTRUTOR ===== -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
+        <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
       </div>
 
       <!-- Hero card -->
@@ -8683,7 +8683,7 @@ async function verTurma(id) {
       </div>` : `
       <!-- ===== TELA GESTOR ===== -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
+        <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
         <div style="flex:1;min-width:0">
           <div style="font-size:18px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
           ${t.protocolo?`<div style="font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:6px">
@@ -10549,36 +10549,43 @@ async function renderAgendaEquipe() {
   window._agEquipeInstrutorSel = window._agEquipeInstrutorSel || '';
   window._agEquipeHoje = dataLocalISO();
   window._agEquipeData = window._agEquipeData || window._agEquipeHoje;
+  // 2026-08-09: visão Dia/Semana/Mês (pedido do Alisson). Preserva a última
+  // visão escolhida entre entradas na tela, na mesma sessão (mesmo padrão
+  // já usado pra _agEquipeInstrutorSel/_agEquipeData acima).
+  window._agEquipeVisao = window._agEquipeVisao || 'dia';
 
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Agenda da Equipe</div>`);
   fabOcultar();
 
-  await _agEquipeCarregarDados();
+  await _agEquipeCarregarPeriodoAtual();
 
   const instrutores   = window._agEquipeInstrutores || [];
   const optsInstrutor = instrutores.map(i=>`<option value="${i.id}" ${window._agEquipeInstrutorSel===i.id?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
 
+  // 2026-08-09: removida a frase de apresentação ("Veja a disponibilidade...")
+  // e o resumo "N de M instrutores livres" — feedback do Alisson de que não
+  // agregavam valor e só ocupavam espaço. O resumo textual perde ainda mais
+  // sentido agora que existem 3 visões (Dia/Semana/Mês), cada uma com sua
+  // própria forma de mostrar disponibilidade visualmente.
   setConteudo(`
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <div style="font-size:13px;color:var(--text-3);max-width:480px">Veja a disponibilidade de todos os instrutores lado a lado, num único horário do dia.</div>
+      <div id="agEquipeVisaoSwitchWrap">${_agEquipeHtmlVisaoSwitch()}</div>
       <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)"
         style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);min-width:200px">
         <option value="">Todos os instrutores</option>${optsInstrutor}
       </select>
     </div>
 
-    <div id="agEquipeResumo" style="font-size:12px;color:var(--text-2);margin-bottom:10px"></div>
-
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden">
       <div style="background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <button onclick="_agEquipeNavDia(-1)" aria-label="Dia anterior" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">‹</button>
+        <button onclick="_agEquipeNav(-1)" aria-label="Período anterior" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">‹</button>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center">
           <span id="agEquipeDataLabel" style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap"></span>
           <input type="date" id="agEquipeDataInput" value="${window._agEquipeData}" onchange="_agEquipeIrParaData(this.value)"
             style="border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:7px;padding:5px 8px;font-size:12px;font-family:inherit;color-scheme:dark">
           <button onclick="_agEquipeIrParaHoje()" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;border-radius:7px;padding:5px 10px;font-size:12px;font-family:inherit">Hoje</button>
         </div>
-        <button onclick="_agEquipeNavDia(1)" aria-label="Próximo dia" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">›</button>
+        <button onclick="_agEquipeNav(1)" aria-label="Próximo período" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">›</button>
       </div>
       <div id="agEquipeTimeline" style="padding:14px"></div>
     </div>
@@ -10591,11 +10598,10 @@ async function renderAgendaEquipe() {
     </div>
   `);
 
-  _agEquipeRenderTimeline();
+  _agEquipeAtualizarLabelPeriodo();
+  _agEquipeRenderView();
   _agEquipeRenderPendentes();
-
-  if (window._agEquipePollId) clearInterval(window._agEquipePollId);
-  window._agEquipePollId = setInterval(_agEquipeAtualizarSilenciosamente, 45000);
+  _agEquipePollGerenciar();
 }
 
 // Busca só as sessões DO DIA selecionado (não do mês inteiro como na
@@ -10656,7 +10662,10 @@ function _agEquipeFiltrarInstrutor(instrutorId) {
     const sel = body?.querySelector('#agEquipeFiltroInstrutor');
     if (sel) sel.value = window._agEquipeInstrutorSel;
   });
-  _agEquipeRenderTimeline();
+  // 2026-08-09: já temos os dados do período carregados — trocar o filtro
+  // não precisa buscar de novo no banco, só redesenhar a visão ativa
+  // (Dia/Semana/Mês) com o recorte novo.
+  _agEquipeRenderView();
 }
 
 function _agEquipeSincronizarDataInput() {
@@ -10666,6 +10675,9 @@ function _agEquipeSincronizarDataInput() {
   });
 }
 
+// Função antiga, mantida sem uso (o botão ‹ do cabeçalho agora chama
+// _agEquipeNav, que sabe avançar por dia/semana/mês conforme a visão
+// ativa — ver bloco "VISÃO DIA/SEMANA/MÊS" logo abaixo).
 async function _agEquipeNavDia(delta) {
   const [y,m,d] = window._agEquipeData.split('-').map(Number);
   const dt = new Date(y, m-1, d + delta);
@@ -10679,14 +10691,376 @@ async function _agEquipeNavDia(delta) {
 async function _agEquipeIrParaData(valor) {
   if (!valor) return;
   window._agEquipeData = valor;
-  _agEquipeSincronizarDataInput();
-  await _agEquipeCarregarDados();
-  _agEquipeRenderTimeline();
-  _agEquipeRenderPendentes();
+  await _agEquipeCarregarEExibir();
 }
 
 function _agEquipeIrParaHoje() {
   _agEquipeIrParaData(window._agEquipeHoje);
+}
+
+// ============================================================
+// AGENDA DA EQUIPE — VISÃO DIA/SEMANA/MÊS (2026-08-09)
+// ============================================================
+// Pedido do Alisson: a visão de Dia sozinha não deixa o comercial enxergar
+// rápido a disponibilidade da semana pra planejar agendamentos. A visão Dia
+// em si (carregamento, render, polling, criação rápida por clique) NÃO foi
+// alterada — continua 100% a mesma função/lógica de antes. Semana e Mês são
+// aditivos: dados próprios (window._agEquipeSessoesPeriodo, carregados por
+// intervalo de datas em vez de um único dia) e funções de render próprias,
+// sem tocar nas estruturas usadas pela visão Dia
+// (window._agEquipeSessoesDoDia, _agEquipeRenderTimeline, o polling de 45s).
+
+// Alterna a visão ativa. Reconstrói só o mini-toolbar de botões (Dia/Semana/
+// Mês) e recarrega+redesenha o conteúdo — não precisa refazer setConteudo
+// inteiro, então mantém o resto da tela (filtro de instrutor, pendentes)
+// intacto.
+function _agEquipeTrocarVisao(visao) {
+  if (window._agEquipeVisao === visao) return;
+  window._agEquipeVisao = visao;
+  _setElBoth('agEquipeVisaoSwitchWrap', _agEquipeHtmlVisaoSwitch());
+  _agEquipeCarregarEExibir();
+}
+
+function _agEquipeHtmlVisaoSwitch() {
+  const visao = window._agEquipeVisao || 'dia';
+  const opts = [['dia','Dia'],['semana','Semana'],['mes','Mês']];
+  return `<div style="display:flex;background:var(--gray-100);border-radius:8px;padding:2px;gap:2px">${opts.map(([v,l])=>`
+    <button type="button" onclick="_agEquipeTrocarVisao('${v}')"
+      style="border:none;cursor:pointer;padding:7px 15px;border-radius:6px;font-size:12px;font-weight:600;font-family:inherit;min-height:30px;${v===visao?'background:var(--surface);color:var(--navy);box-shadow:0 1px 2px rgba(0,0,0,.08)':'background:none;color:var(--text-3)'}">${l}</button>
+  `).join('')}</div>`;
+}
+
+// Carrega os dados certos pro período ativo — usada tanto no primeiro
+// carregamento da tela quanto ao navegar/filtrar.
+async function _agEquipeCarregarPeriodoAtual() {
+  const visao = window._agEquipeVisao || 'dia';
+  if (visao === 'semana') await _agEquipeCarregarDadosSemana();
+  else if (visao === 'mes') await _agEquipeCarregarDadosMes();
+  else await _agEquipeCarregarDados();
+}
+
+// Recarrega do banco e redesenha — usada por navegação (‹ ›, "Hoje", input
+// de data). Ao trocar de visão via _agEquipeTrocarVisao também passa por
+// aqui, então navegar/trocar visão sempre deixam a tela num estado
+// consistente (dado certo pro período certo).
+async function _agEquipeCarregarEExibir() {
+  _agEquipeSincronizarDataInput();
+  await _agEquipeCarregarPeriodoAtual();
+  _agEquipeAtualizarLabelPeriodo();
+  _agEquipeRenderView();
+  _agEquipeRenderPendentes();
+  _agEquipePollGerenciar();
+}
+
+// Só redesenha com os dados já carregados (sem nova consulta) — usada ao
+// trocar o filtro de instrutor, que não muda o período, só o recorte.
+function _agEquipeRenderView() {
+  const visao = window._agEquipeVisao || 'dia';
+  if (visao === 'semana') _agEquipeRenderSemana();
+  else if (visao === 'mes') _agEquipeRenderMes();
+  else _agEquipeRenderTimeline();
+}
+
+// A atualização silenciosa em segundo plano (pensada pra pegar
+// double-booking em tempo real enquanto o operador está de fato agendando,
+// ver _agEquipeAtualizarSilenciosamente) só roda na visão Dia — Semana/Mês
+// são visões de planejamento/panorama, onde recarregar a cada 45s custaria
+// consulta extra sem muito ganho prático.
+function _agEquipePollGerenciar() {
+  if (window._agEquipePollId) { clearInterval(window._agEquipePollId); window._agEquipePollId = null; }
+  if ((window._agEquipeVisao || 'dia') === 'dia') {
+    window._agEquipePollId = setInterval(_agEquipeAtualizarSilenciosamente, 45000);
+  }
+}
+
+// Avança/volta o período ativo conforme a visão: 1 dia, 1 semana (7 dias)
+// ou 1 mês (preservando o dia do mês quando possível, caindo pro último dia
+// do mês-alvo quando ele for mais curto — ex.: 31/jan → 28/fev).
+function _agEquipeNav(delta) {
+  const visao = window._agEquipeVisao || 'dia';
+  const [y,m,d] = window._agEquipeData.split('-').map(Number);
+  let dt;
+  if (visao === 'mes') {
+    dt = new Date(y, m-1+delta, 1);
+    const ultimoDia = new Date(dt.getFullYear(), dt.getMonth()+1, 0).getDate();
+    dt.setDate(Math.min(d, ultimoDia));
+  } else {
+    const passoDias = visao === 'semana' ? 7*delta : delta;
+    dt = new Date(y, m-1, d + passoDias);
+  }
+  window._agEquipeData = dataLocalISO(dt);
+  _agEquipeCarregarEExibir();
+}
+
+// Domingo–Sábado da semana que contém window._agEquipeData.
+function _agEquipeSemanaAtual() {
+  const [y,m,d] = window._agEquipeData.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  const diaSemana = dt.getDay();
+  const domingo = new Date(y, m-1, d - diaSemana);
+  const sabado  = new Date(y, m-1, d - diaSemana + 6);
+  return { inicio: dataLocalISO(domingo), fim: dataLocalISO(sabado) };
+}
+
+// 1º e último dia do mês que contém window._agEquipeData.
+function _agEquipeMesAtual() {
+  const [y,m] = window._agEquipeData.split('-').map(Number);
+  const inicio = `${y}-${String(m).padStart(2,'0')}-01`;
+  const ultimoDia = new Date(y, m, 0).getDate();
+  const fim = `${y}-${String(m).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`;
+  return { inicio, fim, ano:y, mes:m };
+}
+
+// Atualiza o rótulo do período no cabeçalho para Semana/Mês. A visão Dia
+// continua cuidando do próprio rótulo dentro de _agEquipeRenderTimeline
+// (lógica já existente e testada, não alterada).
+function _agEquipeAtualizarLabelPeriodo() {
+  const visao = window._agEquipeVisao || 'dia';
+  if (visao === 'dia') return;
+  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  let texto;
+  if (visao === 'semana') {
+    const {inicio, fim} = _agEquipeSemanaAtual();
+    const [iy,im,id] = inicio.split('-').map(Number);
+    const [fy,fm,fd] = fim.split('-').map(Number);
+    texto = (im===fm && iy===fy)
+      ? `${id}–${fd} de ${meses[im-1]} de ${iy}`
+      : (iy===fy ? `${id} de ${meses[im-1]} – ${fd} de ${meses[fm-1]} de ${iy}` : `${id}/${String(im).padStart(2,'0')}/${iy} – ${fd}/${String(fm).padStart(2,'0')}/${fy}`);
+  } else {
+    const {ano, mes} = _agEquipeMesAtual();
+    texto = `${meses[mes-1].charAt(0).toUpperCase()+meses[mes-1].slice(1)} de ${ano}`;
+  }
+  _setElBoth('agEquipeDataLabel', texto);
+}
+
+// Busca sessões por INTERVALO de datas (usada por Semana e Mês) — mesmo
+// formato de campos e mesmas regras de filtro (org, cancelada=false, status
+// da turma) da consulta de um único dia (_agEquipeCarregarDados), só que com
+// .gte/.lte em vez de .eq('data', ...). Guarda em window._agEquipeSessoesPeriodo,
+// separado de window._agEquipeSessoesDoDia — a visão Dia nunca lê esse dado
+// novo, e Semana/Mês nunca leem o de Dia, pra não arriscar misturar estado.
+async function _agEquipeCarregarDadosIntervalo(dataIni, dataFim) {
+  const [instrutores, sessoesResp, turmasResp] = await Promise.all([
+    _carregarInstrutores(),
+    sb.from('sessoes')
+      .select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,cancelada,concluida,turmas(status,catalogo(nome),clientes(nome))')
+      .eq('org_id', usuarioAtual.org_id)
+      .gte('data', dataIni)
+      .lte('data', dataFim)
+      .eq('cancelada', false)
+      .order('hora_inicio', {ascending:true}),
+    sb.from('turmas')
+      .select('id,status,created_at,clientes(nome),catalogo(nome),sessoes(id)')
+      .eq('org_id', usuarioAtual.org_id)
+      .in('status', ['agendada','em_andamento'])
+      .order('created_at', {ascending:false}),
+  ]);
+
+  const sessoes = (sessoesResp.data||[]).filter(s => s.turmas && s.turmas.status !== 'cancelada');
+
+  window._agEquipeInstrutores     = instrutores || [];
+  window._agEquipeSessoesPeriodo  = sessoes;
+  window._agEquipeTurmasPendentes = (turmasResp.data||[]).filter(t => !(t.sessoes||[]).length);
+}
+async function _agEquipeCarregarDadosSemana() {
+  const {inicio, fim} = _agEquipeSemanaAtual();
+  await _agEquipeCarregarDadosIntervalo(inicio, fim);
+}
+async function _agEquipeCarregarDadosMes() {
+  const {inicio, fim} = _agEquipeMesAtual();
+  await _agEquipeCarregarDadosIntervalo(inicio, fim);
+}
+
+// Sai da visão Semana/Mês e abre o Dia clicado (opcionalmente já filtrado
+// num instrutor, ao clicar numa célula da linha dele) — forma rápida de
+// "furar" pro detalhe a partir do panorama.
+function _agEquipeAbrirDia(data, instrutorId) {
+  window._agEquipeData = data;
+  if (instrutorId) {
+    window._agEquipeInstrutorSel = instrutorId;
+    [document.getElementById('mainBody'), document.getElementById('mobileBody')].forEach(body => {
+      const sel = body?.querySelector('#agEquipeFiltroInstrutor');
+      if (sel) sel.value = instrutorId;
+    });
+  }
+  _agEquipeTrocarVisao('dia');
+}
+// Wrapper usado pelas células da visão Semana: ignora o clique se ele caiu
+// em cima de um chip de turma (data-action="verTurma") — nesse caso o
+// clique já é tratado pelo delegate central e deve abrir a turma, não
+// trocar de visão. Mesmo guard já usado em _agEquipeCliqueNaLinha (visão Dia).
+function _agEquipeCelulaSemanaClique(event, data, instrutorId) {
+  if (event.target.closest('[data-action]')) return;
+  _agEquipeAbrirDia(data, instrutorId);
+}
+
+// Visão Semana: uma coluna por dia (Dom–Sáb), uma linha por instrutor.
+// Cada célula mostra até 3 compromissos daquele instrutor naquele dia (hora
+// + cliente) e um "+N" se houver mais. Clicar numa célula abre a visão Dia
+// já naquela data (e, se clicado numa linha específica, já filtrado nesse
+// instrutor) — forma rápida de ir do panorama pro detalhe.
+function _agEquipeRenderSemana() {
+  const el = _getElVisible('agEquipeTimeline');
+  if (!el) return;
+
+  const {inicio} = _agEquipeSemanaAtual();
+  const [iy,im,id] = inicio.split('-').map(Number);
+  const dias = [];
+  for (let i=0;i<7;i++) dias.push(dataLocalISO(new Date(iy, im-1, id+i)));
+  const diasSemanaAbrev = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  const sel = window._agEquipeInstrutorSel;
+  const instrutores = (window._agEquipeInstrutores||[]).filter(i => !sel || i.id===sel);
+
+  if (!instrutores.length) {
+    const vazio = `<div style="font-size:12px;color:var(--text-3);padding:20px 0;text-align:center">Cadastre instrutores em Equipe para usar a Agenda da Equipe.</div>`;
+    el.innerHTML = vazio; _setElBoth('agEquipeTimeline', vazio); return;
+  }
+
+  const sessoesPorDia = {};
+  (window._agEquipeSessoesPeriodo||[]).forEach(s => {
+    (sessoesPorDia[s.data] = sessoesPorDia[s.data] || []).push(s);
+  });
+  // Mesma regra de conflito da visão Dia (sobreposição real entre sessões
+  // do mesmo instrutor, com pelo menos uma ainda não concluída), calculada
+  // dia a dia dentro da semana.
+  dias.forEach(data => {
+    const porInstrutor = {};
+    (sessoesPorDia[data]||[]).forEach(s => { if (s.instrutor_id) (porInstrutor[s.instrutor_id]=porInstrutor[s.instrutor_id]||[]).push(s); });
+    Object.values(porInstrutor).forEach(lista => {
+      lista.forEach(s=>{ s._conflito=false; });
+      for (let a=0;a<lista.length;a++) for (let b=a+1;b<lista.length;b++) {
+        const x=lista[a], y=lista[b];
+        const xIni=_agEquipeMinutosDeHora(x.hora_inicio), xFim=_agEquipeMinutosDeHora(x.hora_fim);
+        const yIni=_agEquipeMinutosDeHora(y.hora_inicio), yFim=_agEquipeMinutosDeHora(y.hora_fim);
+        if (xIni==null||xFim==null||yIni==null||yFim==null) continue;
+        if (xIni<yFim && yIni<xFim && (!x.concluida||!y.concluida)) { x._conflito=true; y._conflito=true; }
+      }
+    });
+  });
+
+  const colLargura = 130;
+  const nomeColLargura = 116;
+  const hoje = window._agEquipeHoje;
+
+  const cabecalho = dias.map(data => {
+    const dd = Number(data.slice(8,10));
+    const ehHoje = data === hoje;
+    return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="width:${colLargura}px;flex-shrink:0;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--amber-l);color:var(--amber-text)':'color:var(--text-2)'}">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">${diasSemanaAbrev[new Date(data+'T12:00:00').getDay()]}</div>
+      <div style="font-size:15px;font-weight:700">${dd}</div>
+    </div>`;
+  }).join('');
+
+  const alturaCelula = 72;
+  const nomes = instrutores.map(i => `<div style="height:${alturaCelula}px;display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px">${escapeHtml(i.nome)}</div>`).join('');
+
+  const linhas = instrutores.map(inst => {
+    const celulas = dias.map(data => {
+      const sessoes = (sessoesPorDia[data]||[]).filter(s=>s.instrutor_id===inst.id).sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+      if (!sessoes.length) {
+        return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(inst.nome)} neste dia"
+          style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F8FAFC);display:flex;align-items:center;justify-content:center">
+          <span style="font-size:10px;color:var(--text-3)">Livre</span>
+        </div>`;
+      }
+      const MAX_VISIVEL = 3;
+      const chips = sessoes.slice(0,MAX_VISIVEL).map(s => {
+        const concluida = !!s.concluida;
+        const bg = s._conflito ? 'var(--red)' : (concluida ? 'var(--green)' : 'var(--amber)');
+        const corTexto = (concluida || s._conflito) ? '#fff' : 'var(--navy)';
+        const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
+        const cliente = s.turmas?.clientes?.nome||'—';
+        const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${concluida?' · concluída':''}`;
+        return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+          style="background:${bg};color:${corTexto};border-radius:4px;padding:3px 5px;font-size:9.5px;font-weight:600;margin-bottom:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
+      }).join('');
+      const extra = sessoes.length>MAX_VISIVEL ? `<div style="font-size:9px;color:var(--text-3);text-align:center">+${sessoes.length-MAX_VISIVEL}</div>` : '';
+      return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')"
+        style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F8FAFC);overflow:hidden">${chips}${extra}</div>`;
+    }).join('');
+    return `<div style="display:flex;gap:6px;margin-bottom:6px">${celulas}</div>`;
+  }).join('');
+
+  const html = `<div style="display:flex;gap:10px">
+    <div style="width:${nomeColLargura}px;flex-shrink:0">
+      <div style="height:38px"></div>
+      ${nomes}
+    </div>
+    <div style="overflow-x:auto;flex:1">
+      <div style="min-width:${7*(colLargura+6)}px">
+        <div style="display:flex;gap:6px;margin-bottom:6px">${cabecalho}</div>
+        ${linhas}
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
+  </div>`;
+  el.innerHTML = html;
+  _setElBoth('agEquipeTimeline', html);
+}
+
+// Visão Mês: calendário tradicional (Dom–Sáb). Cada dia mostra um ponto
+// colorido por instrutor com compromisso naquele dia (uma cor fixa por
+// instrutor, só pra diferenciar visualmente — sem checagem de conflito
+// aqui, que é um detalhe fino demais pra uma visão de panorama do mês) e a
+// contagem de sessões do dia. Clicar num dia abre a visão Dia nessa data.
+function _agEquipeRenderMes() {
+  const el = _getElVisible('agEquipeTimeline');
+  if (!el) return;
+
+  const {ano, mes} = _agEquipeMesAtual();
+  const primeiroDiaSemana = new Date(ano, mes-1, 1).getDay();
+  const totalDias = new Date(ano, mes, 0).getDate();
+
+  const sel = window._agEquipeInstrutorSel;
+  const instrutores = (window._agEquipeInstrutores||[]).filter(i => !sel || i.id===sel);
+  const PALETA = ['#F59E0B','#3B82F6','#8B5CF6','#EC4899','#10B981','#EF4444','#06B6D4','#F97316'];
+  const corDoInstrutor = {};
+  instrutores.forEach((inst,idx) => { corDoInstrutor[inst.id] = PALETA[idx % PALETA.length]; });
+
+  if (!instrutores.length) {
+    const vazio = `<div style="font-size:12px;color:var(--text-3);padding:20px 0;text-align:center">Cadastre instrutores em Equipe para usar a Agenda da Equipe.</div>`;
+    el.innerHTML = vazio; _setElBoth('agEquipeTimeline', vazio); return;
+  }
+
+  const sessoesPorDia = {};
+  (window._agEquipeSessoesPeriodo||[]).forEach(s => {
+    if (sel && s.instrutor_id !== sel) return;
+    (sessoesPorDia[s.data] = sessoesPorDia[s.data] || []).push(s);
+  });
+
+  const cabecalho = ['D','S','T','Q','Q','S','S'].map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;padding:4px 0">${d}</div>`).join('');
+
+  const celulas = [];
+  for (let i=0;i<primeiroDiaSemana;i++) celulas.push(`<div></div>`);
+  for (let dia=1; dia<=totalDias; dia++) {
+    const dataISO = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+    const sessoesDia = sessoesPorDia[dataISO] || [];
+    const ehHoje = dataISO === window._agEquipeHoje;
+    const instrutoresComSessao = [...new Set(sessoesDia.map(s=>s.instrutor_id).filter(Boolean))];
+    const MAX_PONTOS = 5;
+    const pontos = instrutoresComSessao.slice(0,MAX_PONTOS).map(id => `<span style="width:6px;height:6px;border-radius:50%;background:${corDoInstrutor[id]||'var(--amber)'};display:inline-block;margin:1px"></span>`).join('');
+    const extraCount = instrutoresComSessao.length > MAX_PONTOS ? `<span style="font-size:8px;color:var(--text-3)">+${instrutoresComSessao.length-MAX_PONTOS}</span>` : '';
+    celulas.push(`<div onclick="_agEquipeAbrirDia('${dataISO}')" title="${sessoesDia.length} sessão(ões) em ${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}"
+      style="min-height:56px;border-radius:6px;padding:4px;cursor:pointer;${ehHoje?'background:var(--amber-l)':'background:var(--gray-50,#F8FAFC)'}">
+      <div style="font-size:11px;font-weight:${ehHoje?'700':'500'};color:${ehHoje?'var(--amber-text)':'var(--text-2)'}">${dia}</div>
+      ${sessoesDia.length?`<div style="display:flex;flex-wrap:wrap;gap:1px;margin-top:3px">${pontos}${extraCount}</div><div style="font-size:8px;color:var(--text-3);margin-top:1px">${sessoesDia.length} sessão${sessoesDia.length!==1?'ões':''}</div>`:''}
+    </div>`);
+  }
+
+  const legenda = (!sel && instrutores.length>1) ? `<div style="display:flex;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">${instrutores.map(inst=>`
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><span style="width:8px;height:8px;border-radius:50%;background:${corDoInstrutor[inst.id]};display:inline-block"></span>${escapeHtml(inst.nome)}</div>
+    `).join('')}</div>` : '';
+
+  const html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px 4px;margin-bottom:2px">${cabecalho}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${celulas.join('')}</div>
+    ${legenda}`;
+  el.innerHTML = html;
+  _setElBoth('agEquipeTimeline', html);
 }
 
 function _agEquipeMinutosDeHora(hhmmss) {
@@ -10721,7 +11095,6 @@ function _agEquipeJanela(sessoes) {
 function _agEquipeRenderTimeline() {
   const el     = _getElVisible('agEquipeTimeline');
   const label  = _getElVisible('agEquipeDataLabel');
-  const resumo = _getElVisible('agEquipeResumo');
   if (!el) return;
 
   const diasSemana = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -10740,15 +11113,6 @@ function _agEquipeRenderTimeline() {
     if (!s.instrutor_id) return;
     (sessoesPorInstrutor[s.instrutor_id] = sessoesPorInstrutor[s.instrutor_id] || []).push(s);
   });
-  const semInstrutor = (window._agEquipeSessoesDoDia||[]).filter(s => !s.instrutor_id).length;
-
-  const livres = instrutores.filter(i => !(sessoesPorInstrutor[i.id]||[]).length).length;
-  const resumoTexto = instrutores.length
-    ? `${livres} de ${instrutores.length} instrutor${instrutores.length===1?'':'es'} livre${livres===1?'':'s'} neste dia${semInstrutor?` · ${semInstrutor} sessão(ões) sem instrutor definido`:''}`
-    : 'Nenhum instrutor ativo cadastrado ainda.';
-  if (resumo) { resumo.textContent = resumoTexto; }
-  _setElBoth('agEquipeResumo', resumoTexto);
-
   if (!instrutores.length) {
     const vazio = `<div style="font-size:12px;color:var(--text-3);padding:20px 0;text-align:center">Cadastre instrutores em Equipe para usar a Agenda da Equipe.</div>`;
     el.innerHTML = vazio; _setElBoth('agEquipeTimeline', vazio); return;
@@ -10836,7 +11200,10 @@ function _agEquipeRenderTimeline() {
       const leftPct  = Math.max(0, ((ini-min)/totalMin)*100);
       const widthPct = Math.max(2, ((fim-ini)/totalMin)*100);
       const concluida = !!s.concluida;
-      const bg = s._conflito ? 'var(--red)' : (concluida ? 'var(--gray-400)' : 'var(--amber)');
+      // 2026-08-09: cor de "concluído" trocada de cinza pra verde (pedido
+      // do Alisson) — mesmo var(--green) já usado no resto do sistema pra
+      // indicar status finalizado/positivo (ex.: badge de turma concluída).
+      const bg = s._conflito ? 'var(--red)' : (concluida ? 'var(--green)' : 'var(--amber)');
       const borda = s._conflito ? '2px solid var(--red)' : 'none';
       const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
       const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
@@ -10854,17 +11221,24 @@ function _agEquipeRenderTimeline() {
       style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;cursor:pointer">${blocos}</div>`;
   }).join(espacador);
 
-  // "+" ao lado do nome — alvo maior pro mobile (tocar um X exato numa
-  // barra fina é difícil no celular); abre o mesmo modal, só sem hora
-  // pré-preenchida (o operador digita).
-  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-1);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+  // 2026-08-09 (pedido do Alisson): nome do instrutor com mais hierarquia
+  // visual (14px/600, era 12px/500) — ficava pequeno demais pra ler rápido,
+  // principalmente no celular. E o "+" ganhou uma área de toque bem maior
+  // (~38×38px) SEM aumentar o círculo visual (continua 18px): o <button>
+  // externo é que recebe o padding/toque, com margin negativa igual ao
+  // padding pra não empurrar o layout — o círculo pequeno vive dentro dele,
+  // só decorativo. Clássico "hit-slop": alvo de toque grande, elemento
+  // visual do mesmo tamanho de antes.
+  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:2px;font-size:14px;color:var(--text-1);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
     <span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.nome)}</span>
     <button type="button" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}" aria-label="Agendar turma com ${escapeHtml(i.nome)}"
-      style="border:none;background:var(--gray-100);color:var(--text-2);width:18px;height:18px;border-radius:50%;font-size:12px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0">+</button>
+      style="border:none;background:none;padding:10px;margin:-10px -10px -10px -4px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+      <span style="width:18px;height:18px;border-radius:50%;background:var(--gray-100);color:var(--text-2);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center">+</span>
+    </button>
   </div>`).join(espacador);
 
   const html = `<div style="display:flex;gap:10px">
-    <div style="width:96px;flex-shrink:0;padding-top:22px">${nomes}</div>
+    <div style="width:112px;flex-shrink:0;padding-top:22px">${nomes}</div>
     <div style="overflow-x:auto;flex:1">
       <div style="min-width:${larguraTimeline}px;position:relative">
         <div style="position:relative;height:16px;margin-bottom:6px">${regua}</div>
@@ -10874,7 +11248,7 @@ function _agEquipeRenderTimeline() {
   </div>
   <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-400)"></div>Já concluído</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
   </div>`;
   el.innerHTML = html;
@@ -11923,7 +12297,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm" data-action="irParaTurmas">${ICONS.back} Voltar</button>
+        <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
         <div style="flex:1">
           <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
           <div style="font-size:13px;color:var(--text-2)">${nomeC}${infoSessao ? ' · '+infoSessao : ''}</div>
@@ -14254,6 +14628,19 @@ document.addEventListener('click', function(e) {
   switch(action) {
     // Navegação
     case 'irParaTurmas':    irPara('turmas'); break;
+    // 2026-08-09: "Voltar" de dentro de uma turma (verTurma) ou da execução
+    // do treinamento levava sempre para 'turmas', mesmo quando a pessoa
+    // tinha entrado por outro caminho (Agenda da Equipe, Histórico, Início,
+    // Meus agendamentos) — sensação de "Voltar" não voltar de verdade.
+    // paginaAtual só é alterado dentro de irPara(); como verTurma()/a tela
+    // de execução nunca chamam irPara() (só reescrevem o conteúdo por cima),
+    // paginaAtual continua intacto com a última página "de verdade" por
+    // onde a pessoa passou, mesmo vários níveis adentro (ex.: Agenda da
+    // Equipe → turma → execução). Por isso basta reaproveitar esse valor,
+    // sem precisar de uma pilha de histórico própria. irPara() já tem seu
+    // próprio guard de acesso por perfil (_perfilTemAcesso), então não
+    // precisa duplicar essa checagem aqui.
+    case 'irParaOrigem':    irPara(paginaAtual); break;
     case 'irPara':          if(id) irPara(id); break;
     case 'verTurma':        if(id) verTurma(id); break;
     case 'verHistoricoTurma': verHistoricoTurma(id); break;
