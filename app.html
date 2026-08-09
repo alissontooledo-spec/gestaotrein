@@ -131,25 +131,33 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .bn-dot{width:4px;height:4px;border-radius:50%;background:var(--amber);margin-top:1px;opacity:0}
 .bn-item.active .bn-dot{opacity:1}
 
-/* ── Mobile header ── */
-.mobile-header{display:none;flex-shrink:0;background:var(--navy);padding:20px 16px 18px;padding-top:calc(20px + env(safe-area-inset-top))}
+/* ── Mobile header ──
+   2026-08-09: redesenho da navegação mobile (motivo completo no changelog).
+   O antigo .mobile-menu-btn era fixed, sobreposto à logo da sidebar quando
+   ela abria, e só sabia abrir (nunca fechar) — o "não gostei" e o "às vezes
+   não responde" relatados pelo Alisson eram a mesma causa: duas coisas
+   disputando a mesma área da tela, sem um jeito dedicado de fechar. Agora
+   o botão de abrir mora DENTRO da barra do cabeçalho mobile (fluxo normal,
+   sem position:fixed, sem chance de sobrepor nada) e quem fecha é um X
+   dentro do próprio menu (ver .sidebar-close-btn), nunca o mesmo elemento. */
+.mobile-header{display:none;flex-shrink:0;background:var(--navy);padding:16px 16px 18px;padding-top:calc(16px + env(safe-area-inset-top));align-items:flex-start;gap:10px}
+.mobile-header-conteudo{flex:1;min-width:0}
 .mh-greeting{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:2px;font-weight:400}
 .mh-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.4px}
 .mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(245,158,11,.18);padding:4px 10px;border-radius:999px;font-size:11px;color:var(--amber);font-weight:500;border:1px solid rgba(245,158,11,.25)}
 .mobile-content{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
 
-/* ── Botão de menu do mobile (fixo, todos os perfis) — vive fora de
-   .main-content, igual ao .sino-btn abaixo. Corrige bug 2026-08-09: o
-   antigo .hamburger fica dentro de .main-content, que leva display:none
-   no mobile — um elemento com display:none esconde TODOS os filhos,
-   mesmo que o filho tenha sua própria regra de display; então o botão
-   nunca aparecia e não havia nenhuma outra forma de abrir a sidebar
-   (com Agenda da Equipe, Catálogo, Equipe etc. — telas fora do rodapé
-   NAV_BOTTOM) pelo celular. Esse botão novo é um elemento próprio, fora
-   de .main-content, então não herda o display:none. */
-.mobile-menu-btn{display:none;position:fixed;top:16px;left:16px;z-index:150;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;align-items:center;justify-content:center;padding:0}
-.mobile-menu-btn svg{width:19px;height:19px}
-body.modo-suporte-ativo .mobile-menu-btn{top:calc(16px + var(--suporte-h,34px))}
+/* ── Botão de abrir o menu — agora dentro do fluxo normal do cabeçalho
+   mobile (não mais position:fixed flutuando por cima da sidebar). ── */
+.mobile-menu-btn{display:none;border:none;background:rgba(255,255,255,.12);color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin-top:1px}
+.mobile-menu-btn svg{width:18px;height:18px}
+
+/* ── Botão de fechar o menu, dentro da própria sidebar — some no desktop,
+   igual ao .mobile-menu-btn acima. Ter um controle dedicado pra fechar
+   (além de tocar fora) deixa abrir/fechar sempre em lugares diferentes da
+   tela, eliminando a sobreposição que existia antes. ── */
+.sidebar-close-btn{display:none;margin-left:auto;border:none;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);width:30px;height:30px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0}
+.sidebar-close-btn svg{width:16px;height:16px}
 
 /* ── Sino de notificações (fixo, só Provedor) — vive fora de #mainBody/
    #mobileBody/#mobileHeader, por isso sobrevive a toda troca de tela. */
@@ -328,8 +336,8 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── Responsive breakpoints ── */
-@media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.mobile-menu-btn{display:none!important}}
-@media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:block;padding-left:62px}.mobile-content{display:block}.hamburger{display:flex}.mobile-menu-btn{display:flex}#screenApp{flex-direction:column}}
+@media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.mobile-menu-btn{display:none!important}.sidebar-close-btn{display:none!important}}
+@media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:flex}.mobile-content{display:block}.hamburger{display:flex}.mobile-menu-btn{display:flex}.sidebar-close-btn{display:flex}#screenApp{flex-direction:column}}
 @media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}.rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rel2-rankings{grid-template-columns:1fr}.home-2col{grid-template-columns:1fr}}
 @media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}.rel2-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
@@ -569,6 +577,13 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
           <div class="sidebar-logo-name">Toledo Labs</div>
           <div class="sidebar-logo-tag">Treinamentos NR</div>
         </div>
+        <!-- Fecha o menu — só aparece no mobile (ver .sidebar-close-btn no
+             <style>). Controle dedicado, separado do botão que abre (agora
+             dentro do cabeçalho mobile), pra nunca mais disputar a mesma
+             área da tela — causa raiz do bug relatado em 2026-08-09. -->
+        <button class="sidebar-close-btn" onclick="fecharSidebar()" aria-label="Fechar menu" title="Fechar menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
     </div>
     <button class="sidebar-search" onclick="abrirPaletaComandos()">
@@ -594,16 +609,19 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
     </header>
     <main class="main-body scrollable" id="mainBody"></main>
   </div>
-  <div id="mobileHeader" class="mobile-header"></div>
+  <!-- 2026-08-09: botão de abrir o menu agora mora DENTRO do cabeçalho
+       mobile (fluxo normal, sem position:fixed) em vez de flutuar sobre a
+       sidebar — corrige a sobreposição relatada. setMobileHeader() só
+       reescreve #mobileHeaderConteudo, então este botão nunca é apagado ao
+       trocar de tela. -->
+  <div id="mobileHeader" class="mobile-header">
+    <button class="mobile-menu-btn" onclick="abrirSidebar()" aria-label="Abrir menu" title="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div id="mobileHeaderConteudo" class="mobile-header-conteudo"></div>
+  </div>
   <div class="mobile-content scrollable" id="mobileBody"></div>
   <nav class="bottom-nav" id="bottomNav"><div class="bn-items" id="bnItems"></div></nav>
-  <!-- Botão de menu do mobile: abre a sidebar completa (todas as telas do
-       perfil, inclusive as que não cabem no rodapé, como Agenda da Equipe,
-       Catálogo, Equipe) e a busca (Ctrl K). Fica fora de .main-content de
-       propósito — ver comentário na regra .mobile-menu-btn no <style>. -->
-  <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="abrirSidebar()" aria-label="Abrir menu" title="Menu">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-  </button>
   <button class="sino-btn" id="sinoBtn" onclick="toggleSinoNotificacoes()" aria-label="Notificações" title="Notificações">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
     <span class="sino-badge" id="sinoBadge"></span>
@@ -2034,7 +2052,13 @@ function _getElVisible(id) {
   return el || document.getElementById(id);
 }
 function setMobileHeader(html) {
-  document.getElementById('mobileHeader').innerHTML = html;
+  // 2026-08-09: escreve só no wrapper interno (#mobileHeaderConteudo), não
+  // mais em #mobileHeader inteiro — #mobileHeader agora também contém o
+  // botão de abrir o menu (ver <style>/HTML estático), que precisa
+  // sobreviver a toda troca de tela, igual ao próprio #mobileHeader já
+  // sobrevivia antes. Ponto único de mudança: as ~20 chamadas de
+  // setMobileHeader() espalhadas pelo app continuam iguais.
+  document.getElementById('mobileHeaderConteudo').innerHTML = html;
 }
 // Botão flutuante (+) removido — as ações de criação já ficam nas barras de ferramentas de cada tela.
 function fabMostrar(cb) { fabCallback = cb; }
@@ -2428,10 +2452,17 @@ const NAV = {
   comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
+// 2026-08-09: rodapé mobile reduzido a 5 itens essenciais (Administrador
+// tinha 8, Comercial 6 — apertado demais numa barra de celular). O resto
+// (Clientes, Colaboradores, Catálogo, Conformidade, Equipe) continua
+// sempre acessível pelo menu lateral completo (NAV, não NAV_BOTTOM) — nada
+// foi escondido, só reorganizado por frequência de uso. Aproveitado pra
+// promover "Agenda da Equipe" ao rodapé, já que virou ferramenta central
+// no dia a dia do Comercial/Administrador (antes só existia no menu).
 const NAV_BOTTOM = {
   provedor:['home','orgs','financeiro','adocao','conta'],
-  administrador:['home','turmas','clientes','colaboradores','conformidade','relatorios','equipe','conta'],
-  comercial:['home','turmas','relatorios','clientes','conformidade','conta'],
+  administrador:['home','turmas','agendaequipe','relatorios','conta'],
+  comercial:['home','turmas','agendaequipe','relatorios','conta'],
   instrutor:['home','agenda','historico','conta'],
 };
 
