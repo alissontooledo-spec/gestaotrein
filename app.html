@@ -453,6 +453,27 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
   .rel2-toggle{flex-wrap:wrap}
 }
 
+.rel3-faixa{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;-webkit-overflow-scrolling:touch}
+.rel3-dcard{flex-shrink:0;min-width:96px;border:1px solid var(--border);border-radius:var(--r-lg);padding:9px 10px;cursor:pointer;background:var(--surface);transition:border-color .15s,background .15s}
+.rel3-dcard:hover{border-color:var(--border-2)}
+.rel3-dcard.active{border:2px solid var(--amber);background:#FFFBEB}
+.rel3-dcard.alert{border-color:#FCA5A5;background:#FEF2F2}
+.rel3-dn{font-size:15px;font-weight:700;color:var(--navy);margin-top:5px;line-height:1.1}
+.rel3-dcard.alert .rel3-dn{color:var(--red)}
+.rel3-dl{font-size:9.5px;color:var(--text-3);margin-top:1px}
+.rel3-dcard.active .rel3-dl{color:var(--amber-text);font-weight:600}
+.rel3-pill{background:var(--gray-100);border-radius:20px;padding:3px 10px;font-size:10px;font-weight:600;color:var(--navy);cursor:pointer;border:none;font-family:inherit}
+.rel3-layout{display:flex;gap:16px;align-items:flex-start}
+.rel3-filtros{width:150px;flex-shrink:0}
+.rel3-lbl{font-size:9.5px;font-weight:600;color:var(--text-3);letter-spacing:.04em;margin-bottom:6px;text-transform:uppercase}
+.rel3-main{flex:1;min-width:0}
+@media(max-width:767px){
+  .rel3-dcard{min-width:84px;padding:8px}
+  .rel3-dn{font-size:13px}
+  .rel3-layout{flex-direction:column}
+  .rel3-filtros{width:100%}
+}
+
 /* ── Execution tabs ── */
 .exec-tab{flex:1;padding:10px 8px;background:none;border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--text-3);cursor:pointer;font-family:inherit;transition:all .15s}
 .exec-tab:hover{color:var(--text-1)}
@@ -11261,7 +11282,7 @@ function _agEquipeRenderTimeline() {
   // só decorativo. Clássico "hit-slop": alvo de toque grande, elemento
   // visual do mesmo tamanho de antes.
   const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:2px;font-size:14px;color:var(--text-1);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-    <span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.nome)}</span>
+    <span style="overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="_relAbrirInstrutorDaAgenda('${i.id}')" title="Ver relatório de ${escapeHtml(i.nome)}">${escapeHtml(i.nome)}</span>
     <button type="button" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}" aria-label="Agendar turma com ${escapeHtml(i.nome)}"
       style="border:none;background:none;padding:10px;margin:-10px -10px -10px -4px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">
       <span style="width:18px;height:18px;border-radius:50%;background:var(--gray-100);color:var(--text-2);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center">+</span>
@@ -13230,6 +13251,9 @@ function _renderRelatorioView() {
       </div>
     </div>
 
+    ${_relFaixaDestinosHtml('geral')}
+    ${_relRecentesHtml()}
+
     ${_buildKpiGrid({
       tAtivas, tConcluidas, tConcluidasAnt, partUnicos, partUnicosAnt,
       horasTotal, horasTotalAnt, tAgendadas, tCanceladas, cliAtivos, totalTurmas, meses,
@@ -13409,6 +13433,7 @@ function relVerCliente(clienteId) {
   if (!turmasCliente.length) { showToast('Nenhuma turma no período selecionado', 'info'); return; }
 
   const nomeCliente = turmasCliente[0]?.clientes?.nome || 'Cliente';
+  _relRecentesAdd('cliente', clienteId, nomeCliente);
   const totalPessoas = new Set(partAll.filter(p => turmasCliente.some(t => t.id === p.turma_id)).map(p => p.colaborador_id)).size;
   const totalHoras   = turmasCliente.reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
   const concluidas   = turmasCliente.filter(t => t.status === 'concluida').length;
@@ -13436,7 +13461,7 @@ function relVerCliente(clienteId) {
 
   // Pré-computar strings para evitar ternários dentro de template literals
   const nTurmasStr  = turmasCliente.length + ' turma' + (turmasCliente.length !== 1 ? 's' : '');
-  const htmlCliente = '<button class="rel2-back" onclick="_renderRelatorioView()">'
+  const htmlCliente = '<button class="rel2-back" onclick="relIrParaDestino(window._relDestinoAtivo||\'geral\')">'
     + '← Voltar para Relatórios</button>'
     + '<div class="rel2-header" style="margin-bottom:14px">'
     + '<div class="rel2-title" style="font-size:15px">' + nomeCliente + '</div>'
@@ -13451,7 +13476,7 @@ function relVerCliente(clienteId) {
     + '<div class="rel2-card"><div class="rel2-card-title">Turmas de ' + nomeCliente + '</div>'
     + linhasTabela
     + '</div>';
-  setConteudo(htmlCliente);
+  setConteudo(_relFaixaDestinosHtml('clientes') + _relRecentesHtml() + htmlCliente);
 }
 
 function irParaTurmasFiltradas(status) {
@@ -13468,8 +13493,9 @@ function renderDocumentosPendentesLista() {
   const pend = window._relRaw?.pendencias || [];
   setMobileHeader(`<div class="mh-greeting">Relatórios</div><div class="mh-name">Documentos pendentes</div>`);
   setConteudo(`
+    ${_relFaixaDestinosHtml('documentos')}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="relatorios">${ICONS.back} Voltar</button>
+      <button class="btn btn-ghost btn-sm" onclick="relIrParaDestino(window._relDestinoAtivo||'geral')">${ICONS.back} Voltar</button>
       <div style="flex:1;min-width:0">
         <div style="font-size:18px;font-weight:700;color:var(--text-1)">Documentos pendentes</div>
         <div style="font-size:13px;color:var(--text-2)">${pend.length} turma${pend.length!==1?'s':''} com pendência</div>
@@ -13489,6 +13515,664 @@ function renderDocumentosPendentesLista() {
           </div>`).join('')
       }
     </div>`);
+}
+
+
+// ============================================================
+// RELATÓRIOS — CENTRAL DE RELATÓRIOS (2026-08-09)
+// Faixa de destinos, "Recentes" e painéis dedicados por recorte
+// (Instrutores / Clientes / Treinamentos / Auditoria / Documentos).
+// Tudo consulta window._relRaw, já buscado por renderRelatorios() — nenhuma
+// consulta nova ao banco além da sonda opcional de sessoes_historico (ver
+// _renderRelatorioAuditoria). Nenhuma função de Turmas/Agenda/Catálogo foi
+// alterada; as únicas edições em funções pré-existentes de Relatórios são
+// pontuais e documentadas no changelog do dia.
+// Ver 01-Requisitos/relatorio-completo-instrutor-gestao-auditoria.md
+// (seções 11 e 12) para o raciocínio completo por trás das decisões abaixo.
+// ============================================================
+
+window._relDestinoAtivo = window._relDestinoAtivo || 'geral';
+let _paginaRelInstrutor = 1, _porPaginaRelInstrutor = 10;
+
+// Consulta elementos só dentro do body realmente visível (desktop OU
+// mobile) — mesmo cuidado de _getElVisible(), mas para querySelectorAll,
+// necessário aqui porque os checkboxes de situação existem em ambas as
+// cópias do DOM (setConteudo escreve nas duas).
+function _relQuerySelectorAllVisible(sel) {
+  const main = document.getElementById('mainBody');
+  const isDesktop = !!(main && main.offsetParent !== null);
+  const body = isDesktop ? main : document.getElementById('mobileBody');
+  return body ? Array.from(body.querySelectorAll(sel)) : [];
+}
+
+function relIrParaDestino(destino) {
+  window._relDestinoAtivo = destino;
+  if (destino === 'instrutores')       { _renderRelatorioInstrutoresLista(); return; }
+  if (destino === 'clientes')          { _renderRelatorioClientesLista();    return; }
+  if (destino === 'treinamentos')      { _renderRelatorioTreinamentosLista();return; }
+  if (destino === 'auditoria')         { _renderRelatorioAuditoria();        return; }
+  if (destino === 'documentos')        { renderDocumentosPendentesLista();   return; }
+  _renderRelatorioView();
+}
+
+// ── Faixa de destinos (cartão com número vivo, calculado a partir do
+// mesmo período já selecionado — sem consulta nova ao banco) ──
+function _relFaixaDestinosHtml(ativo) {
+  const raw = window._relRaw || {};
+  const meses = window._relPeriodo || 6;
+  const { tFilt } = _relFiltrarPorPeriodo(raw.turmas || [], raw.sessoes || [], meses);
+  const nInstrutores  = new Set((raw.usuarios || []).filter(u => u.perfil === 'instrutor').map(u => u.id)).size;
+  const nClientes     = new Set(tFilt.map(t => t.cliente_id).filter(Boolean)).size;
+  const nTreinamentos = new Set(tFilt.map(t => t.catalogo_id).filter(Boolean)).size;
+  const nCanceladas   = tFilt.filter(t => t.status === 'cancelada').length;
+  const nDocs         = (raw.pendencias || []).length;
+  const itens = [
+    { id: 'geral',        n: tFilt.length,  l: 'Visão geral' },
+    { id: 'instrutores',  n: nInstrutores,  l: 'Instrutores' },
+    { id: 'clientes',     n: nClientes,     l: 'Clientes' },
+    { id: 'treinamentos', n: nTreinamentos, l: 'Treinamentos' },
+    { id: 'auditoria',    n: nCanceladas,   l: 'Auditoria' },
+    { id: 'documentos',   n: nDocs,         l: 'Documentos', alerta: nDocs > 0 },
+  ];
+  return `<div class="rel3-faixa">${itens.map(it => `
+    <div class="rel3-dcard${it.id === ativo ? ' active' : ''}${it.alerta ? ' alert' : ''}" onclick="relIrParaDestino('${it.id}')">
+      <div class="rel3-dn">${it.n}</div>
+      <div class="rel3-dl">${escapeHtml(it.l)}</div>
+    </div>`).join('')}</div>`;
+}
+
+// ── "Recentes" — guardado no navegador por usuário, sem tabela nova ──
+function _relRecentesKey() { return `tl_rel_recentes_${usuarioAtual?.id || 'x'}`; }
+function _relRecentesGet() {
+  try { return JSON.parse(localStorage.getItem(_relRecentesKey()) || '[]'); }
+  catch (e) { return []; }
+}
+function _relRecentesAdd(tipo, id, label) {
+  try {
+    let lst = _relRecentesGet().filter(r => !(r.tipo === tipo && r.id === id));
+    lst.unshift({ tipo, id, label });
+    localStorage.setItem(_relRecentesKey(), JSON.stringify(lst.slice(0, 6)));
+  } catch (e) {}
+}
+function _relRecentesHtml() {
+  const lst = _relRecentesGet();
+  if (!lst.length) return '';
+  return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:2px 0 12px">
+    <span style="font-size:10px;color:var(--text-3);font-weight:600;flex-shrink:0">RECENTES</span>
+    ${lst.map(r => `<button type="button" class="rel3-pill" onclick="_relAbrirRecente('${r.tipo}','${r.id}')">${escapeHtml(r.label)}</button>`).join('')}
+  </div>`;
+}
+function _relAbrirRecente(tipo, id) {
+  if (tipo === 'instrutor')        { relVerInstrutor(id); }
+  else if (tipo === 'cliente')     { window._relDestinoAtivo = 'clientes';     relVerCliente(id); }
+  else if (tipo === 'treinamento') { relVerTreinamento(id); }
+}
+
+// ── Cabeçalho compartilhado pelos painéis novos — mesmo estilo visual do
+// cabeçalho original de Relatórios (não alterado), incluindo os chips de
+// período e, quando aplicável, um chip extra "Personalizado". O painel
+// "Clientes" não recebe o chip Personalizado porque reaproveita a tela de
+// detalhe já existente (relVerCliente), que só entende os chips fixos —
+// ver seção 12 do requisito para o raciocínio dessa decisão. ──
+function _relHeaderNovo(subtitulo, semPersonalizado) {
+  const meses = window._relPeriodo || 6;
+  const custom = window._relPeriodoCustom;
+  const label = custom
+    ? `${formatarData(custom.inicio)} – ${formatarData(custom.fim)}`
+    : (meses === 1 ? 'Este mês' : `Últimos ${meses} meses`);
+  return `<div class="rel2-header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div class="rel2-title">Relatórios</div>
+        <div class="rel2-sub">${escapeHtml(subtitulo)} · ${escapeHtml(label)}</div>
+      </div>
+    </div>
+    <div class="rel2-period">
+      <button class="rel2-chip${!custom && meses === 1 ? ' active' : ''}" onclick="relSetPeriodo2(1)">Este mês</button>
+      <button class="rel2-chip${!custom && meses === 3 ? ' active' : ''}" onclick="relSetPeriodo2(3)">3 meses</button>
+      <button class="rel2-chip${!custom && meses === 6 ? ' active' : ''}" onclick="relSetPeriodo2(6)">6 meses</button>
+      <button class="rel2-chip${!custom && meses === 12 ? ' active' : ''}" onclick="relSetPeriodo2(12)">Este ano</button>
+      ${semPersonalizado ? '' : `<button class="rel2-chip${custom ? ' active' : ''}" onclick="_relAbrirPeriodoPersonalizado()">Personalizado</button>`}
+    </div>
+  </div>`;
+}
+function relSetPeriodo2(n) {
+  window._relPeriodo = n;
+  window._relPeriodoCustom = null;
+  relIrParaDestino(window._relDestinoAtivo || 'geral');
+}
+function _relAbrirPeriodoPersonalizado() {
+  const c = window._relPeriodoCustom || {};
+  abrirModal('Período personalizado', `
+    <div class="field"><label>Data inicial</label><input type="date" id="relPersIni" value="${c.inicio || ''}"></div>
+    <div class="field" style="margin-top:10px"><label>Data final</label><input type="date" id="relPersFim" value="${c.fim || ''}"></div>
+  `, `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" style="width:auto" onclick="_relConfirmarPeriodoPersonalizado()">Aplicar</button>`);
+}
+function _relConfirmarPeriodoPersonalizado() {
+  const ini = document.getElementById('relPersIni')?.value;
+  const fim = document.getElementById('relPersFim')?.value;
+  if (!ini || !fim || ini > fim) { showToast('Escolha um período válido', 'error'); return; }
+  window._relPeriodoCustom = { inicio: ini, fim: fim };
+  fecharModal();
+  relIrParaDestino(window._relDestinoAtivo || 'geral');
+}
+// Mesma filtragem já usada na Visão geral (_relFiltrarPorPeriodo, não
+// alterada), com um modo adicional por intervalo de datas livre — usado só
+// pelos painéis novos que aceitam período personalizado.
+function _relFiltrarPeriodoV2(turmas, sessoes) {
+  const custom = window._relPeriodoCustom;
+  if (!custom) return _relFiltrarPorPeriodo(turmas, sessoes, window._relPeriodo || 6);
+  const ini = new Date(custom.inicio), fim = new Date(custom.fim + 'T23:59:59');
+  const tFilt = turmas.filter(t => { const d = new Date(t.created_at); return d >= ini && d <= fim; });
+  const sFilt = sessoes.filter(s => s.data && new Date(s.data) >= ini && new Date(s.data) <= fim);
+  return { tFilt, sFilt };
+}
+
+// ── Destino: Instrutores ──
+function _renderRelatorioInstrutoresLista() {
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Instrutores</div>`);
+  const raw = window._relRaw || {};
+  const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
+  const instrutores = (raw.usuarios || []).filter(u => u.perfil === 'instrutor');
+  const porInstrutor = instrutores.map(u => {
+    const sess = (raw.sessoes || []).filter(s => s.instrutor_id === u.id && tFilt.some(t => t.id === s.turma_id));
+    const turmaIds = new Set(sess.map(s => s.turma_id));
+    const turmasDele = tFilt.filter(t => turmaIds.has(t.id));
+    const horas = turmasDele.filter(t => t.status === 'concluida').reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+    const clientes = new Set(turmasDele.map(t => t.cliente_id).filter(Boolean)).size;
+    return { id: u.id, nome: u.nome, turmas: turmasDele.length, horas, clientes };
+  }).sort((a, b) => b.turmas - a.turmas);
+
+  const lista = porInstrutor.map(i => `
+    <button class="rel2-cli-btn" onclick="relVerInstrutor('${i.id}')">
+      <div style="flex:1;min-width:0">
+        <div class="rel2-cli-name">${escapeHtml(i.nome)}</div>
+        <div class="rel2-cli-meta">${i.turmas} treinamento${i.turmas !== 1 ? 's' : ''} · ${i.horas}h · ${i.clientes} cliente${i.clientes !== 1 ? 's' : ''}</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>`).join('');
+
+  setConteudo(`
+    ${_relHeaderNovo('Instrutores')}
+    ${_relFaixaDestinosHtml('instrutores')}
+    ${_relRecentesHtml()}
+    <div class="rel2-card">
+      <div class="rel2-card-title">Instrutores no período — clique para o relatório completo</div>
+      ${lista || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum instrutor com atividade no período</div>'}
+    </div>`);
+}
+
+window._relInstrutorFiltro = window._relInstrutorFiltro || { situacoes: null, clienteId: '' };
+
+function relVerInstrutor(instrutorId) {
+  window._relDestinoAtivo = 'instrutores';
+  window._relInstrutorAtual = instrutorId;
+  window._relInstrutorFiltro = { situacoes: null, clienteId: '' };
+  _paginaRelInstrutor = 1;
+  _renderRelatorioInstrutorDetalhe();
+}
+function _relInstrutorAtualizarFiltro() {
+  const cliente = _getElVisible('relInstSelCliente')?.value || '';
+  const checks = _relQuerySelectorAllVisible('.rel-inst-sit:checked').map(c => c.value);
+  window._relInstrutorFiltro = { situacoes: checks.length ? checks : null, clienteId: cliente };
+  _paginaRelInstrutor = 1;
+  _renderRelatorioInstrutorDetalhe();
+}
+function _relInstrutorIrPagina(n) { _paginaRelInstrutor = n; _renderRelatorioInstrutorDetalhe(); }
+function _relInstrutorAlterarPorPagina(v) { _porPaginaRelInstrutor = +v; _paginaRelInstrutor = 1; _renderRelatorioInstrutorDetalhe(); }
+
+function _renderRelatorioInstrutorDetalhe() {
+  const raw = window._relRaw || {};
+  const instrutorId = window._relInstrutorAtual;
+  const instrutor = (raw.usuarios || []).find(u => u.id === instrutorId);
+  if (!instrutor) { relIrParaDestino('instrutores'); return; }
+  setMobileHeader(`<div class="mh-greeting">Instrutor</div><div class="mh-name">${escapeHtml(instrutor.nome)}</div>`);
+
+  const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
+  const sessoesInstrutor = (raw.sessoes || []).filter(s => s.instrutor_id === instrutorId);
+  const turmaIdsInstrutor = new Set(sessoesInstrutor.map(s => s.turma_id));
+  let turmasInstrutor = tFilt.filter(t => turmaIdsInstrutor.has(t.id));
+
+  const filtro = window._relInstrutorFiltro || {};
+  if (filtro.clienteId) turmasInstrutor = turmasInstrutor.filter(t => t.cliente_id === filtro.clienteId);
+  if (filtro.situacoes) turmasInstrutor = turmasInstrutor.filter(t => filtro.situacoes.includes(t.status));
+
+  const totalTreinamentos = turmasInstrutor.length;
+  const horas = turmasInstrutor.filter(t => t.status === 'concluida').reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+  const concluidas = turmasInstrutor.filter(t => t.status === 'concluida').length;
+  const canceladasN = turmasInstrutor.filter(t => t.status === 'cancelada').length;
+  const taxaConclusao = totalTreinamentos ? Math.round((concluidas / totalTreinamentos) * 100) : 0;
+  const clientesUnicos = new Set(turmasInstrutor.map(t => t.cliente_id).filter(Boolean)).size;
+
+  const clientesDoInstrutor = [...new Map(
+    tFilt.filter(t => turmaIdsInstrutor.has(t.id)).filter(t => t.cliente_id).map(t => [t.cliente_id, t.clientes?.nome || '—'])
+  ).entries()];
+
+  const datasTodas = sessoesInstrutor.map(s => s.data).filter(Boolean).sort();
+  const periodoAtuacao = datasTodas.length ? `desde ${formatarData(datasTodas[0])}` : '';
+
+  const statusLabel = { agendada: 'Agendada', em_andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' };
+  const statusColor = { agendada: '#F59E0B', em_andamento: '#1E2A4A', concluida: '#059669', cancelada: '#94A3B8' };
+
+  const ordenadas = turmasInstrutor.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const { itens: pagItens, totalPaginas, paginaAtual, total } = _paginarLista(ordenadas, _paginaRelInstrutor, _porPaginaRelInstrutor);
+  _paginaRelInstrutor = paginaAtual;
+
+  const timelineHtml = pagItens.map(t => {
+    const nPart = (raw.participantes || []).filter(p => p.turma_id === t.id).length;
+    const sc = statusColor[t.status] || '#94A3B8';
+    return `<div class="rel2-row" style="cursor:pointer" data-action="verTurma" data-id="${t.id}">
+      <div class="rel2-badge" style="background:${sc}18;color:${sc};font-size:9px">${t.catalogo?.carga_horaria || 0}h</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.catalogo?.nome || 'Treinamento')}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHtml(t.clientes?.nome || '—')} · ${formatarData(t.created_at)} · ${nPart} participante${nPart !== 1 ? 's' : ''}</div>
+      </div>
+      <span style="background:${sc}18;border:1px solid ${sc}40;color:${sc};font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap">${statusLabel[t.status] || t.status}</span>
+    </div>`;
+  }).join('');
+
+  const cliMapInst = {};
+  turmasInstrutor.forEach(t => {
+    if (!t.cliente_id) return;
+    if (!cliMapInst[t.cliente_id]) cliMapInst[t.cliente_id] = { nome: t.clientes?.nome || '—', turmas: 0 };
+    cliMapInst[t.cliente_id].turmas++;
+  });
+  const rankCliInst = Object.values(cliMapInst).sort((a, b) => b.turmas - a.turmas).slice(0, 6);
+  const maxCliInst = rankCliInst[0]?.turmas || 1;
+  const barrasCliHtml = rankCliInst.length ? rankCliInst.map(c => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="width:110px;flex-shrink:0;font-size:11px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</span>
+      <div style="flex:1;height:6px;background:var(--gray-100);border-radius:3px"><div style="width:${Math.round((c.turmas / maxCliInst) * 100)}%;height:100%;background:var(--navy);border-radius:3px"></div></div>
+      <span style="font-size:10px;color:var(--text-3);width:64px;text-align:right;flex-shrink:0">${c.turmas} turma${c.turmas !== 1 ? 's' : ''}</span>
+    </div>`).join('') : `<div style="font-size:12px;color:var(--text-3)">Nenhum cliente no período</div>`;
+
+  _relRecentesAdd('instrutor', instrutorId, instrutor.nome);
+
+  setConteudo(`
+    ${_relHeaderNovo('Instrutores')}
+    ${_relFaixaDestinosHtml('instrutores')}
+    ${_relRecentesHtml()}
+    <button class="rel2-back" onclick="relIrParaDestino('instrutores')">← Voltar para Instrutores</button>
+    <div class="rel3-layout">
+      <div class="rel3-filtros">
+        <div class="rel3-lbl">Situação</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-1);margin-bottom:4px;cursor:pointer">
+          <input type="checkbox" class="rel-inst-sit" value="concluida" onchange="_relInstrutorAtualizarFiltro()" ${!filtro.situacoes || filtro.situacoes.includes('concluida') ? 'checked' : ''}> Concluídas
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-1);margin-bottom:4px;cursor:pointer">
+          <input type="checkbox" class="rel-inst-sit" value="agendada" onchange="_relInstrutorAtualizarFiltro()" ${!filtro.situacoes || filtro.situacoes.includes('agendada') ? 'checked' : ''}> Agendadas
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-1);margin-bottom:4px;cursor:pointer">
+          <input type="checkbox" class="rel-inst-sit" value="em_andamento" onchange="_relInstrutorAtualizarFiltro()" ${!filtro.situacoes || filtro.situacoes.includes('em_andamento') ? 'checked' : ''}> Em andamento
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-1);margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" class="rel-inst-sit" value="cancelada" onchange="_relInstrutorAtualizarFiltro()" ${!filtro.situacoes || filtro.situacoes.includes('cancelada') ? 'checked' : ''}> Canceladas
+        </label>
+        <div class="rel3-lbl">Cliente</div>
+        <select id="relInstSelCliente" onchange="_relInstrutorAtualizarFiltro()" style="width:100%;padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-md);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+          <option value="">Todos</option>
+          ${clientesDoInstrutor.map(([id, nome]) => `<option value="${id}" ${filtro.clienteId === id ? 'selected' : ''}>${escapeHtml(nome)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="rel3-main">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--navy)">${escapeHtml(instrutor.nome)}</div>
+            ${periodoAtuacao ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px">Atuando ${periodoAtuacao}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="window.print()">Imprimir</button>
+            <button class="btn btn-sm" style="background:var(--navy);color:#fff" onclick="exportarRelatorioInstrutorCSV('${instrutorId}')">⬇ CSV</button>
+            ${planoAtinge('pro')
+              ? `<button class="btn btn-sm" style="background:var(--amber);color:var(--navy)" onclick="exportarRelatorioInstrutorPDF('${instrutorId}')">⬇ PDF</button>`
+              : `<button class="btn btn-sm" style="opacity:.5" onclick="modalUpgrade('PDF do instrutor','pro')">🔒 PDF</button>`}
+          </div>
+        </div>
+        <div class="rel2-kpis">
+          <div class="rel2-kpi"><div class="rel2-kpi-val">${totalTreinamentos}</div><div class="rel2-kpi-lbl">Treinamentos</div></div>
+          <div class="rel2-kpi"><div class="rel2-kpi-val">${horas}h</div><div class="rel2-kpi-lbl">Horas ministradas</div></div>
+          <div class="rel2-kpi"><div class="rel2-kpi-val" style="color:var(--green)">${taxaConclusao}%</div><div class="rel2-kpi-lbl">Conclusão</div></div>
+          <div class="rel2-kpi"><div class="rel2-kpi-val">${clientesUnicos}</div><div class="rel2-kpi-lbl">Clientes</div></div>
+        </div>
+        <div class="rel2-card">
+          <div class="rel2-card-title">Linha do tempo</div>
+          ${timelineHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum treinamento com esses filtros</div>'}
+          ${_htmlPaginacao({ totalPaginas, paginaAtual, porPagina: _porPaginaRelInstrutor, total, onPageChange: '_relInstrutorIrPagina', onPageSizeChange: '_relInstrutorAlterarPorPagina', opcoesPorPagina: [10, 20, 50] })}
+        </div>
+        <div class="rel2-card">
+          <div class="rel2-card-title">Clientes atendidos por este instrutor</div>
+          ${barrasCliHtml}
+        </div>
+        ${canceladasN ? `<div style="font-size:11px;color:var(--text-3);padding:4px 2px">${canceladasN} treinamento${canceladasN !== 1 ? 's' : ''} cancelado${canceladasN !== 1 ? 's' : ''} no período selecionado.</div>` : ''}
+      </div>
+    </div>`);
+}
+
+function exportarRelatorioInstrutorCSV(instrutorId) {
+  const raw = window._relRaw || {};
+  const instrutor = (raw.usuarios || []).find(u => u.id === instrutorId);
+  if (!instrutor) return;
+  const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
+  const turmaIds = new Set((raw.sessoes || []).filter(s => s.instrutor_id === instrutorId).map(s => s.turma_id));
+  const turmas = tFilt.filter(t => turmaIds.has(t.id));
+  if (!turmas.length) { showToast('Nenhum dado para exportar', 'info'); return; }
+  const header = ['Instrutor', 'Treinamento', 'Cliente', 'Status', 'Data', 'Carga horária', 'Participantes'];
+  const rows = turmas.map(t => {
+    const nPart = (raw.participantes || []).filter(p => p.turma_id === t.id).length;
+    return [instrutor.nome, (t.catalogo?.nome || '').replace(/,/g, ';'), (t.clientes?.nome || '').replace(/,/g, ';'), t.status || '', t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '', t.catalogo?.carga_horaria || 0, nPart];
+  });
+  const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `relatorio-${instrutor.nome.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  showToast('CSV exportado com sucesso!', 'success');
+}
+
+async function exportarRelatorioInstrutorPDF(instrutorId) {
+  if (!planoAtinge('pro')) { modalUpgrade('PDF do instrutor', 'pro'); return; }
+  const raw = window._relRaw || {};
+  const instrutor = (raw.usuarios || []).find(u => u.id === instrutorId);
+  if (!instrutor) return;
+  const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
+  const turmaIds = new Set((raw.sessoes || []).filter(s => s.instrutor_id === instrutorId).map(s => s.turma_id));
+  let turmas = tFilt.filter(t => turmaIds.has(t.id));
+  if (!turmas.length) { showToast('Nenhum dado para exportar', 'info'); return; }
+
+  // Salvaguarda de LGPD: se o relatório reúne mais de um cliente e nenhum
+  // filtro de cliente está ativo, confirma antes de gerar — o PDF traz nomes
+  // de participantes de empresas diferentes juntos no mesmo documento. Ver
+  // seção 12 (item C10) do requisito de Relatórios para o raciocínio.
+  const clientesEnvolvidos = new Set(turmas.map(t => t.cliente_id).filter(Boolean));
+  const filtroCliente = window._relInstrutorFiltro?.clienteId;
+  if (!filtroCliente && clientesEnvolvidos.size > 1) {
+    const ok = await confirmarAcao(
+      `Este PDF reúne treinamentos de ${clientesEnvolvidos.size} clientes diferentes. Se o documento for apresentado a um cliente específico, filtre por esse cliente antes de exportar. Deseja gerar mesmo assim, com todos os clientes juntos?`,
+      'Gerar mesmo assim'
+    );
+    if (!ok) return;
+  }
+
+  showToast('Gerando PDF do instrutor...', 'info');
+  const { jsPDF } = window.jspdf;
+  const W = 297, H = 210;
+  const NAVY = [30, 42, 74], AMBER = [245, 158, 11], WHITE = [255, 255, 255], GREEN = [5, 150, 105];
+  const T2 = [71, 85, 105], T3 = [148, 163, 184], BORD = [220, 228, 240], GRAY = [244, 246, 250];
+  const s = v => pdfSafe(v);
+  const hojeStr = new Date().toLocaleDateString('pt-BR');
+  const meses = window._relPeriodo || 6;
+  const periodoLabel = window._relPeriodoCustom
+    ? `${window._relPeriodoCustom.inicio} a ${window._relPeriodoCustom.fim}`
+    : (meses === 1 ? 'Este mes' : `Ultimos ${meses} meses`);
+
+  const totalTreinamentos = turmas.length;
+  const horas = turmas.filter(t => t.status === 'concluida').reduce((a, t) => a + (t.catalogo?.carga_horaria || 0), 0);
+  const concluidas = turmas.filter(t => t.status === 'concluida').length;
+  const taxaConc = totalTreinamentos ? Math.round((concluidas / totalTreinamentos) * 100) : 0;
+  const clientesUnicos = clientesEnvolvidos.size;
+
+  const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 40, 'F');
+  doc.setFillColor(...AMBER); doc.rect(0, 40, W, 2.5, 'F');
+  desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 10, 48, 15, undefined, imgLogoOrg);
+  doc.setFontSize(13); doc.setTextColor(...WHITE); doc.setFont('helvetica', 'bold');
+  doc.text('RELATORIO DO INSTRUTOR', W - 14, 18, { align: 'right' });
+  doc.setFontSize(11); doc.setTextColor(...AMBER); doc.setFont('helvetica', 'bold');
+  doc.text(s(instrutor.nome), W - 14, 26, { align: 'right' });
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...T3);
+  doc.text(`${s(periodoLabel)}  |  Gerado em ${hojeStr}`, W - 14, 34, { align: 'right' });
+
+  const kpis = [
+    { l: 'Treinamentos', v: totalTreinamentos, c: NAVY },
+    { l: 'Horas ministradas', v: `${horas}h`, c: [124, 58, 237] },
+    { l: 'Taxa de conclusao', v: `${taxaConc}%`, c: GREEN },
+    { l: 'Clientes atendidos', v: clientesUnicos, c: AMBER },
+  ];
+  const kw = (W - 28 - 3 * 4) / 4, kh = 24, ky0 = 50;
+  kpis.forEach((k, i) => {
+    const kx = 14 + i * (kw + 4);
+    doc.setFillColor(...GRAY); doc.rect(kx, ky0, kw, kh, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(kx, ky0, kw, kh, 'S');
+    doc.setDrawColor(...k.c); doc.setLineWidth(1.8); doc.line(kx, ky0, kx, ky0 + kh);
+    doc.setFontSize(14); doc.setTextColor(...k.c); doc.setFont('helvetica', 'bold');
+    doc.text(String(k.v), kx + kw / 2, ky0 + 13, { align: 'center' });
+    doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica', 'normal');
+    doc.text(s(k.l), kx + kw / 2, ky0 + 19, { align: 'center' });
+  });
+
+  doc.setFontSize(8); doc.setTextColor(...AMBER); doc.setFont('helvetica', 'bold');
+  doc.text('TREINAMENTOS NO PERIODO', 14, 86);
+  const colX = [14, 100, 160, 205, 235, 260];
+  const heads = ['Treinamento', 'Cliente', 'Data', 'CH', 'Participantes', 'Status'];
+  doc.setFontSize(7); doc.setTextColor(...T2);
+  heads.forEach((h, i) => doc.text(h, colX[i], 92));
+  doc.setDrawColor(...BORD); doc.line(14, 94, W - 14, 94);
+
+  const statusLabelPdf = { agendada: 'Agendada', em_andamento: 'Em andamento', concluida: 'Concluida', cancelada: 'Cancelada' };
+  const statusColorPdf = { agendada: AMBER, em_andamento: NAVY, concluida: GREEN, cancelada: [148, 163, 184] };
+  const partAll = raw.participantes || [];
+  let ty = 100;
+  const ordenadas = turmas.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  ordenadas.forEach((t, i) => {
+    if (ty > H - 16) {
+      doc.addPage(); ty = 20;
+      doc.setFillColor(...NAVY); doc.rect(0, 0, W, 14, 'F');
+      doc.setFontSize(9); doc.setTextColor(...WHITE); doc.setFont('helvetica', 'bold');
+      doc.text(`RELATORIO DO INSTRUTOR — ${s(instrutor.nome)} (continuacao)`, 14, 10);
+    }
+    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    doc.setFontSize(7.5); doc.setTextColor(...NAVY); doc.setFont('helvetica', 'normal');
+    doc.text(s(t.catalogo?.nome || '-', 42), colX[0], ty);
+    doc.text(s(t.clientes?.nome || '-', 32), colX[1], ty);
+    doc.text(t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '-', colX[2], ty);
+    doc.text(`${t.catalogo?.carga_horaria || 0}h`, colX[3], ty);
+    doc.text(String(nPart), colX[4], ty);
+    doc.setTextColor(...(statusColorPdf[t.status] || T2)); doc.setFont('helvetica', 'bold');
+    doc.text(statusLabelPdf[t.status] || t.status || '-', colX[5], ty);
+    ty += 7;
+    if (i < ordenadas.length - 1) { doc.setDrawColor(...BORD); doc.setLineWidth(0.1); doc.line(14, ty - 4.5, W - 14, ty - 4.5); }
+  });
+
+  const totalPaginasPdf = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPaginasPdf; p++) {
+    doc.setPage(p);
+    doc.setFillColor(...NAVY); doc.rect(0, H - 9, W, 9, 'F');
+    doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica', 'bold');
+    doc.text(`${s(usuarioAtual?.orgNome || '')}  |  toledolabs.com.br`, W / 2, H - 3.5, { align: 'center' });
+    doc.setTextColor(...T3); doc.setFont('helvetica', 'normal');
+    doc.text(`${p} / ${totalPaginasPdf}`, W - 14, H - 3.5, { align: 'right' });
+  }
+
+  doc.save(`relatorio-${instrutor.nome.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`);
+  showToast('PDF gerado com sucesso!', 'success');
+}
+
+// ── Destino: Treinamentos ──
+function _renderRelatorioTreinamentosLista() {
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Treinamentos</div>`);
+  const raw = window._relRaw || {};
+  const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
+  const catMap = {};
+  tFilt.forEach(t => {
+    if (!t.catalogo_id) return;
+    if (!catMap[t.catalogo_id]) catMap[t.catalogo_id] = { nome: t.catalogo?.nome || '—', n: 0, horas: 0 };
+    catMap[t.catalogo_id].n++;
+    catMap[t.catalogo_id].horas += (t.catalogo?.carga_horaria || 0);
+  });
+  const lista = Object.entries(catMap).sort((a, b) => b[1].n - a[1].n).map(([id, v]) => `
+    <button class="rel2-cli-btn" onclick="relVerTreinamento('${id}')">
+      <div style="flex:1;min-width:0">
+        <div class="rel2-cli-name">${escapeHtml(v.nome)}</div>
+        <div class="rel2-cli-meta">${v.n} turma${v.n !== 1 ? 's' : ''} · ${v.horas}h totais</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>`).join('');
+  setConteudo(`
+    ${_relHeaderNovo('Treinamentos')}
+    ${_relFaixaDestinosHtml('treinamentos')}
+    ${_relRecentesHtml()}
+    <div class="rel2-card">
+      <div class="rel2-card-title">Treinamentos no período — clique para detalhes</div>
+      ${lista || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum treinamento no período</div>'}
+    </div>`);
+}
+
+function relVerTreinamento(catalogoId) {
+  window._relDestinoAtivo = 'treinamentos';
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Treinamento</div>`);
+  const raw = window._relRaw || {};
+  const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
+  const turmas = tFilt.filter(t => t.catalogo_id === catalogoId);
+  if (!turmas.length) { showToast('Nenhuma turma no período selecionado', 'info'); return; }
+  const nome = turmas[0]?.catalogo?.nome || 'Treinamento';
+  _relRecentesAdd('treinamento', catalogoId, nome);
+
+  const partAll = raw.participantes || [];
+  const totalPessoas = new Set(partAll.filter(p => turmas.some(t => t.id === p.turma_id)).map(p => p.colaborador_id)).size;
+  const totalHoras = turmas.reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+  const concluidas = turmas.filter(t => t.status === 'concluida').length;
+
+  const statusLabel = { agendada: 'Agendada', em_andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' };
+  const statusColor = { agendada: '#F59E0B', em_andamento: '#1E2A4A', concluida: '#059669', cancelada: '#94A3B8' };
+  const linhas = turmas.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(t => {
+    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    const sc = statusColor[t.status] || '#94A3B8';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.clientes?.nome || '—')}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${formatarData(t.created_at)} · ${nPart} pessoa${nPart !== 1 ? 's' : ''}</div>
+      </div>
+      <span style="background:${sc}18;border:1px solid ${sc}40;color:${sc};font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px">${statusLabel[t.status] || t.status}</span>
+    </div>`;
+  }).join('');
+
+  setConteudo(`
+    ${_relHeaderNovo('Treinamentos')}
+    ${_relFaixaDestinosHtml('treinamentos')}
+    ${_relRecentesHtml()}
+    <button class="rel2-back" onclick="relIrParaDestino('treinamentos')">← Voltar para Treinamentos</button>
+    <div class="rel2-header" style="margin-bottom:14px">
+      <div class="rel2-title" style="font-size:15px">${escapeHtml(nome)}</div>
+      <div class="rel2-sub">${turmas.length} turma${turmas.length !== 1 ? 's' : ''} no período selecionado</div>
+    </div>
+    <div class="rel2-kpis" style="margin-bottom:14px">
+      <div class="rel2-kpi" style="border-left:3px solid var(--navy)"><div class="rel2-kpi-val">${turmas.length}</div><div class="rel2-kpi-lbl">Total turmas</div></div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--green)"><div class="rel2-kpi-val">${concluidas}</div><div class="rel2-kpi-lbl">Concluídas</div></div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--amber)"><div class="rel2-kpi-val">${totalPessoas}</div><div class="rel2-kpi-lbl">Pessoas treinadas</div></div>
+      <div class="rel2-kpi" style="border-left:3px solid #7C3AED"><div class="rel2-kpi-val">${totalHoras}</div><div class="rel2-kpi-lbl">Horas totais</div></div>
+    </div>
+    <div class="rel2-card"><div class="rel2-card-title">Turmas de ${escapeHtml(nome)}</div>${linhas}</div>`);
+}
+
+// ── Destino: Clientes (lista nova; detalhe reaproveita relVerCliente,
+// já existente e não alterado na lógica, só no botão "Voltar") ──
+function _renderRelatorioClientesLista() {
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Clientes</div>`);
+  const raw = window._relRaw || {};
+  const meses = window._relPeriodo || 6;
+  const { tFilt } = _relFiltrarPorPeriodo(raw.turmas || [], raw.sessoes || [], meses);
+  const partAll = raw.participantes || [];
+  const cliMap = {};
+  tFilt.forEach(t => {
+    if (!t.cliente_id) return;
+    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome || '—', turmas: 0, horas: 0, pessoas: 0 };
+    cliMap[t.cliente_id].turmas++;
+    cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria || 0);
+    cliMap[t.cliente_id].pessoas += partAll.filter(p => p.turma_id === t.id).length;
+  });
+  const lista = Object.entries(cliMap).sort((a, b) => b[1].turmas - a[1].turmas).map(([id, v]) => `
+    <button class="rel2-cli-btn" onclick="relVerCliente('${id}')">
+      <div style="flex:1;min-width:0">
+        <div class="rel2-cli-name">${escapeHtml(v.nome)}</div>
+        <div class="rel2-cli-meta">${v.turmas} turma${v.turmas !== 1 ? 's' : ''} · ${v.pessoas} participante${v.pessoas !== 1 ? 's' : ''} · ${v.horas}h</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>`).join('');
+  setConteudo(`
+    ${_relHeaderNovo('Clientes', true)}
+    ${_relFaixaDestinosHtml('clientes')}
+    ${_relRecentesHtml()}
+    <div class="rel2-card">
+      <div class="rel2-card-title">Clientes no período — clique para detalhes</div>
+      ${lista || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
+    </div>`);
+}
+
+// ── Destino: Auditoria ──
+async function _renderRelatorioAuditoria() {
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Auditoria</div>`);
+  const raw = window._relRaw || {};
+  const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
+  const canceladasLista = tFilt.filter(t => t.status === 'cancelada');
+  const partAll = raw.participantes || [];
+
+  // Sonda a existência da tabela de auditoria fina (sessoes_historico,
+  // migration opcional) — se ainda não foi rodada, cai graciosamente para a
+  // visão baseada só em cancelamentos (dado que já existe hoje), sem erro
+  // nem número inventado. Ver 03-Migrations/sql/migration-sessoes-historico-auditoria.sql.
+  let logAlteracoes = null;
+  try {
+    const turmaIds = tFilt.map(t => t.id);
+    const sessIds = (raw.sessoes || []).filter(s => turmaIds.includes(s.turma_id)).map(s => s.id);
+    if (sessIds.length) {
+      const { data, error } = await sb.from('sessoes_historico').select('*').in('sessao_id', sessIds).order('alterado_em', { ascending: false }).limit(100);
+      if (!error) logAlteracoes = data || [];
+    } else {
+      logAlteracoes = [];
+    }
+  } catch (e) { logAlteracoes = null; }
+
+  const listaCanceladasHtml = canceladasLista.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(t => {
+    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    return `<div class="rel2-row">
+      <div class="rel2-badge" style="background:var(--red-l);color:var(--red-text);font-size:9px">×</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--navy)">${escapeHtml(t.catalogo?.nome || 'Treinamento')}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHtml(t.clientes?.nome || '—')} · ${formatarData(t.created_at)} · ${nPart} participante${nPart !== 1 ? 's' : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const painelLogHtml = logAlteracoes === null
+    ? `<div class="rel2-card" style="border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
+        <div class="rel2-card-title">Rastreamento detalhado de alterações</div>
+        <div style="font-size:12px;color:var(--text-2);line-height:1.6">
+          Esta visão mostra cancelamentos, que já ficam registrados hoje. O rastreamento fino de alterações (quem mudou data, horário ou instrutor de um agendamento, e quando) depende de uma tabela de auditoria adicional, ainda não ativada nesta organização.
+        </div>
+      </div>`
+    : `<div class="rel2-card">
+        <div class="rel2-card-title">Alterações registradas — ${logAlteracoes.length}</div>
+        ${logAlteracoes.length ? logAlteracoes.map(h => `<div class="rel2-row">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;color:var(--navy)"><strong>${escapeHtml(h.campo || 'campo')}</strong> alterado</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHtml(String(h.valor_anterior ?? '—'))} → ${escapeHtml(String(h.valor_novo ?? '—'))} · ${formatarDataHora(h.alterado_em)}</div>
+          </div>
+        </div>`).join('') : '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhuma alteração registrada no período</div>'}
+      </div>`;
+
+  setConteudo(`
+    ${_relHeaderNovo('Auditoria')}
+    ${_relFaixaDestinosHtml('auditoria')}
+    ${_relRecentesHtml()}
+    <div class="rel2-kpis" style="margin-bottom:14px">
+      <div class="rel2-kpi" style="border-left:3px solid var(--red)"><div class="rel2-kpi-val">${canceladasLista.length}</div><div class="rel2-kpi-lbl">Cancelamentos</div></div>
+      <div class="rel2-kpi" style="border-left:3px solid var(--navy)"><div class="rel2-kpi-val">${tFilt.length}</div><div class="rel2-kpi-lbl">Total no período</div></div>
+    </div>
+    ${painelLogHtml}
+    <div class="rel2-card">
+      <div class="rel2-card-title">Treinamentos cancelados no período</div>
+      ${listaCanceladasHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cancelamento no período</div>'}
+    </div>`);
+}
+
+// ── Integração com a Agenda da Equipe: clicar no nome do instrutor abre
+// o relatório dele já filtrado. Não altera nenhuma lógica da própria Agenda. ──
+function _relAbrirInstrutorDaAgenda(instrutorId) {
+  irPara('relatorios').then(() => { relVerInstrutor(instrutorId); });
 }
 
 function exportarRelatorioCSV() {
