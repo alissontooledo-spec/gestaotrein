@@ -2399,13 +2399,13 @@ async function fazerLogout() {
 // ============================================================
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'conta',l:'Minha conta',icon:'user'}],
-  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   // 2026-08: adicionado 'relatorios' — já estava referenciado em
   // NAV_BOTTOM.comercial (atalho do rodapé mobile) mas não existia aqui,
   // então o item nunca aparecia de verdade e o Comercial não conseguia
   // acessar Relatórios nem digitando a URL (_perfilTemAcesso bloqueava).
   // Achado durante a validação de perfis antes do go-live da Avanteseg.
-  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 const NAV_BOTTOM = {
@@ -2462,13 +2462,21 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
+const TITULOS = {home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
 async function irPara(pagina, params={}) {
   // Bloqueia navegação para telas fora do menu do perfil atual (ver
   // _perfilTemAcesso acima) — redireciona para o Início em vez de renderizar
   // uma tela sem permissão.
   if (!_perfilTemAcesso(pagina)) pagina = 'home';
+  // Agenda da Equipe roda um refresh silencioso em segundo plano (ver
+  // renderAgendaEquipe) enquanto a pessoa está nela — ao sair da tela,
+  // sempre para esse timer aqui, independente de para onde ela está indo,
+  // pra não ficar consultando o banco à toa nem vazar o interval.
+  if (pagina !== 'agendaequipe' && window._agEquipePollId) {
+    clearInterval(window._agEquipePollId);
+    window._agEquipePollId = null;
+  }
   paginaAtual = pagina;
   marcarNavAtivo(pagina);
   fecharSidebar();
@@ -2490,6 +2498,7 @@ async function irPara(pagina, params={}) {
       case 'catalogo':      await renderCatalogo(); break;
       case 'conformidade':  await renderConformidade(); break;
       case 'turmas':        await renderTurmas(); break;
+      case 'agendaequipe':  await renderAgendaEquipe(); break;
       case 'equipe':        await renderEquipe(); break;
       case 'agenda':        await renderAgenda(); break;
       case 'historico':     await renderHistorico(); break;
@@ -9068,6 +9077,13 @@ async function _carregarInstrutores() {
 async function abrirModalAgendamento(turmaId, agendamentoId=null) {
   _modalCurrentId = turmaId;
   window._agendamentoEditId = agendamentoId||null;
+  window._agTemConflito = false;
+  // Controla se hora_fim deve continuar sendo auto-calculada a partir da
+  // carga horária (2026-08-08) — true assim que o usuário mexer nela na
+  // mão, ou já de saída se está editando um agendamento que já tinha um
+  // hora_fim salvo (não queremos sobrescrever um ajuste manual anterior só
+  // porque o usuário tocou no campo Hora início de novo).
+  window._agHoraFimManual = false;
 
   // Buscar instrutores e carga horária da turma em paralelo
   const [instrutores, turmaResp] = await Promise.all([
@@ -9082,6 +9098,7 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
     const {data} = await sb.from('sessoes').select('*').eq('id', agendamentoId).single();
     ag = data;
   }
+  if (ag?.hora_fim) window._agHoraFimManual = true;
 
     const instOpts = instrutores.map(i =>
     `<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${escapeHtml(i.nome)}</option>`
@@ -9089,16 +9106,24 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
 
   abrirModal(ag?'Editar agendamento':'Novo agendamento', `
     <div class="field"><label>Data *</label>
-      <input type="date" id="mAgData" value="${ag?.data||''}"></div>
-    <div class="field">
-      <label>Hora início</label>
-      <input type="time" id="mAgIni" value="${ag?.hora_inicio?.slice(0,5)||''}"
-        style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+      <input type="date" id="mAgData" value="${ag?.data||''}" onchange="_agVerificarConflito()"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field"><label>Hora início *</label>
+        <input type="time" id="mAgIni" value="${ag?.hora_inicio?.slice(0,5)||''}" onchange="_agCalcularHoraFim();_agVerificarConflito()"
+          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+      </div>
+      <div class="field"><label>Hora término</label>
+        <input type="time" id="mAgFim" value="${ag?.hora_fim?.slice(0,5)||''}" onchange="_agHoraFimEditadaManual();_agVerificarConflito()"
+          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+      </div>
     </div>
+    <div style="font-size:11px;color:var(--text-3);margin:-8px 0 14px">Sugerida automaticamente a partir da carga horária do curso (${cargaHoraria||'—'}h) — ajuste se precisar.</div>
     <div class="field"><label>Instrutor responsável</label>
-      <select id="mAgInstrutor" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+      <select id="mAgInstrutor" onchange="_agVerificarConflito()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="">Selecione o instrutor...</option>${instOpts}
-      </select></div>
+      </select>
+      <div id="mAgConflito"></div>
+    </div>
     <div class="field"><label>Modalidade</label>
       <select id="mAgMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="presencial" ${(!ag||ag?.modalidade==='presencial')?'selected':''}>Presencial</option>
@@ -9113,21 +9138,114 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarAgendamento()">
        ${ag?'Salvar':'Adicionar agendamento'}
      </button>`);
+  if (ag?.instrutor_id && ag?.data) _agVerificarConflito();
 }
 
-// calcularHoraFimAuto removida — campo hora_fim retirado do modal
+// Calcula automaticamente a Hora término a partir da carga horária do
+// curso, sempre que a Hora início muda — mas só enquanto o usuário não
+// tiver editado a Hora término manualmente (ver _agHoraFimEditadaManual),
+// pra não apagar um ajuste manual dele (ex.: intervalo mais longo).
+// Revivido em 2026-08-08 — ver seção 5 de
+// 01-Requisitos/agenda-instrutores-conflitos.md: a comparação de conflito
+// de horário só funciona de verdade com hora_fim preenchida.
+function _agCalcularHoraFim() {
+  if (window._agHoraFimManual) return;
+  const ini = document.getElementById('mAgIni')?.value;
+  const fimEl = document.getElementById('mAgFim');
+  const ch = window._agCargaHoraria || 0;
+  if (!ini || !fimEl || !ch) return;
+  const [h,m] = ini.split(':').map(Number);
+  let totalMin = h*60 + m + Math.round(ch*60);
+  totalMin = totalMin % (24*60); // não deixa "vazar" pro dia seguinte na exibição
+  fimEl.value = `${String(Math.floor(totalMin/60)).padStart(2,'0')}:${String(totalMin%60).padStart(2,'0')}`;
+}
+function _agHoraFimEditadaManual() { window._agHoraFimManual = true; }
+
+// Checagem de conflito AO VIVO (2026-08-08) — consulta as sessões do
+// instrutor escolhido nesse mesmo dia e avisa antes de salvar. É só a
+// camada de EXPERIÊNCIA: quem garante de verdade que dois usuários não
+// conseguem gravar o mesmo horário é a constraint no banco (ver migration
+// em 03-Migrations) — esta função só evita que o comercial precise
+// descobrir o conflito depois de tentar salvar, e dá um retorno amigável
+// no caso raro de perder a corrida mesmo assim (ver catch em
+// salvarAgendamento).
+async function _agVerificarConflito() {
+  const instrutorId = document.getElementById('mAgInstrutor')?.value;
+  const data = document.getElementById('mAgData')?.value;
+  const ini  = document.getElementById('mAgIni')?.value;
+  const fim  = document.getElementById('mAgFim')?.value;
+  const box  = document.getElementById('mAgConflito');
+  window._agTemConflito = false;
+  if (!box) return;
+  if (!instrutorId || !data) { box.innerHTML = ''; _agAtualizarBotaoSalvar(); return; }
+  const { data: existentes } = await sb.from('sessoes')
+    .select('id,hora_inicio,hora_fim,concluida,turmas(status,catalogo(nome),clientes(nome))')
+    .eq('instrutor_id', instrutorId)
+    .eq('data', data)
+    .neq('id', window._agendamentoEditId || '00000000-0000-0000-0000-000000000000');
+  // Turmas canceladas liberam o horário do instrutor de volta, e sessões já
+  // CONCLUÍDAS não são mais "compromissos" a proteger — são histórico
+  // (mesmo critério usado na constraint do banco, ver migration Parte 3:
+  // cancelada=false e concluida=false).
+  const relevantes = (existentes||[]).filter(s => s.turmas?.status !== 'cancelada' && !s.concluida);
+  if (!relevantes.length) { box.innerHTML = ''; _agAtualizarBotaoSalvar(); return; }
+  const sobrepoe = (s) => {
+    // Sem horário suficiente pra comparar com precisão (ini/fim novos ou
+    // do registro existente em branco) — trata como risco e avisa mesmo
+    // assim, só não classifica como conflito confirmado.
+    if (!ini || !fim || !s.hora_inicio || !s.hora_fim) return null;
+    return ini < s.hora_fim.slice(0,5) && s.hora_inicio.slice(0,5) < fim;
+  };
+  const avaliadas = relevantes.map(s => ({ s, conflita: sobrepoe(s) }));
+  const conflitantes = avaliadas.filter(a => a.conflita === true);
+  window._agTemConflito = conflitantes.length > 0;
+  const corAviso = conflitantes.length ? 'var(--red)' : 'var(--amber-h)';
+  const fundoAviso = conflitantes.length ? 'var(--red-l)' : 'rgba(245,158,11,.1)';
+  box.innerHTML = `<div style="background:${fundoAviso};color:${corAviso};border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px;line-height:1.6">
+    <strong>${conflitantes.length?'⚠ Conflito de horário':'ℹ Este instrutor já tem compromisso(s) neste dia'}</strong>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      ${avaliadas.map(a=>`<li>${a.s.hora_inicio?a.s.hora_inicio.slice(0,5):'horário não definido'}${a.s.hora_fim?'–'+a.s.hora_fim.slice(0,5):''} — ${escapeHtml(a.s.turmas?.clientes?.nome||'Cliente não identificado')} (${escapeHtml(a.s.turmas?.catalogo?.nome||'')})</li>`).join('')}
+    </ul>
+  </div>`;
+  _agAtualizarBotaoSalvar();
+}
+
+// Bloqueio brando (seção 5 da análise) — comercial não consegue salvar em
+// cima de um conflito confirmado; administrador pode forçar (para os
+// casos excepcionais legítimos), sempre com a constraint do banco como
+// garantia final caso o forçar também colida de verdade.
+function _agAtualizarBotaoSalvar() {
+  const btn = document.getElementById('btnSalvarModal');
+  if (!btn) return;
+  const podeForcar = usuarioAtual.perfil === 'administrador';
+  if (window._agTemConflito && !podeForcar) {
+    btn.disabled = true;
+    btn.title = 'Resolva o conflito de horário antes de salvar — ou peça para um administrador confirmar.';
+  } else {
+    btn.disabled = false;
+    btn.title = podeForcar && window._agTemConflito ? 'Há um conflito de horário — salvar mesmo assim, como administrador.' : '';
+  }
+}
 
 async function salvarAgendamento() {
   const turmaId = _modalCurrentId;
   if (!turmaId) { showToast('Erro: ID da turma não encontrado','error'); return; }
   const data = document.getElementById('mAgData')?.value;
   if (!data) { showToast('Informe a data','error'); return; }
+  const horaInicio = document.getElementById('mAgIni')?.value || null;
+  if (!horaInicio) { showToast('Informe a hora de início','error'); return; }
+  // Segunda barreira (a primeira é o botão desabilitado) — cobre o caso de
+  // o usuário disparar salvarAgendamento() por outro caminho.
+  if (window._agTemConflito && usuarioAtual.perfil !== 'administrador') {
+    showToast('Esse instrutor já tem um compromisso nesse horário — ajuste antes de salvar.','error');
+    return;
+  }
   const dados = {
     turma_id:    turmaId,
     org_id:      usuarioAtual.org_id,
     data,
-    hora_inicio: document.getElementById('mAgIni')?.value||null,
-    hora_fim:    null, // campo removido do modal — não coletado
+    hora_inicio: horaInicio,
+    hora_fim:    document.getElementById('mAgFim')?.value || null,
     instrutor_id:document.getElementById('mAgInstrutor')?.value||null,
     modalidade:  document.getElementById('mAgMod')?.value||'presencial',
     local:       document.getElementById('mAgLocal')?.value.trim()||null,
@@ -9142,7 +9260,19 @@ async function salvarAgendamento() {
     showToast(window._agendamentoEditId?'Agendamento atualizado!':'Agendamento adicionado!','success');
     window._agendamentoEditId = null;
     await verTurma(turmaId);
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) {
+    setBtnModalLoading(false);
+    // 23P01 = exclusion_violation no Postgres — é a constraint anti-conflito
+    // (ver migration) barrando de verdade, provavelmente porque outro
+    // usuário gravou um horário conflitante entre a checagem ao vivo e o
+    // clique em salvar. Mensagem amigável em vez do erro técnico do banco.
+    if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
+      showToast('Esse instrutor acabou de ser agendado por outro usuário para esse horário — escolha outro horário ou instrutor.','error');
+      _agVerificarConflito();
+    } else {
+      showToast(e.message||'Erro ao salvar','error');
+    }
+  }
 }
 
 function menuAgendamento(btn, agId, turmaId) {
@@ -10233,6 +10363,302 @@ function _agendaFiltrarData(dataStr) {
   // separada de turmas abaixo do calendário (isso foi para o Início).
   window._agendaDataSel = window._agendaDataSel === dataStr ? null : dataStr;
   _agendaRenderCalendario();
+}
+
+// ============================================================
+// AGENDA DA EQUIPE — administrador / comercial (2026-08-08)
+// ============================================================
+// Ver 01-Requisitos/agenda-instrutores-conflitos.md — implementa a
+// Solução 3 do documento de análise. Reaproveita a mesma linguagem
+// visual do calendário de "Minha Agenda" (renderAgenda, acima), mas:
+//   - mostra todos os instrutores da organização, com filtro por um
+//     deles específico (responde "esse instrutor está livre nesse dia?");
+//   - mostra um resumo de carga por instrutor no mês (responde "quem
+//     está mais livre pra receber uma turma nova?");
+//   - lista as turmas que ainda não têm nenhum agendamento (responde "o
+//     que falta agendar?");
+//   - se atualiza sozinha em segundo plano enquanto a tela está aberta,
+//     reduzindo o risco de dois comerciais não perceberem que alguém
+//     acabou de ocupar um horário. A garantia de verdade contra dois
+//     usuários gravando o mesmo horário é a constraint do banco (ver
+//     migration) — isto aqui só mantém a visão sempre fresca, sem
+//     precisar apertar F5.
+async function renderAgendaEquipe() {
+  if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { renderEmBreve('Agenda da Equipe'); return; }
+
+  window._agEquipeInstrutorSel = window._agEquipeInstrutorSel || '';
+  window._agEquipeDataSel = null;
+
+  const hoje = dataLocalISO();
+  const [anoHoje, mesHoje] = hoje.split('-').map(Number);
+  window._agEquipeMes  = mesHoje;
+  window._agEquipeAno  = anoHoje;
+  window._agEquipeHoje = hoje;
+
+  setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Agenda da Equipe</div>`);
+  fabOcultar();
+
+  await _agEquipeCarregarDados();
+
+  const instrutores  = window._agEquipeInstrutores || [];
+  const optsInstrutor = instrutores.map(i=>`<option value="${i.id}" ${window._agEquipeInstrutorSel===i.id?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
+
+  setConteudo(`
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div style="font-size:13px;color:var(--text-3);max-width:480px">Veja a disponibilidade de todos os instrutores num só lugar antes de marcar uma turma nova.</div>
+      <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)"
+        style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);min-width:200px">
+        <option value="">Todos os instrutores</option>${optsInstrutor}
+      </select>
+    </div>
+
+    <div id="agEquipeWorkload" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden">
+      <div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+        <button onclick="_agEquipeNavMes(-1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">‹</button>
+        <div id="agEquipeCalMes" style="font-size:14px;font-weight:600;color:#fff"></div>
+        <button onclick="_agEquipeNavMes(1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:auto 1fr;min-height:200px">
+        <div style="padding:12px 12px 12px 14px;border-right:1px solid var(--border)">
+          <div id="agEquipeCalGrid"></div>
+          <div style="display:flex;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
+              <div style="width:9px;height:9px;border-radius:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4)"></div>Com sessão
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
+              <div style="width:9px;height:9px;border-radius:3px;background:var(--navy)"></div>Hoje
+            </div>
+          </div>
+        </div>
+        <div id="agEquipeCalLista" style="padding:12px 14px;overflow-y:auto;max-height:280px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px" id="agEquipeCalListaHeader">Sessões do mês</div>
+          <div id="agEquipeCalListaBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div class="home-section">
+        <div class="section-header"><div class="section-title">Turmas pendentes de agendamento</div></div>
+        <div class="card" id="agEquipePendentes"></div>
+      </div>
+    </div>
+  `);
+
+  _agEquipeRenderWorkload();
+  _agEquipeRenderCalendario();
+  _agEquipeRenderPendentes();
+
+  if (window._agEquipePollId) clearInterval(window._agEquipePollId);
+  window._agEquipePollId = setInterval(_agEquipeAtualizarSilenciosamente, 45000);
+}
+
+async function _agEquipeCarregarDados() {
+  const [instrutores, sessoesResp, turmasResp] = await Promise.all([
+    _carregarInstrutores(),
+    sb.from('sessoes')
+      .select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,modalidade,cancelada,turmas(status,clientes(nome),catalogo(nome))')
+      .eq('org_id', usuarioAtual.org_id)
+      .eq('cancelada', false)
+      .order('data', {ascending:true}),
+    sb.from('turmas')
+      .select('id,status,created_at,clientes(nome),catalogo(nome),sessoes(id)')
+      .eq('org_id', usuarioAtual.org_id)
+      .in('status', ['agendada','em_andamento'])
+      .order('created_at', {ascending:false}),
+  ]);
+
+  const instrutorNomeDe = Object.fromEntries((instrutores||[]).map(i=>[i.id,i.nome]));
+  const sessoes = (sessoesResp.data||[])
+    .filter(s => s.turmas && s.turmas.status !== 'cancelada')
+    .map(s => ({...s, instrutorNome: instrutorNomeDe[s.instrutor_id] || 'Instrutor não definido'}));
+
+  window._agEquipeInstrutores      = instrutores || [];
+  window._agEquipeSessoes          = sessoes;
+  window._agEquipeTurmasPendentes  = (turmasResp.data||[]).filter(t => !(t.sessoes||[]).length);
+}
+
+async function _agEquipeAtualizarSilenciosamente() {
+  // Só continua se a pessoa ainda está de fato nesta tela — proteção extra
+  // além do clearInterval feito em irPara ao trocar de página.
+  if (paginaAtual !== 'agendaequipe') { clearInterval(window._agEquipePollId); window._agEquipePollId = null; return; }
+  const assinatura = () => JSON.stringify([
+    (window._agEquipeSessoes||[]).map(s=>[s.id,s.data,s.hora_inicio,s.hora_fim,s.instrutor_id]),
+    window._agEquipeTurmasPendentes?.length,
+  ]);
+  const antes = assinatura();
+  try {
+    await _agEquipeCarregarDados();
+  } catch(e) { console.warn('Agenda da equipe: falha ao atualizar em segundo plano', e.message); return; }
+  if (antes === assinatura()) return; // nada mudou, evita re-render à toa
+  _agEquipeRenderWorkload();
+  _agEquipeRenderCalendario();
+  _agEquipeRenderPendentes();
+}
+
+function _agEquipeSessoesFiltradas() {
+  const sel = window._agEquipeInstrutorSel;
+  return sel ? (window._agEquipeSessoes||[]).filter(s=>s.instrutor_id===sel) : (window._agEquipeSessoes||[]);
+}
+
+function _agEquipeFiltrarInstrutor(instrutorId) {
+  window._agEquipeInstrutorSel = instrutorId || '';
+  window._agEquipeDataSel = null;
+  // Sincroniza o <select> nas duas cópias do DOM (desktop/mobile) — não dá
+  // pra usar _setElBoth aqui (ele reescreve innerHTML, o que apagaria as
+  // <option> do select); setar .value diretamente em cada cópia preserva
+  // as opções e só move a seleção.
+  [document.getElementById('mainBody'), document.getElementById('mobileBody')].forEach(body => {
+    const sel = body?.querySelector('#agEquipeFiltroInstrutor');
+    if (sel) sel.value = window._agEquipeInstrutorSel;
+  });
+  _agEquipeRenderWorkload();
+  _agEquipeRenderCalendario();
+}
+
+function _agEquipeRenderWorkload() {
+  const el = _getElVisible('agEquipeWorkload');
+  if (!el) return;
+  const mes = window._agEquipeMes, ano = window._agEquipeAno;
+  const instrutores = window._agEquipeInstrutores || [];
+  if (!instrutores.length) {
+    const vazio = `<div style="font-size:12px;color:var(--text-3)">Nenhum instrutor ativo cadastrado ainda.</div>`;
+    el.innerHTML = vazio; _setElBoth('agEquipeWorkload', vazio); return;
+  }
+  const html = instrutores.map(i => {
+    const n = (window._agEquipeSessoes||[]).filter(s => {
+      if (s.instrutor_id !== i.id || !s.data) return false;
+      const [sy,sm] = s.data.split('-').map(Number);
+      return sy===ano && sm===mes;
+    }).length;
+    const ativo = window._agEquipeInstrutorSel === i.id;
+    return `<button onclick="_agEquipeFiltrarInstrutor('${ativo?'':i.id}')"
+      style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1.5px solid ${ativo?'var(--navy)':'var(--border)'};background:${ativo?'var(--navy)':'var(--surface)'};color:${ativo?'#fff':'var(--text-1)'};font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap">
+      ${escapeHtml(i.nome)} <span style="opacity:.75">· ${n} ${n===1?'sessão':'sessões'}</span>
+    </button>`;
+  }).join('');
+  el.innerHTML = html;
+  _setElBoth('agEquipeWorkload', html);
+}
+
+function _agEquipeRenderCalendario() {
+  const mes = window._agEquipeMes, ano = window._agEquipeAno, hoje = window._agEquipeHoje;
+  const nomesMeses = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const elMes  = _getElVisible('agEquipeCalMes');
+  const elGrid = _getElVisible('agEquipeCalGrid');
+  if (!elMes || !elGrid) return;
+  elMes.textContent = `${nomesMeses[mes-1]} ${ano}`;
+
+  const sessoesFiltro = _agEquipeSessoesFiltradas();
+  const contagemPorDia = {};
+  sessoesFiltro.forEach(s => { if (s.data) contagemPorDia[s.data] = (contagemPorDia[s.data]||0)+1; });
+
+  const primeiroDia = new Date(ano, mes-1, 1).getDay();
+  const diasNoMes   = new Date(ano, mes, 0).getDate();
+  const dow = ['D','S','T','Q','Q','S','S'];
+
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,30px);gap:2px;margin-bottom:4px">`;
+  html += dow.map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:3px 0">${d}</div>`).join('');
+  html += '</div>';
+  html += `<div style="display:grid;grid-template-columns:repeat(7,30px);gap:2px">`;
+  for (let i=0;i<primeiroDia;i++) html += `<div style="width:30px;height:30px"></div>`;
+  for (let d=1; d<=diasNoMes; d++) {
+    const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const n = contagemPorDia[dataStr] || 0;
+    const ehHoje = dataStr === hoje;
+    const ehSel  = window._agEquipeDataSel === dataStr;
+    let bg='transparent', color='var(--text-2)', fw='400', borda='none', cursor='default';
+    if (ehHoje) { bg='var(--navy)'; color='#fff'; fw='600'; }
+    if (n>0 && !ehHoje) { bg='rgba(245,158,11,.15)'; color='var(--navy)'; fw='600'; borda='1px solid rgba(245,158,11,.4)'; cursor='pointer'; }
+    if (ehSel && !ehHoje) borda='2px solid var(--navy)';
+    const marcador = n>1 ? `<div style="font-size:8px;font-weight:700;color:#B45309;line-height:1">${n}</div>` : (n===1 ? `<div style="width:4px;height:4px;background:var(--amber,#F59E0B);border-radius:50%;margin:1px auto 0"></div>` : '');
+    html += `<div onclick="${n>0?`_agEquipeFiltrarData('${dataStr}')`:''}"
+      style="width:30px;height:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;font-size:12px;font-weight:${fw};background:${bg};color:${color};cursor:${cursor};border:${borda}"
+    >${d}${marcador}</div>`;
+  }
+  html += '</div>';
+  elGrid.innerHTML = html;
+  _setElBoth('agEquipeCalGrid', html);
+  _agEquipeAtualizarLista(window._agEquipeDataSel || null);
+}
+
+function _agEquipeAtualizarLista(dataFiltro) {
+  const header = _getElVisible('agEquipeCalListaHeader');
+  const body   = _getElVisible('agEquipeCalListaBody');
+  if (!header || !body) return;
+  const mes = window._agEquipeMes, ano = window._agEquipeAno, hoje = window._agEquipeHoje;
+  let lista = _agEquipeSessoesFiltradas().filter(s => {
+    if (!s.data) return false;
+    if (dataFiltro) return s.data === dataFiltro;
+    const [sy,sm] = s.data.split('-').map(Number);
+    return sy===ano && sm===mes;
+  });
+  lista.sort((a,b) => (a.data+(a.hora_inicio||'')).localeCompare(b.data+(b.hora_inicio||'')));
+
+  const nm = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  header.textContent = dataFiltro
+    ? `${dataFiltro.split('-').reverse().join('/')} — ${lista.length} sessão(ões)`
+    : `${nm[mes-1]} ${ano} — ${lista.length} sessão(ões)`;
+  _setElBoth('agEquipeCalListaHeader', header.textContent);
+
+  if (!lista.length) {
+    const vazio = `<div style="font-size:12px;color:var(--text-3);padding:16px 0;text-align:center">${dataFiltro?'Nenhuma sessão neste dia':'Nenhuma sessão neste mês'}</div>`;
+    body.innerHTML = vazio; _setElBoth('agEquipeCalListaBody', vazio); return;
+  }
+
+  const html = lista.map(s => {
+    const ehHoje  = s.data === hoje;
+    const hora    = s.hora_inicio ? s.hora_inicio.slice(0,5) + (s.hora_fim?'–'+s.hora_fim.slice(0,5):'') : 'horário não definido';
+    const dataFmt = s.data.split('-').reverse().join('/');
+    return `<div class="list-item" data-action="verTurma" data-id="${s.turma_id}" style="cursor:pointer;padding:8px 10px;background:${ehHoje?'rgba(245,158,11,.08)':'var(--gray-50,#F8FAFC)'};border:1px solid ${ehHoje?'rgba(245,158,11,.3)':'var(--border)'};border-radius:8px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.turmas?.catalogo?.nome||'Treinamento')}</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHtml(s.turmas?.clientes?.nome||'—')}</div>
+      <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
+        <span>${dataFmt} · ${hora}</span>
+        <span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:500;background:var(--blue-l,#EFF6FF);color:var(--blue-text,#2563EB)">${escapeHtml(s.instrutorNome)}</span>
+      </div>
+    </div>`;
+  }).join('');
+  body.innerHTML = html;
+  _setElBoth('agEquipeCalListaBody', html);
+}
+
+function _agEquipeNavMes(delta) {
+  let mes = window._agEquipeMes + delta, ano = window._agEquipeAno;
+  if (mes>12) { mes=1; ano++; }
+  if (mes<1)  { mes=12; ano--; }
+  window._agEquipeMes = mes; window._agEquipeAno = ano;
+  window._agEquipeDataSel = null;
+  _agEquipeRenderWorkload();
+  _agEquipeRenderCalendario();
+}
+
+function _agEquipeFiltrarData(dataStr) {
+  window._agEquipeDataSel = window._agEquipeDataSel === dataStr ? null : dataStr;
+  _agEquipeRenderCalendario();
+}
+
+function _agEquipeRenderPendentes() {
+  const el = _getElVisible('agEquipePendentes');
+  if (!el) return;
+  const lista = window._agEquipeTurmasPendentes || [];
+  if (!lista.length) {
+    const vazio = `<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">Nenhuma turma pendente de agendamento</div></div>`;
+    el.innerHTML = vazio; _setElBoth('agEquipePendentes', vazio); return;
+  }
+  const html = lista.map(t => `
+    <div class="list-item" data-action="verTurma" data-id="${t.id}" style="cursor:pointer">
+      <div class="li-icon" style="background:#F59E0B1a;color:#F59E0B">${ICONS.cal}</div>
+      <div class="li-info">
+        <div class="li-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+        <div class="li-sub">${escapeHtml(t.clientes?.nome||'—')}</div>
+      </div>
+      <span class="badge badge-amber">Agendar</span>
+    </div>`).join('');
+  el.innerHTML = html;
+  _setElBoth('agEquipePendentes', html);
 }
 
 // ============================================================
