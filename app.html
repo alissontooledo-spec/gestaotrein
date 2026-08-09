@@ -10643,6 +10643,10 @@ function _agEquipeRenderTimeline() {
   const totalMin = max - min;
   const pxPorHora = 56;
   const larguraTimeline = Math.max(360, Math.round((totalMin/60)*pxPorHora));
+  // Guardado pra _agEquipeCliqueNaLinha converter a posição X do clique em
+  // horário, usando a mesma janela que foi de fato desenhada (2026-08-08,
+  // criação rápida de turma pela Agenda).
+  window._agEquipeJanelaAtual = {min, max};
 
   let regua = '';
   for (let h = Math.ceil(min/60); h <= Math.floor(max/60); h += 2) {
@@ -10653,10 +10657,17 @@ function _agEquipeRenderTimeline() {
   const linhaAltura = 40;
   const espacador = `<div style="height:6px"></div>`;
 
+  // Clicar num espaço vazio da linha do instrutor abre a criação rápida de
+  // turma já com instrutor/data/hora daquele ponto (2026-08-08, a pedido do
+  // Alisson — ver 01-Requisitos/agenda-instrutores-conflitos.md seção 13).
+  // O guard contra clique em bloco existente (data-action="verTurma") mora
+  // dentro de _agEquipeCliqueNaLinha, não aqui — mantém esta função (já
+  // testada) só cuidando de desenhar a linha.
   const linhas = instrutores.map(i => {
     const sessoes = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
     if (!sessoes.length) {
-      return `<div style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;display:flex;align-items:center;justify-content:center">
+      return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(i.nome)} neste horário"
+        style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer">
         <span style="font-size:10px;color:var(--text-3)">Livre o dia todo</span>
       </div>`;
     }
@@ -10675,10 +10686,18 @@ function _agEquipeRenderTimeline() {
       return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
         style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:4px;bottom:4px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px"></div>`;
     }).join('');
-    return `<div style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px">${blocos}</div>`;
+    return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma nova com ${escapeHtml(i.nome)}"
+      style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;cursor:pointer">${blocos}</div>`;
   }).join(espacador);
 
-  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;font-size:12px;color:var(--text-1);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.nome)}</div>`).join(espacador);
+  // "+" ao lado do nome — alvo maior pro mobile (tocar um X exato numa
+  // barra fina é difícil no celular); abre o mesmo modal, só sem hora
+  // pré-preenchida (o operador digita).
+  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-1);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+    <span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.nome)}</span>
+    <button type="button" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}" aria-label="Agendar turma com ${escapeHtml(i.nome)}"
+      style="border:none;background:var(--gray-100);color:var(--text-2);width:18px;height:18px;border-radius:50%;font-size:12px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0">+</button>
+  </div>`).join(espacador);
 
   const html = `<div style="display:flex;gap:10px">
     <div style="width:96px;flex-shrink:0;padding-top:22px">${nomes}</div>
@@ -10696,6 +10715,297 @@ function _agEquipeRenderTimeline() {
   </div>`;
   el.innerHTML = html;
   _setElBoth('agEquipeTimeline', html);
+}
+
+// ============================================================
+// CRIAÇÃO RÁPIDA DE TURMA PELA AGENDA DA EQUIPE (2026-08-08)
+// ============================================================
+// A pedido do Alisson: comercial vê um horário livre na Agenda e já cria a
+// turma dali, sem digitar de novo instrutor/data/hora. IMPORTANTE — isto é
+// só um ATALHO que, por baixo, grava exatamente os mesmos dois registros
+// que o fluxo de sempre grava em dois passos separados (Turmas → "Nova
+// turma" → dentro da turma, "Adicionar agendamento"):
+//   1. um INSERT em `turmas` (mesmíssimo formato de dados de salvarTurma);
+//   2. um INSERT em `sessoes` (mesmíssimo formato de dados de
+//      salvarAgendamento), como a PRIMEIRA sessão dessa turma.
+// Nenhuma das duas funções originais (salvarTurma, salvarAgendamento) foi
+// alterada — turmas continuam podendo ter várias sessões, em dias
+// diferentes, cada uma com seu próprio instrutor/horário (ex.: CIPA em 4
+// dias com instrutores diferentes por dia) exatamente como hoje. Este
+// atalho só cobre o PRIMEIRO encontro; para os demais, o caminho
+// continua sendo "Adicionar agendamento" dentro da turma — inclusive
+// oferecido automaticamente logo depois de criar (ver
+// _agRapidaSalvarTurmaEAgendamento).
+//
+// Decisão consciente de escopo, por segurança: o atalho "+ Novo cliente"
+// que existe dentro do modal de Nova turma comum NÃO foi replicado aqui
+// nesta primeira versão — ele está fortemente acoplado ao id do campo da
+// tela de Turmas (salvarClienteRapido volta sempre para abrirModalTurma).
+// Replicar teria exigido mexer numa função que já funciona bem hoje. Se
+// fizer falta na prática, dá pra generalizar depois com um parâmetro,
+// sem risco. Por ora, cliente precisa já existir; se não existir, o
+// caminho é criar em Clientes ou pela tela Turmas normal.
+
+// Converte a posição X do clique na linha do instrutor em um horário
+// (arredondado pra 15 em 15 min), usando a mesma janela de horas que foi
+// desenhada em _agEquipeRenderTimeline (window._agEquipeJanelaAtual).
+// Ignora o clique se ele começou dentro de um bloco já existente
+// (data-action="verTurma") — esses continuam abrindo a turma normalmente.
+function _agEquipeCliqueNaLinha(event, instrutorId) {
+  if (event.target.closest('[data-action]')) return;
+  const janela = window._agEquipeJanelaAtual || {min:7*60, max:20*60};
+  const rect = event.currentTarget.getBoundingClientRect();
+  const pct = rect.width ? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) : 0;
+  const minutos = janela.min + pct * (janela.max - janela.min);
+  const minutosArred = Math.round(minutos/15)*15;
+  const hh = String(Math.floor(minutosArred/60)).padStart(2,'0');
+  const mm = String(minutosArred%60).padStart(2,'0');
+  _agEquipeAbrirCriacaoRapida(instrutorId, window._agEquipeData, `${hh}:${mm}`);
+}
+
+// horaInicio pode vir null (disparado pelo botão "+" ao lado do nome, no
+// lugar de um clique num ponto exato da linha — pensado pro mobile, onde
+// acertar um X específico numa barra fina é difícil). Nesse caso o campo
+// Hora início nasce vazio e o operador digita.
+async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
+  if (!_clientesCache.length) {
+    const {data:cd} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    _clientesCache = cd||[];
+  }
+  if (!_catalogoCache.length) {
+    const {data:cg} = await sb.from('catalogo').select('id,nome,carga_horaria').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    _catalogoCache = cg||[];
+  }
+  if (!_catalogoCache.length) { showToast('Cadastre o catálogo de treinamentos antes de criar turmas','error'); return; }
+
+  const instrutores = (window._agEquipeInstrutores||[]).length ? window._agEquipeInstrutores : await _carregarInstrutores();
+  const cliOpcoes  = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
+  const catOpcoes  = _catalogoCache.map(c=>({id:c.id, nome:c.nome}));
+  const instOpts   = instrutores.map(i => `<option value="${i.id}" ${i.id===instrutorId?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
+
+  window._agRapidaHoraFimManual = false;
+  window._agRapidaTemConflito   = false;
+
+  abrirModal('Nova turma', `
+    <div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text-2)">
+      Criando a partir da Agenda da Equipe — instrutor, data e horário já vêm preenchidos, ajuste se precisar.
+    </div>
+    <div class="field"><label>Cliente *</label>
+      ${_comboBuscavelHtml('mNtCli', 'Buscar cliente por nome...', cliOpcoes, null)}</div>
+    <div class="field"><label>Treinamento *</label>
+      ${_comboBuscavelHtml('mNtCat', 'Buscar treinamento por nome...', catOpcoes, null)}</div>
+    <div class="field"><label>Instrutor</label>
+      <select id="mNtInstrutor" onchange="_agRapidaVerificarConflito()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="">Selecione o instrutor...</option>${instOpts}
+      </select>
+      <div id="mNtConflito"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="field"><label>Data *</label>
+        <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito()"
+          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+      <div class="field"><label>Hora início *</label>
+        <input type="time" id="mNtIni" value="${horaInicio||''}" onchange="_agRapidaCalcularHoraFim();_agRapidaVerificarConflito()"
+          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+      <div class="field"><label>Hora término</label>
+        <input type="time" id="mNtFim" value="" onchange="_agRapidaHoraFimEditadaManual();_agRapidaVerificarConflito()"
+          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+    </div>
+    <div id="mNtFimAviso" style="margin:-4px 0 6px"></div>
+    <details style="margin-top:2px">
+      <summary style="font-size:12px;color:var(--text-3);cursor:pointer">Mais detalhes (opcional)</summary>
+      <div style="margin-top:12px">
+        <div class="field"><label>Modalidade</label>
+          <select id="mNtMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+            <option value="presencial" selected>Presencial</option>
+            <option value="online">Online</option>
+            <option value="hibrido">Híbrido</option>
+          </select></div>
+        <div class="field"><label>Endereço do treinamento</label>
+          <textarea id="mNtLocal" rows="2" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>
+        <div class="field"><label>Sala / complemento (desse encontro)</label>
+          <input type="text" id="mNtSala" placeholder="Ex.: Sala 1, 2º andar..." style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+        <div class="field"><label>Observações</label>
+          <textarea id="mNtObs" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>
+      </div>
+    </details>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`);
+
+  _comboBuscavelRegistrar('mNtCli', cliOpcoes, null);
+  _comboBuscavelRegistrar('mNtCat', catOpcoes, () => { _agRapidaCalcularHoraFim(); });
+
+  if (instrutorId && data) _agRapidaVerificarConflito();
+}
+
+// Mesma lógica de _agCalcularHoraFim (modal de agendamento dentro da
+// turma), só que a carga horária vem de _catalogoCache em vez de
+// window._agCargaHoraria — aqui o curso só é escolhido DEPOIS que o
+// modal já está aberto (nasce do clique no horário, não da turma).
+function _agRapidaCalcularHoraFim() {
+  if (window._agRapidaHoraFimManual) return;
+  const catId  = document.getElementById('mNtCat')?.value;
+  const cat    = _catalogoCache.find(c => String(c.id)===String(catId));
+  const ch     = cat?.carga_horaria || 0;
+  const ini    = document.getElementById('mNtIni')?.value;
+  const fimEl  = document.getElementById('mNtFim');
+  const avisoEl= document.getElementById('mNtFimAviso');
+  if (!ini || !fimEl || !ch) return;
+  const [h,m] = ini.split(':').map(Number);
+  const totalMin = h*60 + m + Math.round(ch*60);
+  if (totalMin >= 24*60) {
+    fimEl.value = '';
+    if (avisoEl) avisoEl.innerHTML = `<div style="font-size:11px;color:var(--red);line-height:1.5">A carga horária (${ch}h) não cabe num único dia a partir desse horário de início. Informe a hora de término manualmente, ou registre o restante como outra sessão em outro dia.</div>`;
+    return;
+  }
+  if (avisoEl) avisoEl.innerHTML = '';
+  fimEl.value = `${String(Math.floor(totalMin/60)).padStart(2,'0')}:${String(totalMin%60).padStart(2,'0')}`;
+}
+function _agRapidaHoraFimEditadaManual() {
+  window._agRapidaHoraFimManual = true;
+  const avisoEl = document.getElementById('mNtFimAviso');
+  if (avisoEl) avisoEl.innerHTML = '';
+}
+
+// Mesma lógica de _agVerificarConflito (modal de agendamento dentro da
+// turma) — cópia independente, com seus próprios ids de campo, porque
+// aqui está sempre CRIANDO uma sessão nova (não precisa excluir nenhum
+// id de edição da comparação).
+async function _agRapidaVerificarConflito() {
+  const instrutorId = document.getElementById('mNtInstrutor')?.value;
+  const data = document.getElementById('mNtData')?.value;
+  const ini  = document.getElementById('mNtIni')?.value;
+  const fim  = document.getElementById('mNtFim')?.value;
+  const box  = document.getElementById('mNtConflito');
+  window._agRapidaTemConflito = false;
+  if (!box) return;
+  if (!instrutorId || !data) { box.innerHTML = ''; _agRapidaAtualizarBotaoSalvar(); return; }
+  const { data: existentes } = await sb.from('sessoes')
+    .select('id,hora_inicio,hora_fim,concluida,turmas(status,catalogo(nome),clientes(nome))')
+    .eq('instrutor_id', instrutorId)
+    .eq('data', data);
+  const relevantes = (existentes||[]).filter(s => s.turmas?.status !== 'cancelada' && !s.concluida);
+  if (!relevantes.length) { box.innerHTML = ''; _agRapidaAtualizarBotaoSalvar(); return; }
+  const sobrepoe = (s) => {
+    if (!ini || !fim || !s.hora_inicio || !s.hora_fim) return null;
+    return ini < s.hora_fim.slice(0,5) && s.hora_inicio.slice(0,5) < fim;
+  };
+  const avaliadas = relevantes.map(s => ({ s, conflita: sobrepoe(s) }));
+  const conflitantes = avaliadas.filter(a => a.conflita === true);
+  window._agRapidaTemConflito = conflitantes.length > 0;
+  const corAviso = conflitantes.length ? 'var(--red)' : 'var(--amber-h)';
+  const fundoAviso = conflitantes.length ? 'var(--red-l)' : 'rgba(245,158,11,.1)';
+  box.innerHTML = `<div style="background:${fundoAviso};color:${corAviso};border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px;line-height:1.6">
+    <strong>${conflitantes.length?'⚠ Conflito de horário':'ℹ Este instrutor já tem compromisso(s) neste dia'}</strong>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      ${avaliadas.map(a=>`<li>${a.s.hora_inicio?a.s.hora_inicio.slice(0,5):'horário não definido'}${a.s.hora_fim?'–'+a.s.hora_fim.slice(0,5):''} — ${escapeHtml(a.s.turmas?.clientes?.nome||'Cliente não identificado')} (${escapeHtml(a.s.turmas?.catalogo?.nome||'')})</li>`).join('')}
+    </ul>
+  </div>`;
+  _agRapidaAtualizarBotaoSalvar();
+}
+
+function _agRapidaAtualizarBotaoSalvar() {
+  const btn = document.getElementById('btnSalvarModal');
+  if (!btn) return;
+  const podeForcar = usuarioAtual.perfil === 'administrador';
+  if (window._agRapidaTemConflito && !podeForcar) {
+    btn.disabled = true;
+    btn.title = 'Resolva o conflito de horário antes de salvar — ou peça para um administrador confirmar.';
+  } else {
+    btn.disabled = false;
+    btn.title = podeForcar && window._agRapidaTemConflito ? 'Há um conflito de horário — salvar mesmo assim, como administrador.' : '';
+  }
+}
+
+// Grava os dois registros em sequência — turma primeiro, sessão depois.
+// Se a turma gravar mas a sessão falhar (ex.: outro usuário fechou esse
+// mesmo horário entre a checagem ao vivo e o clique em salvar), a turma
+// NÃO é desfeita: ela fica visível em "Turmas pendentes de agendamento"
+// (mesma lista que já existe hoje) pra o operador tentar de novo, sem
+// perder o trabalho de já ter escolhido cliente e curso.
+async function _agRapidaSalvarTurmaEAgendamento() {
+  const cli = document.getElementById('mNtCli')?.value;
+  const cat = document.getElementById('mNtCat')?.value;
+  if (!cli) { showToast('Selecione o cliente','error'); return; }
+  if (!cat) { showToast('Selecione o treinamento','error'); return; }
+  const data = document.getElementById('mNtData')?.value;
+  if (!data) { showToast('Informe a data','error'); return; }
+  const horaInicio = document.getElementById('mNtIni')?.value || null;
+  if (!horaInicio) { showToast('Informe a hora de início','error'); return; }
+  const horaFim = document.getElementById('mNtFim')?.value || null;
+  if (horaFim && horaFim <= horaInicio) {
+    showToast('A hora de término deve ser depois da hora de início.','error');
+    return;
+  }
+  if (window._agRapidaTemConflito && usuarioAtual.perfil !== 'administrador') {
+    showToast('Esse instrutor já tem um compromisso nesse horário — ajuste antes de salvar.','error');
+    return;
+  }
+
+  const dadosTurma = {
+    cliente_id: cli,
+    catalogo_id: cat,
+    local: document.getElementById('mNtLocal')?.value.trim() || null,
+    observacoes: document.getElementById('mNtObs')?.value.trim() || null,
+    org_id: usuarioAtual.org_id,
+    status: 'agendada',
+    criado_por: usuarioAtual.id,
+  };
+
+  let novaTurmaId = null;
+  try {
+    setBtnModalLoading(true);
+    const {data:turmaSalva, error:errTurma} = await sb.from('turmas').insert(dadosTurma).select('id');
+    if (errTurma) throw errTurma;
+    if (!turmaSalva || !turmaSalva.length) throw new Error('Nada foi gravado — nenhuma linha foi afetada.');
+    novaTurmaId = turmaSalva[0].id;
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.message||'Erro ao criar a turma','error');
+    return;
+  }
+
+  const catInfo = _catalogoCache.find(c => String(c.id)===String(cat));
+  try {
+    const dadosSessao = {
+      turma_id: novaTurmaId,
+      org_id: usuarioAtual.org_id,
+      data,
+      hora_inicio: horaInicio,
+      hora_fim: horaFim,
+      instrutor_id: document.getElementById('mNtInstrutor')?.value || null,
+      modalidade: document.getElementById('mNtMod')?.value || 'presencial',
+      local: document.getElementById('mNtSala')?.value.trim() || null,
+    };
+    const {error: errSessao} = await sb.from('sessoes').insert(dadosSessao);
+    if (errSessao) throw errSessao;
+
+    fecharModal();
+    showToast('Turma criada e agendada!','success');
+    await _agEquipeCarregarDados();
+    _agEquipeRenderTimeline();
+    _agEquipeRenderPendentes();
+
+    // Curso com carga horária alta é candidato a precisar de mais de um
+    // encontro (ex.: CIPA em 4 dias, com instrutor podendo mudar a cada
+    // dia) — oferece o atalho sem forçar, reaproveitando o modal de
+    // agendamento já existente e testado (abrirModalAgendamento).
+    if ((catInfo?.carga_horaria||0) > 8) {
+      const quer = await confirmarAcao('Esta turma pode precisar de mais de um encontro (curso de carga horária alta). Deseja adicionar outro dia/horário agora?', 'Adicionar outro encontro', false);
+      if (quer) await abrirModalAgendamento(novaTurmaId);
+    }
+  } catch(e) {
+    setBtnModalLoading(false);
+    fecharModal(); // a turma já existe — não faz sentido manter o modal de criação aberto
+    if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
+      showToast('A turma foi criada, mas esse instrutor acabou de ser agendado por outro usuário nesse horário. Abra a turma em "Turmas pendentes de agendamento" pra escolher outro horário.','error');
+    } else {
+      showToast(`A turma foi criada, mas não foi possível agendar: ${e.message||'erro desconhecido'}. Abra a turma em "Turmas pendentes de agendamento" pra tentar de novo.`,'error');
+    }
+    await _agEquipeCarregarDados();
+    _agEquipeRenderTimeline();
+    _agEquipeRenderPendentes();
+  }
 }
 
 function _agEquipeRenderPendentes() {
