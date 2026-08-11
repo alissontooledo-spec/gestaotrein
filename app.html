@@ -16327,6 +16327,35 @@ function _avParagrafoMisto(doc, segmentos, cx, yBase0, maxWidth, fontSize, lineH
 // campos = { nome, cpf, empresa, curso, ch, periodoTexto, instrutorNome,
 //            instrutorCargo, instrutorEspec, instrutorCredencial, nrNum,
 //            codigoShort, rodape }
+// Converte um nome para "Nome Próprio" (primeira letra de cada palavra
+// maiúscula, resto minúscula, conectivos comuns do português sempre
+// minúsculos) — usado só na fonte cursiva Great Vibes do certificado
+// individual, logo abaixo.
+//
+// 2026-08-11 — causa raiz REAL do "nome do aluno desconfigurado" (reportado
+// com print, "ALISSONOLVEIRAALVES" ilegível): não era um problema de
+// tamanho de fonte nem de largura medida (a margem de segurança aplicada
+// antes, embora continue válida como reforço, não resolvia isso sozinha).
+// O nome do colaborador estava salvo em CAIXA ALTA (comum em cadastros
+// importados, ex.: nomes trazidos do SOC) — e o jsPDF tem um bug conhecido,
+// não corrigido pelos mantenedores, onde desenhar texto TODO em maiúsculas
+// com espaço faz o espaço "desaparecer" e as letras se sobreporem
+// (github.com/parallax/jsPDF/issues/3443, "Uppercase Text width not
+// match"). Confirmado comparando lado a lado com um certificado antigo que
+// funcionava perfeitamente ("Ford da Silva", nome já em Nome Próprio) contra
+// o certificado com o bug ("ALISSON OLIVEIRA ALVES", em caixa alta) — mesma
+// fonte, mesmo código, a única diferença era a caixa do texto de entrada.
+// Correção: o nome do aluno nunca é desenhado em caixa alta nesta fonte,
+// não importa como esteja salvo no cadastro do colaborador (o cadastro em
+// si não é alterado — só a forma como aparece nesta linha do certificado).
+function _avNomeProprio(nome) {
+  const CONECTIVOS = new Set(['de','da','do','das','dos','e','di','du']);
+  return String(nome || '').toLowerCase().split(' ').filter(Boolean).map((palavra, i) => {
+    if (i > 0 && CONECTIVOS.has(palavra)) return palavra;
+    return palavra.charAt(0).toUpperCase() + palavra.slice(1);
+  }).join(' ');
+}
+
 function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.addImage(bgDataUrl, 'JPEG', 0, 0, W, H);
 
@@ -16345,7 +16374,7 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   // uma assinatura em destaque, sem sufocar o resto do layout.
   _registrarFonteAvanteseg(doc);
   doc.setFont('GreatVibes','normal'); doc.setTextColor(...GOLD);
-  const nome = pdfSafe(campos.nome, 60);
+  const nome = _avNomeProprio(pdfSafe(campos.nome, 60));
   // 2026-08-11: doc.getTextWidth() do jsPDF SUBESTIMA a largura de textos
   // com mais de uma palavra (bug aberto e não corrigido do próprio jsPDF —
   // github.com/parallax/jsPDF/issues/2675; mesma causa raiz do texto colado
