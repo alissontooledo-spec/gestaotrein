@@ -10137,6 +10137,22 @@ async function executarImportacaoSOC() {
     const faltouCliente = _socImportEmpresas.some(e => !e.clienteId);
     if (faltouCliente) throw new Error('Não foi possível confirmar o cadastro de uma ou mais empresas — nenhum colaborador foi importado. Tente novamente.');
 
+    // 1b) Empresas que JÁ existiam como cliente no Toledo Labs, mas cujo
+    // código da empresa no SOC ainda não estava salvo (ou mudou) — só
+    // acontece na origem "Buscar no SOC" (_socWs*), que é a única que traz
+    // emp.socCodigoEmpresa preenchido. Sem isso, esse código só era gravado
+    // quando o cliente era criado nesta mesma tela — pedido do Alisson
+    // (2026-08-11): reaproveitar essa busca para também manter
+    // clientes.soc_codigo_empresa atualizado em clientes já cadastrados,
+    // evitando ter que consultar de novo no futuro (é o mesmo campo que a
+    // integração de envio de certificados ao SOCGED usa — ver
+    // 01-Requisitos/integracao-soc-socged-certificados.md, seção 6.3).
+    const empresasExistentesComCodigo = _socImportEmpresas.filter(e => e.existente && e.socCodigoEmpresa && e.clienteId);
+    for (const emp of empresasExistentesComCodigo) {
+      const { error: eUpdCli } = await sb.from('clientes').update({ soc_codigo_empresa: emp.socCodigoEmpresa }).eq('id', emp.clienteId);
+      if (eUpdCli) console.warn('Não foi possível atualizar soc_codigo_empresa do cliente existente:', emp.clienteId, eUpdCli.message);
+    }
+
     const clienteIdPorCnpj = new Map(_socImportEmpresas.map(e => [e.cnpjDigits, e.clienteId]));
 
     // 2) Colaboradores — upsert por (org_id, cpf), mesmo padrão já usado na
