@@ -3381,7 +3381,7 @@ function _htmlIntegracaoSocOrg() {
       ${campo('socChaveAcesso', 'Chave de acesso', c.soc_chave_acesso, {tipo:'password', placeholder:'chave do usuário WebService'})}
       ${campo('socCodigoEmpresaPrincipal', 'Código da empresa principal', c.soc_codigo_empresa_principal, {placeholder:'empresa principal da Avanteseg no SOC'})}
       ${campo('socCodigoResponsavel', 'Código do responsável', c.soc_codigo_responsavel, {placeholder:'configurações de integração no SOC'})}
-      ${campo('socCodigoTipoGed', 'Código do Tipo de SOCGED', c.soc_codigo_tipo_ged, {placeholder:'ex.: 00000003 (tela 623)'})}
+      ${campo('socCodigoTipoGed', 'Código do Tipo de SOCGED', c.soc_codigo_tipo_ged, {placeholder:'ex.: 3 (tela 623, sem zeros à esquerda)'})}
       <div></div>
       ${campo('socUrlSocged', 'URL do WS SOCGED (incluirSocGed)', c.soc_url_socged, {placeholder:'endpoint do WSDL fornecido pelo SOC'})}
       ${campo('socUrlUpload', 'URL do WS Upload de Arquivos', c.soc_url_upload, {placeholder:'endpoint do WSDL fornecido pelo SOC'})}
@@ -16196,6 +16196,23 @@ const _avPT_W  = (frac, W) => frac * W * 2.83465;    // idem, calibrado como fra
 // protótipo em Python/PIL) — esta função aproxima a conversão topo→base.
 const _avBase  = (topMM, sizePt) => topMM + (sizePt/2.83465) * 0.75;
 
+// DESATIVADA (2026-08-11) — sem nenhuma chamada no app; mantida só como
+// referência histórica, não apagada. Desenhava um "parágrafo" centralizado
+// com trechos em negrito/cor diferente dentro do mesmo texto corrido (ex.:
+// nome da empresa + CNPJ em destaque no meio de uma frase). Depois de 4
+// rodadas de tentativas de calibração (ver histórico abaixo) o texto ainda
+// saía colado — causa raiz encontrada: doc.getTextWidth() do jsPDF
+// SUBESTIMA a largura de qualquer texto com mais de uma palavra, um bug
+// aberto e não corrigido da própria biblioteca
+// (github.com/parallax/jsPDF/issues/2675) — por isso NENHUMA medida testada
+// (espaço isolado, diferença de strings, trecho inteiro) batia de forma
+// confiável com o que o jsPDF realmente desenha. Não é uma questão de medir
+// melhor; é que não dá pra confiar em nenhuma medida do jsPDF pra emendar
+// dois estilos na MESMA linha. desenharCapaColetivoAvanteseg foi reescrita
+// pra não precisar mais disso — nome da empresa e CNPJ agora vão em linha(s)
+// própria(s), cada doc.text() com um único estilo (a mesma técnica já usada,
+// sem bug, no resto do app). Comentário original da função, preservado:
+//
 // Desenha um "parágrafo" centralizado com trechos em negrito/cor diferente
 // dentro do mesmo texto corrido (ex.: nome da empresa + CNPJ em destaque no
 // meio de uma frase, 2026-08 — a pedido do Alisson, no lugar do nome solto
@@ -16329,16 +16346,30 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   _registrarFonteAvanteseg(doc);
   doc.setFont('GreatVibes','normal'); doc.setTextColor(...GOLD);
   const nome = pdfSafe(campos.nome, 60);
+  // 2026-08-11: doc.getTextWidth() do jsPDF SUBESTIMA a largura de textos
+  // com mais de uma palavra (bug aberto e não corrigido do próprio jsPDF —
+  // github.com/parallax/jsPDF/issues/2675; mesma causa raiz do texto colado
+  // corrigido em desenharCapaColetivoAvanteseg). Como o nome do aluno quase
+  // sempre tem mais de uma palavra, a medida usada aqui pra decidir o
+  // tamanho da fonte também vem menor que a largura real desenhada — o laço
+  // de encolhimento abaixo então "achava" que o nome já cabia, deixando a
+  // fonte grande demais; o nome real (mais largo) estourava a caixa, e numa
+  // fonte cursiva com traços conectados (Great Vibes) isso aparecia como
+  // letras se sobrepondo. Correção: aplica uma margem de segurança na
+  // medida ANTES de comparar com o limite, pra sempre encolher mais do que
+  // o cálculo "cru" sugeriria — não depende de acertar o quanto o jsPDF
+  // erra (isso varia por texto), só de nunca confiar 100% na medida dele.
+  const FATOR_SEGURANCA_LARGURA = 1.25;
   let nomeSize = _avPT_H(0.065,H);
   doc.setFontSize(nomeSize);
-  let nomeW = doc.getTextWidth(nome);
+  let nomeW = doc.getTextWidth(nome) * FATOR_SEGURANCA_LARGURA;
   const nomeMaxW = maxW*0.9;
-  while (nomeW > nomeMaxW && nomeSize > 12) { nomeSize -= 1.5; doc.setFontSize(nomeSize); nomeW = doc.getTextWidth(nome); }
+  while (nomeW > nomeMaxW && nomeSize > 12) { nomeSize -= 1.5; doc.setFontSize(nomeSize); nomeW = doc.getTextWidth(nome) * FATOR_SEGURANCA_LARGURA; }
   if (nomeW < maxW*0.55) {
     // nome curto: usa fonte maior, até o teto de 0.075H
-    let nomeSize2 = _avPT_H(0.075,H); doc.setFontSize(nomeSize2); let nomeW2 = doc.getTextWidth(nome);
+    let nomeSize2 = _avPT_H(0.075,H); doc.setFontSize(nomeSize2); let nomeW2 = doc.getTextWidth(nome) * FATOR_SEGURANCA_LARGURA;
     const nomeMaxW2 = maxW*0.75;
-    while (nomeW2 > nomeMaxW2 && nomeSize2 > 12) { nomeSize2 -= 1.5; doc.setFontSize(nomeSize2); nomeW2 = doc.getTextWidth(nome); }
+    while (nomeW2 > nomeMaxW2 && nomeSize2 > 12) { nomeSize2 -= 1.5; doc.setFontSize(nomeSize2); nomeW2 = doc.getTextWidth(nome) * FATOR_SEGURANCA_LARGURA; }
     nomeSize = nomeSize2;
   }
   doc.text(nome, cx, _avBase(_avMM_H(0.385,H), nomeSize), {align:'center'});
@@ -16605,13 +16636,45 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // parte do PNG de fundo, desceu um pouco (a pedido do Alisson); a frase
   // acompanha pra manter o mesmo respiro visual entre título e texto.
   const fraseY0 = _avBase(_avMM_H(0.318,H), fraseSize);
-  const yAposFrase = _avParagrafoMisto(doc, [
-    { texto: 'A AVANTESeg certifica que a empresa', negrito: false },
-    { texto: `${campos.empresa},`, negrito: true },
-    { texto: 'CNPJ', negrito: false },
-    { texto: `${campos.cnpj},`, negrito: true },
-    { texto: 'capacitou sua equipe no curso de', negrito: false },
-  ], cx, fraseY0, maxW*0.86, fraseSize, _avMM_H(0.042,H), 'times', BLACK, GREEN_DARK);
+  // 2026-08-11, 5ª rodada — troca de abordagem (não mais uma calibração):
+  // as 4 rodadas anteriores tentaram, de formas diferentes, medir o fim de
+  // um trecho normal e o início de um trecho em negrito NA MESMA LINHA pra
+  // emendar sem colar ("empresaCIDMED", "SILVA,CNPJ"). Causa raiz real,
+  // confirmada contra o bug aberto e não corrigido do próprio jsPDF
+  // (github.com/parallax/jsPDF/issues/2675): doc.getTextWidth() SUBESTIMA a
+  // largura de qualquer texto com mais de uma palavra — por isso nenhuma
+  // medida (espaço isolado, diferença "a a" menos "aa", trecho inteiro)
+  // bateu de forma confiável com o que o jsPDF realmente desenha. Não é uma
+  // questão de calibrar melhor — é que não dá pra confiar em NENHUMA medida
+  // do jsPDF pra emendar dois estilos na mesma linha. Solução definitiva:
+  // parar de tentar. Nome da empresa e CNPJ agora vão em linha(s) própria(s)
+  // — cada doc.text() com um único estilo, exatamente a técnica já usada
+  // (com sucesso, nunca reportado bug) em todo o resto do app, inclusive no
+  // certificado coletivo padrão (não-Avanteseg, função irmã logo abaixo).
+  const lhFrase = _avMM_H(0.042,H);
+  let yFrase = fraseY0;
+  doc.setFont('times','normal'); doc.setFontSize(fraseSize); doc.setTextColor(...BLACK);
+  doc.text('A AVANTESeg certifica que a empresa', cx, yFrase, {align:'center'});
+  yFrase += lhFrase;
+
+  doc.setFont('times','bold'); doc.setFontSize(fraseSize*1.1); doc.setTextColor(...GREEN_DARK);
+  const linhasEmpresaFrase = doc.splitTextToSize(pdfSafe(`${campos.empresa},`,120), maxW*0.86);
+  linhasEmpresaFrase.forEach(ln => { doc.text(ln, cx, yFrase, {align:'center'}); yFrase += lhFrase; });
+
+  // Fonte um pouco menor pro CNPJ (dado de apoio, não precisa do mesmo peso
+  // visual do nome) — usa um passo de linha reduzido na mesma proporção,
+  // pra não sobrar vão vazio antes da linha seguinte.
+  const lhCnpj = lhFrase*0.85;
+  doc.setFont('times','normal'); doc.setFontSize(fraseSize*0.9); doc.setTextColor(...GRAY);
+  doc.text(pdfSafe(`CNPJ ${campos.cnpj}`,60), cx, yFrase, {align:'center'});
+  yFrase += lhCnpj;
+
+  doc.setFont('times','normal'); doc.setFontSize(fraseSize); doc.setTextColor(...BLACK);
+  doc.text('capacitou sua equipe no curso de', cx, yFrase, {align:'center'});
+  // Mesma convenção de retorno da versão anterior (_avParagrafoMisto): y já
+  // avançado um passo além da última linha desenhada, pronto pro próximo
+  // bloco (yCurso) começar.
+  const yAposFrase = yFrase + lhFrase;
 
   doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.032,H)); doc.setTextColor(...GREEN_DARK);
   const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,90), maxW*0.85);
