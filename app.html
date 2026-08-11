@@ -3209,6 +3209,15 @@ async function verOrgProvedor(orgId) {
   const { data: notas } = await sb.from('organizacoes_notas').select('id,texto,autor_nome,criado_em').eq('org_id', orgId).order('criado_em', { ascending: false });
   window._orgNotasAtual = { orgId, lista: notas || [] };
 
+  // Credenciais do usuário WebService SOC (SOCGED) — feature nova e isolada,
+  // 2026-08-10 (ver 01-Requisitos/integracao-soc-socged-certificados.md,
+  // seção 6). Tabela soc_ged_config só é legível pelo Provedor (RLS) — se a
+  // migration ainda não rodou, o select falha e a gente simplesmente não
+  // mostra o card, sem quebrar o resto da tela (mesmo padrão de
+  // organizacoes_notas acima).
+  const { data: socGedConfig } = await sb.from('soc_ged_config').select('*').eq('org_id', orgId).maybeSingle();
+  window._orgSocGedConfigAtual = socGedConfig || null;
+
   // Histórico de mudanças desta organização — reaproveita a mesma tabela
   // de auditoria (eventos_sistema) que já alimenta o feed geral do
   // Início, só que filtrada pra uma organização específica. A tabela não
@@ -3334,10 +3343,90 @@ async function verOrgProvedor(orgId) {
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Notas internas</div>
     <div class="card" style="padding:14px" id="notasInternasOrg">${_htmlNotasInternasOrg()}</div>
 
+    <!-- Integração SOC (SOCGED) — feature nova e isolada, 2026-08-10. Só
+         aparece se a migration migration-soc-ged-certificados.sql já rodou
+         (senão window._orgSocGedConfigAtual fica undefined, não null). -->
+    ${window._orgSocGedConfigAtual !== undefined ? `
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Integração SOC — Certificados no SOCGED</div>
+    <div class="card" style="padding:14px" id="integracaoSocOrg">${_htmlIntegracaoSocOrg()}</div>
+    ` : ''}
+
     <!-- Histórico de mudanças — só leitura, últimos 15 eventos desta organização -->
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Histórico de mudanças</div>
     <div class="card" style="padding:0">${_htmlHistoricoOrg()}</div>
   `);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Integração SOC (SOCGED) — cadastro das credenciais do usuário WebService
+// pelo Provedor, direto na tela da organização. Escreve só na tabela nova
+// soc_ged_config (ver migration-soc-ged-certificados.sql) — não altera o
+// cadastro da organização em si. Pedido do Alisson (2026-08-10): evitar ter
+// que passar as credenciais manualmente por SQL a cada nova organização.
+// ─────────────────────────────────────────────────────────────
+function _htmlIntegracaoSocOrg() {
+  const c = window._orgSocGedConfigAtual || {};
+  const campo = (id, label, valor, opts={}) => `
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--text-3);margin-bottom:4px">${label}</label>
+      <input id="${id}" type="${opts.tipo||'text'}" value="${escapeHtml(valor||'')}" placeholder="${escapeHtml(opts.placeholder||'')}"
+        style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)">
+    </div>`;
+  return `
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
+      Credenciais do usuário WebService do SOC, usadas para enviar os certificados de treinamento ao SOCGED do cliente (ver 01-Requisitos/integracao-soc-socged-certificados.md). Visível e editável só pelo Provedor.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+      ${campo('socCodigoUsuario', 'Código do usuário (sem o "U")', c.soc_codigo_usuario, {placeholder:'ex.: 3792714'})}
+      ${campo('socChaveAcesso', 'Chave de acesso', c.soc_chave_acesso, {tipo:'password', placeholder:'chave do usuário WebService'})}
+      ${campo('socCodigoEmpresaPrincipal', 'Código da empresa principal', c.soc_codigo_empresa_principal, {placeholder:'empresa principal da Avanteseg no SOC'})}
+      ${campo('socCodigoResponsavel', 'Código do responsável', c.soc_codigo_responsavel, {placeholder:'configurações de integração no SOC'})}
+      ${campo('socCodigoTipoGed', 'Código do Tipo de SOCGED', c.soc_codigo_tipo_ged, {placeholder:'ex.: 00000003 (tela 623)'})}
+      <div></div>
+      ${campo('socUrlSocged', 'URL do WS SOCGED (incluirSocGed)', c.soc_url_socged, {placeholder:'endpoint do WSDL fornecido pelo SOC'})}
+      ${campo('socUrlUpload', 'URL do WS Upload de Arquivos', c.soc_url_upload, {placeholder:'endpoint do WSDL fornecido pelo SOC'})}
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-1);margin:6px 0 14px;cursor:pointer">
+      <input type="checkbox" id="socGedAtivo" ${c.ativo?'checked':''} style="width:16px;height:16px;cursor:pointer">
+      Integração ativa (só marque depois de testar — ver aviso no topo da Edge Function enviar-certificados-soc)
+    </label>
+    <button class="btn btn-navy btn-sm" onclick="salvarIntegracaoSocOrg('${window._orgIdAtualProvedor}')">Salvar credenciais SOC</button>
+    ${c.atualizado_em ? `<div style="font-size:11px;color:var(--text-3);margin-top:8px">Última atualização: ${new Date(c.atualizado_em).toLocaleString('pt-BR')}</div>` : ''}
+  `;
+}
+
+async function salvarIntegracaoSocOrg(orgId) {
+  const val = id => (_getElVisible(id)?.value || '').trim();
+  const dados = {
+    org_id: orgId,
+    soc_codigo_usuario: val('socCodigoUsuario') || null,
+    soc_chave_acesso: val('socChaveAcesso') || null,
+    soc_codigo_empresa_principal: val('socCodigoEmpresaPrincipal') || null,
+    soc_codigo_responsavel: val('socCodigoResponsavel') || null,
+    soc_codigo_tipo_ged: val('socCodigoTipoGed') || null,
+    soc_url_socged: val('socUrlSocged') || null,
+    soc_url_upload: val('socUrlUpload') || null,
+    ativo: !!_getElVisible('socGedAtivo')?.checked,
+    atualizado_em: new Date().toISOString(),
+  };
+
+  // Evita ativar com configuração incompleta — mesma checagem que a Edge
+  // Function já faz no backend, só que avisando antes de salvar.
+  if (dados.ativo) {
+    const faltando = ['soc_codigo_usuario','soc_chave_acesso','soc_codigo_empresa_principal','soc_codigo_responsavel','soc_codigo_tipo_ged','soc_url_socged','soc_url_upload']
+      .filter(k => !dados[k]);
+    if (faltando.length) {
+      showToast(`Preencha todos os campos antes de ativar (faltam: ${faltando.join(', ')}).`, 'error', 6000);
+      return;
+    }
+  }
+
+  const { data, error } = await sb.from('soc_ged_config').upsert(dados, { onConflict: 'org_id' }).select('*').single();
+  if (error) { showToast(`Não foi possível salvar: ${error.message}`, 'error'); return; }
+
+  window._orgSocGedConfigAtual = data;
+  _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
+  showToast('Credenciais SOC salvas.', 'success');
 }
 
 function _htmlHistoricoOrg() {
@@ -18629,6 +18718,31 @@ async function renderDocumentosTurma(turmaId) {
     // Status de envio anterior
     const {data:envio} = await sb.from('envios_email').select('*').eq('turma_id', turmaId).maybeSingle();
 
+    // ---- Status do envio ao SOCGED (SOC) — feature nova e isolada, 2026-08-10 ----
+    // Visível SOMENTE para Provedor e Administrador (pedido do Alisson). A
+    // tabela soc_ged_envios já tem RLS restringindo a leitura a esses dois
+    // perfis (ver migration-soc-ged-certificados.sql), mas o filtro de
+    // perfil aqui também evita disparar a consulta à toa para quem não vai
+    // ver o resultado.
+    let htmlStatusSoc = '';
+    if (usuarioAtual?.perfil === 'provedor' || usuarioAtual?.perfil === 'administrador') {
+      const {data: statusSoc} = await sb.from('soc_ged_envios').select('status').eq('turma_id', turmaId);
+      if (statusSoc && statusSoc.length > 0) {
+        const okCount   = statusSoc.filter(s => s.status === 'enviado').length;
+        const erroCount = statusSoc.filter(s => s.status === 'erro').length;
+        const cor = erroCount > 0 ? 'var(--amber-text)' : 'var(--green)';
+        const bg  = erroCount > 0 ? 'var(--amber-l)' : 'var(--green-l)';
+        const texto = erroCount > 0
+          ? `⚠️ ${okCount} certificado(s) enviado(s) ao SOCGED, ${erroCount} com falha`
+          : `✓ ${okCount} certificado(s) enviado(s) ao SOCGED`;
+        htmlStatusSoc = `
+          <div class="card" style="margin-top:16px;background:${bg};border:1px solid ${cor}">
+            <div style="font-size:12px;font-weight:600;color:${cor}">${texto}</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">Visível só para Provedor/Administrador · integração SOC (SOCGED)</div>
+          </div>`;
+      }
+    }
+
     // ---- Trilha de progresso (3 etapas: agendamentos → documentos → envio) ----
     const _step = (estado, label, sub) => {
       // estado: 'ok' | 'atencao' | 'aguardando'
@@ -18776,7 +18890,8 @@ async function renderDocumentosTurma(turmaId) {
 
       ${htmlTrilha}
       ${htmlDocumentos}
-      ${htmlEnvio}`;
+      ${htmlEnvio}
+      ${htmlStatusSoc}`;
 
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Documentos</div><div class="mh-name">${nomeT}</div>`);
@@ -19027,6 +19142,19 @@ async function enviarDocumentosPorEmail(turmaId) {
     } else {
       showToast('Documentos enviados com sucesso!', 'success');
     }
+
+    // Integração SOC (SOCGED) — 2026-08-10, feature nova e isolada (ver
+    // 01-Requisitos/integracao-soc-socged-certificados.md, seção 6). Disparo
+    // "fire-and-forget": SEM await e com .catch() que só loga no console, de
+    // propósito — o e-mail já foi confirmadamente enviado ao cliente neste
+    // ponto (chamada acima), então nada do que acontecer daqui pra baixo (a
+    // Edge Function não existir ainda, o SOC estar fora do ar, etc.) pode
+    // travar ou atrasar o fluxo que já está em produção. Se a integração não
+    // estiver configurada/ativa para a organização, a função apenas retorna
+    // { skipped: true } sem fazer nada.
+    sb.functions.invoke('enviar-certificados-soc', {body:{turma_id: turmaId}})
+      .catch(e => console.warn('enviar-certificados-soc: não foi possível disparar (não afeta o envio já concluído):', e?.message||e));
+
     await renderDocumentosTurma(turmaId);
   } catch(e) {
     console.error(e);
