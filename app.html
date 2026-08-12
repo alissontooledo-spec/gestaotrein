@@ -15819,6 +15819,75 @@ function pdfSafe(v, maxLen) {
     .slice(0, maxLen || 400);
 }
 
+// ─────────────────── Encaixe robusto de texto dinâmico em PDF (2026-08-12) ───────────────────
+// Incidente real: um curso com nome longo ("Curso NR-11 - Capacitacao Para
+// Operacao De Equipamentos De Movimentacao De Materiais Com Forca Motriz")
+// saiu cortado no certificado e estourando a borda/sobrepondo campos na
+// ficha de presença da Avanteseg, já em produção. Causa raiz: em vários
+// pontos do sistema o texto era cortado por CONTAGEM DE CARACTERES
+// (pdfSafe(valor, N) → slice) antes de qualquer cálculo de largura real —
+// contagem de caracteres não tem nenhuma relação com o espaço realmente
+// ocupado no PDF (depende de fonte/tamanho/negrito). `pdfSafe` deve ser só
+// uma trava de segurança contra input patológico (por isso os maxLen
+// generosos usados a partir de agora nos campos de tamanho livre — o
+// comentário em nomeEmpSafe0, "existir como rede de segurança extrema, não
+// como limite prático", já descrevia exatamente esse princípio, só que só
+// tinha sido aplicado ao nome da empresa). As duas funções abaixo são
+// helpers genéricos (não dependem de nada específico da Avanteseg) para
+// quem for desenhar texto de tamanho livre em qualquer PDF do sistema:
+// nunca mais decidir o que cabe na página por número de caracteres, só por
+// largura real. Documentado em 01-Requisitos/pdf-textos-dinamicos-robustez.md.
+
+// Encolhe o tamanho da fonte (a partir de fontSizeIni, nunca abaixo de
+// fontSizeMin) até uma linha ÚNICA de texto caber em maxWidth. Generaliza o
+// laço que já existia (só) para o nome do aluno em Great Vibes na capa
+// individual da Avanteseg — mesma lógica, agora reutilizável. Aplica uma
+// margem de segurança na medida (fatorSeguranca) porque doc.getTextWidth()
+// do jsPDF SUBESTIMA a largura de qualquer texto com mais de uma palavra
+// (bug aberto do próprio jsPDF, github.com/parallax/jsPDF/issues/2675) — por
+// isso nunca se deve confiar 100% na medida "crua"; o padrão (1.15) é mais
+// conservador que o 1.25 já usado no nome do aluno (fonte cursiva, pior
+// caso), suficiente para as fontes retas (Helvetica/Times) usadas nos
+// títulos. Devolve o tamanho de fonte final escolhido — doc.setFontSize já
+// fica configurado com ele, pronto para desenhar.
+function _pdfAjustarFonteLinhaUnica(doc, texto, maxWidth, fontSizeIni, fontSizeMin, passo, fatorSeguranca) {
+  fatorSeguranca = fatorSeguranca || 1.15;
+  passo = passo || 1;
+  let fontSize = fontSizeIni;
+  doc.setFontSize(fontSize);
+  let largura = doc.getTextWidth(texto) * fatorSeguranca;
+  while (largura > maxWidth && fontSize > fontSizeMin) {
+    fontSize -= passo;
+    doc.setFontSize(fontSize);
+    largura = doc.getTextWidth(texto) * fatorSeguranca;
+  }
+  return fontSize;
+}
+
+// Desenha um bloco de texto que quebra em quantas linhas forem necessárias
+// para caber em maxWidth (nunca corta uma palavra ao meio) e devolve a
+// altura total ocupada (nº de linhas × lineHeight), para quem chama poder
+// empilhar o próximo elemento sem sobrepor — o mesmo princípio já usado com
+// sucesso em _campoAv (verso individual Avanteseg) e no verso coletivo,
+// generalizado aqui para qualquer PDF do sistema. `opts.maxLinhas`, quando
+// informado, é só uma rede de segurança final (reticências) contra um input
+// realmente patológico — com maxWidth/lineHeight dimensionados com folga
+// real, não deveria disparar em uso normal.
+function _pdfBlocoMultilinha(doc, texto, x, yBase, maxWidth, lineHeight, opts) {
+  opts = opts || {};
+  const linhas = doc.splitTextToSize(String(texto == null ? '' : texto), maxWidth);
+  let linhasFinal = linhas;
+  if (opts.maxLinhas && linhas.length > opts.maxLinhas) {
+    linhasFinal = linhas.slice(0, opts.maxLinhas);
+    let ultima = linhasFinal[linhasFinal.length - 1];
+    while (doc.getTextWidth(ultima + '...') > maxWidth && ultima.length > 1) ultima = ultima.slice(0, -1);
+    linhasFinal[linhasFinal.length - 1] = ultima + '...';
+  }
+  let y = yBase;
+  linhasFinal.forEach(ln => { doc.text(ln, x, y, {align: opts.align || 'left'}); y += lineHeight; });
+  return linhasFinal.length * lineHeight;
+}
+
 // Sanitiza HTML vindo do editor rico (Quill) antes de salvar no banco —
 // protege contra XSS permitindo apenas tags/atributos usados pelo editor.
 function sanitizarHtml(dirty) {
@@ -16412,7 +16481,11 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.028,H)); doc.setTextColor(...BLACK);
   const corpo = `CPF número ${campos.cpf || 'não informado'}, da empresa ${campos.empresa}, ` +
     `concluiu com aproveitamento o Curso de ${campos.curso}, com carga horária total de ${campos.ch}. ${campos.periodoTexto}`;
-  const linhasCorpo = doc.splitTextToSize(pdfSafe(corpo,300), maxW*0.92);
+  // 2026-08-12: teto elevado de 300->600 — combinando empresa+curso longos
+  // (ambos já podem ter até 200 caracteres cada) o texto corrido facilmente
+  // passava de 300; o splitTextToSize logo abaixo (largura real) é quem
+  // decide onde quebrar linha, o corte por caractere é só rede de segurança.
+  const linhasCorpo = doc.splitTextToSize(pdfSafe(corpo,600), maxW*0.92);
   const lhCorpo = _avMM_H(0.044,H);
   let yCorpo = _avMM_H(0.53,H);
   linhasCorpo.forEach(ln => { doc.text(ln, cx, _avBase(yCorpo, _avPT_H(0.028,H)), {align:'center'}); yCorpo += lhCorpo; });
@@ -16555,7 +16628,10 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
 
   const cx = (ml+mr)/2;
   doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.044,H)); doc.setTextColor(...GREEN_DARK);
-  const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,90), (mr-ml)*0.86);
+  // 2026-08-12: teto elevado de 90->200 (rede de segurança, não limite
+  // prático) — quem decide onde quebrar é o splitTextToSize logo abaixo,
+  // pela largura real da coluna. Ver pdf-textos-dinamicos-robustez.md.
+  const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,200), (mr-ml)*0.86);
   let y = top+lh+_avMM_H(0.09,H);
   const lhCurso = _avMM_H(0.058,H);
   linhasCurso.forEach(ln => { doc.text(ln, cx, _avBase(y,_avPT_H(0.044,H)), {align:'center'}); y += lhCurso; });
@@ -16578,7 +16654,11 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
     doc.setFont('helvetica','bold'); doc.setFontSize(_avPT_H(0.015,H)); doc.setTextColor(140,158,148);
     doc.text(label.toUpperCase(), x, _avBase(yPos, _avPT_H(0.015,H)));
     doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...BLACK);
-    const valorTxt = pdfSafe(String(valor||'-'),70);
+    // 2026-08-12: teto elevado de 70->200 — um endereço/razão social real
+    // podia passar de 70 e ser cortado mesmo com o splitTextToSize logo
+    // abaixo pronto pra quebrar em várias linhas (a função já fazia a parte
+    // difícil certo; só o corte por caractere ANTES dela estava atrapalhando).
+    const valorTxt = pdfSafe(String(valor||'-'),200);
     const linhasValor = maxWidth ? doc.splitTextToSize(valorTxt, maxWidth) : [valorTxt];
     const lhValor = _avMM_H(0.027,H);
     let vy = yPos+_avMM_H(0.021,H);
@@ -16706,7 +16786,10 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   const yAposFrase = yFrase + lhFrase;
 
   doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.032,H)); doc.setTextColor(...GREEN_DARK);
-  const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,90), maxW*0.85);
+  // 2026-08-12 (correção de causa raiz do incidente real, curso cortado em
+  // "...Com F"): teto elevado de 90->200 — o splitTextToSize abaixo (largura
+  // real) já quebrava certo, só nunca recebia o texto completo pra quebrar.
+  const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,200), maxW*0.85);
   // 2026-08: removido o piso fixo de 0.495H — ele foi calibrado pro layout
   // antigo (nome da empresa grande em Great Vibes) e, com a frase corrida
   // mais compacta, sobrava um vão grande e constante antes do nome do curso
@@ -16732,7 +16815,18 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // times); padronizado para o mesmo family da capa.
   doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.019,H)); doc.setTextColor(...GREEN_DARK);
   const fatos = `Realizado em ${campos.periodoTexto}   |   Carga horária: ${campos.ch}   |   ${campos.nParticipantes} participantes`;
-  doc.text(pdfSafe(fatos,120), cx, _avBase(yDesc+_avMM_H(0.020,H), _avPT_H(0.019,H)), {align:'center'});
+  // 2026-08-12: antes uma linha só, corte em 120 caracteres — uma turma com
+  // muitos encontros (período com várias datas) pode passar de 120 e/ou ser
+  // larga demais pra 1 linha. Quebra pela largura real, no máximo 2 linhas
+  // (reticências como rede de segurança final — nunca deveria disparar numa
+  // frase deste tamanho). `fatosFimY` (usado logo abaixo, no cálculo de
+  // sigY) reflete a posição real após a última linha desenhada.
+  const linhasFatos = doc.splitTextToSize(pdfSafe(fatos,300), maxW*0.92);
+  const linhasFatosFinal = linhasFatos.length > 2 ? linhasFatos.slice(0,2) : linhasFatos;
+  const lhFatos = _avMM_H(0.024,H);
+  let yFatosCursor = yDesc+_avMM_H(0.020,H);
+  linhasFatosFinal.forEach(ln => { doc.text(ln, cx, _avBase(yFatosCursor, _avPT_H(0.019,H)), {align:'center'}); yFatosCursor += lhFatos; });
+  const fatosFimY = yFatosCursor - lhFatos;
 
   // assinatura — só a do instrutor (documento coletivo, sem assinatura individual)
   // 2026-08 (correção de bug reportado com print): antes sigY era um valor
@@ -16751,7 +16845,11 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // entre sigY e zbot precisa caber assinatura+nome+cargo+credencial, que
   // hoje ocupam ~0.063H, então 0.08H de teto mínimo ainda sobra folga.
   const zbot = _avMM_H(0.925,H);
-  const fatosY = yDesc + _avMM_H(0.020,H);
+  // 2026-08-12: fatosY agora usa fatosFimY (posição real após a(s) linha(s)
+  // de "fatos" desenhada(s) acima), em vez de assumir sempre 1 linha —
+  // mesmo raciocínio já usado aqui pra yDesc/descrição, agora estendido pra
+  // "fatos" também poder quebrar em 2 linhas sem colar na assinatura.
+  const fatosY = fatosFimY;
   const sigYBase = zbot - _avMM_H(0.115,H);
   const gapMinimo = _avMM_H(0.028,H);
   const sigY = Math.min(Math.max(sigYBase, fatosY + gapMinimo), zbot - _avMM_H(0.08,H));
@@ -16867,7 +16965,9 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
     let y = colTop;
     sectionLabel(c1x0, y, 'Treinamento'); y += _avMM_H(0.050,H);
     doc.setFont('times','bold'); doc.setFontSize(12); doc.setTextColor(...GREEN_DARK);
-    const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,60), c1x1-c1x0);
+    // 2026-08-12: teto elevado de 60->200 — mesmo padrão dos outros títulos
+    // de curso da Avanteseg; o splitTextToSize já quebra pela largura real.
+    const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,200), c1x1-c1x0);
     linhasCurso.forEach(ln => { doc.text(ln, c1x0, y); y += 5.0; });
     y += 3.2;
     const camposList = [['Empresa', campos.empresa], ['Realizado em', campos.periodoTexto],
@@ -16978,15 +17078,44 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
 // pedido explícito do Alisson) — y0 é a soma cumulativa das alturas de tudo
 // que é desenhado acima da tabela em desenharFichaPresencaAvanteseg, na
 // mesma ordem: faixa do cabeçalho (24) + friso dourado (1.6) + respiro (9)
-// + título do curso (6) + subtítulo "encontro X de Y" (8) + faixa "Empresa"
-// (9+3) + grade de dados 2×11mm + respiro (11*2+7) + faixa de cabeçalho da
-// tabela (7). Conferido conferindo a soma real de "y" no código abaixo.
-function _avFichaGeometriaTabela(W, H) {
+// + título do curso + subtítulo "encontro X de Y" (8) + faixa "Empresa"
+// (9+3) + grade de dados + respiro (7) + faixa de cabeçalho da tabela (7).
+// 2026-08-12 (correção de causa raiz, incidente real em produção — ver
+// 01-Requisitos/pdf-textos-dinamicos-robustez.md): título do curso e as 6
+// células da grade (Data/Instrutor/CH/Local/CNPJ/Protocolo) assumiam sempre
+// 1 linha cada — um curso ou endereço longo saía cortado (título) ou sem
+// nenhum limite de largura, invadindo a coluna vizinha (grade). Agora os
+// dois medem quantas linhas realmente precisam pela largura REAL da página/
+// coluna (nunca cortam), e esta função — que já era a única fonte de
+// verdade pro número de linhas da tabela — passa a ser também a única fonte
+// de verdade pra altura do título e da grade, recebendo `campos` (mesmo
+// objeto passado pro desenho) em vez de calcular isso duas vezes em lugares
+// diferentes. Quando o curso/endereço tem tamanho normal, o resultado é
+// idêntico ao de antes (1 linha, mesmas alturas fixas).
+function _avFichaGeometriaTabela(doc, W, H, campos) {
   const mg = _avMM_W(0.057, W);
+  const ml = mg+4, mr = W-mg-4;
   const rowH = 18;
-  const y0 = mg + 24 + 1.6 + 9 + 6 + 8 + (9+3) + (11*2+7) + 7;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  const linhasTitulo = doc.splitTextToSize(pdfSafe(String(campos.curso||'').toUpperCase(), 200), mr-ml);
+  const lhTitulo = 6;
+  const alturaTitulo = Math.max(1, linhasTitulo.length) * lhTitulo;
+
+  const colW = (mr-ml)/3;
+  const larguraCelula = colW - 6;
+  doc.setFont('times','bold'); doc.setFontSize(9);
+  const gridValores = [
+    [campos.data, campos.instrutor, campos.ch],
+    [campos.local, campos.cnpjCliente, campos.protocolo],
+  ];
+  const lhGrid = 3.5;
+  const gridLinhas = gridValores.map(row => row.map(v => doc.splitTextToSize(pdfSafe(String(v||'-'),200), larguraCelula)));
+  const gridRowH = gridLinhas.map(row => 11 + Math.max(0, Math.max(...row.map(ls=>ls.length)) - 1) * lhGrid);
+
+  const y0 = mg + 24 + 1.6 + 9 + alturaTitulo + 8 + (9+3) + (gridRowH[0]+gridRowH[1]+7) + 7;
   const maxRows = Math.max(1, Math.floor((H-mg-4-38 - y0) / rowH));
-  return { mg, rowH, y0, maxRows };
+  return { mg, ml, mr, rowH, y0, maxRows, linhasTitulo, lhTitulo, colW, larguraCelula, gridLinhas, gridRowH, lhGrid };
 }
 
 function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
@@ -17018,10 +17147,16 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.setFont('times','normal'); doc.setFontSize(7.5); doc.setTextColor(220,232,225);
   doc.text(pdfSafe(campos.protocolo,40), mr, mg+16, {align:'right'});
 
+  // 2026-08-12 (correção de causa raiz — ver comentário completo em
+  // _avFichaGeometriaTabela): o título do curso agora quebra em quantas
+  // linhas forem necessárias pela largura real da página, em vez de uma
+  // linha só cortada em 70 caracteres — a mesma função usada aqui é a única
+  // fonte de verdade também usada pelo paginador da chamada, então o
+  // restante do cabeçalho (abaixo) sempre acompanha o número real de linhas.
+  const _geoFicha = _avFichaGeometriaTabela(doc, W, H, campos);
   let y = mg+24+1.6+9;
   doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...GREEN_DARK);
-  doc.text(pdfSafe(campos.curso.toUpperCase(),70), (ml+mr)/2, y, {align:'center'});
-  y += 6;
+  _geoFicha.linhasTitulo.forEach(ln => { doc.text(ln, (ml+mr)/2, y, {align:'center'}); y += _geoFicha.lhTitulo; });
   doc.setFont('times','normal'); doc.setFontSize(8.5); doc.setTextColor(...GRAY);
   doc.text(`AVANTESeg  ·  Encontro ${campos.encontroIdx} de ${campos.encontroTotal}`, (ml+mr)/2, y, {align:'center'});
   y += 8;
@@ -17038,26 +17173,34 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.text(pdfSafe(campos.empresa||'-',60), ml+3, y+7.4);
   y += empBarH + 3;
 
-  // grade de dados (2 linhas × 3 colunas)
-  const gridRows = [
-    [['Data', campos.data], ['Instrutor', campos.instrutor], ['Carga horária', campos.ch]],
-    [['Local', campos.local], ['CNPJ Cliente', campos.cnpjCliente], ['Protocolo', campos.protocolo]],
+  // grade de dados (2 linhas × 3 colunas) — 2026-08-12 (correção de causa
+  // raiz, incidente real: "Local" sobrepondo "CNPJ Cliente" com um endereço
+  // real de 35 caracteres): cada célula quebra em várias linhas pela
+  // largura REAL da coluna (nunca mais invade a coluna vizinha), e a altura
+  // de cada linha da grade acompanha a maior célula daquela linha — mesma
+  // fonte de verdade de _avFichaGeometriaTabela, então o resto do documento
+  // (tabela de participantes) sempre sabe onde a grade realmente terminou.
+  const gridRowsLabels = [
+    ['Data', 'Instrutor', 'Carga horária'],
+    ['Local', 'CNPJ Cliente', 'Protocolo'],
   ];
-  const gridRowH = 11;
-  doc.setFillColor(240,247,243); doc.rect(ml, y, mr-ml, gridRowH*2, 'F');
-  doc.setDrawColor(210,228,218); doc.setLineWidth(0.2); doc.rect(ml, y, mr-ml, gridRowH*2);
-  gridRows.forEach((row, ri) => {
-    const colW = (mr-ml)/3;
-    row.forEach(([label,value], ci) => {
+  const { colW, larguraCelula, gridLinhas, gridRowH, lhGrid } = _geoFicha;
+  const gridAlturaTotal = gridRowH[0] + gridRowH[1];
+  doc.setFillColor(240,247,243); doc.rect(ml, y, mr-ml, gridAlturaTotal, 'F');
+  doc.setDrawColor(210,228,218); doc.setLineWidth(0.2); doc.rect(ml, y, mr-ml, gridAlturaTotal);
+  let yRowGrid = y;
+  gridRowsLabels.forEach((row, ri) => {
+    row.forEach((label, ci) => {
       const x = ml + colW*ci + 3;
-      const yRow = y + gridRowH*ri;
       doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(...GREEN_DARK);
-      doc.text(label.toUpperCase(), x, yRow+gridRowH*0.35);
+      doc.text(label.toUpperCase(), x, yRowGrid+3.85);
       doc.setFont('times','bold'); doc.setFontSize(9); doc.setTextColor(...BLACK);
-      doc.text(pdfSafe(String(value||'-'),36), x, yRow+gridRowH*0.75);
+      let yValor = yRowGrid+8.25;
+      gridLinhas[ri][ci].forEach(ln => { doc.text(ln, x, yValor); yValor += lhGrid; });
     });
+    yRowGrid += gridRowH[ri];
   });
-  y += gridRowH*2 + 7;
+  y += gridAlturaTotal + 7;
 
   // tabela de presença — cabeçalho em faixa sólida (mesmo peso visual do
   // modelo padrão, em vez do fio fino usado antes) + zebra nas linhas
@@ -17070,7 +17213,7 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.text('ASSINATURA', colSig, y+4.6);
   y += 7;
 
-  const { rowH, maxRows } = _avFichaGeometriaTabela(W, H);
+  const { rowH, maxRows } = _geoFicha;
   (campos.participantes||[]).slice(0, maxRows).forEach((p, i) => {
     doc.setFillColor(i%2===1?244:255, i%2===1?249:255, i%2===1?246:255); doc.rect(ml, y, mr-ml, rowH, 'F');
     doc.setDrawColor(220,232,225); doc.setLineWidth(0.15); doc.rect(ml, y, mr-ml, rowH, 'S');
@@ -17345,16 +17488,60 @@ function _corTextoAutoArteFundo(arte, xFrac, yFrac) {
 // Desenha um campo de texto posicionado por coordenada fracionária sobre a
 // arte de fundo. `campo.cor` pode ser 'auto' (calcula contraste — padrão),
 // um hex fixo escolhido no mini-editor, ou ausente (mesmo que 'auto').
+// 2026-08-12 (Frente 2 da correção do incidente Avanteseg — ver
+// 01-Requisitos/pdf-textos-dinamicos-robustez.md): esta função desenhava
+// sempre 1 linha, sem limite de largura nenhum, só um corte por caractere
+// (120) — a mesma classe de bug confirmada em produção na Avanteseg, só que
+// aqui no MODELO PADRÃO de certificado, usado por todas as outras
+// organizações da plataforma (nome do treinamento, nome do participante
+// etc., posicionados pelo mini-editor de layout). Como o editor só guarda
+// posição fracionária (x/y) e alinhamento, sem uma "caixa" de largura
+// explícita, a largura máxima disponível é deduzida da posição + alinhamento
+// (com uma margem de segurança) — a mesma dedução que qualquer editor de
+// texto posicionado livremente precisa fazer quando não existe uma caixa. A
+// fonte encolhe primeiro (generalização do laço já usado no nome do aluno da
+// Avanteseg, ver _pdfAjustarFonteLinhaUnica) até um piso de 62% do tamanho
+// configurado; só se mesmo assim não couber é que quebra em até 2 linhas,
+// centralizadas na posição Y original. Quando o texto cabe no tamanho
+// configurado — o caso comum, sempre foi assim — o resultado visual
+// continua idêntico a antes; o ajuste só entra em ação quando o texto
+// realmente não cabia (e antes disso saía cortado ou passando da arte).
 function _desenharCampoTextoArte(doc, campo, valor, arte, W, H, alinhamentoPadrao) {
   if (!campo) return;
   const x = campo.x*W, y = campo.y*H;
-  doc.setFontSize(campo.tamanho || 10);
+  const alinhamento = campo.alinhamento || alinhamentoPadrao || 'center';
   doc.setFont('helvetica', campo.negrito===false ? 'normal' : 'bold');
   let cor = null;
   if (campo.cor && campo.cor !== 'auto') cor = _hexParaRgb(campo.cor);
   if (!cor) cor = _corTextoAutoArteFundo(arte, campo.x, campo.y);
   doc.setTextColor(...cor);
-  doc.text(pdfSafe(String(valor ?? ''), 120), x, y, {align: campo.alinhamento || alinhamentoPadrao || 'center'});
+
+  const margem = W*0.035;
+  const maxWidth = alinhamento === 'right' ? Math.max(15, x - margem)
+    : alinhamento === 'left' ? Math.max(15, (W - margem) - x)
+    : Math.max(15, 2*Math.min(x, W - x) - margem);
+  const texto = pdfSafe(String(valor ?? ''), 300);
+  const tamanhoMax = campo.tamanho || 10;
+  const tamanhoMin = Math.max(6, tamanhoMax * 0.62);
+  const tamanhoFinal = _pdfAjustarFonteLinhaUnica(doc, texto, maxWidth, tamanhoMax, tamanhoMin, 0.5, 1.15);
+  if (doc.getTextWidth(texto) <= maxWidth) {
+    doc.text(texto, x, y, {align: alinhamento});
+    return;
+  }
+  // Mesmo no tamanho mínimo o texto não coube numa linha só — quebra em até
+  // 2 linhas, centralizadas verticalmente na posição Y original (pra não
+  // parecer que o campo "pulou" de lugar). Reticências como rede de
+  // segurança final contra um valor realmente patológico.
+  const lhBloco = tamanhoFinal * 0.42;
+  const linhas = doc.splitTextToSize(texto, maxWidth);
+  const linhasFinal = linhas.length > 2 ? linhas.slice(0,2) : linhas;
+  if (linhas.length > 2) {
+    let ultima = linhasFinal[1];
+    while (doc.getTextWidth(ultima + '...') > maxWidth && ultima.length > 1) ultima = ultima.slice(0,-1);
+    linhasFinal[1] = ultima + '...';
+  }
+  const yInicio = y - ((linhasFinal.length-1)*lhBloco)/2;
+  linhasFinal.forEach((ln,i) => doc.text(ln, x, yInicio + i*lhBloco, {align: alinhamento}));
 }
 
 // Desenha um campo de imagem (assinatura ou QR) centrado na coordenada
@@ -17569,7 +17756,25 @@ async function gerarListaPresenca(turmaId, sessaoId) {
       // silenciosamente participantes da lista. Agora vem da mesma função
       // (_avFichaGeometriaTabela) usada pelo próprio desenho — os dois
       // pontos nunca mais podem ficar fora de sincronia.
-      const AV_FICHA_MAX_ROWS = _avFichaGeometriaTabela(W, H).maxRows;
+      // 2026-08-12 (correção de causa raiz, incidente real): o corte em 70
+      // caracteres no nome do curso saía do mesmo lugar onde o antigo "8"
+      // fixo saía — um valor "de segurança" desconectado da largura real.
+      // `_camposBaseFicha` agora é montado uma vez só, com um teto bem
+      // generoso (200, rede de segurança extrema — ver pdfSafe/helpers no
+      // início do arquivo), e usado tanto pra calcular quantas linhas cabem
+      // (abaixo) quanto pra desenhar cada página (repassado com spread),
+      // eliminando a duplicação que já tinha causado divergência uma vez.
+      const _camposBaseFicha = {
+        curso: pdfSafe(t.catalogo?.nome||'Treinamento', 200),
+        data: dataAula,
+        instrutor,
+        ch: `${t.catalogo?.carga_horaria||'-'}h`,
+        local,
+        empresa: t.clientes?.nome||'não informada',
+        cnpjCliente: t.clientes?.cnpj||'-',
+        protocolo,
+      };
+      const AV_FICHA_MAX_ROWS = _avFichaGeometriaTabela(doc, W, H, _camposBaseFicha).maxRows;
       const totalPaginasFicha = Math.max(1, Math.ceil(participantesAv.length / AV_FICHA_MAX_ROWS));
       for (let pgf = 1; pgf <= totalPaginasFicha; pgf++) {
         if (pgf > 1) doc.addPage('a4','portrait');
@@ -17577,16 +17782,9 @@ async function gerarListaPresenca(turmaId, sessaoId) {
           .slice((pgf-1)*AV_FICHA_MAX_ROWS, pgf*AV_FICHA_MAX_ROWS)
           .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf, assinatura: p.assinatura }));
         desenharFichaPresencaAvanteseg(doc, {
-          curso: pdfSafe(t.catalogo?.nome||'Treinamento',70),
+          ..._camposBaseFicha,
           encontroIdx: indiceEncontro+1,
           encontroTotal: sessoesOrdenadas.length,
-          data: dataAula,
-          instrutor,
-          ch: `${t.catalogo?.carga_horaria||'-'}h`,
-          local,
-          empresa: t.clientes?.nome||'não informada',
-          cnpjCliente: t.clientes?.cnpj||'-',
-          protocolo,
           participantes: fatiaP,
           instrutorCargo: instDescCompletaFicha,
           logoAvantesegDataUrl: _logoAvantesegFicha?.dataUrl,
@@ -17860,6 +18058,11 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
     // Sanitiza texto - remove caracteres de controle que quebram o jsPDF
+    // 2026-08-12: o teto de `curso` (abaixo) subiu de 90 para 200 — 90
+    // caracteres cortava nomes de curso reais (incidente em produção); quem
+    // decide onde quebrar linha agora é a largura real (splitTextToSize) em
+    // cada função de desenho, não mais o corte por caractere. Ver
+    // 01-Requisitos/pdf-textos-dinamicos-robustez.md.
     const s = (v, max) => pdfSafe(v, max);
 
     const {jsPDF} = window.jspdf;
@@ -17941,7 +18144,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         nome: nomePart,
         cpf: s(col.cpf || '', 20),
         empresa: s(t.clientes?.nome || 'não informada', 60),
-        curso: s(nomeT, 90),
+        curso: s(nomeT, 200),
         ch: `${ch}h`,
         periodoTexto: `Realizado em ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         instrutorNome: s(instrutor, 40),
@@ -18041,7 +18244,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         cargo: s(col.cargo || '', 40),
         empresa: s(t.clientes?.nome || 'não informada', 60),
         cnpjEmpresa: t.clientes?.cnpj || '-',
-        curso: s(nomeT, 90),
+        curso: s(nomeT, 200),
         ch: `${ch}h`,
         periodoTexto: `Conclusão: ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         validadeTexto: fmtVal,
@@ -18339,6 +18542,8 @@ async function gerarCertificadoColetivo(turmaId) {
     const nrMatch = `${nomeT} ${t.catalogo?.descricao||''} ${t.catalogo?.conteudo_programatico||''}`.match(/NR[\s\-]*(\d+)/i);
     const nrNum   = nrMatch ? nrMatch[1] : '';
 
+    // 2026-08-12: mesmo ajuste da função irmã (gerarCertificadoIndividual) —
+    // ver comentário lá e 01-Requisitos/pdf-textos-dinamicos-robustez.md.
     const s = (v, max) => pdfSafe(v, max);
 
     const {jsPDF} = window.jspdf;
@@ -18382,7 +18587,7 @@ async function gerarCertificadoColetivo(turmaId) {
       desenharCapaColetivoAvanteseg(doc, _bgAvantesegCol?.dataUrl, {
         empresa: nomeEmpSafe0,
         cnpj: s(t.clientes?.cnpj || 'não informado', 25),
-        curso: s(nomeT, 90),
+        curso: s(nomeT, 200),
         descricao: s(htmlParaTextoPlano(t.catalogo?.descricao || ''), 260),
         ch: `${ch} hora${ch!==1?'s':''}`,
         periodoTexto: fmtPeriodoRealizacaoPDF(t.sessoes),
@@ -18523,7 +18728,7 @@ async function gerarCertificadoColetivo(turmaId) {
         desenharVersoColetivoAvanteseg(doc, {
           empresa: nomeEmpSafe0,
           cnpj: s(t.clientes?.cnpj || 'não informado', 25),
-          curso: s(nomeT, 90),
+          curso: s(nomeT, 200),
           ch: `${ch} hora${ch!==1?'s':''}`,
           periodoTexto: fmtPeriodoRealizacaoPDF(t.sessoes),
           validadeTexto: fmtVal,
