@@ -8713,9 +8713,14 @@ function _htmlTurmaCard(t) {
   // específico direto — evita ter que abrir a turma só pra descobrir o que
   // falta, exatamente o problema relatado pelo Alisson.
   const pend = _turmaPendencias(t);
+  // 2026-08: título nativo (title=) com a lista real do que falta — em
+  // desktop aparece como tooltip nativo do navegador ao passar o mouse,
+  // sem precisar de nenhum JS novo; no touch (sem hover) continua valendo
+  // o toque, que abre o painel abaixo com a mesma informação.
+  const pendTitle = pend.map(p=>p.label).join(' · ');
   const pendHtml = pend.length ? `
     <div>
-      <button type="button" class="turma-card-pend-toggle" data-action="toggleTurmaPendencias" data-id="${t.id}" onclick="event.stopPropagation()" title="Ver o que falta">
+      <button type="button" class="turma-card-pend-toggle" data-action="toggleTurmaPendencias" data-id="${t.id}" onclick="event.stopPropagation()" title="${escapeHtml(pendTitle)}">
         <span class="badge badge-warn">⚠ ${pend.length>1?`${pend.length} pendências`:'Possui pendência'}</span>
       </button>
       <div class="turma-card-pend-list" id="turmaPend-${t.id}" style="display:none" onclick="event.stopPropagation()">
