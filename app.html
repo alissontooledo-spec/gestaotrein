@@ -11361,11 +11361,10 @@ function _agEquipeRenderMes() {
     (sessoesPorDia[s.data] = sessoesPorDia[s.data] || []).push(s);
   });
 
-  // 2026-08-12 (pedido do Alisson): mesma troca de cor da régua da visão
-  // Dia (var(--text-3) -> var(--text-2)) + leve aumento de peso/tamanho —
-  // as letras D/S/T/Q... estavam apagadas demais pra identificar rápido o
-  // dia da semana. Mesma cor que a Semana já usa pra essa informação.
-  const cabecalho = ['D','S','T','Q','Q','S','S'].map(d=>`<div style="text-align:center;font-size:10.5px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.03em;padding:4px 0">${d}</div>`).join('');
+  // 2026-08-12 (pedido do Alisson, revisão de legibilidade Dia/Mês tomando
+  // a visão Semana como referência — mockup aprovado em chat): letras
+  // D/S/T/Q... de 10.5px para 11px, mesma cor/peso de antes.
+  const cabecalho = ['D','S','T','Q','Q','S','S'].map(d=>`<div style="text-align:center;font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.03em;padding:4px 0">${d}</div>`).join('');
 
   const celulas = [];
   for (let i=0;i<primeiroDiaSemana;i++) celulas.push(`<div></div>`);
@@ -11375,12 +11374,21 @@ function _agEquipeRenderMes() {
     const ehHoje = dataISO === window._agEquipeHoje;
     const instrutoresComSessao = [...new Set(sessoesDia.map(s=>s.instrutor_id).filter(Boolean))];
     const MAX_PONTOS = 5;
-    const pontos = instrutoresComSessao.slice(0,MAX_PONTOS).map(id => `<span style="width:6px;height:6px;border-radius:50%;background:${corDoInstrutor[id]||'var(--amber)'};display:inline-block;margin:1px"></span>`).join('');
-    const extraCount = instrutoresComSessao.length > MAX_PONTOS ? `<span style="font-size:8px;color:var(--text-3)">+${instrutoresComSessao.length-MAX_PONTOS}</span>` : '';
+    // 2026-08-12: pontos de 6px->8px (mesmo tamanho da legenda logo abaixo,
+    // que já usava 8px — os dois ficavam com tamanhos diferentes por engano).
+    const pontos = instrutoresComSessao.slice(0,MAX_PONTOS).map(id => `<span style="width:8px;height:8px;border-radius:50%;background:${corDoInstrutor[id]||'var(--amber)'};display:inline-block;margin:1px"></span>`).join('');
+    const extraCount = instrutoresComSessao.length > MAX_PONTOS ? `<span style="font-size:9px;color:var(--text-2);font-weight:600">+${instrutoresComSessao.length-MAX_PONTOS}</span>` : '';
+    // 2026-08-12 (mockup aprovado): célula de 56px->72px (mesma altura da
+    // Semana, mais espaço pra respirar); número do dia de 11px->15px e
+    // sempre em cor legível (var(--text-1) — antes var(--text-2), o mesmo
+    // tom apagado usado pra texto secundário — só "hoje" tinha contraste
+    // de verdade); contorno âmbar em "hoje" pra reforçar o destaque que já
+    // tinha só no fundo; contagem de sessões de 8px/--text-3 (apagado) para
+    // 10px/--text-2, mesmo princípio já usado no cabeçalho D/S/T/Q.
     celulas.push(`<div onclick="_agEquipeAbrirDia('${dataISO}')" title="${sessoesDia.length} sessão(ões) em ${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}"
-      style="min-height:56px;border-radius:6px;padding:4px;cursor:pointer;${ehHoje?'background:var(--amber-l)':'background:var(--gray-50,#F8FAFC)'}">
-      <div style="font-size:11px;font-weight:${ehHoje?'700':'500'};color:${ehHoje?'var(--amber-text)':'var(--text-2)'}">${dia}</div>
-      ${sessoesDia.length?`<div style="display:flex;flex-wrap:wrap;gap:1px;margin-top:3px">${pontos}${extraCount}</div><div style="font-size:8px;color:var(--text-3);margin-top:1px">${sessoesDia.length} sessão${sessoesDia.length!==1?'ões':''}</div>`:''}
+      style="min-height:72px;border-radius:6px;padding:6px;cursor:pointer;${ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F8FAFC)'}">
+      <div style="font-size:15px;font-weight:${ehHoje?'700':'600'};color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
+      ${sessoesDia.length?`<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:5px">${pontos}${extraCount}</div><div style="font-size:10px;color:var(--text-2);font-weight:500;margin-top:2px">${sessoesDia.length} sessão${sessoesDia.length!==1?'ões':''}</div>`:''}
     </div>`);
   }
 
@@ -11388,8 +11396,10 @@ function _agEquipeRenderMes() {
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><span style="width:8px;height:8px;border-radius:50%;background:${corDoInstrutor[inst.id]};display:inline-block"></span>${escapeHtml(inst.nome)}</div>
     `).join('')}</div>` : '';
 
-  const html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px 4px;margin-bottom:2px">${cabecalho}</div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${celulas.join('')}</div>
+  // 2026-08-12: espaçamento da grade de 4px->6px (mockup aprovado), mesmo
+  // "respiro" já usado entre as colunas da visão Semana.
+  const html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px 6px;margin-bottom:4px">${cabecalho}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">${celulas.join('')}</div>
     ${legenda}`;
   el.innerHTML = html;
   _setElBoth('agEquipeTimeline', html);
@@ -11439,6 +11449,13 @@ function _agEquipeRenderTimeline() {
 
   const sel = window._agEquipeInstrutorSel;
   const instrutores = (window._agEquipeInstrutores||[]).filter(i => !sel || i.id===sel);
+
+  // 2026-08-12: cor fixa por instrutor, mesma paleta/lógica já usada em
+  // _agEquipeRenderMes/_agEquipeRenderSemana (pedido do Alisson — manter
+  // consistência visual entre as 3 visões da Agenda da Equipe).
+  const PALETA_AG = ['#F59E0B','#3B82F6','#8B5CF6','#EC4899','#10B981','#EF4444','#06B6D4','#F97316'];
+  const corDoInstrutorAg = {};
+  instrutores.forEach((inst,idx) => { corDoInstrutorAg[inst.id] = PALETA_AG[idx % PALETA_AG.length]; });
 
   const sessoesPorInstrutor = {};
   (window._agEquipeSessoesDoDia||[]).forEach(s => {
@@ -11500,7 +11517,7 @@ function _agEquipeRenderTimeline() {
     // rápida. Trocada pra var(--text-2)/seminegrito, a mesma combinação
     // que a visão Semana já usa pro nome do dia da semana (D/S/T/Q...)
     // dentro de cada cartão — mantém consistência entre as visões.
-    regua += `<span style="position:absolute;${pos};font-size:10px;font-weight:600;letter-spacing:.02em;color:var(--text-2);white-space:nowrap">${h}h</span>`;
+    regua += `<span style="position:absolute;${pos};font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--text-2);white-space:nowrap">${h}h</span>`;
   }
   // Linhas-guia verticais atrás das barras, na mesma posição das marcas da
   // régua — ajuda a "ler" onde um compromisso começa/termina sem precisar
@@ -11527,7 +11544,7 @@ function _agEquipeRenderTimeline() {
     const sessoes = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
     if (!sessoes.length) {
       return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(i.nome)} neste horário"
-        style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer">
+        style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer">
         <span style="font-size:10px;color:var(--text-3)">Livre o dia todo</span>
       </div>`;
     }
@@ -11556,7 +11573,7 @@ function _agEquipeRenderTimeline() {
       return label + barra;
     }).join('');
     return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma nova com ${escapeHtml(i.nome)}"
-      style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-radius:6px;cursor:pointer">${blocos}</div>`;
+      style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;cursor:pointer">${blocos}</div>`;
   }).join(espacador);
 
   // 2026-08-09 (pedido do Alisson): nome do instrutor com mais hierarquia
@@ -11567,8 +11584,13 @@ function _agEquipeRenderTimeline() {
   // padding pra não empurrar o layout — o círculo pequeno vive dentro dele,
   // só decorativo. Clássico "hit-slop": alvo de toque grande, elemento
   // visual do mesmo tamanho de antes.
-  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:2px;font-size:14px;color:var(--text-1);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-    <span style="overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="_relAbrirInstrutorDaAgenda('${i.id}')" title="Ver relatório de ${escapeHtml(i.nome)}">${escapeHtml(i.nome)}</span>
+  // 2026-08-12 (pedido do Alisson): nome ganhou bolinha da cor do instrutor
+  // (mesma paleta/técnica da visão Semana) e passou de 1 linha truncada com
+  // "..." pra até 2 linhas completas (-webkit-line-clamp) — nome não fica
+  // mais cortado no meio, só quebra pra 2ª linha quando não cabe em 1.
+  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:6px">
+    <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
+    <span style="overflow:hidden;cursor:pointer;font-size:14px;color:var(--text-1);font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical" onclick="_relAbrirInstrutorDaAgenda('${i.id}')" title="Ver relatório de ${escapeHtml(i.nome)}">${escapeHtml(i.nome)}</span>
     <button type="button" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}" aria-label="Agendar turma com ${escapeHtml(i.nome)}"
       style="border:none;background:none;padding:10px;margin:-10px -10px -10px -4px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">
       <span style="width:18px;height:18px;border-radius:50%;background:var(--gray-100);color:var(--text-2);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center">+</span>
@@ -11576,7 +11598,7 @@ function _agEquipeRenderTimeline() {
   </div>`).join(espacador);
 
   const html = `<div style="display:flex;gap:10px">
-    <div style="width:112px;flex-shrink:0;padding-top:22px">${nomes}</div>
+    <div style="width:150px;flex-shrink:0;padding-top:22px">${nomes}</div>
     <div style="overflow-x:auto;flex:1">
       <div style="min-width:${larguraTimeline}px;position:relative">
         <div style="position:relative;height:16px;margin-bottom:6px">${regua}</div>
