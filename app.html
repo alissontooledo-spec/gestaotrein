@@ -231,6 +231,11 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .badge-red{background:var(--red-l);color:var(--red-text)}
 .badge-gray{background:var(--gray-100);color:var(--gray-600)}
 .badge-navy{background:rgba(30,42,74,.1);color:var(--navy)}
+/* 2026-08: pendência de turma (motor genérico, ver _turmaPendencias) —
+   reaproveita --warn/--warn-l/--warn-text, cor de atenção já existente no
+   design system mas ainda sem badge própria; fica distinta do --amber de
+   marca, usado em CTAs/destaques, pra não confundir os dois sentidos. */
+.badge-warn{background:var(--warn-l);color:var(--warn-text)}
 
 /* ── Buttons ── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--r-md);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:all .15s;text-decoration:none;white-space:nowrap}
@@ -504,6 +509,13 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .fill-concluida{background:var(--green)}
 .fill-cancelada{background:var(--red)}
 .turma-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:2px}
+/* 2026-08: pendência de turma no card da lista — botão sem estilo de
+   navegador (herda o badge de dentro) que expande a lista específica do
+   que falta. É por toque/clique (nunca só :hover) de propósito: card
+   aparece igual em Web e Mobile, e hover não existe em touchscreen. */
+.turma-card-pend-toggle{all:unset;cursor:pointer;display:inline-flex}
+.turma-card-pend-list{margin-top:6px;padding:8px 10px;background:var(--warn-l);border-radius:var(--r-md);display:flex;flex-direction:column;gap:3px}
+.turma-card-pend-item{font-size:11.5px;color:var(--warn-text);line-height:1.4}
 .turma-card-nova{background:var(--surface);border:1.5px dashed var(--border-2);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:border-color .15s,background .15s;min-height:160px;color:var(--text-3)}
 .turma-card-nova:hover{border-color:var(--amber);background:rgba(245,158,11,.04);color:var(--amber-h)}
 .turmas-section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
@@ -3656,7 +3668,10 @@ async function renderHomeAdmin() {
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
 
   const [{data:turmas},{data:clientes},{data:sessoes},{count:catalogoCount},{count:colaboradoresCount},{count:usuariosAtivosCount}] = await Promise.all([
-    sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,clientes(nome),catalogo(nome)').eq('org_id',oi),
+    // local/turma_participantes(id): 2026-08, adicionados só pra alimentar
+    // o alerta de pendências abaixo (_turmaPendencias) — sessoes(instrutor_id)
+    // já vinha na consulta de `sessoes` logo abaixo, reaproveitada sem custo extra.
+    sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,local,clientes(nome),catalogo(nome),turma_participantes(id)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
     sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida,local').order('data',{ascending:true}),
     // Contagens leves (head:true, sem baixar linhas) só pra alimentar o
@@ -3776,6 +3791,22 @@ async function renderHomeAdmin() {
       texto: `${atrasadas.length} turma${atrasadas.length!==1?'s':''} com data de início no passado ainda aguardando início`,
       acao: "irParaTurmasFiltradas('agendada')",
       label: 'Revisar',
+    });
+  }
+
+  // 4. Turmas com alguma pendência de cadastro (sem participantes, sem
+  // local ou com algum encontro sem instrutor) — 2026-08, a pedido do
+  // Alisson. Mesmo catálogo de pendências usado no badge do card da lista
+  // de Turmas (ver _turmaPendencias); aqui só agrega a contagem pra
+  // organização inteira, igual aos outros alertas desta lista.
+  const comPendencia = tAll.filter(t => _turmaPendencias(t, sesAll.filter(s => s.turma_id === t.id)).length > 0);
+  if (comPendencia.length > 0) {
+    alertas.push({
+      tipo: 'warning',
+      icone: '📋',
+      texto: `${comPendencia.length} turma${comPendencia.length!==1?'s':''} com pendência de cadastro (participantes, local ou instrutor)`,
+      acao: "irParaTurmasComPendencia()",
+      label: 'Ver turmas',
     });
   }
 
@@ -3948,15 +3979,30 @@ async function renderHomeAdmin() {
 
 async function renderHomeComercial() {
   const oi = usuarioAtual.org_id;
+  // local/sessoes(instrutor_id)/turma_participantes(id): 2026-08, só pra
+  // alimentar _turmaPendencias — o card "N turmas com pendência" abaixo é
+  // a versão do Comercial do mesmo mecanismo que a Home do Administrador
+  // ganhou na mesma entrega (ver renderHomeAdmin). Cobre toda a
+  // organização, o mesmo escopo que o Comercial já vê em Turmas/Agenda da
+  // Equipe hoje — não só as turmas que ele mesmo criou.
   const [{data:turmas},{data:clientes}] = await Promise.all([
-    sb.from('turmas').select('id,status').eq('org_id',oi),
+    sb.from('turmas').select('id,status,local,sessoes(instrutor_id),turma_participantes(id)').eq('org_id',oi),
     sb.from('clientes').select('id').eq('org_id',oi).eq('ativo',true),
   ]);
+  const tAll = turmas||[];
+  const nPendencia = tAll.filter(t => _turmaPendencias(t).length > 0).length;
+  const htmlPendencia = nPendencia > 0 ? `
+    <div onclick="irParaTurmasComPendencia()" style="cursor:pointer;background:var(--warn-l);border:1px solid rgba(217,119,6,.3);border-left:3px solid var(--warn);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span style="font-size:16px;flex-shrink:0">⚠️</span>
+      <div style="flex:1;font-size:12.5px;color:var(--warn-text);font-weight:500;line-height:1.4">${nPendencia} turma${nPendencia!==1?'s':''} com pendência (participantes, local ou instrutor)</div>
+      <span style="font-size:11px;color:var(--warn-text);font-weight:600;white-space:nowrap">Ver →</span>
+    </div>` : '';
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Comercial</div>`);
   setConteudo(`
+    ${htmlPendencia}
     <div class="stats-grid">
-      <div class="stat-card navy"><div class="stat-label">Agendadas</div><div class="stat-value">${(turmas||[]).filter(t=>t.status==='agendada').length}</div><div class="stat-sub">Turmas</div></div>
-      <div class="stat-card accent"><div class="stat-label">Em andamento</div><div class="stat-value">${(turmas||[]).filter(t=>t.status==='em_andamento').length}</div></div>
+      <div class="stat-card navy"><div class="stat-label">Agendadas</div><div class="stat-value">${tAll.filter(t=>t.status==='agendada').length}</div><div class="stat-sub">Turmas</div></div>
+      <div class="stat-card accent"><div class="stat-label">Em andamento</div><div class="stat-value">${tAll.filter(t=>t.status==='em_andamento').length}</div></div>
       <div class="stat-card accent"><div class="stat-label">Clientes ativos</div><div class="stat-value">${(clientes||[]).length}</div></div>
     </div>
     <div class="quick-actions">
@@ -8464,7 +8510,11 @@ async function carregarCatalogoModeloOrgUI(orgId) {
 // TURMAS
 // ============================================================
 async function renderTurmas(abaInicial) {
-  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(id,concluida,data)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
+  // turma_participantes(id) e sessoes.instrutor_id: 2026-08, adicionados só
+  // pra alimentar _turmaPendencias (badge de pendência no card) — nenhum
+  // outro dado, mesma técnica (contagem via nested select) já usada em
+  // outros pontos do arquivo (ex.: renderHistorico, execução de turma).
+  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(id,concluida,data,instrutor_id),turma_participantes(id)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
   if (error) throw error;
   _turmasCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Operação</div><div class="mh-name">Turmas</div>`);
@@ -8533,11 +8583,18 @@ function _turmaDataRef(t) {
 }
 
 function _htmlTurmasGrid(lista, status, podeCriar) {
-  const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
-  const DOT_COLOR = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626'};
+  // 'pendencia' é um pseudo-status (não existe em turmas.status) — só uma
+  // forma de filtrar a mesma lista pelas turmas que têm alguma pendência
+  // (ver _turmaPendencias). Não é uma aba fixa na barra (pra não poluir a
+  // navegação de quem não veio de um alerta de pendência); chega-se aqui
+  // só via irParaTurmasComPendencia(), chamada pelos cartões de pendência
+  // do Início do Comercial/Administrador.
+  const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada',pendencia:'Com pendência'};
+  const DOT_COLOR = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626',pendencia:'#D97706'};
   const busca = (window._turmasBuscaAtual||'').toLowerCase();
   const ehTodas = status === 'todas';
-  let filtrada = ehTodas ? lista.slice() : lista.filter(t=>t.status===status);
+  const ehPendencia = status === 'pendencia';
+  let filtrada = ehTodas ? lista.slice() : ehPendencia ? lista.filter(t=>_turmaPendencias(t).length>0) : lista.filter(t=>t.status===status);
   if (busca) {
     filtrada = filtrada.filter(t =>
       (t.catalogo?.nome||'').toLowerCase().includes(busca) ||
@@ -8573,6 +8630,63 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
   </div>${cardsHtml}`;
 }
 
+// ============================================================
+// PENDÊNCIAS DE TURMA (2026-08)
+// ------------------------------------------------------------
+// A pedido do Alisson (relato da Comercial da Avanteseg): o Comercial
+// passou a reservar o instrutor na agenda (criar a turma + o(s)
+// encontro(s)) antes de saber quem vai participar — fluxo válido, mas o
+// card na aba "Agendadas" ficava idêntico ao de uma turma 100% pronta,
+// sem nenhum sinal do que ainda falta.
+//
+// Catálogo central: cada pendência sabe detectar sua própria condição e
+// tem uma prioridade (menor = mais urgente). Adicionar um tipo de
+// pendência novo no futuro é só acrescentar uma entrada aqui — nenhuma
+// tela precisa mudar (card da lista de Turmas, Início do Comercial e
+// Início do Administrador já consomem `_turmaPendencias`).
+const CATALOGO_PENDENCIAS_TURMA = [
+  { id: 'sem_participantes', prioridade: 1, label: 'Sem participantes cadastrados',
+    detectar: (t) => (t.turma_participantes||[]).length === 0 },
+  { id: 'sem_instrutor', prioridade: 2, label: 'Encontro sem instrutor atribuído',
+    detectar: (t, sessoes) => (sessoes||[]).some(s => !s.instrutor_id) },
+  { id: 'sem_local', prioridade: 3, label: 'Local do treinamento não definido',
+    detectar: (t) => !(t.local||'').trim() },
+];
+
+// Pendências ativas de uma turma, já em ordem de prioridade.
+// `sessoesDaTurma` é opcional — quem já tem a turma com `sessoes` aninhado
+// (caso da lista de Turmas, que traz tudo numa consulta só) não precisa
+// passar; quem busca as sessões à parte (Início do Administrador/Comercial,
+// que já fazem isso por outro motivo) passa explicitamente pra não exigir
+// uma consulta nova.
+//
+// Só avalia turma em aberto (agendada/em andamento) — turma concluída ou
+// cancelada é histórico, não "pendência de configuração" mais.
+function _turmaPendencias(t, sessoesDaTurma) {
+  if (t.status !== 'agendada' && t.status !== 'em_andamento') return [];
+  const sessoes = sessoesDaTurma || t.sessoes || [];
+  return CATALOGO_PENDENCIAS_TURMA
+    .filter(p => p.detectar(t, sessoes))
+    .sort((a,b) => a.prioridade - b.prioridade);
+}
+
+// Navegação: Início (Comercial/Administrador) → Turmas já filtrado só nas
+// turmas com pendência. Mesmo padrão de irParaTurmasFiltradas, só que pelo
+// pseudo-status 'pendencia' em vez de um status real.
+function irParaTurmasComPendencia() {
+  irPara('turmas').then(() => { setTimeout(() => { trocarAbaTurmas('pendencia'); }, 200); });
+}
+
+// Toggle do painel de detalhe das pendências dentro do card da lista de
+// Turmas — por clique/toque (nunca só :hover, que não existe em
+// touchscreen); o card inteiro já tem data-action="verTurma", por isso o
+// botão do badge sempre para a propagação antes de chegar aqui.
+function _toggleTurmaPendencias(el, id) {
+  const painel = document.getElementById(`turmaPend-${id}`);
+  if (!painel) return;
+  painel.style.display = painel.style.display === 'none' ? 'flex' : 'none';
+}
+
 function _htmlTurmaCard(t) {
   const SB = {agendada:'badge-gray',em_andamento:'badge-amber',concluida:'badge-green',cancelada:'badge-red'};
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
@@ -8594,6 +8708,20 @@ function _htmlTurmaCard(t) {
   const menuBtn = podeMgr&&(st==='agendada'||st==='em_andamento')?
     `<button class="btn btn-ghost btn-sm" style="padding:4px;margin-left:4px;flex-shrink:0" data-action="menuTurmaCard" data-id="${t.id}" onclick="event.stopPropagation()">${ICONS.dots}</button>`:'';
   const dataRef = _turmaDataRef(t);
+  // Pendências: badge de atenção + painel de detalhe (ver bloco
+  // CATALOGO_PENDENCIAS_TURMA/_turmaPendencias acima). Mostra o rótulo
+  // específico direto — evita ter que abrir a turma só pra descobrir o que
+  // falta, exatamente o problema relatado pelo Alisson.
+  const pend = _turmaPendencias(t);
+  const pendHtml = pend.length ? `
+    <div>
+      <button type="button" class="turma-card-pend-toggle" data-action="toggleTurmaPendencias" data-id="${t.id}" onclick="event.stopPropagation()" title="Ver o que falta">
+        <span class="badge badge-warn">⚠ ${pend.length>1?`${pend.length} pendências`:'Possui pendência'}</span>
+      </button>
+      <div class="turma-card-pend-list" id="turmaPend-${t.id}" style="display:none" onclick="event.stopPropagation()">
+        ${pend.map(p=>`<div class="turma-card-pend-item">• ${p.label}</div>`).join('')}
+      </div>
+    </div>` : '';
   return `<div class="turma-card" data-action="verTurma" data-id="${t.id}">
     ${nrTag}
     <div class="turma-card-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
@@ -8606,6 +8734,7 @@ function _htmlTurmaCard(t) {
       <span style="font-size:11px;color:var(--text-3)">em ${formatarData(dataRef)}</span>
     </div>`:''}
     ${progressHtml}
+    ${pendHtml}
     <div class="turma-card-footer">
       <span class="badge ${SB[st]}">${SL[st]}</span>
       ${menuBtn}
@@ -15539,6 +15668,7 @@ document.addEventListener('click', function(e) {
     case 'toggleUsuarioEquipe': toggleUsuarioEquipe(id); break;
     // Turmas
     case 'menuTurmaCard':         _menuTurmaCard(el,id); break;
+    case 'toggleTurmaPendencias': _toggleTurmaPendencias(el,id); break;
     case 'excluirTurma':          document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalExcluirTurma(id); break;
     case 'editarTurma':           document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalTurma(id); break;
     case 'cancelarTurma':   cancelarTurma(id); break;
