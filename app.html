@@ -16699,16 +16699,82 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
   // meio das letras, parecendo um erro de tachado/riscado. Corrigido.
   doc.setDrawColor(...GOLD); doc.setLineWidth(0.5);
   doc.line(_contTitX, _contTitBase+1.4, _contTitX+22, _contTitBase+1.4);
-  doc.setFont('times','normal'); doc.setFontSize(_avPT_H(0.019,H)); doc.setTextColor(...BLACK);
-  let iy = boxY0+_avMM_H(0.075,H);
-  // Evita numerar de novo quando o item já vem numerado do cadastro (ex.:
-  // conteúdo digitado como "1º Riscos Ambientais", "2º NR-06" etc.) — antes
-  // sempre prefixava "1. ", "2. ", duplicando a numeração nesses casos.
+  doc.setTextColor(...BLACK);
+  // 2026-08-12 (correção "verso desconfigurado"): antes desenhava 1 linha
+  // por item, sem quebra de linha e com corte em 110 caracteres — mesma
+  // causa raiz do incidente de ontem (corte por contagem de caracteres),
+  // só que num local que a correção de ontem não cobriu. Com cursos que têm
+  // bastante conteúdo programático (comum em NRs) e/ou nome de curso ou
+  // empresa longos (que empurram esta caixa pra baixo, reduzindo a altura
+  // disponível), o texto sempre saía cortado e sobrepondo o rodapé
+  // (QR/Token/URL/Emitido).
+  // Decisão do Alisson (2026-08-12): a caixa, o rodapé e o restante do
+  // certificado permanecem EXATAMENTE nas posições/tamanhos de sempre — sem
+  // nova página, sem crescer a caixa. Quem se adapta é o conteúdo, não o
+  // espaço. Duas coisas tornam isso possível sem tocar em nada estrutural:
+  // (1) havia ~10mm de vão morto entre o fio dourado e o 1º item, que não
+  // era parte do título nem margem de segurança — reduzido a um respiro de
+  // 3mm; (2) os itens agora quebram por largura real e a fonte/entrelinha/
+  // nº de colunas (1 ou 2, sempre dentro desta mesma caixa) se ajustam
+  // automaticamente à quantidade de conteúdo. Caso comum (conteúdo curto):
+  // 1 coluna, fonte no tamanho normal de sempre. Conteúdo extenso (caso real
+  // do incidente): 2 colunas dentro da mesma caixa, fonte menor. Rede de
+  // segurança extrema (combinação improvável de curso+empresa+conteúdo tudo
+  // muito longos ao mesmo tempo): fonte reduzida a um piso técnico — nunca
+  // corta palavra, nunca sobrepõe o rodapé, nunca sai da caixa.
+  // Ver análise completa e validação numérica em
+  // 01-Requisitos/pdf-verso-individual-conteudo-adaptativo.md
   const _jaNumerado = /^\s*\d+\s*[.\)ºª]/;
-  (campos.itensConteudo||[]).forEach((it,idx) => {
+  const _itensNumerados = (campos.itensConteudo||[]).map((it,idx) => {
     const item = _jaNumerado.test(it) ? it : `${idx+1}. ${it}`;
-    doc.text(pdfSafe(item,110), ml+_avMM_W(0.035,W), _avBase(iy,_avPT_H(0.019,H)));
-    iy += _avMM_H(0.032,H);
+    // 300 = rede de segurança extrema (não limite prático) — quem decide
+    // onde quebrar é a largura real via splitTextToSize logo abaixo.
+    return pdfSafe(item, 300);
+  });
+  const _contX = ml+_avMM_W(0.035,W);
+  const _contLarguraTotal = (mr-_avMM_W(0.035,W)) - _contX;
+  const _contIyIni = _contTitBase + 1.4 + 3.0; // logo abaixo do fio dourado + respiro de 3mm (era ~10mm de vão morto sem função)
+  const _contAlturaDisponivel = boxY1 - _contIyIni - _avMM_H(0.012,H);
+  const _contGapColunas = _avMM_W(0.02,W);
+  const _contFonteNormal = _avPT_H(0.019,H);
+  const _contLhOriginal = _avMM_H(0.032,H); // mesma altura de linha de hoje, no tamanho normal (referência do piso "sem mudança")
+  function _contTentativa(cols, fator) {
+    const larguraCol = cols===1 ? _contLarguraTotal : (_contLarguraTotal-_contGapColunas)/2;
+    const sizePt = _contFonteNormal*fator;
+    doc.setFont('times','normal'); doc.setFontSize(sizePt);
+    const linhasPorItem = _itensNumerados.map(it => doc.splitTextToSize(it, larguraCol));
+    const totalLinhas = linhasPorItem.reduce((a,l)=>a+l.length,0);
+    // entrelinha compacta (espaçamento simples padrão, ~1.22x a altura da
+    // fonte) — mais eficiente que o espaçamento de hoje (~1.7x), é o que
+    // libera espaço suficiente pra caber conteúdo real sem crescer a caixa.
+    const lh = sizePt*1.22*(25.4/72);
+    const linhasPorColuna = cols>0 ? Math.ceil(totalLinhas/cols) : totalLinhas;
+    const alturaNecessaria = linhasPorColuna*lh;
+    return { cabe: alturaNecessaria<=_contAlturaDisponivel, linhasPorItem, totalLinhas, sizePt, lh, cols, larguraCol };
+  }
+  const _FLOOR_CONFORTAVEL = 0.60, _FLOOR_TECNICO = 0.42;
+  let _contPlano = null;
+  for (let f=1.0; !_contPlano && f>=_FLOOR_CONFORTAVEL-1e-9; f-=0.02) { const t=_contTentativa(1,f); if (t.cabe) _contPlano=t; }
+  if (!_contPlano) for (let f=1.0; !_contPlano && f>=_FLOOR_CONFORTAVEL-1e-9; f-=0.02) { const t=_contTentativa(2,f); if (t.cabe) _contPlano=t; }
+  if (!_contPlano) for (let f=_FLOOR_CONFORTAVEL-0.02; !_contPlano && f>=_FLOOR_TECNICO-1e-9; f-=0.02) { const t=_contTentativa(2,f); if (t.cabe) _contPlano=t; }
+  if (!_contPlano) _contPlano = _contTentativa(2, _FLOOR_TECNICO); // caso extremo patológico: desenha no piso técnico mesmo sem garantia matemática de caber
+
+  doc.setFont('times','normal'); doc.setFontSize(_contPlano.sizePt); doc.setTextColor(...BLACK);
+  const _contMetaLinhasCol0 = Math.ceil(_contPlano.totalLinhas/_contPlano.cols);
+  let _contColAtual = 0, _contLinhaNaColuna = 0, _contLinhasAcumCol0 = 0;
+  _contPlano.linhasPorItem.forEach(linhas => {
+    // decide ANTES de desenhar o item se ele deve ir pra 2ª coluna — nunca
+    // quebra um item no meio entre colunas, só entre itens.
+    if (_contPlano.cols===2 && _contColAtual===0 && _contLinhasAcumCol0>0 && (_contLinhasAcumCol0+linhas.length)>_contMetaLinhasCol0) {
+      _contColAtual = 1; _contLinhaNaColuna = 0;
+    }
+    const _cx = _contColAtual===0 ? _contX : _contX+_contPlano.larguraCol+_contGapColunas;
+    linhas.forEach(ln => {
+      const _cy = _contIyIni + _contLinhaNaColuna*_contPlano.lh;
+      doc.text(ln, _cx, _avBase(_cy, _contPlano.sizePt));
+      _contLinhaNaColuna++;
+    });
+    if (_contColAtual===0) _contLinhasAcumCol0 += linhas.length;
   });
 
   // QR + token + validação + emissão
