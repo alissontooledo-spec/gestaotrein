@@ -11227,7 +11227,11 @@ function _agEquipeRenderMes() {
     (sessoesPorDia[s.data] = sessoesPorDia[s.data] || []).push(s);
   });
 
-  const cabecalho = ['D','S','T','Q','Q','S','S'].map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;padding:4px 0">${d}</div>`).join('');
+  // 2026-08-12 (pedido do Alisson): mesma troca de cor da régua da visão
+  // Dia (var(--text-3) -> var(--text-2)) + leve aumento de peso/tamanho —
+  // as letras D/S/T/Q... estavam apagadas demais pra identificar rápido o
+  // dia da semana. Mesma cor que a Semana já usa pra essa informação.
+  const cabecalho = ['D','S','T','Q','Q','S','S'].map(d=>`<div style="text-align:center;font-size:10.5px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.03em;padding:4px 0">${d}</div>`).join('');
 
   const celulas = [];
   for (let i=0;i<primeiroDiaSemana;i++) celulas.push(`<div></div>`);
@@ -11356,7 +11360,13 @@ function _agEquipeRenderTimeline() {
     const pos = leftPct<=0.5 ? 'left:0;transform:none'
       : leftPct>=99.5 ? 'left:auto;right:0;transform:none'
       : `left:${leftPct}%;transform:translateX(-50%)`;
-    regua += `<span style="position:absolute;${pos};font-size:9px;color:var(--text-3);white-space:nowrap">${h}h</span>`;
+    // 2026-08-12 (pedido do Alisson): régua estava em var(--text-3), o
+    // mesmo tom usado pra texto secundário/desabilitado no resto do
+    // sistema — ficava apagada demais pra uma informação de leitura
+    // rápida. Trocada pra var(--text-2)/seminegrito, a mesma combinação
+    // que a visão Semana já usa pro nome do dia da semana (D/S/T/Q...)
+    // dentro de cada cartão — mantém consistência entre as visões.
+    regua += `<span style="position:absolute;${pos};font-size:10px;font-weight:600;letter-spacing:.02em;color:var(--text-2);white-space:nowrap">${h}h</span>`;
   }
   // Linhas-guia verticais atrás das barras, na mesma posição das marcas da
   // régua — ajuda a "ler" onde um compromisso começa/termina sem precisar
