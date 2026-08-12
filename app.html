@@ -16626,16 +16626,15 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
     doc.text(ln, divX+_avMM_W(0.02,W), cy); cy += _avMM_H(0.030,H);
   });
 
+  // 2026-08-12 (pedido do Alisson): título do nome do curso removido do
+  // verso — a página já fica lotada com o conteúdo programático em cursos
+  // com muitos itens, e o nome do curso já aparece na capa (frente). Nada
+  // mais nesta função foi alterado: colunas de dados abaixo (Empresa/Aluno/
+  // CPF/CNPJ/CH/Realizado em/Válido até) mantêm exatamente a mesma posição,
+  // tamanho e espaçamento de sempre — só o ponto de partida (y) passa a vir
+  // direto do fim do cabeçalho, sem o espaço que o título ocupava.
   const cx = (ml+mr)/2;
-  doc.setFont('times','bold'); doc.setFontSize(_avPT_H(0.044,H)); doc.setTextColor(...GREEN_DARK);
-  // 2026-08-12: teto elevado de 90->200 (rede de segurança, não limite
-  // prático) — quem decide onde quebrar é o splitTextToSize logo abaixo,
-  // pela largura real da coluna. Ver pdf-textos-dinamicos-robustez.md.
-  const linhasCurso = doc.splitTextToSize(pdfSafe(campos.curso,200), (mr-ml)*0.86);
-  let y = top+lh+_avMM_H(0.09,H);
-  const lhCurso = _avMM_H(0.058,H);
-  linhasCurso.forEach(ln => { doc.text(ln, cx, _avBase(y,_avPT_H(0.044,H)), {align:'center'}); y += lhCurso; });
-  y += _avMM_H(0.035,H);
+  let y = top+lh+_avMM_H(0.09,H)+_avMM_H(0.035,H);
 
   // coluna esquerda (empresa/aluno/cargo/período/válido até) e direita
   // (CPF/CNPJ/CH) — 2026-08: antes eram frases corridas em times normal
@@ -16753,11 +16752,26 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
     return { cabe: alturaNecessaria<=_contAlturaDisponivel, linhasPorItem, totalLinhas, sizePt, lh, cols, larguraCol };
   }
   const _FLOOR_CONFORTAVEL = 0.60, _FLOOR_TECNICO = 0.42;
-  let _contPlano = null;
-  for (let f=1.0; !_contPlano && f>=_FLOOR_CONFORTAVEL-1e-9; f-=0.02) { const t=_contTentativa(1,f); if (t.cabe) _contPlano=t; }
-  if (!_contPlano) for (let f=1.0; !_contPlano && f>=_FLOOR_CONFORTAVEL-1e-9; f-=0.02) { const t=_contTentativa(2,f); if (t.cabe) _contPlano=t; }
-  if (!_contPlano) for (let f=_FLOOR_CONFORTAVEL-0.02; !_contPlano && f>=_FLOOR_TECNICO-1e-9; f-=0.02) { const t=_contTentativa(2,f); if (t.cabe) _contPlano=t; }
-  if (!_contPlano) _contPlano = _contTentativa(2, _FLOOR_TECNICO); // caso extremo patológico: desenha no piso técnico mesmo sem garantia matemática de caber
+  // 2026-08-12 (ajuste do algoritmo, junto com a remoção do título do
+  // curso): antes a busca testava 1 coluna primeiro e parava no primeiro
+  // fator que coubesse — mesmo quando 2 colunas, no mesmo piso, permitiam
+  // uma fonte visivelmente maior. Agora calcula o melhor fator possível
+  // (maior fonte) para 1 e para 2 colunas, dentro do piso confortável, e
+  // escolhe o que resultar em fonte maior — só usa 2 colunas por escolher
+  // fonte maior, nunca por preferência fixa. Empate prefere 1 coluna (lista
+  // única lê melhor que 2 colunas na mesma fonte).
+  const _contMelhorFator = (cols, floorMin) => {
+    for (let f=1.0; f>=floorMin-1e-9; f-=0.02) { const t=_contTentativa(cols,f); if (t.cabe) return t; }
+    return null;
+  };
+  const _contPlano1 = _contMelhorFator(1, _FLOOR_CONFORTAVEL);
+  const _contPlano2 = _contMelhorFator(2, _FLOOR_CONFORTAVEL);
+  let _contPlano = _contPlano1 && _contPlano2
+    ? (_contPlano1.sizePt >= _contPlano2.sizePt ? _contPlano1 : _contPlano2)
+    : (_contPlano1 || _contPlano2);
+  // rede de segurança: nenhuma das duas coube no piso confortável -> 2
+  // colunas (mais capacidade), encolhendo até o piso técnico extremo.
+  if (!_contPlano) _contPlano = _contMelhorFator(2, _FLOOR_TECNICO) || _contTentativa(2, _FLOOR_TECNICO);
 
   doc.setFont('times','normal'); doc.setFontSize(_contPlano.sizePt); doc.setTextColor(...BLACK);
   const _contMetaLinhasCol0 = Math.ceil(_contPlano.totalLinhas/_contPlano.cols);
