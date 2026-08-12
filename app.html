@@ -10709,7 +10709,10 @@ async function renderAgendaEquipe() {
   // 2026-08-09: visão Dia/Semana/Mês (pedido do Alisson). Preserva a última
   // visão escolhida entre entradas na tela, na mesma sessão (mesmo padrão
   // já usado pra _agEquipeInstrutorSel/_agEquipeData acima).
-  window._agEquipeVisao = window._agEquipeVisao || 'dia';
+  // 2026-08-12: padrão trocado de 'dia' pra 'semana' (pedido do Alisson) —
+  // a visão Semana dá mais contexto de disponibilidade de cara. Continua
+  // só o valor inicial: ainda respeita a última visão escolhida na sessão.
+  window._agEquipeVisao = window._agEquipeVisao || 'semana';
 
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Agenda da Equipe</div>`);
   fabOcultar();
@@ -11097,27 +11100,61 @@ function _agEquipeRenderSemana() {
   });
 
   const colLargura = 130;
-  const nomeColLargura = 116;
+  // 2026-08-12 (pedido do Alisson): coluna de nome alargada de 116->150 +
+  // nome passa a quebrar em até 2 linhas (ver `nomes` abaixo) — antes
+  // cortava com reticências em nomes maiores (ex.: "Geasi Keniel do N...").
+  const nomeColLargura = 150;
   const hoje = window._agEquipeHoje;
 
+  // 2026-08-12: cor fixa por instrutor, pra diferenciar as linhas da grade
+  // visualmente (pedido do Alisson — "nomes e informações muito misturados").
+  // Mesma paleta/lógica já usada em _agEquipeRenderMes (não é algo novo no
+  // sistema, só reaproveitado aqui pra manter as duas visões consistentes).
+  const PALETA_AG = ['#F59E0B','#3B82F6','#8B5CF6','#EC4899','#10B981','#EF4444','#06B6D4','#F97316'];
+  const corDoInstrutorAg = {};
+  instrutores.forEach((inst,idx) => { corDoInstrutorAg[inst.id] = PALETA_AG[idx % PALETA_AG.length]; });
+
+  // 2026-08-12: antes só o dia de hoje tinha fundo/cor de destaque — os
+  // outros 6 dias ficavam com o número (a informação mais importante do
+  // cabeçalho) em cinza apagado, sem nenhum "cartão" visual, misturando
+  // tudo. Agora todo dia ganha um cartão de fundo neutro (mesmo tom já
+  // usado nas células "Livre") com o número sempre em cor escura/legível;
+  // hoje continua se destacando, só que agora contrastando com um cartão
+  // neutro nos outros em vez de contrastar com "nada".
   const cabecalho = dias.map(data => {
     const dd = Number(data.slice(8,10));
     const ehHoje = data === hoje;
-    return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="width:${colLargura}px;flex-shrink:0;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--amber-l);color:var(--amber-text)':'color:var(--text-2)'}">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">${diasSemanaAbrev[new Date(data+'T12:00:00').getDay()]}</div>
-      <div style="font-size:15px;font-weight:700">${dd}</div>
+    return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="width:${colLargura}px;flex-shrink:0;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F8FAFC);border:1px solid var(--border)'}">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:${ehHoje?'var(--amber-text)':'var(--text-2)'}">${diasSemanaAbrev[new Date(data+'T12:00:00').getDay()]}</div>
+      <div style="font-size:15px;font-weight:700;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dd}</div>
     </div>`;
   }).join('');
 
   const alturaCelula = 72;
-  const nomes = instrutores.map(i => `<div style="height:${alturaCelula}px;display:flex;align-items:center;font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px">${escapeHtml(i.nome)}</div>`).join('');
+  // Nome em até 2 linhas (-webkit-line-clamp, mesma técnica já usada em
+  // outras telas do sistema pra truncar com segurança sem cortar no meio
+  // de uma palavra) + bolinha da cor do instrutor antes do nome.
+  const nomes = instrutores.map((i,idx) => `<div style="height:${alturaCelula}px;display:flex;align-items:center;gap:7px;padding-right:6px;${idx>0?'border-top:1px solid var(--border)':''}">
+    <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
+    <span style="font-size:13.5px;font-weight:600;color:var(--text-1);line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(i.nome)}</span>
+  </div>`).join('');
 
-  const linhas = instrutores.map(inst => {
-    const celulas = dias.map(data => {
+  const linhas = instrutores.map((inst,ridx) => {
+    const celulas = dias.map((data,cidx) => {
+      // Borda esquerda com a cor do instrutor só na 1ª célula da linha —
+      // um único acento por linha (não 7 vezes) pra não pesar visualmente.
+      // Borda superior em todas as células a partir da 2ª linha, igual à
+      // coluna de nomes (dentro da altura fixa de 72px, box-sizing:border-box
+      // — não empurra a linha, só desenha o separador), pra que a separação
+      // entre instrutores fique visível na grade inteira, não só no nome.
+      const bordaInst = [
+        cidx===0 ? `border-left:3px solid ${corDoInstrutorAg[inst.id]}` : '',
+        ridx>0 ? 'border-top:1px solid var(--border)' : '',
+      ].filter(Boolean).join(';');
       const sessoes = (sessoesPorDia[data]||[]).filter(s=>s.instrutor_id===inst.id).sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
       if (!sessoes.length) {
         return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(inst.nome)} neste dia"
-          style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F8FAFC);display:flex;align-items:center;justify-content:center">
+          style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F8FAFC);display:flex;align-items:center;justify-content:center;${bordaInst}">
           <span style="font-size:10px;color:var(--text-3)">Livre</span>
         </div>`;
       }
@@ -11134,9 +11171,9 @@ function _agEquipeRenderSemana() {
       }).join('');
       const extra = sessoes.length>MAX_VISIVEL ? `<div style="font-size:9px;color:var(--text-3);text-align:center">+${sessoes.length-MAX_VISIVEL}</div>` : '';
       return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')"
-        style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F8FAFC);overflow:hidden">${chips}${extra}</div>`;
+        style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F8FAFC);overflow:hidden;${bordaInst}">${chips}${extra}</div>`;
     }).join('');
-    return `<div style="display:flex;gap:6px;margin-bottom:6px">${celulas}</div>`;
+    return `<div style="display:flex;gap:6px">${celulas}</div>`;
   }).join('');
 
   const html = `<div style="display:flex;gap:10px">
