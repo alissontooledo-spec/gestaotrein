@@ -17589,8 +17589,23 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
       doc.setDrawColor(210,228,218); doc.setLineWidth(0.2);
       doc.line(colSig, y+rowH*0.76, mr-2, y+rowH*0.76);
     }
+    // 2026-08-13: indicador discreto de assinatura reaproveitada de outro
+    // dia da turma (ver _calcularReaproveitamentosDisponiveis) — não altera
+    // a imagem, só marca visualmente; a legenda de rodapé explica o símbolo.
+    if (assinado && p.reaproveitada) {
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
+      doc.text('↻', mr-2, y+4.5, {align:'right'});
+    }
     y += rowH;
   });
+
+  // Legenda de reaproveitamento (2026-08-13) — só aparece nesta página se
+  // pelo menos 1 assinatura mostrada aqui foi reaproveitada de outro dia.
+  if (campos.notaReaproveitamento) {
+    y += 3;
+    doc.setFont('helvetica','italic'); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
+    doc.text('↻ Assinatura coletada em outro encontro desta turma e reaproveitada com autorização de Administrador/Provedor.', ml, y);
+  }
 
   // assinatura do instrutor + rodapé sólido (mesmo peso visual do modelo padrão)
   const sigY = H-mg-4-24;
@@ -17935,6 +17950,140 @@ async function _participantesElegiveisCertificado(turmaId) {
   return elegiveis;
 }
 
+// ============================================================
+// REAPROVEITAMENTO DE ASSINATURA ENTRE DIAS DA MESMA TURMA (2026-08-13,
+// a pedido do Alisson — ver 05-Decisoes/2026-08-13-reaproveitamento-
+// assinaturas-multidia.md). Cenário: treinamento de vários encontros (ex.
+// CIPA, 5 dias) onde o app só foi usado corretamente em parte dos dias —
+// sem isso, NINGUÉM fica elegível ao certificado, porque
+// _participantesElegiveisCertificado (acima) exige presença em 100% dos
+// encontros. Restrito a Administrador/Provedor, sempre com confirmação
+// explícita — nunca roda sozinho, nunca sobrescreve um dia já assinado.
+//
+// As funções abaixo só CALCULAM o que é possível propor e mostram a lista
+// pro usuário revisar. A gravação de verdade só acontece na função do
+// banco `reaproveitar_assinatura_presenca` (RPC security definer) — ela
+// repete todas as validações no servidor (mesma turma, aluno matriculado,
+// nunca sobrescreve assinatura já coletada, só admin/provedor), então
+// mesmo que este cálculo do lado do cliente tivesse algum erro, o banco
+// não deixaria passar nada indevido.
+// ============================================================
+
+// Só entra na lista quem tem pelo menos 1 dia assinado E pelo menos 1 dia
+// faltando nesta turma — quem nunca assinou em nenhum dia não aparece
+// (não há assinatura nenhuma pra reaproveitar, e a funcionalidade não cria
+// presença "do nada").
+async function _calcularReaproveitamentosDisponiveis(turmaId) {
+  const {data:sessoesTurma} = await sb.from('sessoes').select('id,data').eq('turma_id', turmaId).order('data');
+  const sessoes = sessoesTurma||[];
+  if (sessoes.length < 2) return []; // só faz sentido em turmas com mais de 1 encontro
+
+  const {data:participantesTurma} = await sb.from('turma_participantes').select('colaborador_id,colaboradores(nome)').eq('turma_id', turmaId);
+  const {data:presencasTurma} = await sb.from('presencas').select('*').eq('turma_id', turmaId);
+
+  const presPorColaborador = {};
+  (presencasTurma||[]).forEach(p => {
+    (presPorColaborador[p.colaborador_id] ||= {})[p.sessao_id] = p;
+  });
+
+  const propostas = [];
+  (participantesTurma||[]).forEach(part => {
+    const mapa = presPorColaborador[part.colaborador_id] || {};
+    const assinadas = sessoes.filter(s => mapa[s.id]?.presente && mapa[s.id]?.assinatura_path);
+    const faltando   = sessoes.filter(s => !(mapa[s.id]?.presente && mapa[s.id]?.assinatura_path));
+    if (!assinadas.length || !faltando.length) return;
+    faltando.forEach(destino => {
+      // Origem: entre os dias já assinados, o de data mais próxima do dia
+      // faltando (só afeta qual data aparece na lista de revisão — o
+      // Administrador vê exatamente qual dia está sendo usado como origem
+      // antes de confirmar, então a escolha aqui não é uma caixa preta).
+      const origem = assinadas.slice().sort((a,b) =>
+        Math.abs(new Date(a.data)-new Date(destino.data)) - Math.abs(new Date(b.data)-new Date(destino.data))
+      )[0];
+      propostas.push({
+        colaboradorId: part.colaborador_id,
+        colaboradorNome: part.colaboradores?.nome || '-',
+        sessaoDestinoId: destino.id,
+        sessaoDestinoData: destino.data,
+        sessaoOrigemId: origem.id,
+        sessaoOrigemData: origem.data,
+      });
+    });
+  });
+  return propostas;
+}
+
+// Modal de revisão — só é chamado a partir de um botão que já só aparece
+// pra Administrador/Provedor em renderDocumentosTurma (o banco confirma o
+// perfil de novo, então não depende só desta tela escondida).
+async function abrirModalReaproveitamentoAssinaturas(turmaId) {
+  showLoading('Calculando...');
+  let propostas;
+  try { propostas = await _calcularReaproveitamentosDisponiveis(turmaId); }
+  finally { hideLoading(); }
+  if (!propostas.length) { showToast('Nenhum reaproveitamento disponível no momento.', 'info'); return; }
+
+  const linhas = propostas.map((p,i) => `
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" checked data-idx="${i}" style="margin-top:3px">
+      <div style="font-size:13px;color:var(--text-1)">
+        <strong>${escapeHtml(p.colaboradorNome)}</strong><br>
+        <span style="color:var(--text-2)">Assinatura de ${formatarData(p.sessaoOrigemData)} será usada para comprovar presença em ${formatarData(p.sessaoDestinoData)}.</span>
+      </div>
+    </label>`).join('');
+
+  abrirModal('Reaproveitar assinaturas entre dias', `
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.5">
+      Os alunos abaixo têm assinatura coletada em pelo menos 1 dia desta turma, mas faltam em outro(s). Revise cada item — desmarque o que não quiser aplicar — antes de confirmar. A assinatura original não é alterada nem apagada.
+    </div>
+    <div id="_listaReaproveitamento" style="max-height:320px;overflow:auto">${linhas}</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:var(--text-1);font-weight:600">
+      <input type="checkbox" id="_confReaproveitamento">
+      Confirmo que revisei a lista acima e autorizo o reaproveitamento das assinaturas marcadas.
+    </label>
+    <div style="font-size:11px;color:var(--text-3);margin-top:6px">Fica registrado, em auditoria, que este dia foi comprovado com uma assinatura de outro encontro — e a Ficha de Presença passa a indicar isso também.</div>
+  `, `
+    <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+    <button class="btn btn-navy" id="_btnConfirmarReaproveitamento" onclick="_confirmarReaproveitamentoAssinaturas('${turmaId}')" disabled>Confirmar reaproveitamento</button>
+  `);
+  window._propostasReaproveitamento = propostas;
+
+  const chk = document.getElementById('_confReaproveitamento');
+  const btn = document.getElementById('_btnConfirmarReaproveitamento');
+  if (chk && btn) chk.addEventListener('change', () => { btn.disabled = !chk.checked; });
+}
+
+async function _confirmarReaproveitamentoAssinaturas(turmaId) {
+  const propostas = window._propostasReaproveitamento || [];
+  const chk = document.getElementById('_confReaproveitamento');
+  if (!chk || !chk.checked) return;
+  const marcados = [...document.querySelectorAll('#_listaReaproveitamento input[type=checkbox]:checked')]
+    .map(el => propostas[parseInt(el.dataset.idx, 10)]).filter(Boolean);
+  if (!marcados.length) { showToast('Nenhum item selecionado.', 'error'); return; }
+
+  fecharModal();
+  showLoading(`Reaproveitando ${marcados.length} assinatura(s)...`);
+  let ok = 0, falhas = 0;
+  try {
+    for (const p of marcados) {
+      const {error} = await sb.rpc('reaproveitar_assinatura_presenca', {
+        p_sessao_destino_id: p.sessaoDestinoId,
+        p_colaborador_id: p.colaboradorId,
+        p_sessao_origem_id: p.sessaoOrigemId,
+      });
+      if (error) { falhas++; console.error('Reaproveitamento falhou:', p, error); }
+      else ok++;
+    }
+  } finally {
+    hideLoading();
+    delete window._propostasReaproveitamento;
+  }
+  if (ok && !falhas) showToast(`${ok} assinatura(s) reaproveitada(s) com sucesso.`, 'success');
+  else if (ok && falhas) showToast(`${ok} reaproveitada(s), ${falhas} não puderam ser reaproveitadas — veja o console.`, 'error');
+  else showToast('Não foi possível reaproveitar as assinaturas selecionadas.', 'error');
+  await renderDocumentosTurma(turmaId);
+}
+
 // Verifica se todos os encontros da turma já foram concluídos — mesma regra
 // já usada na tela "Documentos da turma" (renderDocumentosTurma), reaproveitada
 // aqui para bloquear a geração de documentos, não só colorir um indicador.
@@ -18078,6 +18227,10 @@ async function gerarListaPresenca(turmaId, sessaoId) {
           nome: pdfSafe(p.colaboradores?.nome||'',44),
           cpf: pdfSafe(p.colaboradores?.cpf||'-',20),
           assinatura,
+          // 2026-08-13: marca quando esta assinatura veio de reaproveitamento
+          // entre dias (ver _calcularReaproveitamentosDisponiveis) — usado só
+          // pra desenhar o indicador visual "↻" na ficha, nunca muda o dado.
+          reaproveitada: !!(pr && pr.assinatura_origem_sessao_id),
         });
       }
       // 2026-08 (correção de causa raiz): antes este valor era um "8" fixo,
@@ -18112,12 +18265,15 @@ async function gerarListaPresenca(turmaId, sessaoId) {
         if (pgf > 1) doc.addPage('a4','portrait');
         const fatiaP = participantesAv
           .slice((pgf-1)*AV_FICHA_MAX_ROWS, pgf*AV_FICHA_MAX_ROWS)
-          .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf, assinatura: p.assinatura }));
+          .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf, assinatura: p.assinatura, reaproveitada: p.reaproveitada }));
         desenharFichaPresencaAvanteseg(doc, {
           ..._camposBaseFicha,
           encontroIdx: indiceEncontro+1,
           encontroTotal: sessoesOrdenadas.length,
           participantes: fatiaP,
+          // 2026-08-13: só esta página precisa da nota de rodapé sobre
+          // reaproveitamento — cada página soma seus próprios participantes.
+          notaReaproveitamento: fatiaP.some(p => p.reaproveitada),
           instrutorCargo: instDescCompletaFicha,
           logoAvantesegDataUrl: _logoAvantesegFicha?.dataUrl,
           // 2026-08-06: faltava encaminhar a assinatura do instrutor pra esta
@@ -18222,6 +18378,9 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     const {data:presencas} = await sb.from('presencas').select('*').eq('sessao_id', sessaoId);
     const presMap = {};
     (presencas||[]).forEach(p=>{ presMap[p.colaborador_id]=p; });
+    // 2026-08-13: marca se pelo menos 1 assinatura desta ficha veio de
+    // reaproveitamento entre dias — controla a legenda de rodapé abaixo.
+    let houveReaproveitamento = false;
 
     for (let i=0;i<participantes.length;i++) {
       const p = participantes[i];
@@ -18266,8 +18425,22 @@ async function gerarListaPresenca(turmaId, sessaoId) {
             if (imgData) doc.addImage(imgData,'PNG',mg+108,y+1,42,rowH-3);
           }
         } catch(e){}
+        // 2026-08-13: indicador discreto de assinatura reaproveitada de
+        // outro dia da turma — não altera a imagem, só marca visualmente.
+        if (pr.assinatura_origem_sessao_id) {
+          houveReaproveitamento = true;
+          doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
+          doc.text('↻', mg+152, y+9);
+        }
       }
       y += rowH;
+    }
+
+    // Legenda de reaproveitamento (2026-08-13) — só aparece se pelo menos 1
+    // assinatura desta ficha foi reaproveitada de outro dia da turma.
+    if (houveReaproveitamento) {
+      doc.setFont('helvetica','italic'); doc.setFontSize(6.5); doc.setTextColor(...TEXT3);
+      doc.text('↻ Assinatura coletada em outro encontro desta turma e reaproveitada com autorização de Administrador/Provedor.', mg, y+4);
     }
 
     // ── Rodapé ──
@@ -19352,6 +19525,24 @@ async function renderDocumentosTurma(turmaId) {
     // os demais aparecem marcados como "presença incompleta", não "pendente"
     // (não é que falte gerar, é que não podem receber certificado).
     const elegiveisDoc  = await _participantesElegiveisCertificado(turmaId);
+
+    // Banner de reaproveitamento de assinatura entre dias (2026-08-13) —
+    // só calculado e mostrado para Administrador/Provedor; o banco confirma
+    // o perfil de novo na RPC, então esconder da tela é só uma segunda camada.
+    let htmlReaproveitamento = '';
+    if (usuarioAtual?.perfil === 'provedor' || usuarioAtual?.perfil === 'administrador') {
+      const propostasReap = await _calcularReaproveitamentosDisponiveis(turmaId);
+      if (propostasReap.length) {
+        const alunosAfetados = new Set(propostasReap.map(p=>p.colaboradorId)).size;
+        htmlReaproveitamento = `
+          <div class="card" style="margin-bottom:16px;background:var(--amber-l);border:1px solid var(--amber)">
+            <div style="font-size:13px;font-weight:600;color:var(--amber-text)">⚠️ ${alunosAfetados} aluno(s) com assinatura em outro dia, mas faltando em ${propostasReap.length} dia(s)</div>
+            <div style="font-size:12px;color:var(--amber-text);margin-top:4px;line-height:1.5">É possível reaproveitar, de forma controlada e auditável, a assinatura já coletada em outro encontro desta turma para cobrir os dias sem coleta.</div>
+            <button class="btn btn-amber btn-sm" style="margin-top:10px" onclick="abrirModalReaproveitamentoAssinaturas('${turmaId}')">Revisar e reaproveitar assinaturas</button>
+          </div>`;
+      }
+    }
+
     const geradosIndArr = participantes.filter(p => !!docsMap['certificado_individual'+p.colaborador_id+'']);
     const geradosInd    = geradosIndArr.length;
     const temTodosInd   = totalInd > 0 && geradosInd === totalInd;
@@ -19534,6 +19725,7 @@ async function renderDocumentosTurma(turmaId) {
       </div>
 
       ${htmlTrilha}
+      ${htmlReaproveitamento}
       ${htmlDocumentos}
       ${htmlEnvio}
       ${htmlStatusSoc}`;
