@@ -704,6 +704,54 @@ const SUPABASE_URL = 'https://cldbqcpnzitwqvgqbipz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_uuOYchKEtJXdYPI0pKmM_A_mtp-ihMT';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ============================================================
+// TRADUÇÃO DE MENSAGENS DE ERRO (Supabase Auth/GoTrue, PostgREST,
+// rede) PARA PORTUGUÊS DO BRASIL
+//
+// Supabase (GoTrue/PostgREST) devolve mensagens de erro sempre em inglês
+// por padrão — não há como configurar isso no backend. O padrão usado até
+// aqui no app (`e.message || 'texto padrão em português'`) só cai no
+// texto padrão quando `e.message` está vazio, e por isso deixava passar
+// direto para o usuário mensagens técnicas em inglês (ex.: "Invalid login
+// credentials") sempre que existiam.
+//
+// traduzErroSupabase() resolve isso sem regressão: se a mensagem bater com
+// um padrão técnico conhecido (linha do _MAPA_ERROS_PT), devolve a tradução
+// em português. Caso contrário, mantém EXATAMENTE o comportamento antigo:
+// devolve a mensagem original se existir (o que cobre os `throw new
+// Error('texto em português')` que o próprio app já lança em vários
+// pontos), ou o texto padrão do call site se não houver mensagem alguma.
+// ============================================================
+const _MAPA_ERROS_PT = [
+  [/invalid login credentials/i, 'Credenciais de acesso inválidas. Verifique seu usuário e senha e tente novamente.'],
+  [/email not confirmed/i, 'E-mail ainda não confirmado. Verifique sua caixa de entrada.'],
+  [/user already registered|already been registered/i, 'Este e-mail já está cadastrado.'],
+  [/password should be at least/i, 'A senha deve ter no mínimo 6 caracteres.'],
+  [/rate limit/i, 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.'],
+  [/token has expired or is invalid|invalid refresh token/i, 'Sua sessão expirou. Faça login novamente.'],
+  [/jwt expired/i, 'Sua sessão expirou. Faça login novamente.'],
+  [/user not found/i, 'Usuário não encontrado.'],
+  [/signups? not allowed|signup is disabled/i, 'Cadastro não permitido no momento.'],
+  [/failed to fetch|network ?error|load failed/i, 'Falha de conexão. Verifique sua internet e tente novamente.'],
+  [/duplicate key value violates unique constraint/i, 'Já existe um registro com essas informações.'],
+  [/violates foreign key constraint/i, 'Não é possível concluir: há registros vinculados a este item.'],
+  [/violates row-level security/i, 'Você não tem permissão para realizar esta ação.'],
+  [/violates check constraint/i, 'Os dados informados não atendem às regras do sistema.'],
+  [/value too long for type/i, 'Um dos campos informados excede o tamanho máximo permitido.'],
+  [/invalid input syntax/i, 'Um dos campos foi preenchido em um formato inválido.'],
+];
+
+function traduzErroSupabase(erro, textoPadrao) {
+  const bruto = (erro && (erro.message || erro.error_description || erro.msg)) || (typeof erro === 'string' ? erro : '') || '';
+  if (bruto) {
+    for (const [re, pt] of _MAPA_ERROS_PT) {
+      if (re.test(bruto)) return pt;
+    }
+    return bruto;
+  }
+  return textoPadrao;
+}
+
 // Captura o retorno do link de recuperação de senha (enviarRecuperacaoSenha,
 // em Minha Conta) — o supabase-js detecta o token na URL automaticamente e
 // dispara este evento antes de qualquer outra coisa rodar. Guardamos numa
@@ -951,7 +999,7 @@ async function _dispensarAlerta(orgId, categoria, assinatura) {
     );
     showToast('Alerta descartado — volta a aparecer se a situação mudar.', 'success');
   } catch(e) {
-    showToast('Não foi possível descartar: ' + e.message, 'error');
+    showToast('Não foi possível descartar: ' + traduzErroSupabase(e, 'erro desconhecido'), 'error');
     return;
   }
   if (paginaAtual === 'home' && usuarioAtual?.perfil === 'provedor') await renderHomeProvedor();
@@ -1414,7 +1462,7 @@ async function iniciarModoSuporte(orgId) {
 
     showToast(`Modo suporte ativo — ${_suporteOrgNome}`, 'info');
   } catch(e) {
-    showToast(e.message || 'Erro ao iniciar modo suporte', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao iniciar modo suporte'), 'error');
   } finally {
     hideLoading();
   }
@@ -1612,7 +1660,7 @@ async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId, cnaeId, 
       showToast('Dados preenchidos pela Receita Federal','success');
     }
   } catch(e) {
-    showToast(e.message||'Erro ao consultar CNPJ','error');
+    showToast(traduzErroSupabase(e,'Erro ao consultar CNPJ'),'error');
   } finally {
     if (btn) { btn.disabled=false; btn.textContent='Consultar'; }
   }
@@ -2355,7 +2403,7 @@ async function fazerLogin() {
     usuarioAtual = perfil;
     await entrarNoApp();
   } catch(e) {
-    err.textContent = e.message || 'E-mail ou senha incorretos.';
+    err.textContent = traduzErroSupabase(e, 'E-mail ou senha incorretos.');
     err.classList.add('show');
     btn.disabled = false; btn.textContent = 'Entrar';
   }
@@ -2402,7 +2450,7 @@ async function _enviarRecuperacaoSenhaLogin() {
     fecharModal();
     showToast('Se esse e-mail estiver cadastrado, você vai receber um link de recuperação em instantes.', 'success', 7000);
   } catch(e) {
-    showToast(e.message || 'Erro ao solicitar recuperação de senha', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao solicitar recuperação de senha'), 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Enviar link';
   }
@@ -2592,7 +2640,7 @@ async function irPara(pagina, params={}) {
     }
   } catch(e) {
     console.error(e);
-    renderErro(e.message);
+    renderErro(traduzErroSupabase(e));
   } finally {
     hideLoading();
   }
@@ -3077,7 +3125,7 @@ async function exportarPainelExecutivoPDF() {
     showToast('PDF executivo gerado.', 'success');
   } catch(e) {
     console.error(e);
-    showToast('Erro ao gerar PDF: ' + e.message, 'error');
+    showToast('Erro ao gerar PDF: ' + traduzErroSupabase(e, 'erro desconhecido'), 'error');
   }
 }
 
@@ -3185,7 +3233,7 @@ async function salvarNovaOrg() {
     await renderHomeProvedor();
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message || 'Erro ao criar organização', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao criar organização'), 'error');
   }
 }
 
@@ -3434,7 +3482,7 @@ async function salvarIntegracaoSocOrg(orgId) {
   }
 
   const { data, error } = await sb.from('soc_ged_config').upsert(dados, { onConflict: 'org_id' }).select('*').single();
-  if (error) { showToast(`Não foi possível salvar: ${error.message}`, 'error'); return; }
+  if (error) { showToast(`Não foi possível salvar: ${traduzErroSupabase(error, 'erro desconhecido')}`, 'error'); return; }
 
   window._orgSocGedConfigAtual = data;
   _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
@@ -3495,7 +3543,7 @@ async function salvarNotaOrg() {
   }).select('id,texto,autor_nome,criado_em').single();
 
   if (error) {
-    showToast(`Não foi possível salvar a nota: ${error.message}`, 'error');
+    showToast(`Não foi possível salvar a nota: ${traduzErroSupabase(error, 'erro desconhecido')}`, 'error');
     return;
   }
 
@@ -3557,7 +3605,7 @@ function _alterarPorPaginaUsuariosOrg(v) {
 async function ativarOrg(orgId) {
   if (usuarioAtual.perfil !== 'provedor') { showToast('Apenas o provedor pode ativar organizações','error'); return; }
   const { error } = await sb.from('organizacoes').update({ ativo: true }).eq('id', orgId);
-  if (error) { showToast(error.message, 'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error, 'Não foi possível ativar a organização.'), 'error'); return; }
   showToast('Organização ativada!', 'success');
   await renderHomeProvedor();
 }
@@ -3567,7 +3615,7 @@ async function desativarOrg(orgId) {
   const ok = await confirmarAcao('Deseja desativar esta organização? Os usuários não conseguirão acessar o sistema.', 'Desativar', true);
   if (!ok) return;
   const { error } = await sb.from('organizacoes').update({ ativo: false }).eq('id', orgId);
-  if (error) { showToast(error.message, 'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error, 'Não foi possível desativar a organização.'), 'error'); return; }
 
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -3658,7 +3706,7 @@ async function alterarPlanoOrg() {
     await verOrgProvedor(orgId);
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message || 'Erro ao alterar plano', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao alterar plano'), 'error');
   }
 }
 
@@ -5312,7 +5360,7 @@ async function uploadLogoOrganizacao(inputEl, orgId) {
     if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise';
     showToast('Logomarca enviada!','success');
   } catch(e) {
-    showToast(e.message||'Erro ao enviar logomarca','error');
+    showToast(traduzErroSupabase(e,'Erro ao enviar logomarca'),'error');
     if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise';
   } finally {
     inputEl.value = '';
@@ -5341,7 +5389,7 @@ async function removerLogoOrganizacao(orgId) {
     if (orgCache) orgCache.logo_url = null;
     showToast('Logomarca removida.','success');
     abrirModalOrg(orgId); // reabre o modal para refletir o estado sem logo
-  } catch(e) { showToast(e.message||'Erro ao remover logomarca','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao remover logomarca'),'error'); }
 }
 
 // ------------------------------------------------------------------
@@ -5435,7 +5483,7 @@ async function uploadArteFundoOrg(inputEl, orgId, campo) {
     showToast(`Arte da ${slot.label} enviada!`,'success');
     abrirEditorCertificado(orgId, campo === 'cert_arte_fundo_url' ? 'capa' : 'contracapa');
   } catch(e) {
-    showToast(e.message||'Erro ao enviar arte','error');
+    showToast(traduzErroSupabase(e,'Erro ao enviar arte'),'error');
   } finally {
     inputEl.value = '';
     hideLoading();
@@ -5462,7 +5510,7 @@ async function removerArteFundoOrg(orgId, campo) {
     if (orgCache) Object.assign(orgCache, patch);
     showToast('Arte removida.','success');
     abrirEditorCertificado(orgId, campo === 'cert_arte_fundo_url' ? 'capa' : 'contracapa');
-  } catch(e) { showToast(e.message||'Erro ao remover arte','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao remover arte'),'error'); }
 }
 
 // ------------------------------------------------------------------
@@ -5556,7 +5604,7 @@ async function _selecionarNivelCertificado(orgId, nivel, modeloId) {
     showToast('Certificado atualizado!','success');
     if (nivel === 'padrao') { abrirModalOrg(orgId); }
     else abrirGaleriaModelosCertificado(orgId);
-  } catch(e) { showToast(e.message||'Erro ao atualizar certificado','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao atualizar certificado'),'error'); }
 }
 
 // ------------------------------------------------------------------
@@ -5845,7 +5893,7 @@ async function _salvarEditorCertCapa() {
     const orgIdReabrir = _editorCertOrgId;
     fecharModal();
     abrirModalOrg(orgIdReabrir);
-  } catch(e) { showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 async function salvarOrg() {
@@ -5892,7 +5940,7 @@ async function salvarOrg() {
       } catch(e2) { showToast('Organização criada, mas houve um erro ao carregar o catálogo modelo — carregue depois pela tela Catálogo. Detalhe: '+(e2.message||''),'error',7000); }
     }
     await renderOrgs();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 async function toggleOrg(id) {
@@ -5902,7 +5950,7 @@ async function toggleOrg(id) {
   const ok = await confirmarAcao(`Deseja ${org.ativo?'desativar':'ativar'} esta organização?`, org.ativo?'Desativar':'Ativar', org.ativo);
   if (!ok) return;
   const {error} = await sb.from('organizacoes').update({ativo:!org.ativo}).eq('id',id);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível atualizar a organização.'),'error'); return; }
   showToast(`Organização ${org.ativo?'desativada':'ativada'}!`,'success');
   await renderOrgs();
 }
@@ -6031,7 +6079,7 @@ async function _confirmarAlterarSenhaGerenciado(usuarioId) {
     if (!res.ok) throw new Error(resultado.error||'Erro ao alterar senha');
     showToast('Senha alterada com sucesso!','success');
     _ocultarFormSenhaGerenciado();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao alterar senha','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao alterar senha'),'error'); }
 }
 
 // Ativa/inativa um usuário gerenciado pelo Administrador (própria org) ou
@@ -6058,7 +6106,7 @@ async function _toggleAtivoUsuarioGerenciado(usuarioId, orgId) {
     } else if (paginaAtual === 'equipe') {
       await renderEquipe();
     }
-  } catch(e) { showToast(e.message||'Erro ao atualizar usuário','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao atualizar usuário'),'error'); }
 }
 
 async function salvarUsuarioOrg() {
@@ -6084,7 +6132,7 @@ async function salvarUsuarioOrg() {
     await verUsuarioEquipe(usuarioId);
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message || 'Erro ao salvar usuário', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao salvar usuário'), 'error');
   }
 }
 
@@ -6128,7 +6176,7 @@ async function criarUsuarioOrg() {
     fecharModal(); showToast(`${nome} criado com sucesso!`,'success');
   } catch(e) {
     setBtnModalLoading(false);
-    const msg = e.message || 'Erro ao criar usuário';
+    const msg = traduzErroSupabase(e, 'Erro ao criar usuário');
     showToast(msg, 'error');
     // Mostrar erro também dentro do modal para não perder o contexto
     const modalBody = document.querySelector('.modal-body');
@@ -6469,7 +6517,7 @@ async function salvarCliente() {
     if (error) throw error;
     fecharModal(); showToast(_modalCurrentId?'Cliente atualizado!':'Cliente cadastrado!','success');
     await renderClientes();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 async function toggleCliente(id) {
@@ -6479,7 +6527,7 @@ async function toggleCliente(id) {
   const ok = await confirmarAcao(`Deseja ${c.ativo?'desativar':'ativar'} este cliente?`, c.ativo?'Desativar':'Ativar', c.ativo);
   if (!ok) return;
   const {error} = await sb.from('clientes').update({ativo:!c.ativo}).eq('id',id);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível atualizar o cliente.'),'error'); return; }
   showToast(`Cliente ${c.ativo?'desativado':'ativado'}!`,'success');
   await renderClientes();
 }
@@ -6609,7 +6657,7 @@ async function executarImportacaoClientes() {
     await renderClientes();
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message||'Erro ao importar','error');
+    showToast(traduzErroSupabase(e,'Erro ao importar'),'error');
   }
 }
 
@@ -6944,7 +6992,7 @@ async function salvarColab() {
     if (!salvo || !salvo.length) throw new Error('Nada foi gravado — confira se o colaborador ainda existe (nenhuma linha foi afetada).');
     fecharModal(); showToast(_modalCurrentId?'Colaborador atualizado!':'Colaborador cadastrado!','success');
     await renderColaboradores();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 // ============================================================
@@ -7866,7 +7914,7 @@ async function _confSalvarStatus(id, btn) {
     await renderConformidade(true);
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = rotuloOriginal; }
-    showToast(e.message||'Erro ao salvar','error');
+    showToast(traduzErroSupabase(e,'Erro ao salvar'),'error');
   }
 }
 
@@ -7889,7 +7937,7 @@ async function reabrirPendencia(id) {
     });
     showToast('Pendência reaberta!','success');
     await renderConformidade(true);
-  } catch(e) { showToast(e.message||'Erro','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro'),'error'); }
 }
 
 // ── Treinamento externo ──────────────────────────────────────────────
@@ -8031,7 +8079,7 @@ async function salvarTreinoExterno() {
     }
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message || 'Erro ao salvar treinamento externo', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao salvar treinamento externo'), 'error');
   }
 }
 
@@ -8073,7 +8121,7 @@ async function abrirModalAdicionarEmTurmaExistente(id) {
         }).join('')}
       </div>`,
       `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`);
-  } catch(e) { hideLoading(); showToast(e.message||'Erro ao buscar turmas','error'); }
+  } catch(e) { hideLoading(); showToast(traduzErroSupabase(e,'Erro ao buscar turmas'),'error'); }
 }
 
 async function confirmarAdicionarEmTurma(turmaId) {
@@ -8105,7 +8153,7 @@ async function confirmarAdicionarEmTurma(turmaId) {
     fecharModal();
     showToast('Colaborador adicionado à turma!','success');
     await renderConformidade(true);
-  } catch(e) { showToast(e.message||'Erro','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro'),'error'); }
 }
 
 function menuCatalogo(btn, id) {
@@ -8148,7 +8196,7 @@ async function arquivarCatalogo(id) {
   delete window._resolveArq;
   if (!confirmado) return;
   const {error} = await sb.from('catalogo').update({arquivado:true, ativo:false}).eq('id',id);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível arquivar o treinamento.'),'error'); return; }
   showToast(`"${escapeHtml(t.nome)}" arquivado.`, 'success');
   await renderCatalogo();
 }
@@ -8158,7 +8206,7 @@ async function desarquivarCatalogo(id) {
   const t = _catalogoCache.find(x=>x.id===id);
   if (!t) return;
   const {error} = await sb.from('catalogo').update({arquivado:false, ativo:true}).eq('id',id);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível restaurar o treinamento.'),'error'); return; }
   showToast(`"${escapeHtml(t.nome)}" restaurado.`, 'success');
   await renderCatalogo();
 }
@@ -8258,7 +8306,7 @@ async function salvarCatalogo() {
     if (_modalCurrentId) { try { await _recalcularVencimentosCatalogo(_modalCurrentId, validade); } catch(e) {} }
     fecharModal(); showToast(_modalCurrentId?'Treinamento atualizado!':'Treinamento cadastrado!','success');
     await renderCatalogo();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 async function duplicarCatalogo(id) {
@@ -8279,7 +8327,7 @@ async function duplicarCatalogo(id) {
     if (error) throw error;
     showToast(`"${escapeHtml(t.nome)}" duplicado.`,'success');
     await renderCatalogo();
-  } catch(e) { showToast(e.message||'Erro ao duplicar','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao duplicar'),'error'); }
 }
 
 // ============================================================
@@ -8486,7 +8534,7 @@ async function carregarCatalogoModeloUI() {
     const n = await importarCatalogoModelo(usuarioAtual.org_id);
     showToast(n > 0 ? `${n} treinamento${n!==1?'s':''} adicionado${n!==1?'s':''} ao catálogo!` : 'Seu catálogo já tem todos os treinamentos do modelo — nada novo para adicionar.', 'success');
     await renderCatalogo();
-  } catch(e) { showToast(e.message||'Erro ao carregar catálogo modelo','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao carregar catálogo modelo'),'error'); }
 }
 
 // Acionado pelo Provedor (menu de ações da organização) para levar o
@@ -8500,7 +8548,7 @@ async function carregarCatalogoModeloOrgUI(orgId) {
   try {
     const n = await importarCatalogoModelo(orgId);
     showToast(n > 0 ? `${n} treinamento${n!==1?'s':''} adicionado${n!==1?'s':''} ao catálogo de ${escapeHtml(org?.nome||'organização')}.` : 'Essa organização já tem todos os treinamentos do modelo.', 'success');
-  } catch(e) { showToast(e.message||'Erro ao carregar catálogo modelo','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao carregar catálogo modelo'),'error'); }
 }
 
 // ============================================================
@@ -9212,7 +9260,7 @@ async function salvarClienteRapido() {
     showToast(`${nome} cadastrado!`,'success');
     await abrirModalTurma(turmaId||null);
     setTimeout(()=>{ if (data) _comboBuscavelSelecionar('mTurCli', data.id); },100);
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 async function salvarTurma() {
@@ -9264,7 +9312,7 @@ async function salvarTurma() {
     // já que editar normalmente é feito a partir de lá.
     if (eraCriacao) { await verTurma(salva[0].id); }
     else { await renderTurmas(); }
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 function abrirModalCancelarTurma(id) {
@@ -9297,7 +9345,7 @@ async function confirmarCancelarTurma() {
     await renderTurmas();
   } catch(e) {
     setBtnModalLoading(false);
-    const msg = e.message || 'Erro ao criar usuário';
+    const msg = traduzErroSupabase(e, 'Erro ao criar usuário');
     showToast(msg, 'error');
     // Mostrar erro também dentro do modal para não perder o contexto
     const modalBody = document.querySelector('.modal-body');
@@ -9350,7 +9398,7 @@ async function confirmarExcluirTurma() {
     fecharModal();
     showToast('Turma excluída permanentemente','info');
     await renderTurmas();
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao excluir','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao excluir'),'error'); }
 }
 
 // ---- Agendamentos ----
@@ -9600,7 +9648,7 @@ async function salvarAgendamento() {
       showToast('Esse instrutor acabou de ser agendado por outro usuário para esse horário — escolha outro horário ou instrutor.','error');
       _agVerificarConflito();
     } else {
-      showToast(e.message||'Erro ao salvar','error');
+      showToast(traduzErroSupabase(e,'Erro ao salvar'),'error');
     }
   }
 }
@@ -9618,7 +9666,7 @@ async function excluirAgendamento(agId, turmaId) {
   const ok = await confirmarAcao('Deseja excluir este agendamento?', 'Excluir', true);
   if (!ok) return;
   const {error} = await sb.from('sessoes').delete().eq('id',agId);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível excluir o agendamento.'),'error'); return; }
   showToast('Agendamento excluído','info');
   await verTurma(turmaId);
 }
@@ -9629,7 +9677,7 @@ async function removerParticipante(presencaId, turmaId) {
   const ok = await confirmarAcao('Deseja remover este participante da turma?', 'Remover', true);
   if (!ok) return;
   const {error} = await sb.from('turma_participantes').delete().eq('id',presencaId);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível remover o participante.'),'error'); return; }
   showToast('Participante removido','info');
   await verTurma(turmaId);
 }
@@ -9981,7 +10029,7 @@ async function executarImportacao() {
     await renderClientes();
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message||'Erro ao importar','error');
+    showToast(traduzErroSupabase(e,'Erro ao importar'),'error');
   }
 }
 
@@ -10318,7 +10366,7 @@ async function executarImportacaoSOC() {
     else await renderColaboradores();
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message || 'Erro ao importar do SOC', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao importar do SOC'), 'error');
   }
 }
 
@@ -10363,7 +10411,7 @@ let _socWsSelecionados = new Set();  // chaves (codigo ou cpf) dos funcionários
 async function _socWsChamar(acao, extra = {}) {
   const resp = await sb.functions.invoke('soc-integracao', {body: {acao, orgId: usuarioAtual.org_id, ...extra}});
   if (resp.error) {
-    let detalhe = resp.error.message || 'Erro ao consultar o SOC';
+    let detalhe = traduzErroSupabase(resp.error, 'Erro ao consultar o SOC');
     try {
       const ctx = resp.error.context;
       if (ctx && typeof ctx.clone === 'function') {
@@ -10560,7 +10608,7 @@ async function _socWsConfirmarImportacao() {
     await executarImportacaoSOC();
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Importar selecionados'; }
-    showToast(e.message || 'Erro ao preparar a importação.', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao preparar a importação.'), 'error');
   }
 }
 
@@ -11859,7 +11907,7 @@ async function _agRapidaSalvarTurmaEAgendamento() {
     novaTurmaId = turmaSalva[0].id;
   } catch(e) {
     setBtnModalLoading(false);
-    showToast(e.message||'Erro ao criar a turma','error');
+    showToast(traduzErroSupabase(e,'Erro ao criar a turma'),'error');
     return;
   }
 
@@ -12289,7 +12337,7 @@ async function verHistoricoTurma(turmaId) {
     `);
   } catch(e) {
     hideLoading();
-    renderErro(e.message);
+    renderErro(traduzErroSupabase(e));
   }
 }
 
@@ -12529,7 +12577,7 @@ async function iniciarExecucaoSessao(turmaId, sessaoId) {
   const okIniciaSessao = await confirmarAcao('Deseja iniciar o treinamento de hoje? O status será alterado para "Em andamento".', 'Iniciar', false);
   if (!okIniciaSessao) return;
   const {error} = await sb.from('turmas').update({status:'em_andamento'}).eq('id',turmaId);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível iniciar a execução.'),'error'); return; }
   showToast('Execução iniciada!','success');
   await abrirExecucao(turmaId, sessaoId);
 }
@@ -12538,7 +12586,7 @@ async function iniciarExecucao(turmaId) {
   const okIniciaExec = await confirmarAcao('Deseja iniciar a execução desta turma? O status será alterado para "Em andamento".', 'Iniciar', false);
   if (!okIniciaExec) return;
   const {error} = await sb.from('turmas').update({status:'em_andamento'}).eq('id',turmaId);
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível iniciar a execução.'),'error'); return; }
   showToast('Execução iniciada!','success');
   await abrirExecucao(turmaId);
 }
@@ -12955,7 +13003,7 @@ async function confirmarAssinatura() {
       }
     } else {
       setBtnModalLoading(false);
-      showToast(e.message||'Erro ao salvar assinatura','error');
+      showToast(traduzErroSupabase(e,'Erro ao salvar assinatura'),'error');
       return;
     }
   }
@@ -13060,7 +13108,7 @@ async function adicionarEvidencia(input, tipo) {
         showToast('Não foi possível guardar a foto neste dispositivo: '+(e2.message||''),'error');
       }
     } else {
-      showToast(e.message||'Erro ao enviar foto','error');
+      showToast(traduzErroSupabase(e,'Erro ao enviar foto'),'error');
     }
   } finally {
     const listaEvEl = execEl('listaEvidencias');
@@ -13092,7 +13140,7 @@ async function removerEvidencia(evId, path) {
     const listaEvEl2 = execEl('listaEvidencias');
     if (listaEvEl2) listaEvEl2.innerHTML = _htmlListaEvidencias(window._execEvidencias);
     showToast('Evidência removida','info');
-  } catch(e) { showToast(e.message||'Erro','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro'),'error'); }
 }
 
 function _marcarAnotacoesSalvas(pendente) {
@@ -13144,7 +13192,7 @@ async function salvarAnotacoes(turmaId) {
         showToast('Não foi possível guardar as anotações neste dispositivo: '+(e2.message||''),'error');
       }
     } else {
-      showToast(e.message||'Erro ao salvar anotações','error');
+      showToast(traduzErroSupabase(e,'Erro ao salvar anotações'),'error');
     }
   }
 }
@@ -13195,7 +13243,7 @@ async function finalizarTurma(turmaId) {
         showToast('Não foi possível guardar a finalização neste dispositivo: '+(e2.message||''),'error');
       }
     } else {
-      showToast(e.message||'Erro ao finalizar','error');
+      showToast(traduzErroSupabase(e,'Erro ao finalizar'),'error');
     }
   } finally { hideLoading(); }
 }
@@ -14991,7 +15039,7 @@ async function toggleUsuarioEquipe(id) {
   showLoading();
   const {error} = await sb.from('usuarios').update({ativo:!ativo}).eq('id',id);
   hideLoading();
-  if (error) { showToast(error.message,'error'); return; }
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível atualizar o usuário.'),'error'); return; }
   showToast(`${escapeHtml(u.nome)} ${ativo?'desativado':'reativado'}!`, ativo?'info':'success');
   await renderEquipe();
 }
@@ -15303,7 +15351,7 @@ async function uploadAssinaturaInstrutor(inputEl, targetId, origem) {
     if (origem === 'modal') await abrirModalUsuarioOrg(_modalCurrentId, targetId);
     else await renderContaDocumentos();
   } catch(e) {
-    showToast(e.message||'Erro ao enviar assinatura','error');
+    showToast(traduzErroSupabase(e,'Erro ao enviar assinatura'),'error');
   } finally { hideLoading(); inputEl.value=''; }
 }
 
@@ -15330,7 +15378,7 @@ async function removerAssinaturaInstrutor(targetId, origem) {
     if (origem === 'modal') await abrirModalUsuarioOrg(_modalCurrentId, targetId);
     else await renderContaDocumentos();
   } catch(e) {
-    showToast(e.message||'Erro ao remover assinatura','error');
+    showToast(traduzErroSupabase(e,'Erro ao remover assinatura'),'error');
   } finally { hideLoading(); }
 }
 
@@ -15370,7 +15418,7 @@ async function confirmarAlterarSenha() {
     if (upErr) throw upErr;
     showToast('Senha alterada com sucesso!','success');
     cancelarAlterarSenha();
-  } catch(e) { hideLoading(); showToast(e.message||'Erro ao alterar senha','error'); }
+  } catch(e) { hideLoading(); showToast(traduzErroSupabase(e,'Erro ao alterar senha'),'error'); }
 }
 
 // ------------------------------------------------------------------
@@ -15396,7 +15444,7 @@ async function enviarRecuperacaoSenha() {
     hideLoading();
     if (error) throw error;
     showToast('E-mail de recuperação enviado! Verifique sua caixa de entrada (e o spam).', 'success', 7000);
-  } catch(e) { hideLoading(); showToast(e.message||'Erro ao enviar e-mail de recuperação','error'); }
+  } catch(e) { hideLoading(); showToast(traduzErroSupabase(e,'Erro ao enviar e-mail de recuperação'),'error'); }
 }
 
 // Modal de definição de nova senha, mostrado quando o usuário volta pelo
@@ -15426,7 +15474,7 @@ async function _confirmarNovaSenhaRecuperacao() {
     if (error) throw error;
     fecharModal();
     showToast('Senha atualizada com sucesso!','success');
-  } catch(e) { setBtnModalLoading(false); showToast(e.message||'Erro ao definir nova senha','error'); }
+  } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao definir nova senha'),'error'); }
 }
 
 async function salvarConta() {
@@ -15457,7 +15505,7 @@ async function salvarConta() {
     document.getElementById('sidebarAvatar').textContent = iniciais(nome);
     document.getElementById('sidebarNome').textContent   = nome;
     showToast('Dados atualizados!','success');
-  } catch(e) { showToast(e.message||'Erro ao salvar','error'); }
+  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
 // ============================================================
@@ -15626,7 +15674,7 @@ async function _salvarCertificadoDigital() {
     showToast('Certificado digital cadastrado com sucesso!','success');
     await renderContaDocumentos();
   } catch(e) {
-    showToast(e.message||'Erro ao salvar certificado','error');
+    showToast(traduzErroSupabase(e,'Erro ao salvar certificado'),'error');
     btn.disabled = false; btn.textContent = 'Confirmar e salvar';
   }
 }
@@ -15784,7 +15832,7 @@ window.addEventListener('popstate', async (e) => {
         case 'conta':         await renderConta(); break;
         default: renderEmBreve(TITULOS[pagina]||pagina);
       }
-    } catch(err) { console.error(err); renderErro(err.message); }
+    } catch(err) { console.error(err); renderErro(traduzErroSupabase(err)); }
     finally { hideLoading(); }
   }
 });
@@ -18255,7 +18303,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
   } catch(e) {
     console.error(e);
-    showToast(e.message||'Erro ao gerar PDF','error');
+    showToast(traduzErroSupabase(e,'Erro ao gerar PDF'),'error');
   } finally { hideLoading(); }
 }
 
@@ -18749,7 +18797,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     await salvarDocumentoSupabase(doc,`cert-individual-${colaboradorId}.pdf`,'certificado_individual',turmaId,colaboradorId,codigo);
     showToast(`Certificado de ${s(col.nome,40)} gerado!`,'success');
   } catch(e) {
-    console.error(e); showToast(e.message||'Erro ao gerar certificado','error');
+    console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado'),'error');
   } finally { hideLoading(); }
 }
 
@@ -19257,7 +19305,7 @@ async function gerarCertificadoColetivo(turmaId) {
     await salvarDocumentoSupabase(doc,`cert-coletivo-${turmaId}.pdf`,'certificado_coletivo',turmaId,null,codigo);
     showToast('Certificado coletivo gerado!','success');
   } catch(e) {
-    console.error(e); showToast(e.message||'Erro ao gerar certificado coletivo','error');
+    console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado coletivo'),'error');
   } finally { hideLoading(); }
 }
 
@@ -19562,7 +19610,7 @@ async function gerarTudoEnviarEmail(turmaId) {
     await renderDocumentosTurma(turmaId);
   } catch(e) {
     console.error(e);
-    showToast(e.message || 'Erro ao gerar/enviar documentos', 'error');
+    showToast(traduzErroSupabase(e, 'Erro ao gerar/enviar documentos'), 'error');
   } finally {
     hideLoading();
   }
@@ -19611,7 +19659,7 @@ async function marcarEnvioComoConcluido(turmaId, emailDestino) {
     const erro = await _registrarEnvioEmail(turmaId, emailDestino||'');
     if (erro) {
       console.error('Falha ao marcar envio como concluído manualmente:', erro);
-      showToast(`Não foi possível atualizar o status (${erro.message||erro.code||'erro desconhecido'}). Tente novamente ou verifique as permissões da tabela envios_email no Supabase.`, 'error');
+      showToast(`Não foi possível atualizar o status (${traduzErroSupabase(erro, erro.code||'erro desconhecido')}). Tente novamente ou verifique as permissões da tabela envios_email no Supabase.`, 'error');
       return;
     }
     showToast('Status atualizado — turma marcada como enviada.', 'success');
@@ -19702,7 +19750,7 @@ async function enviarDocumentosPorEmail(turmaId) {
       // status code"). O corpo real do erro fica em resp.error.context (um Response) —
       // sem extrair isso é impossível saber o motivo real (chave do Resend ausente,
       // domínio de envio não verificado, payload inválido, etc).
-      let detalhe = resp.error.message || 'Erro na Edge Function';
+      let detalhe = traduzErroSupabase(resp.error, 'Erro na Edge Function');
       try {
         const ctx = resp.error.context;
         if (ctx && typeof ctx.clone === 'function') {
@@ -19755,7 +19803,7 @@ async function enviarDocumentosPorEmail(turmaId) {
     await renderDocumentosTurma(turmaId);
   } catch(e) {
     console.error(e);
-    showToast(e.message||'Erro ao enviar documentos', 'error');
+    showToast(traduzErroSupabase(e,'Erro ao enviar documentos'), 'error');
   } finally { hideLoading(); }
 }
 
