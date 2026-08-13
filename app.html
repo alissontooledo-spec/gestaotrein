@@ -9577,20 +9577,22 @@ async function _agVerificarConflito() {
   _agAtualizarBotaoSalvar();
 }
 
-// Bloqueio brando (seção 5 da análise) — comercial não consegue salvar em
-// cima de um conflito confirmado; administrador pode forçar (para os
-// casos excepcionais legítimos), sempre com a constraint do banco como
-// garantia final caso o forçar também colida de verdade.
+// Bloqueio brando (seção 5 da análise) — Instrutor e demais perfis não
+// conseguem salvar em cima de um conflito confirmado; Provedor/
+// Administrador/Comercial podem confirmar a sobreposição explicitamente
+// (2026-08-13, a pedido do Alisson — cenário legítimo: mesma empresa,
+// CNPJs diferentes, mesmo treinamento/instrutor/horário/local, realizado
+// de forma conjunta), sempre com a constraint do banco como garantia final.
 function _agAtualizarBotaoSalvar() {
   const btn = document.getElementById('btnSalvarModal');
   if (!btn) return;
-  const podeForcar = usuarioAtual.perfil === 'administrador';
+  const podeForcar = usuarioAtual.perfil === 'provedor' || usuarioAtual.perfil === 'administrador' || usuarioAtual.perfil === 'comercial';
   if (window._agTemConflito && !podeForcar) {
     btn.disabled = true;
-    btn.title = 'Resolva o conflito de horário antes de salvar — ou peça para um administrador confirmar.';
+    btn.title = 'Resolva o conflito de horário antes de salvar — ou peça para um administrador/comercial confirmar.';
   } else {
     btn.disabled = false;
-    btn.title = podeForcar && window._agTemConflito ? 'Há um conflito de horário — salvar mesmo assim, como administrador.' : '';
+    btn.title = podeForcar && window._agTemConflito ? 'Há um conflito de horário — ao salvar, você vai confirmar se as turmas serão realizadas simultaneamente.' : '';
   }
 }
 
@@ -9612,12 +9614,10 @@ async function salvarAgendamento() {
     showToast('A hora de término deve ser depois da hora de início.','error');
     return;
   }
-  // Segunda barreira (a primeira é o botão desabilitado) — cobre o caso de
-  // o usuário disparar salvarAgendamento() por outro caminho.
-  if (window._agTemConflito && usuarioAtual.perfil !== 'administrador') {
-    showToast('Esse instrutor já tem um compromisso nesse horário — ajuste antes de salvar.','error');
-    return;
-  }
+  // Lê todos os campos do modal ANTES de qualquer confirmação abaixo — a
+  // confirmação de sobreposição (confirmarAcao) abre outro modal por cima
+  // deste, então os elementos mAgInstrutor/mAgMod/mAgLocal deixam de
+  // existir no DOM depois disso.
   const dados = {
     turma_id:    turmaId,
     org_id:      usuarioAtual.org_id,
@@ -9628,6 +9628,27 @@ async function salvarAgendamento() {
     modalidade:  document.getElementById('mAgMod')?.value||'presencial',
     local:       document.getElementById('mAgLocal')?.value.trim()||null,
   };
+
+  // Sobreposição autorizada (2026-08-13) — segunda barreira (a primeira é o
+  // botão desabilitado), cobre o caso de salvarAgendamento() ser disparado
+  // por outro caminho. Só Provedor/Administrador/Comercial podem confirmar;
+  // qualquer outro perfil continua bloqueado, igual sempre foi.
+  if (window._agTemConflito) {
+    const podeAutorizar = usuarioAtual.perfil === 'provedor' || usuarioAtual.perfil === 'administrador' || usuarioAtual.perfil === 'comercial';
+    if (!podeAutorizar) {
+      showToast('Esse instrutor já tem um compromisso nesse horário — ajuste antes de salvar.','error');
+      return;
+    }
+    const confirmou = await confirmarAcao(
+      'Este instrutor já possui uma turma agendada neste dia e horário. Confirme apenas se os treinamentos serão realizados de forma conjunta (mesmo instrutor, mesmo local — turmas separadas, por exemplo, por empresa ou CNPJ). A sobreposição fica registrada para auditoria.',
+      'Confirmar sobreposição e agendar',
+      false
+    );
+    if (!confirmou) return;
+    dados.conflito_autorizado = true;
+    showLoading('Salvando agendamento...');
+  }
+
   try {
     setBtnModalLoading(true);
     const {error} = window._agendamentoEditId
@@ -9650,6 +9671,8 @@ async function salvarAgendamento() {
     } else {
       showToast(traduzErroSupabase(e,'Erro ao salvar'),'error');
     }
+  } finally {
+    hideLoading();
   }
 }
 
@@ -10955,7 +10978,7 @@ async function _agEquipeCarregarDados() {
   const [instrutores, sessoesResp, turmasResp] = await Promise.all([
     _carregarInstrutores(),
     sb.from('sessoes')
-      .select('id,turma_id,hora_inicio,hora_fim,instrutor_id,cancelada,concluida,turmas(status,catalogo(nome),clientes(nome))')
+      .select('id,turma_id,hora_inicio,hora_fim,instrutor_id,cancelada,concluida,conflito_autorizado,turmas(status,catalogo(nome),clientes(nome))')
       .eq('org_id', usuarioAtual.org_id)
       .eq('data', data)
       .eq('cancelada', false)
@@ -11185,7 +11208,7 @@ async function _agEquipeCarregarDadosIntervalo(dataIni, dataFim) {
   const [instrutores, sessoesResp, turmasResp] = await Promise.all([
     _carregarInstrutores(),
     sb.from('sessoes')
-      .select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,cancelada,concluida,turmas(status,catalogo(nome),clientes(nome))')
+      .select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,cancelada,concluida,conflito_autorizado,turmas(status,catalogo(nome),clientes(nome))')
       .eq('org_id', usuarioAtual.org_id)
       .gte('data', dataIni)
       .lte('data', dataFim)
@@ -11270,13 +11293,22 @@ function _agEquipeRenderSemana() {
     const porInstrutor = {};
     (sessoesPorDia[data]||[]).forEach(s => { if (s.instrutor_id) (porInstrutor[s.instrutor_id]=porInstrutor[s.instrutor_id]||[]).push(s); });
     Object.values(porInstrutor).forEach(lista => {
-      lista.forEach(s=>{ s._conflito=false; });
+      lista.forEach(s=>{ s._conflito=false; s._sobreposicaoAutorizada=false; });
       for (let a=0;a<lista.length;a++) for (let b=a+1;b<lista.length;b++) {
         const x=lista[a], y=lista[b];
         const xIni=_agEquipeMinutosDeHora(x.hora_inicio), xFim=_agEquipeMinutosDeHora(x.hora_fim);
         const yIni=_agEquipeMinutosDeHora(y.hora_inicio), yFim=_agEquipeMinutosDeHora(y.hora_fim);
         if (xIni==null||xFim==null||yIni==null||yFim==null) continue;
-        if (xIni<yFim && yIni<xFim && (!x.concluida||!y.concluida)) { x._conflito=true; y._conflito=true; }
+        if (xIni<yFim && yIni<xFim && (!x.concluida||!y.concluida)) {
+          // Sobreposição autorizada (pedido do Alisson, 2026-08-13 — ver
+          // 05-Decisoes/2026-08-13-turmas-simultaneas-mesmo-instrutor.md):
+          // se qualquer uma das duas sessões foi explicitamente marcada como
+          // conflito_autorizado, não é um conflito de agendamento de verdade
+          // (ex.: mesma empresa, 2 CNPJs, treinamento conjunto) — não pinta
+          // de vermelho como erro, só sinaliza como sobreposição intencional.
+          if (x.conflito_autorizado || y.conflito_autorizado) { x._sobreposicaoAutorizada=true; y._sobreposicaoAutorizada=true; }
+          else { x._conflito=true; y._conflito=true; }
+        }
       }
     });
   });
@@ -11343,11 +11375,11 @@ function _agEquipeRenderSemana() {
       const MAX_VISIVEL = 3;
       const chips = sessoes.slice(0,MAX_VISIVEL).map(s => {
         const concluida = !!s.concluida;
-        const bg = s._conflito ? 'var(--red)' : (concluida ? 'var(--green)' : 'var(--amber)');
-        const corTexto = (concluida || s._conflito) ? '#fff' : 'var(--navy)';
+        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
+        const corTexto = (concluida || s._conflito || s._sobreposicaoAutorizada) ? '#fff' : 'var(--navy)';
         const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
         const cliente = s.turmas?.clientes?.nome||'—';
-        const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${concluida?' · concluída':''}`;
+        const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
         return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
           style="background:${bg};color:${corTexto};border-radius:4px;padding:3px 5px;font-size:9.5px;font-weight:600;margin-bottom:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
       }).join('');
@@ -11518,7 +11550,7 @@ function _agEquipeRenderTimeline() {
   // Marca conflitos reais: sobreposição entre duas sessões do mesmo
   // instrutor onde pelo menos uma ainda não foi concluída.
   Object.values(sessoesPorInstrutor).forEach(lista => {
-    lista.forEach(s => { s._conflito = false; });
+    lista.forEach(s => { s._conflito = false; s._sobreposicaoAutorizada = false; });
     for (let i=0;i<lista.length;i++) {
       for (let j=i+1;j<lista.length;j++) {
         const a=lista[i], b=lista[j];
@@ -11526,7 +11558,14 @@ function _agEquipeRenderTimeline() {
         const bIni=_agEquipeMinutosDeHora(b.hora_inicio), bFim=_agEquipeMinutosDeHora(b.hora_fim);
         if (aIni==null||aFim==null||bIni==null||bFim==null) continue;
         const sobrepoe = aIni < bFim && bIni < aFim;
-        if (sobrepoe && (!a.concluida || !b.concluida)) { a._conflito = true; b._conflito = true; }
+        if (sobrepoe && (!a.concluida || !b.concluida)) {
+          // Sobreposição autorizada (pedido do Alisson, 2026-08-13 — ver
+          // 05-Decisoes/2026-08-13-turmas-simultaneas-mesmo-instrutor.md):
+          // mesma lógica da visão Semana — sessão marcada como
+          // conflito_autorizado não é pintada como conflito de erro.
+          if (a.conflito_autorizado || b.conflito_autorizado) { a._sobreposicaoAutorizada = true; b._sobreposicaoAutorizada = true; }
+          else { a._conflito = true; b._conflito = true; }
+        }
       }
     }
   });
@@ -11606,12 +11645,12 @@ function _agEquipeRenderTimeline() {
       // 2026-08-09: cor de "concluído" trocada de cinza pra verde (pedido
       // do Alisson) — mesmo var(--green) já usado no resto do sistema pra
       // indicar status finalizado/positivo (ex.: badge de turma concluída).
-      const bg = s._conflito ? 'var(--red)' : (concluida ? 'var(--green)' : 'var(--amber)');
-      const borda = s._conflito ? '2px solid var(--red)' : 'none';
+      const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
+      const borda = s._conflito ? '2px solid var(--red)' : s._sobreposicaoAutorizada ? '2px solid var(--blue-h)' : 'none';
       const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
       const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
       const rotulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''}`;
-      const titulo = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${concluida?' · concluída':''}`;
+      const titulo = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
       // Rótulo de horário (ex.: "08:30–10:00") sempre visível acima da
       // barra — pointer-events:none pra não atrapalhar o clique na barra
       // logo abaixo nem o clique-pra-criar da linha vazia.
@@ -11853,13 +11892,13 @@ async function _agRapidaVerificarConflito() {
 function _agRapidaAtualizarBotaoSalvar() {
   const btn = document.getElementById('btnSalvarModal');
   if (!btn) return;
-  const podeForcar = usuarioAtual.perfil === 'administrador';
+  const podeForcar = usuarioAtual.perfil === 'provedor' || usuarioAtual.perfil === 'administrador' || usuarioAtual.perfil === 'comercial';
   if (window._agRapidaTemConflito && !podeForcar) {
     btn.disabled = true;
-    btn.title = 'Resolva o conflito de horário antes de salvar — ou peça para um administrador confirmar.';
+    btn.title = 'Resolva o conflito de horário antes de salvar — ou peça para um administrador/comercial confirmar.';
   } else {
     btn.disabled = false;
-    btn.title = podeForcar && window._agRapidaTemConflito ? 'Há um conflito de horário — salvar mesmo assim, como administrador.' : '';
+    btn.title = podeForcar && window._agRapidaTemConflito ? 'Há um conflito de horário — ao salvar, você vai confirmar se as turmas serão realizadas simultaneamente.' : '';
   }
 }
 
@@ -11883,11 +11922,12 @@ async function _agRapidaSalvarTurmaEAgendamento() {
     showToast('A hora de término deve ser depois da hora de início.','error');
     return;
   }
-  if (window._agRapidaTemConflito && usuarioAtual.perfil !== 'administrador') {
-    showToast('Esse instrutor já tem um compromisso nesse horário — ajuste antes de salvar.','error');
-    return;
-  }
 
+  // Lê todos os campos do modal ANTES de qualquer confirmação abaixo — a
+  // confirmação de sobreposição (confirmarAcao) e o próprio fluxo de
+  // criação abrem/fecham modais por cima deste, então os elementos
+  // mNtLocal/mNtObs/mNtInstrutor/mNtMod/mNtSala deixam de existir no DOM
+  // depois disso (2026-08-13).
   const dadosTurma = {
     cliente_id: cli,
     catalogo_id: cat,
@@ -11897,6 +11937,36 @@ async function _agRapidaSalvarTurmaEAgendamento() {
     status: 'agendada',
     criado_por: usuarioAtual.id,
   };
+  const dadosSessao = {
+    org_id: usuarioAtual.org_id,
+    data,
+    hora_inicio: horaInicio,
+    hora_fim: horaFim,
+    instrutor_id: document.getElementById('mNtInstrutor')?.value || null,
+    modalidade: document.getElementById('mNtMod')?.value || 'presencial',
+    local: document.getElementById('mNtSala')?.value.trim() || null,
+  };
+  const catInfo = _catalogoCache.find(c => String(c.id)===String(cat));
+
+  // Sobreposição autorizada (2026-08-13) — mesma regra do modal de
+  // agendamento dentro da turma (_agVerificarConflito/salvarAgendamento):
+  // só Provedor/Administrador/Comercial podem confirmar, sempre com
+  // confirmação explícita antes de criar qualquer coisa.
+  if (window._agRapidaTemConflito) {
+    const podeAutorizar = usuarioAtual.perfil === 'provedor' || usuarioAtual.perfil === 'administrador' || usuarioAtual.perfil === 'comercial';
+    if (!podeAutorizar) {
+      showToast('Esse instrutor já tem um compromisso nesse horário — ajuste antes de salvar.','error');
+      return;
+    }
+    const confirmou = await confirmarAcao(
+      'Este instrutor já possui uma turma agendada neste dia e horário. Confirme apenas se os treinamentos serão realizados de forma conjunta (mesmo instrutor, mesmo local — turmas separadas, por exemplo, por empresa ou CNPJ). A sobreposição fica registrada para auditoria.',
+      'Confirmar sobreposição e agendar',
+      false
+    );
+    if (!confirmou) return;
+    dadosSessao.conflito_autorizado = true;
+    showLoading('Salvando agendamento...');
+  }
 
   let novaTurmaId = null;
   try {
@@ -11907,22 +11977,13 @@ async function _agRapidaSalvarTurmaEAgendamento() {
     novaTurmaId = turmaSalva[0].id;
   } catch(e) {
     setBtnModalLoading(false);
+    hideLoading();
     showToast(traduzErroSupabase(e,'Erro ao criar a turma'),'error');
     return;
   }
 
-  const catInfo = _catalogoCache.find(c => String(c.id)===String(cat));
   try {
-    const dadosSessao = {
-      turma_id: novaTurmaId,
-      org_id: usuarioAtual.org_id,
-      data,
-      hora_inicio: horaInicio,
-      hora_fim: horaFim,
-      instrutor_id: document.getElementById('mNtInstrutor')?.value || null,
-      modalidade: document.getElementById('mNtMod')?.value || 'presencial',
-      local: document.getElementById('mNtSala')?.value.trim() || null,
-    };
+    dadosSessao.turma_id = novaTurmaId;
     const {error: errSessao} = await sb.from('sessoes').insert(dadosSessao);
     if (errSessao) throw errSessao;
 
@@ -11946,7 +12007,7 @@ async function _agRapidaSalvarTurmaEAgendamento() {
     if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
       showToast('A turma foi criada, mas esse instrutor acabou de ser agendado por outro usuário nesse horário. Abra a turma em "Turmas pendentes de agendamento" pra escolher outro horário.','error');
     } else {
-      showToast(`A turma foi criada, mas não foi possível agendar: ${e.message||'erro desconhecido'}. Abra a turma em "Turmas pendentes de agendamento" pra tentar de novo.`,'error');
+      showToast(`A turma foi criada, mas não foi possível agendar: ${traduzErroSupabase(e,'erro desconhecido')}. Abra a turma em "Turmas pendentes de agendamento" pra tentar de novo.`,'error');
     }
     await _agEquipeCarregarDados();
     _agEquipeRenderTimeline();
