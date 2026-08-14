@@ -319,6 +319,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    sempre o mesmo espaço para o rótulo (até 2 linhas), com o texto ancorado
    embaixo, então o campo sempre começa na mesma altura nas duas colunas. */
 .nt-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.nt-3col > div{min-width:0}
 @media(max-width:560px){.nt-3col{grid-template-columns:1fr}}
 .nt-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .nt-2col .field label{min-height:34px;display:flex;align-items:flex-end}
@@ -527,6 +528,22 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turmas-tab .tab-count{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
 .turmas-tab:not(.active) .tab-count{background:var(--gray-100);color:var(--text-3)}
 .turmas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:8px}
+/* 2026-08-14 (pedido do Alisson — 3ª rodada de fidelidade): barra de
+   filtros da tela Turmas ganha classes dedicadas em vez de estilo inline
+   repetido em cada controle — garante que Buscar/Instrutor/Período/
+   Pendência tenham exatamente a mesma altura, padding e cantos, o que
+   antes dependia de manter vários blocos de style="..." sincronizados à
+   mão. */
+.turmas-filtros{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.turmas-busca{position:relative;flex:1;min-width:180px;max-width:280px}
+.turmas-busca input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1)}
+.turmas-busca .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3);pointer-events:none}
+.turmas-filtro-select{padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1);cursor:pointer;min-width:130px}
+.turmas-periodo-custom{display:flex;align-items:center;gap:6px}
+.turmas-periodo-custom input[type=date]{padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text-1)}
+.turmas-viewtoggle{display:flex;background:var(--gray-100);border-radius:var(--r-md);padding:2px;margin-left:auto}
+.turmas-viewtoggle button{border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+@media(max-width:767px){.turmas-busca{max-width:none;min-width:0;flex-basis:100%}}
 /* 2026-08-14 (correção pedida pelo Alisson — visão Lista da tela Turmas):
    colunas FIXAS via CSS Grid (não flex com proporções) — cada elemento tem
    sua própria coluna reservada, mesmo quando fica vazio (ex.: turma sem
@@ -535,11 +552,11 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    Textos longos truncam com reticências (ellipsis) em vez de alargar a
    coluna, que é a única forma de garantir alinhamento independente do
    tamanho do conteúdo. */
-.turma-linha-lista{display:grid;grid-template-columns:8px minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,1.3fr) 18px 56px 92px;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:6px;font-size:12.5px;cursor:pointer}
+.turma-linha-lista{display:grid;grid-template-columns:8px minmax(0,1.5fr) minmax(0,1.1fr) 92px minmax(0,1fr) 18px 56px 92px;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:6px;font-size:12.5px;cursor:pointer}
 .turma-linha-lista .tl-dot{width:7px;height:7px;border-radius:50%}
 .turma-linha-lista .tl-curso{font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-linha-lista .tl-cliente{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.turma-linha-lista .tl-meta{color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-linha-lista .tl-data,.turma-linha-lista .tl-inst{color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-linha-lista .tl-pend{font-size:12px;text-align:center}
 .turma-linha-lista .tl-bar{width:46px;height:4px;background:var(--gray-100);border-radius:3px;overflow:hidden;justify-self:end}
 .turma-linha-lista .tl-bar .f{display:block;height:100%;background:var(--green)}
@@ -551,17 +568,29 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 }
 .turma-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
 .turma-card:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
-.turma-card-nr{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;background:rgba(30,42,74,.09);color:var(--navy);padding:2px 7px;border-radius:10px;letter-spacing:.02em}
-.turma-card-title{font-size:14px;font-weight:600;color:var(--text-1);line-height:1.35;padding-right:44px;word-break:break-word}
+/* 2026-08-14 (pedido do Alisson — 3ª rodada de fidelidade): badge de status
+   sobe pro cabeçalho do card, ao lado do título (igual ao mockup da Opção
+   A) — em vez de position:absolute (que exigiria um padding-right "no
+   chute" no título e voltaria a estourar com títulos/badges compridos,
+   exatamente o tipo de problema já relatado antes), usa flex com
+   justify-content:space-between: o título ocupa o espaço que sobrar e o
+   badge nunca é coberto, não importa o tamanho de nenhum dos dois. O chip
+   "NR-XX" isolado saiu — a informação já está dentro do próprio título
+   (nome do curso já vem como "NR-35 · Trabalho em Altura"), mantê-lo era
+   repetir a mesma informação duas vezes no card. */
+.turma-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.turma-card-header .badge{flex-shrink:0;white-space:nowrap}
+.turma-card-title{font-size:14px;font-weight:600;color:var(--text-1);line-height:1.35;word-break:break-word}
 .turma-card-meta{font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-card-date{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:4px}
-/* 2026-08-14 (pedido do Alisson — modo Cards precisa ficar igual à Opção A
-   apresentada: KPIs no topo + cards agrupados por período + instrutor
-   visível no card, não só a Lista). */
 .turma-card-inst{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);margin-top:-2px}
 .turma-card-inst .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+/* 2026-08-14 (pedido do Alisson): os indicadores (Este mês/Em andamento/
+   Pendências/Concluído) saem do Cards e passam a viver só na Lista — ver
+   _turmasKpiHtml, chamada agora de dentro de _htmlTurmasLista. */
 .turmas-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
 .turmas-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
+.turmas-kpi .ic{font-size:13px;margin-bottom:3px}
 .turmas-kpi .n{font-size:18px;font-weight:800;color:var(--navy)}
 .turmas-kpi .l{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
 @media(max-width:640px){.turmas-kpis{grid-template-columns:repeat(2,1fr)}}
@@ -578,7 +607,6 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .fill-em_andamento{background:var(--amber)}
 .fill-concluida{background:var(--green)}
 .fill-cancelada{background:var(--red)}
-.turma-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:2px}
 /* 2026-08: pendência de turma no card da lista — botão sem estilo de
    navegador (herda o badge de dentro) que expande a lista específica do
    que falta. É por toque/clique (nunca só :hover) de propósito: card
@@ -8660,31 +8688,44 @@ async function renderTurmas(abaInicial) {
   window._turmasBuscaAtual = '';
   window._turmasInstrutorFiltro = '';
   window._turmasPeriodoFiltro = 'todos';
+  window._turmasPeriodoDe = '';
+  window._turmasPeriodoAte = '';
+  window._turmasPendenciaFiltro = '';
   // Visão (Cards/Lista) persiste por usuário, mesmo padrão já usado nos
   // relatórios recentes (_relRecentesKey). Padrão é Cards — o visual de
   // sempre, ninguém é forçado a mudar de hábito; quem trocar pra Lista
   // continua vendo Lista da próxima vez que abrir esta tela.
   window._turmasVisao = localStorage.getItem(_turmasVisaoKey()) || 'cards';
   setConteudo(`
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <div style="position:relative;flex:1;min-width:200px;max-width:320px">
-        <input type="text" id="turmasBuscaInput" placeholder="Buscar por curso, empresa, instrutor ou protocolo"
-          oninput="buscarTurmas(this.value)"
-          style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit">
-        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3)">🔍</span>
+    <div class="turmas-filtros">
+      <div class="turmas-busca">
+        <span class="ic">🔍</span>
+        <input type="text" id="turmasBuscaInput" placeholder="Buscar por curso, empresa ou instrutor" oninput="buscarTurmas(this.value)">
       </div>
-      <select id="turmasFiltroInstrutor" onchange="_turmasFiltrarInstrutor(this.value)" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1)">
+      <select id="turmasFiltroInstrutor" class="turmas-filtro-select" onchange="_turmasFiltrarInstrutor(this.value)">
         <option value="">👤 Instrutor: todos</option>
         ${_turmasListaInstrutores().map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('')}
       </select>
-      <select id="turmasFiltroPeriodo" onchange="_turmasFiltrarPeriodo(this.value)" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1)">
+      <select id="turmasFiltroPeriodo" class="turmas-filtro-select" onchange="_turmasFiltrarPeriodo(this.value, this)">
         <option value="todos">📅 Período: todos</option>
+        <option value="hoje">Hoje</option>
+        <option value="semana">Esta semana</option>
         <option value="este_mes">Este mês</option>
         <option value="mes_passado">Mês passado</option>
+        <option value="personalizado">Personalizado...</option>
       </select>
-      <div style="display:flex;background:var(--gray-100);border-radius:var(--r-md);padding:2px;margin-left:auto">
-        <button type="button" id="turmasBtnCards" onclick="_turmasAlternarVisao('cards')" style="border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Cards</button>
-        <button type="button" id="turmasBtnLista" onclick="_turmasAlternarVisao('lista')" style="border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Lista</button>
+      <div class="turmas-periodo-custom" id="turmasPeriodoCustom" style="display:none">
+        <input type="date" id="turmasPeriodoDe" onchange="_turmasFiltrarPeriodoCustom(this)">
+        <span style="font-size:11px;color:var(--text-3)">até</span>
+        <input type="date" id="turmasPeriodoAte" onchange="_turmasFiltrarPeriodoCustom(this)">
+      </div>
+      <select id="turmasFiltroPendencia" class="turmas-filtro-select" onchange="_turmasFiltrarPendencia(this.value)">
+        <option value="">⚠️ Pendência: todas</option>
+        <option value="sim">Somente com pendência</option>
+      </select>
+      <div class="turmas-viewtoggle">
+        <button type="button" id="turmasBtnCards" onclick="_turmasAlternarVisao('cards')">Cards</button>
+        <button type="button" id="turmasBtnLista" onclick="_turmasAlternarVisao('lista')">Lista</button>
       </div>
     </div>
     <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
@@ -8773,6 +8814,7 @@ function _turmaFiltrarLista(lista, status) {
   const busca = (window._turmasBuscaAtual||'').toLowerCase();
   const instFiltro = window._turmasInstrutorFiltro||'';
   const periodoFiltro = window._turmasPeriodoFiltro||'todos';
+  const pendFiltro = window._turmasPendenciaFiltro||'';
   const ehTodas = status === 'todas';
   const ehPendencia = status === 'pendencia';
   let filtrada = ehTodas ? lista.slice() : ehPendencia ? lista.filter(t=>_turmaPendencias(t).length>0) : lista.filter(t=>t.status===status);
@@ -8787,17 +8829,43 @@ function _turmaFiltrarLista(lista, status) {
   if (instFiltro) {
     filtrada = filtrada.filter(t => (t.sessoes||[]).some(s=>String(s.instrutor_id)===String(instFiltro)));
   }
+  // 2026-08-14 (pedido do Alisson — filtro "Pendência" novo): reaproveita
+  // o mesmo catálogo/detecção já usado no badge do card e no pseudo-status
+  // 'pendencia' (ver CATALOGO_PENDENCIAS_TURMA/_turmaPendencias) — aqui é
+  // só mais um filtro combinável com os demais, não uma aba.
+  if (pendFiltro === 'sim') {
+    filtrada = filtrada.filter(t => _turmaPendencias(t).length>0);
+  }
+  // 2026-08-14 (pedido do Alisson — Período "muito estático, só funciona
+  // com visão mensal"): agora também filtra por dia (hoje), por semana
+  // corrente (segunda a domingo) e por um intervalo de datas escolhido
+  // livremente (personalizado), além dos presets de mês que já existiam.
   if (periodoFiltro && periodoFiltro !== 'todos') {
-    const hoje = new Date();
-    const anoMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const pad2 = n => String(n).padStart(2,'0');
+    const hojeStr = `${hoje.getFullYear()}-${pad2(hoje.getMonth()+1)}-${pad2(hoje.getDate())}`;
+    const anoMesAtual = `${hoje.getFullYear()}-${pad2(hoje.getMonth()+1)}`;
     const mesPassadoDt = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
-    const anoMesPassado = `${mesPassadoDt.getFullYear()}-${String(mesPassadoDt.getMonth()+1).padStart(2,'0')}`;
+    const anoMesPassado = `${mesPassadoDt.getFullYear()}-${pad2(mesPassadoDt.getMonth()+1)}`;
+    const diaSemana = (hoje.getDay()+6)%7; // 0=segunda ... 6=domingo
+    const segunda = new Date(hoje); segunda.setDate(hoje.getDate()-diaSemana);
+    const domingo = new Date(segunda); domingo.setDate(segunda.getDate()+6);
+    const segundaStr = `${segunda.getFullYear()}-${pad2(segunda.getMonth()+1)}-${pad2(segunda.getDate())}`;
+    const domingoStr = `${domingo.getFullYear()}-${pad2(domingo.getMonth()+1)}-${pad2(domingo.getDate())}`;
     filtrada = filtrada.filter(t => {
       const ref = _turmaDataRef(t);
       if (!ref) return false;
-      const refMes = ref.slice(0,7);
-      if (periodoFiltro==='este_mes') return refMes===anoMesAtual;
-      if (periodoFiltro==='mes_passado') return refMes===anoMesPassado;
+      if (periodoFiltro==='hoje') return ref===hojeStr;
+      if (periodoFiltro==='semana') return ref>=segundaStr && ref<=domingoStr;
+      if (periodoFiltro==='este_mes') return ref.slice(0,7)===anoMesAtual;
+      if (periodoFiltro==='mes_passado') return ref.slice(0,7)===anoMesPassado;
+      if (periodoFiltro==='personalizado') {
+        const de = window._turmasPeriodoDe||'';
+        const ate = window._turmasPeriodoAte||'';
+        if (de && ref<de) return false;
+        if (ate && ref>ate) return false;
+        return true;
+      }
       return true;
     });
   }
@@ -8857,6 +8925,29 @@ function _turmasAgruparPeriodo(filtrada, status) {
   return ordem.filter(g=>grupos.has(g)).map(g=>({label:g, itens:grupos.get(g)}));
 }
 
+// Indicadores (Este mês/Em andamento/Pendências/Concluído), calculados
+// sobre TODAS as turmas carregadas (não só a aba/filtro ativos) — dão uma
+// visão geral fixa, que não muda ao trocar de aba. Extraído como função
+// própria em 2026-08-14 (pedido do Alisson): antes só existia dentro de
+// _htmlTurmasGrid (Cards); agora quem chama é só _htmlTurmasLista — os
+// indicadores saíram do Cards e passaram a viver exclusivamente na Lista.
+function _turmasKpiHtml(lista) {
+  const hoje = new Date();
+  const anoMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  const nEsteMesKpi = lista.filter(t => (_turmaDataRef(t)||'').slice(0,7)===anoMesAtual).length;
+  const nAndamentoKpi = lista.filter(t=>t.status==='em_andamento').length;
+  const nPendenciasKpi = lista.filter(t=>_turmaPendencias(t).length>0).length;
+  const totalSesKpi = lista.reduce((acc,t)=>acc+(t.sessoes||[]).length,0);
+  const concSesKpi = lista.reduce((acc,t)=>acc+(t.sessoes||[]).filter(s=>s.concluida).length,0);
+  const pctConcluidoKpi = totalSesKpi>0 ? Math.round((concSesKpi/totalSesKpi)*100) : 0;
+  return `<div class="turmas-kpis">
+    <div class="turmas-kpi"><div class="ic">📅</div><div class="n">${nEsteMesKpi}</div><div class="l">Este mês</div></div>
+    <div class="turmas-kpi"><div class="ic">▶️</div><div class="n">${nAndamentoKpi}</div><div class="l">Em andamento</div></div>
+    <div class="turmas-kpi"><div class="ic">⚠️</div><div class="n" style="color:var(--amber-h)">${nPendenciasKpi}</div><div class="l">Pendências</div></div>
+    <div class="turmas-kpi"><div class="ic">✅</div><div class="n" style="color:var(--green)">${pctConcluidoKpi}%</div><div class="l">Concluído</div></div>
+  </div>`;
+}
+
 function _htmlTurmasGrid(lista, status, podeCriar) {
   // 'pendencia' é um pseudo-status (não existe em turmas.status) — só uma
   // forma de filtrar a mesma lista pelas turmas que têm alguma pendência
@@ -8871,27 +8962,8 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
   const rotuloStatus = ehTodas ? 'no total' : (TURMA_STATUS_LABEL[status]?.toLowerCase()||'');
   const sectionLabel = busca ? 'Nenhuma turma encontrada' : `Nenhuma turma ${ehTodas?'cadastrada':rotuloStatus}`;
 
-  // 2026-08-14 (pedido do Alisson — Opção A aprovada: "cards agrupados por
-  // período + resumo"): KPIs calculados sobre TODAS as turmas carregadas
-  // (não só a aba/filtro ativos), igual ao mockup — dão uma visão geral
-  // fixa, que não muda ao trocar de aba.
-  const hoje = new Date();
-  const anoMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-  const nEsteMesKpi = lista.filter(t => (_turmaDataRef(t)||'').slice(0,7)===anoMesAtual).length;
-  const nAndamentoKpi = lista.filter(t=>t.status==='em_andamento').length;
-  const nPendenciasKpi = lista.filter(t=>_turmaPendencias(t).length>0).length;
-  const totalSesKpi = lista.reduce((acc,t)=>acc+(t.sessoes||[]).length,0);
-  const concSesKpi = lista.reduce((acc,t)=>acc+(t.sessoes||[]).filter(s=>s.concluida).length,0);
-  const pctConcluidoKpi = totalSesKpi>0 ? Math.round((concSesKpi/totalSesKpi)*100) : 0;
-  const kpiHtml = `<div class="turmas-kpis">
-    <div class="turmas-kpi"><div class="n">${nEsteMesKpi}</div><div class="l">Este mês</div></div>
-    <div class="turmas-kpi"><div class="n">${nAndamentoKpi}</div><div class="l">Em andamento</div></div>
-    <div class="turmas-kpi"><div class="n" style="color:var(--amber-h)">${nPendenciasKpi}</div><div class="l">Pendências</div></div>
-    <div class="turmas-kpi"><div class="n" style="color:var(--green)">${pctConcluidoKpi}%</div><div class="l">Concluído</div></div>
-  </div>`;
-
   if (!filtrada.length) {
-    return `${kpiHtml}<div class="turmas-section-header">
+    return `<div class="turmas-section-header">
       <div class="turmas-section-dot" style="background:${dotColor}"></div>
       <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
       <div class="turmas-section-line"></div>
@@ -8911,7 +8983,7 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
   const gruposHtml = grupos.map((g,idx) => `<div class="turma-group-head"><div class="dot"></div><span>${escapeHtml(g.label)}</span><div class="line"></div></div>
     <div class="turmas-grid">${g.itens.map(t=>_htmlTurmaCard(t)).join('')}${idx===grupos.length-1?novaCardHtml:''}</div>`).join('');
 
-  return `${kpiHtml}${gruposHtml}`;
+  return gruposHtml;
 }
 
 // Visão em lista compacta (1 linha por turma) — Proposta B aprovada,
@@ -8929,6 +9001,10 @@ function _htmlTurmasLista(lista, status, podeCriar) {
     : `${filtrada.length} turma${filtrada.length!==1?'s':''} ${rotuloStatus}`;
   const BADGE_BG  = {agendada:'var(--gray-100)',em_andamento:'var(--blue-l)',concluida:'var(--green-l)',cancelada:'var(--red-l)'};
   const BADGE_TXT = {agendada:'var(--text-2)',em_andamento:'var(--blue-text)',concluida:'var(--green-text)',cancelada:'var(--red-text)'};
+  // 2026-08-14 (pedido do Alisson): indicadores agora só aparecem na Lista
+  // — calculados sobre TODAS as turmas carregadas, não só a aba/filtro
+  // ativos (mesmo critério que já valia quando viviam no Cards).
+  const kpiHtml = _turmasKpiHtml(lista);
 
   const linhasHtml = filtrada.length===0
     ? `<div class="turmas-empty-tab">
@@ -8946,18 +9022,24 @@ function _htmlTurmasLista(lista, status, podeCriar) {
         const concSes = (t.sessoes||[]).filter(s=>s.concluida).length;
         const pct = totalSes>0 ? Math.round((concSes/totalSes)*100) : 0;
         const pend = _turmaPendencias(t);
+        // 2026-08-14 (pedido do Alisson — "Posição do curso, Empresa, Data,
+        // Instrutor" com boa hierarquia): Data e Instrutor ganham coluna
+        // própria (antes vinham concatenados num único "tl-meta"), cada um
+        // com seu ícone pra facilitar a identificação, igual ao pedido
+        // pros cards.
         return `<div class="turma-linha-lista" data-action="verTurma" data-id="${t.id}">
           <span class="tl-dot" style="background:${TURMA_STATUS_DOT[st]||'#94A3B8'}"></span>
           <span class="tl-curso">${escapeHtml(t.catalogo?.nome||'—')}</span>
           <span class="tl-cliente">${escapeHtml(t.clientes?.nome||'—')}</span>
-          <span class="tl-meta">${dataFmt}${horaTxt?' · '+horaTxt:''}${nomesInstrutores.length?' · '+escapeHtml(nomesInstrutores.join(', ')):''}</span>
+          <span class="tl-data">📅 ${dataFmt}${horaTxt?' · '+horaTxt:''}</span>
+          <span class="tl-inst">${nomesInstrutores.length?'👤 '+escapeHtml(nomesInstrutores.join(', ')):'<span style="opacity:.4">—</span>'}</span>
           <span class="tl-pend" title="${pend.length?escapeHtml(pend.map(p=>p.label).join(', ')):''}">${pend.length?'⚠':''}</span>
           <span class="tl-bar">${concSes>0?`<span class="f" style="width:${pct}%"></span>`:''}</span>
           <span class="tl-badge" style="background:${BADGE_BG[st]||'var(--gray-100)'};color:${BADGE_TXT[st]||'var(--text-2)'}">${TURMA_STATUS_LABEL[st]||st}</span>
         </div>`;
       }).join('');
 
-  return `<div class="turmas-section-header">
+  return `${kpiHtml}<div class="turmas-section-header">
     <div class="turmas-section-dot" style="background:${dotColorSecao}"></div>
     <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
     <div class="turmas-section-line"></div>
@@ -8999,8 +9081,34 @@ function _turmasFiltrarInstrutor(valor) {
   _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
 }
 
-function _turmasFiltrarPeriodo(valor) {
+function _turmasFiltrarPeriodo(valor, selEl) {
   window._turmasPeriodoFiltro = valor||'todos';
+  // O painel de range personalizado é irmão do <select> dentro do mesmo
+  // .turmas-filtros — busca a partir de selEl.parentElement pra sempre
+  // achar a cópia certa (desktop ou mobile), a mesma que o usuário está
+  // efetivamente vendo.
+  const custom = selEl ? selEl.parentElement.querySelector('#turmasPeriodoCustom') : null;
+  if (custom) custom.style.display = (valor==='personalizado') ? 'flex' : 'none';
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
+}
+
+// Range personalizado do filtro Período (2026-08-14, pedido do Alisson —
+// "seleção mais flexível e intuitiva"): lê os dois campos de data dentro do
+// mesmo .turmas-filtros do input que disparou o evento, pra também nunca
+// misturar a cópia desktop com a mobile.
+function _turmasFiltrarPeriodoCustom(inputEl) {
+  const scope = inputEl.closest('.turmas-filtros');
+  window._turmasPeriodoDe = scope?.querySelector('#turmasPeriodoDe')?.value || '';
+  window._turmasPeriodoAte = scope?.querySelector('#turmasPeriodoAte')?.value || '';
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
+}
+
+// Filtro "Pendência" (2026-08-14, pedido do Alisson) — mesmo padrão dos
+// demais filtros da barra (_turmasFiltrarInstrutor/_turmasFiltrarPeriodo).
+function _turmasFiltrarPendencia(valor) {
+  window._turmasPendenciaFiltro = valor||'';
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
 }
@@ -9081,8 +9189,6 @@ function _htmlTurmaCard(t) {
   const SB = {agendada:'badge-gray',em_andamento:'badge-amber',concluida:'badge-green',cancelada:'badge-red'};
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
   const st = t.status||'agendada';
-  const nrMatch = (t.catalogo?.nome||'').match(/NR[\s\-]*(\d+)/i);
-  const nrTag = nrMatch?`<div class="turma-card-nr">NR-${nrMatch[1]}</div>`:'';
   const sessoes = t.sessoes||[];
   const totalSes = sessoes.length;
   const concSes = sessoes.filter(s=>s.concluida).length;
@@ -9098,6 +9204,8 @@ function _htmlTurmaCard(t) {
   const menuBtn = podeMgr&&(st==='agendada'||st==='em_andamento')?
     `<button class="btn btn-ghost btn-sm" style="padding:4px;margin-left:4px;flex-shrink:0" data-action="menuTurmaCard" data-id="${t.id}" onclick="event.stopPropagation()">${ICONS.dots}</button>`:'';
   const dataRef = _turmaDataRef(t);
+  const sessaoRefCard = sessoes.find(s=>s.data===dataRef) || sessoes[0];
+  const horaTxtCard = sessaoRefCard?.hora_inicio ? sessaoRefCard.hora_inicio.slice(0,5) : '';
   // Pendências: badge de atenção + painel de detalhe (ver bloco
   // CATALOGO_PENDENCIAS_TURMA/_turmaPendencias acima). Mostra o rótulo
   // específico direto — evita ter que abrir a turma só pra descobrir o que
@@ -9118,23 +9226,24 @@ function _htmlTurmaCard(t) {
       </div>
     </div>` : '';
   return `<div class="turma-card" data-action="verTurma" data-id="${t.id}">
-    ${nrTag}
-    <div class="turma-card-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+    <div class="turma-card-header">
+      <div class="turma-card-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        ${menuBtn}
+        <span class="badge ${SB[st]}">${SL[st]}</span>
+      </div>
+    </div>
     <div class="turma-card-meta">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M3 21l1.9-5.7a8.5 8.5 0 113.8 3.8z"/></svg>
       <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.clientes?.nome||'—')}</span>
     </div>
     ${dataRef?`<div class="turma-card-meta" style="margin-top:2px">
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      <span style="font-size:11px;color:var(--text-3)">em ${formatarData(dataRef)}</span>
+      <span style="font-size:11px;color:var(--text-3)">em ${formatarData(dataRef)}${horaTxtCard?' · '+horaTxtCard:''}</span>
     </div>`:''}
     ${(() => { const nomesInst = _turmaInstrutoresNomes(t); if (!nomesInst.length) return ''; const instId = sessoes.find(s=>s.instrutor_id)?.instrutor_id; return `<div class="turma-card-inst"><span class="dot" style="background:${_corInstrutorTurma(instId)}"></span>${escapeHtml(nomesInst.join(', '))}</div>`; })()}
     ${progressHtml}
     ${pendHtml}
-    <div class="turma-card-footer">
-      <span class="badge ${SB[st]}">${SL[st]}</span>
-      ${menuBtn}
-    </div>
   </div>`;
 }
 
@@ -12261,10 +12370,10 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
               <div class="field"><label>Data *</label>
                 <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
                   style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-              <div class="field"><label>Hora início *</label>
+              <div class="field"><label>Início *</label>
                 <input type="time" id="mNtIni" value="${horaInicio||''}" onchange="_agRapidaCalcularHoraFim();_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
                   style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-              <div class="field" style="margin-bottom:0"><label>Hora término</label>
+              <div class="field" style="margin-bottom:0"><label>Fim</label>
                 <input type="time" id="mNtFim" value="" onchange="_agRapidaHoraFimEditadaManual();_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
                   style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
             </div>
@@ -12288,7 +12397,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
             </div>
             <div class="field">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-                <label style="margin:0">Endereço do treinamento</label>
+                <label style="margin:0">Endereço</label>
                 <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_agRapidaPreencherLocalComCliente()">📍 Usar endereço do cliente</button>
               </div>
               <textarea id="mNtLocal" rows="2" oninput="_agRapidaAtualizarPreview()" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
