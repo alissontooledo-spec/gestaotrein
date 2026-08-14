@@ -9081,6 +9081,16 @@ async function verTurma(id) {
 
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Turma</div><div class="mh-name">${nomeT}</div>`);
+  } catch(e) {
+    // 2026-08-13 (correção de causa raiz, incidente real relatado pelo
+    // Alisson): esta função nunca teve um catch — qualquer erro (RLS
+    // negando a linha, rede, etc.) subia sem tratamento, o spinner de
+    // carregamento sumia (finally) e a tela simplesmente não mudava, sem
+    // nenhum aviso. Isso também quebrava o botão "Voltar" da tela de
+    // Documentos da turma, que chama verTurma() de novo. Agora qualquer
+    // falha aparece de verdade, em vez de "não acontecer nada".
+    console.error(e);
+    showToast(traduzErroSupabase(e,'Erro ao abrir a turma'),'error');
   } finally { hideLoading(); }
 }
 
@@ -16374,6 +16384,14 @@ function fmtValidadePDF(dtVal) {
 }
 
 // Salva o PDF no Supabase Storage e registra na tabela documentos
+// 2026-08-13 (correção de causa raiz, incidente relatado pelo Alisson): esta
+// função sempre engoliu erros de Storage/banco em silêncio (só console.warn)
+// e nunca informava o chamador — o PDF baixa no navegador de qualquer jeito
+// (doc.save() é local, não depende do Supabase), então quem gera o
+// documento sempre via um toast de sucesso, mesmo quando o registro em
+// `documentos` não foi de fato salvo — e a tela de Documentos da turma
+// continuava mostrando "pendente" pra sempre, sem nenhuma pista do porquê.
+// Agora devolve true/false pra quem chamou poder avisar de verdade.
 async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colaboradorId, codigoValidacao, sessaoId=null) {
   try {
     const pdfBytes = pdfDoc.output('arraybuffer');
@@ -16382,7 +16400,7 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
     const path     = `${orgId}/${turmaId}/${nomeArquivo}`;
 
     const {error:upErr} = await sb.storage.from('documentos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
-    if (upErr) { console.warn('Storage documentos:', upErr.message); return; }
+    if (upErr) { console.warn('Storage documentos:', upErr.message); return false; }
 
     // Verificar se já existe registro para evitar o ON CONFLICT problemático.
     // sessaoId distingue a lista de presença de cada encontro (uma por dia,
@@ -16411,9 +16429,11 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
         gerado_em:        new Date().toISOString(),
       }));
     }
-    if (dbErr) console.warn('DB documentos:', dbErr.message);
+    if (dbErr) { console.warn('DB documentos:', dbErr.message); return false; }
+    return true;
   } catch(e) {
     console.warn('salvarDocumentoSupabase:', e.message);
+    return false;
   }
 }
 
@@ -17650,23 +17670,17 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
       doc.setDrawColor(210,228,218); doc.setLineWidth(0.2);
       doc.line(colSig, y+rowH*0.76, mr-2, y+rowH*0.76);
     }
-    // 2026-08-13: indicador discreto de assinatura reaproveitada de outro
-    // dia da turma (ver _calcularReaproveitamentosDisponiveis) — não altera
-    // a imagem, só marca visualmente; a legenda de rodapé explica o símbolo.
-    if (assinado && p.reaproveitada) {
-      doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
-      doc.text('↻', mr-2, y+4.5, {align:'right'});
-    }
+    // 2026-08-13: a marcação visual de assinatura reaproveitada (símbolo "↻"
+    // + legenda de rodapé) foi REMOVIDA do PDF a pedido do Alisson, depois
+    // de testar em produção — o jsPDF não desenha esse caractere Unicode
+    // corretamente com as fontes padrão (Helvetica/Times), saía como um
+    // símbolo ilegível ("!»") em vez da seta. O documento final mostra a
+    // assinatura normalmente, sem nenhum elemento extra; o rastro de quem
+    // autorizou o reaproveitamento e quando continua gravado no banco
+    // (presencas.reaproveitada_por/reaproveitada_em + a tabela de auditoria
+    // presencas_reaproveitamento_historico), só não aparece mais no PDF.
     y += rowH;
   });
-
-  // Legenda de reaproveitamento (2026-08-13) — só aparece nesta página se
-  // pelo menos 1 assinatura mostrada aqui foi reaproveitada de outro dia.
-  if (campos.notaReaproveitamento) {
-    y += 3;
-    doc.setFont('helvetica','italic'); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
-    doc.text('↻ Assinatura coletada em outro encontro desta turma e reaproveitada com autorização de Administrador/Provedor.', ml, y);
-  }
 
   // assinatura do instrutor + rodapé sólido (mesmo peso visual do modelo padrão)
   const sigY = H-mg-4-24;
@@ -18080,7 +18094,11 @@ async function _calcularReaproveitamentosDisponiveis(turmaId) {
 async function abrirModalReaproveitamentoAssinaturas(turmaId) {
   showLoading('Calculando...');
   let propostas;
+  // 2026-08-13 (auditoria de robustez, mesmo padrão de verTurma/
+  // renderDocumentosTurma): sem catch, uma falha aqui deixava o botão
+  // "Revisar e reaproveitar assinaturas" parecendo travado, sem nenhum aviso.
   try { propostas = await _calcularReaproveitamentosDisponiveis(turmaId); }
+  catch(e) { showToast(traduzErroSupabase(e,'Erro ao calcular reaproveitamentos disponíveis'),'error'); return; }
   finally { hideLoading(); }
   if (!propostas.length) { showToast('Nenhum reaproveitamento disponível no momento.', 'info'); return; }
 
@@ -18135,6 +18153,14 @@ async function _confirmarReaproveitamentoAssinaturas(turmaId) {
       if (error) { falhas++; console.error('Reaproveitamento falhou:', p, error); }
       else ok++;
     }
+  } catch(e) {
+    // 2026-08-13 (auditoria de robustez) — uma exceção inesperada (ex.: rede
+    // caiu no meio do laço) antes não tinha catch: o erro subia sem
+    // tratamento e nem o toast de erro nem o refresh da tela abaixo chegavam
+    // a rodar.
+    console.error('Reaproveitamento: erro inesperado', e);
+    showToast(traduzErroSupabase(e,'Erro ao reaproveitar assinaturas'),'error');
+    return;
   } finally {
     hideLoading();
     delete window._propostasReaproveitamento;
@@ -18439,9 +18465,6 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     const {data:presencas} = await sb.from('presencas').select('*').eq('sessao_id', sessaoId);
     const presMap = {};
     (presencas||[]).forEach(p=>{ presMap[p.colaborador_id]=p; });
-    // 2026-08-13: marca se pelo menos 1 assinatura desta ficha veio de
-    // reaproveitamento entre dias — controla a legenda de rodapé abaixo.
-    let houveReaproveitamento = false;
 
     for (let i=0;i<participantes.length;i++) {
       const p = participantes[i];
@@ -18486,22 +18509,14 @@ async function gerarListaPresenca(turmaId, sessaoId) {
             if (imgData) doc.addImage(imgData,'PNG',mg+108,y+1,42,rowH-3);
           }
         } catch(e){}
-        // 2026-08-13: indicador discreto de assinatura reaproveitada de
-        // outro dia da turma — não altera a imagem, só marca visualmente.
-        if (pr.assinatura_origem_sessao_id) {
-          houveReaproveitamento = true;
-          doc.setFontSize(6.5); doc.setTextColor(...TEXT3); doc.setFont('helvetica','normal');
-          doc.text('↻', mg+152, y+9);
-        }
+        // 2026-08-13: marcação visual de assinatura reaproveitada REMOVIDA
+        // do PDF a pedido do Alisson (ver mesma nota em
+        // desenharFichaPresencaAvanteseg) — o jsPDF não desenha "↻"
+        // corretamente com as fontes padrão, saía como símbolo ilegível.
+        // Assinatura aparece normalmente; o rastro de auditoria continua
+        // só no banco (presencas.reaproveitada_por/em + histórico).
       }
       y += rowH;
-    }
-
-    // Legenda de reaproveitamento (2026-08-13) — só aparece se pelo menos 1
-    // assinatura desta ficha foi reaproveitada de outro dia da turma.
-    if (houveReaproveitamento) {
-      doc.setFont('helvetica','italic'); doc.setFontSize(6.5); doc.setTextColor(...TEXT3);
-      doc.text('↻ Assinatura coletada em outro encontro desta turma e reaproveitada com autorização de Administrador/Provedor.', mg, y+4);
     }
 
     // ── Rodapé ──
@@ -18533,8 +18548,9 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     const nomeT = pdfSafe(t.catalogo?.nome||'Treinamento');
     doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
     const codigo = crypto.randomUUID();
-    await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
-    showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
+    const salvou = await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
+    if (salvou) showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
+    else showToast('O PDF foi baixado, mas não foi possível registrar a geração no sistema — a lista pode continuar aparecendo como pendente. Tente gerar de novo.','error');
   } catch(e) {
     console.error(e);
     showToast(traduzErroSupabase(e,'Erro ao gerar PDF'),'error');
@@ -19028,8 +19044,9 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 
     const nomeSafe = s(col.nome,60).replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-${nomeSafe}.pdf`);
-    await salvarDocumentoSupabase(doc,`cert-individual-${colaboradorId}.pdf`,'certificado_individual',turmaId,colaboradorId,codigo);
-    showToast(`Certificado de ${s(col.nome,40)} gerado!`,'success');
+    const salvou = await salvarDocumentoSupabase(doc,`cert-individual-${colaboradorId}.pdf`,'certificado_individual',turmaId,colaboradorId,codigo);
+    if (salvou) showToast(`Certificado de ${s(col.nome,40)} gerado!`,'success');
+    else showToast('O PDF foi baixado, mas não foi possível registrar a geração no sistema — pode continuar aparecendo como pendente. Tente gerar de novo.','error');
   } catch(e) {
     console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado'),'error');
   } finally { hideLoading(); }
@@ -19536,8 +19553,9 @@ async function gerarCertificadoColetivo(turmaId) {
 
     const nomeCli = s(nomeEmp,40).replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-coletivo-${nomeCli}.pdf`);
-    await salvarDocumentoSupabase(doc,`cert-coletivo-${turmaId}.pdf`,'certificado_coletivo',turmaId,null,codigo);
-    showToast('Certificado coletivo gerado!','success');
+    const salvou = await salvarDocumentoSupabase(doc,`cert-coletivo-${turmaId}.pdf`,'certificado_coletivo',turmaId,null,codigo);
+    if (salvou) showToast('Certificado coletivo gerado!','success');
+    else showToast('O PDF foi baixado, mas não foi possível registrar a geração no sistema — pode continuar aparecendo como pendente. Tente gerar de novo.','error');
   } catch(e) {
     console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado coletivo'),'error');
   } finally { hideLoading(); }
@@ -19693,7 +19711,7 @@ async function renderDocumentosTurma(turmaId) {
               <div style="width:26px;height:26px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
               <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${escapeHtml(col.nome||'-')}</div>
               <span style="font-size:11px;color:${corStatus};margin-right:4px">${status}</span>
-              ${elegivel ? `<button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}')">${jaGerado?'↻':'⬇'} PDF</button>` : ''}
+              ${elegivel ? `<button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}').then(()=>renderDocumentosTurma('${turmaId}'))">${jaGerado?'↻':'⬇'} PDF</button>` : ''}
             </div>`;
         }).join('');
 
@@ -19704,7 +19722,7 @@ async function renderDocumentosTurma(turmaId) {
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 8px 48px">
               <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${formatarData(sess.data)}</div>
               <span style="font-size:11px;color:${jaGerado?'var(--green)':'var(--text-3)'};margin-right:4px">${jaGerado?'✓ gerada':'pendente'}</span>
-              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarListaPresenca('${turmaId}','${sess.id}')">${jaGerado?'↻':'⬇'} PDF</button>
+              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarListaPresenca('${turmaId}','${sess.id}').then(()=>renderDocumentosTurma('${turmaId}'))">${jaGerado?'↻':'⬇'} PDF</button>
             </div>`;
         }).join('');
 
@@ -19723,7 +19741,7 @@ async function renderDocumentosTurma(turmaId) {
         </div>
         ${htmlListasSub}
         ${_linhaDoc('🏢','Certificado Coletivo', `Para a empresa · ${elegiveisDoc.size} elegível(is) de ${totalInd} participante(s)`, temColetivo,
-            `gerarCertificadoColetivo('${turmaId}')`)}
+            `gerarCertificadoColetivo('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}'))`)}
         <div style="display:flex;align-items:center;gap:12px;padding:13px 0 ${totalInd?'4px':'0'} 0;${totalInd?'border-bottom:1px solid var(--border)':''}">
           <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎓</div>
           <div style="flex:1;min-width:0">
@@ -19793,6 +19811,13 @@ async function renderDocumentosTurma(turmaId) {
 
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Documentos</div><div class="mh-name">${nomeT}</div>`);
+  } catch(e) {
+    // 2026-08-13 (mesma correção de causa raiz de verTurma) — sem catch,
+    // qualquer falha nesta tela (ex.: no cálculo de reaproveitamentos
+    // disponíveis) deixava a tela de Documentos travada no spinner e depois
+    // em branco/desatualizada, sem nenhum aviso.
+    console.error(e);
+    showToast(traduzErroSupabase(e,'Erro ao carregar documentos da turma'),'error');
   } finally { hideLoading(); }
 }
 // ============================================================
@@ -19917,6 +19942,10 @@ async function marcarEnvioComoConcluido(turmaId, emailDestino) {
     }
     showToast('Status atualizado — turma marcada como enviada.', 'success');
     await renderDocumentosTurma(turmaId);
+  } catch(e) {
+    // 2026-08-13 (auditoria de robustez) — mesmo padrão dos demais.
+    console.error(e);
+    showToast(traduzErroSupabase(e,'Erro ao atualizar status de envio'),'error');
   } finally { hideLoading(); }
 }
 
