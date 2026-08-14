@@ -294,15 +294,20 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    .modal-box continua com max-width:480px por padrão, então nenhum outro
    modal do sistema é afetado. */
 .modal-box-largo{max-width:760px}
-.nt-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+.nt-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
 @media(max-width:700px){.nt-grid{grid-template-columns:1fr}}
+/* 2026-08-14 (correção pedida pelo Alisson): sem min-width:0, uma coluna de
+   grid nunca encolhe abaixo do min-content do que está dentro dela — um
+   nome de empresa/curso comprido e sem espaços na prévia forçava a coluna
+   (e o modal inteiro) a alargar e distorcer o resto do layout. */
+.nt-grid > div{min-width:0}
 .nt-sec{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:var(--r-md);background:var(--gray-50);border:1px solid var(--border);margin-bottom:12px}
 .nt-sec .nt-ic{width:30px;height:30px;border-radius:8px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .nt-sec .nt-body{flex:1;min-width:0}
 .nt-sec .nt-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:8px}
-.nt-preview{background:linear-gradient(160deg,var(--navy),var(--navy-2));color:#fff;border-radius:var(--r-md);padding:14px;font-size:12px}
+.nt-preview{background:linear-gradient(160deg,var(--navy),var(--navy-2));color:#fff;border-radius:var(--r-md);padding:14px;font-size:12px;overflow:hidden}
 .nt-preview .k{color:rgba(255,255,255,.55);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
-.nt-preview .v{color:#fff;font-weight:600;margin-bottom:10px;word-break:break-word}
+.nt-preview .v{color:#fff;font-weight:600;margin-bottom:10px;word-break:break-word;overflow-wrap:anywhere}
 .nt-preview .v:last-child{margin-bottom:0}
 @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
@@ -8611,17 +8616,7 @@ async function renderTurmas(abaInicial) {
   // continua vendo Lista da próxima vez que abrir esta tela.
   window._turmasVisao = localStorage.getItem(_turmasVisaoKey()) || 'cards';
   setConteudo(`
-    <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
-      <div class="turmas-tabs" id="turmasTabsEl">
-        ${_turmaTabHtml('todas','Todas',_turmasCache.length,abaAtiva)}
-        ${_turmaTabHtml('em_andamento','Em andamento',nAn,abaAtiva)}
-        ${_turmaTabHtml('agendada','Agendadas',nAg,abaAtiva)}
-        ${_turmaTabHtml('concluida','Concluídas',nCo,abaAtiva)}
-        ${_turmaTabHtml('cancelada','Canceladas',nCa,abaAtiva)}
-      </div>
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.clip} Nova turma</button>`:''}
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <div style="position:relative;flex:1;min-width:200px;max-width:320px">
         <input type="text" id="turmasBuscaInput" placeholder="Buscar por curso, empresa, instrutor ou protocolo"
           oninput="buscarTurmas(this.value)"
@@ -8641,6 +8636,16 @@ async function renderTurmas(abaInicial) {
         <button type="button" id="turmasBtnCards" onclick="_turmasAlternarVisao('cards')" style="border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Cards</button>
         <button type="button" id="turmasBtnLista" onclick="_turmasAlternarVisao('lista')" style="border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Lista</button>
       </div>
+    </div>
+    <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
+      <div class="turmas-tabs" id="turmasTabsEl">
+        ${_turmaTabHtml('todas','Todas',_turmasCache.length,abaAtiva)}
+        ${_turmaTabHtml('em_andamento','Em andamento',nAn,abaAtiva)}
+        ${_turmaTabHtml('agendada','Agendadas',nAg,abaAtiva)}
+        ${_turmaTabHtml('concluida','Concluídas',nCo,abaAtiva)}
+        ${_turmaTabHtml('cancelada','Canceladas',nCa,abaAtiva)}
+      </div>
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.clip} Nova turma</button>`:''}
     </div>
     <div id="turmasGridEl">${_turmasRenderVisao(_turmasCache, abaAtiva, podeCriar)}</div>`);
   _turmasAtualizarBotoesVisao();
@@ -8825,7 +8830,7 @@ function _htmlTurmasLista(lista, status, podeCriar) {
         const concSes = (t.sessoes||[]).filter(s=>s.concluida).length;
         const pct = totalSes>0 ? Math.round((concSes/totalSes)*100) : 0;
         const pend = _turmaPendencias(t);
-        const barraHtml = totalSes>0 ? `<span style="width:40px;height:4px;background:var(--gray-100);border-radius:3px;display:inline-block;overflow:hidden;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;background:var(--green);width:${pct}%"></span></span>` : '';
+        const barraHtml = concSes>0 ? `<span style="width:40px;height:4px;background:var(--gray-100);border-radius:3px;display:inline-block;overflow:hidden;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;background:var(--green);width:${pct}%"></span></span>` : '';
         return `<div class="turma-row-lista" data-action="verTurma" data-id="${t.id}" style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:6px;font-size:12.5px;cursor:pointer">
           <span style="width:7px;height:7px;border-radius:50%;background:${TURMA_STATUS_DOT[st]||'#94A3B8'};flex-shrink:0"></span>
           <span style="flex:1.6;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${escapeHtml(t.catalogo?.nome||'—')}</span>
@@ -9345,40 +9350,88 @@ async function abrirModalTurma(id=null, preSel=null) {
   const podeCriarCliente = ['administrador','comercial'].includes(usuarioAtual.perfil) && !travado;
   const cliOpcoes = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
   const catOpcoes = _catalogoCache.map(c=>({id:c.id, nome:c.nome}));
-  abrirModal(t?'Editar turma':'Nova turma', `
-    ${travado?`<div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2)">
-      Esta turma está sendo agendada como reciclagem de uma pendência de Conformidade — empresa e treinamento vêm fixos, só para conferência, e não podem ser alterados aqui.
-    </div>`:''}
-    <div class="field">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <label style="margin:0">Cliente *</label>
-        ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.userplus} Novo cliente</button>`:''}
+  // 2026-08-14 (pedido do Alisson — a Proposta A do modal "Nova turma"
+  // precisa valer nos DOIS lugares onde uma turma é criada, não só na
+  // Agenda da Equipe): mesmo padrão visual — seções com ícone + painel-
+  // resumo ao vivo, modal alargado (.modal-box-largo) — já usado em
+  // _agEquipeAbrirCriacaoRapida. Este modal não tem campos de agendamento
+  // (instrutor/data/hora) porque aqui a turma nasce SEM sessão — o primeiro
+  // encontro continua sendo agendado depois, num passo separado ("Adicionar
+  // agendamento" dentro da turma); isso não mudou, só o layout ao redor dos
+  // mesmos campos de sempre (mesmos ids, mesma lógica de salvarTurma()).
+  abrirModal(t?'Editar turma':'✨ Nova turma', `
+    <div class="nt-grid">
+      <div>
+        ${travado?`<div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2)">
+          Esta turma está sendo agendada como reciclagem de uma pendência de Conformidade — empresa e treinamento vêm fixos, só para conferência, e não podem ser alterados aqui.
+        </div>`:''}
+        <div class="nt-sec">
+          <div class="nt-ic">🏢</div>
+          <div class="nt-body">
+            <div class="nt-title">Dados da turma</div>
+            <div class="field">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <label style="margin:0">Cliente *</label>
+                ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.userplus} Novo cliente</button>`:''}
+              </div>
+              ${_comboBuscavelHtml('mTurCli', 'Buscar cliente por nome...', cliOpcoes, cliPreId, travado)}
+            </div>
+            <div class="field" style="margin-bottom:0"><label>Treinamento *</label>
+              ${_comboBuscavelHtml('mTurCat', 'Buscar treinamento por nome...', catOpcoes, catPreId, travado)}</div>
+          </div>
+        </div>
+        <div class="nt-sec" style="margin-bottom:0">
+          <div class="nt-ic">📍</div>
+          <div class="nt-body">
+            <div class="nt-title">Local e observações</div>
+            <div class="field">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <label style="margin:0">Local do treinamento</label>
+                <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_preencherLocalComCliente()">📍 Usar endereço do cliente</button>
+              </div>
+              <textarea id="mTurLocal" rows="2" oninput="_turmaAtualizarPreview()" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.local||'')}</textarea>
+              <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do treinamento — pode ser diferente do endereço cadastrado do cliente.</div>
+            </div>
+            <div class="field" style="margin-bottom:0"><label>Observações</label>
+              <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.observacoes||'')}</textarea></div>
+          </div>
+        </div>
       </div>
-      ${_comboBuscavelHtml('mTurCli', 'Buscar cliente por nome...', cliOpcoes, cliPreId, travado)}
-    </div>
-    <div class="field"><label>Treinamento *</label>
-      ${_comboBuscavelHtml('mTurCat', 'Buscar treinamento por nome...', catOpcoes, catPreId, travado)}</div>
-    <div class="field">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <label style="margin:0">Local do treinamento</label>
-        <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_preencherLocalComCliente()">📍 Usar endereço do cliente</button>
-      </div>
-      <textarea id="mTurLocal" rows="2" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.local||'')}</textarea>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do treinamento — pode ser diferente do endereço cadastrado do cliente.</div>
-    </div>
-    <div class="field"><label>Observações</label>
-      <textarea id="mTurObs" rows="3" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(t?.observacoes||'')}</textarea></div>`,
+      <div class="nt-preview" id="mTurPreview"></div>
+    </div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`);
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarTurma()">${t?'Salvar':'Criar turma'}</button>`,
+    true);
   if (!travado) {
-    _comboBuscavelRegistrar('mTurCli', cliOpcoes, ()=>_autoPreencherLocalTurma());
-    _comboBuscavelRegistrar('mTurCat', catOpcoes, null);
+    _comboBuscavelRegistrar('mTurCli', cliOpcoes, ()=>{ _autoPreencherLocalTurma(); _turmaAtualizarPreview(); });
+    _comboBuscavelRegistrar('mTurCat', catOpcoes, ()=>_turmaAtualizarPreview());
   }
   // Turma nova já nascendo com cliente pré-selecionado (ex.: "Agendar" a
   // partir de uma pendência de Conformidade) — o combobox buscável não
   // dispara onSelect sozinho nesse caso (o valor já vem pronto no HTML),
   // então preenche o Local manualmente aqui.
   if (!t && cliPreId) _autoPreencherLocalTurma();
+  _turmaAtualizarPreview();
+}
+
+// Painel-resumo ao vivo do modal "Nova/Editar turma" da tela Turmas
+// (2026-08-14 — mesmo padrão de _agRapidaAtualizarPreview, da Agenda da
+// Equipe). Só LÊ os campos já preenchidos; nunca decide nem valida nada
+// sozinha, por isso pode ser chamada a qualquer momento sem risco de
+// interferir em salvarTurma(), que continua lendo os campos originais.
+function _turmaAtualizarPreview() {
+  const el = document.getElementById('mTurPreview');
+  if (!el) return;
+  const cli = _clientesCache.find(c => String(c.id)===String(document.getElementById('mTurCli')?.value));
+  const cat = _catalogoCache.find(c => String(c.id)===String(document.getElementById('mTurCat')?.value));
+  const local = document.getElementById('mTurLocal')?.value.trim();
+  const semValor = '<span style="opacity:.5">—</span>';
+  el.innerHTML = `
+    <div class="k">Prévia</div>
+    <div class="v" style="font-size:14px">${cat?escapeHtml(cat.nome):'<span style="opacity:.5">Treinamento não selecionado</span>'}</div>
+    <div class="k">Cliente</div><div class="v">${cli?escapeHtml(cli.nome):semValor}</div>
+    <div class="k">Local</div><div class="v">${local?escapeHtml(local):semValor}</div>
+  `;
 }
 
 // Preenche o campo Local do treinamento com o endereço cadastrado do
@@ -9394,6 +9447,7 @@ function _preencherLocalComCliente() {
   if (!endereco) { showToast('Este cliente não tem endereço cadastrado. Edite o cadastro em Clientes.','error'); return; }
   const campo = document.getElementById('mTurLocal');
   if (campo) campo.value = endereco;
+  _turmaAtualizarPreview();
 }
 function _autoPreencherLocalTurma() {
   if (_modalCurrentId) return; // editando turma existente — não sobrescrever o que já foi digitado
