@@ -11358,7 +11358,12 @@ function _agEquipeRenderSemana() {
   // Nome em até 2 linhas (-webkit-line-clamp, mesma técnica já usada em
   // outras telas do sistema pra truncar com segurança sem cortar no meio
   // de uma palavra) + bolinha da cor do instrutor antes do nome.
-  const nomes = instrutores.map((i,idx) => `<div style="height:${alturaCelula}px;display:flex;align-items:center;gap:7px;padding-right:6px;${idx>0?'border-top:1px solid var(--border)':''}">
+  // 2026-08-14 (pedido do Alisson — mesma lógica da visão Dia, pra
+  // experiência ficar igual nas duas): nome do instrutor agora é clicável e
+  // abre "Nova turma" (_agEquipeAbrirCriacaoRapida) — como a visão Semana
+  // não tem uma data única selecionada, abre sem data pré-preenchida (o
+  // usuário escolhe no modal); instrutor já vem selecionado.
+  const nomes = instrutores.map((i,idx) => `<div style="height:${alturaCelula}px;display:flex;align-items:center;gap:7px;padding-right:6px;cursor:pointer;${idx>0?'border-top:1px solid var(--border)':''}" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', null, null)" title="Agendar turma com ${escapeHtml(i.nome)}">
     <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
     <span style="font-size:13.5px;font-weight:600;color:var(--text-1);line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(i.nome)}</span>
   </div>`).join('');
@@ -11416,6 +11421,7 @@ function _agEquipeRenderSemana() {
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
   el.innerHTML = html;
   _setElBoth('agEquipeTimeline', html);
@@ -11675,23 +11681,20 @@ function _agEquipeRenderTimeline() {
 
   // 2026-08-09 (pedido do Alisson): nome do instrutor com mais hierarquia
   // visual (14px/600, era 12px/500) — ficava pequeno demais pra ler rápido,
-  // principalmente no celular. E o "+" ganhou uma área de toque bem maior
-  // (~38×38px) SEM aumentar o círculo visual (continua 18px): o <button>
-  // externo é que recebe o padding/toque, com margin negativa igual ao
-  // padding pra não empurrar o layout — o círculo pequeno vive dentro dele,
-  // só decorativo. Clássico "hit-slop": alvo de toque grande, elemento
-  // visual do mesmo tamanho de antes.
+  // principalmente no celular.
   // 2026-08-12 (pedido do Alisson): nome ganhou bolinha da cor do instrutor
   // (mesma paleta/técnica da visão Semana) e passou de 1 linha truncada com
   // "..." pra até 2 linhas completas (-webkit-line-clamp) — nome não fica
   // mais cortado no meio, só quebra pra 2ª linha quando não cabe em 1.
-  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:6px">
+  // 2026-08-14 (pedido do Alisson — ajuste que tinha se perdido): removido
+  // o botão "+" ao lado do nome. O nome inteiro agora é a área clicável e
+  // abre "Nova turma" direto (_agEquipeAbrirCriacaoRapida) — antes abria o
+  // relatório do instrutor (_relAbrirInstrutorDaAgenda, função mantida no
+  // arquivo, só não é mais chamada daqui). Mesma lógica aplicada na visão
+  // Semana, pra a experiência ser igual nas duas.
+  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}">
     <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
-    <span style="overflow:hidden;cursor:pointer;font-size:14px;color:var(--text-1);font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical" onclick="_relAbrirInstrutorDaAgenda('${i.id}')" title="Ver relatório de ${escapeHtml(i.nome)}">${escapeHtml(i.nome)}</span>
-    <button type="button" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}" aria-label="Agendar turma com ${escapeHtml(i.nome)}"
-      style="border:none;background:none;padding:10px;margin:-10px -10px -10px -4px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">
-      <span style="width:18px;height:18px;border-radius:50%;background:var(--gray-100);color:var(--text-2);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center">+</span>
-    </button>
+    <span style="overflow:hidden;font-size:14px;color:var(--text-1);font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escapeHtml(i.nome)}</span>
   </div>`).join(espacador);
 
   const html = `<div style="display:flex;gap:10px">
@@ -11707,6 +11710,7 @@ function _agEquipeRenderTimeline() {
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
   el.innerHTML = html;
   _setElBoth('agEquipeTimeline', html);
@@ -11781,14 +11785,24 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
   window._agRapidaHoraFimManual = false;
   window._agRapidaTemConflito   = false;
 
+  // 2026-08-14 — repaginação a pedido do Alisson (ajuste de ontem que
+  // tinha se perdido): campos agora agrupados em seções com o mesmo padrão
+  // visual já usado em outros modais multi-seção do sistema (ex.: modal de
+  // Nova Organização — título em uppercase + linha divisória), "Mais
+  // detalhes (opcional)" removido (nada mais fica escondido atrás de um
+  // clique) e botão "Usar endereço do cliente" adicionado, igual ao que já
+  // existe no modal Nova Turma da página Turmas (_preencherLocalComCliente).
   abrirModal('Nova turma', `
     <div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text-2)">
-      Criando a partir da Agenda da Equipe — instrutor, data e horário já vêm preenchidos, ajuste se precisar.
+      Criando a partir da Agenda da Equipe — o instrutor já vem selecionado; ajuste os demais campos conforme necessário.
     </div>
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Dados da turma</div>
     <div class="field"><label>Cliente *</label>
       ${_comboBuscavelHtml('mNtCli', 'Buscar cliente por nome...', cliOpcoes, null)}</div>
-    <div class="field"><label>Treinamento *</label>
+    <div class="field" style="margin-bottom:0"><label>Treinamento *</label>
       ${_comboBuscavelHtml('mNtCat', 'Buscar treinamento por nome...', catOpcoes, null)}</div>
+
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Agendamento</div>
     <div class="field"><label>Instrutor</label>
       <select id="mNtInstrutor" onchange="_agRapidaVerificarConflito()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="">Selecione o instrutor...</option>${instOpts}
@@ -11802,32 +11816,37 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
       <div class="field"><label>Hora início *</label>
         <input type="time" id="mNtIni" value="${horaInicio||''}" onchange="_agRapidaCalcularHoraFim();_agRapidaVerificarConflito()"
           style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-      <div class="field"><label>Hora término</label>
+      <div class="field" style="margin-bottom:0"><label>Hora término</label>
         <input type="time" id="mNtFim" value="" onchange="_agRapidaHoraFimEditadaManual();_agRapidaVerificarConflito()"
           style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
     </div>
-    <div id="mNtFimAviso" style="margin:-4px 0 6px"></div>
-    <details style="margin-top:2px">
-      <summary style="font-size:12px;color:var(--text-3);cursor:pointer">Mais detalhes (opcional)</summary>
-      <div style="margin-top:12px">
-        <div class="field"><label>Modalidade</label>
-          <select id="mNtMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-            <option value="presencial" selected>Presencial</option>
-            <option value="online">Online</option>
-            <option value="hibrido">Híbrido</option>
-          </select></div>
-        <div class="field"><label>Endereço do treinamento</label>
-          <textarea id="mNtLocal" rows="2" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>
-        <div class="field"><label>Sala / complemento (desse encontro)</label>
-          <input type="text" id="mNtSala" placeholder="Ex.: Sala 1, 2º andar..." style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-        <div class="field"><label>Observações</label>
-          <textarea id="mNtObs" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>
+    <div id="mNtFimAviso" style="margin:6px 0 0"></div>
+
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Detalhes do treinamento</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field"><label>Modalidade</label>
+        <select id="mNtMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+          <option value="presencial" selected>Presencial</option>
+          <option value="online">Online</option>
+          <option value="hibrido">Híbrido</option>
+        </select></div>
+      <div class="field"><label>Sala / complemento (desse encontro)</label>
+        <input type="text" id="mNtSala" placeholder="Ex.: Sala 1, 2º andar..." style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+    </div>
+    <div class="field">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label style="margin:0">Endereço do treinamento</label>
+        <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_agRapidaPreencherLocalComCliente()">📍 Usar endereço do cliente</button>
       </div>
-    </details>`,
+      <textarea id="mNtLocal" rows="2" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do treinamento — pode ser diferente do endereço cadastrado do cliente.</div>
+    </div>
+    <div class="field" style="margin-bottom:0"><label>Observações</label>
+      <textarea id="mNtObs" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`);
 
-  _comboBuscavelRegistrar('mNtCli', cliOpcoes, null);
+  _comboBuscavelRegistrar('mNtCli', cliOpcoes, () => _agRapidaAutoPreencherLocal());
   _comboBuscavelRegistrar('mNtCat', catOpcoes, () => { _agRapidaCalcularHoraFim(); });
 
   if (instrutorId && data) _agRapidaVerificarConflito();
@@ -11860,6 +11879,30 @@ function _agRapidaHoraFimEditadaManual() {
   window._agRapidaHoraFimManual = true;
   const avisoEl = document.getElementById('mNtFimAviso');
   if (avisoEl) avisoEl.innerHTML = '';
+}
+
+// "Usar endereço do cliente" no modal Nova Turma da Agenda Rápida —
+// 2026-08-14, a pedido do Alisson, pra ter a mesma funcionalidade que já
+// existe no modal Nova Turma da página Turmas (_preencherLocalComCliente/
+// _autoPreencherLocalTurma). Cópia independente com os ids de campo da
+// Agenda Rápida (mNtCli/mNtLocal), no mesmo padrão de duplicação já usado
+// em _agRapidaVerificarConflito/_agRapidaCalcularHoraFim — mantém as duas
+// telas simples de entender isoladamente, sem depender uma da outra.
+function _agRapidaPreencherLocalComCliente() {
+  const cliId = document.getElementById('mNtCli')?.value;
+  const c = _clientesCache.find(x=>x.id===cliId);
+  if (!c) { showToast('Selecione um cliente primeiro','error'); return; }
+  const endereco = _enderecoFormatado(c);
+  if (!endereco) { showToast('Este cliente não tem endereço cadastrado. Edite o cadastro em Clientes.','error'); return; }
+  const campo = document.getElementById('mNtLocal');
+  if (campo) campo.value = endereco;
+}
+function _agRapidaAutoPreencherLocal() {
+  const campo = document.getElementById('mNtLocal');
+  if (!campo || campo.value.trim()) return; // já preenchido manualmente — não sobrescrever
+  const cliId = document.getElementById('mNtCli')?.value;
+  const c = _clientesCache.find(x=>x.id===cliId);
+  if (c) campo.value = _enderecoFormatado(c);
 }
 
 // Mesma lógica de _agVerificarConflito (modal de agendamento dentro da
