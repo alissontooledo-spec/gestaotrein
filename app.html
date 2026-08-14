@@ -16400,15 +16400,30 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
     const path     = `${orgId}/${turmaId}/${nomeArquivo}`;
 
     const {error:upErr} = await sb.storage.from('documentos').upload(path, blob, {upsert:true, contentType:'application/pdf'});
-    if (upErr) { console.warn('Storage documentos:', upErr.message); return false; }
+    if (upErr) { console.warn('Storage documentos:', upErr.message); return {ok:false, erro:upErr.message}; }
 
     // Verificar se já existe registro para evitar o ON CONFLICT problemático.
     // sessaoId distingue a lista de presença de cada encontro (uma por dia,
     // desde 2026-07-30) — para certificado individual/coletivo continua null.
+    // 2026-08-14 (correção de causa raiz, incidente relatado pelo Alisson —
+    // lista de presença com assinatura reaproveitada de outro dia): esta
+    // consulta usava .maybeSingle(), que EXIGE 0 ou 1 linha e lança erro se
+    // encontrar 2+. Se por qualquer motivo já existirem 2 registros
+    // `documentos` batendo com o mesmo turma_id+tipo+sessao_id (ex.: uma
+    // corrida de cliques em versões anteriores, quando uma falha aqui ainda
+    // era silenciosa e a pessoa tentava gerar de novo repetidas vezes), TODA
+    // tentativa futura de gerar aquele documento específico quebrava bem
+    // aqui, sempre — o PDF baixava normalmente (isso já tinha acontecido
+    // antes deste ponto), mas o registro nunca mais era atualizado, não
+    // importa quantas vezes a pessoa tentasse. Trocado por .limit(1), que
+    // nunca lança erro por causa da quantidade de linhas — havendo
+    // duplicata, atualiza a primeira em vez de travar a geração.
     let query = sb.from('documentos').select('id').eq('turma_id', turmaId).eq('tipo', tipo);
     query = colaboradorId ? query.eq('colaborador_id', colaboradorId) : query.is('colaborador_id', null);
     query = sessaoId      ? query.eq('sessao_id', sessaoId)           : query.is('sessao_id', null);
-    const {data: existente} = await query.maybeSingle();
+    const {data: existentes, error: selErr} = await query.limit(1);
+    if (selErr) { console.warn('DB documentos (consulta):', selErr.message); return {ok:false, erro:selErr.message}; }
+    const existente = existentes && existentes[0];
 
     let dbErr;
     if (existente) {
@@ -16429,11 +16444,11 @@ async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colab
         gerado_em:        new Date().toISOString(),
       }));
     }
-    if (dbErr) { console.warn('DB documentos:', dbErr.message); return false; }
-    return true;
+    if (dbErr) { console.warn('DB documentos:', dbErr.message); return {ok:false, erro:dbErr.message}; }
+    return {ok:true};
   } catch(e) {
     console.warn('salvarDocumentoSupabase:', e.message);
-    return false;
+    return {ok:false, erro:e.message};
   }
 }
 
@@ -18549,8 +18564,8 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
     const codigo = crypto.randomUUID();
     const salvou = await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
-    if (salvou) showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
-    else showToast('O PDF foi baixado, mas não foi possível registrar a geração no sistema — a lista pode continuar aparecendo como pendente. Tente gerar de novo.','error');
+    if (salvou.ok) showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
+    else showToast(`O PDF foi baixado, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — a lista pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
   } catch(e) {
     console.error(e);
     showToast(traduzErroSupabase(e,'Erro ao gerar PDF'),'error');
@@ -19045,8 +19060,8 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const nomeSafe = s(col.nome,60).replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-${nomeSafe}.pdf`);
     const salvou = await salvarDocumentoSupabase(doc,`cert-individual-${colaboradorId}.pdf`,'certificado_individual',turmaId,colaboradorId,codigo);
-    if (salvou) showToast(`Certificado de ${s(col.nome,40)} gerado!`,'success');
-    else showToast('O PDF foi baixado, mas não foi possível registrar a geração no sistema — pode continuar aparecendo como pendente. Tente gerar de novo.','error');
+    if (salvou.ok) showToast(`Certificado de ${s(col.nome,40)} gerado!`,'success');
+    else showToast(`O PDF foi baixado, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
   } catch(e) {
     console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado'),'error');
   } finally { hideLoading(); }
@@ -19554,8 +19569,8 @@ async function gerarCertificadoColetivo(turmaId) {
     const nomeCli = s(nomeEmp,40).replace(/\s+/g,'-').toLowerCase();
     doc.save(`certificado-coletivo-${nomeCli}.pdf`);
     const salvou = await salvarDocumentoSupabase(doc,`cert-coletivo-${turmaId}.pdf`,'certificado_coletivo',turmaId,null,codigo);
-    if (salvou) showToast('Certificado coletivo gerado!','success');
-    else showToast('O PDF foi baixado, mas não foi possível registrar a geração no sistema — pode continuar aparecendo como pendente. Tente gerar de novo.','error');
+    if (salvou.ok) showToast('Certificado coletivo gerado!','success');
+    else showToast(`O PDF foi baixado, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
   } catch(e) {
     console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado coletivo'),'error');
   } finally { hideLoading(); }
