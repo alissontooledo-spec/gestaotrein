@@ -289,6 +289,21 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 @media(min-width:480px){.modal-overlay{align-items:center;padding:16px}}
 .modal-box{background:var(--surface);width:100%;max-width:480px;border-radius:var(--r-xl) var(--r-xl) 0 0;max-height:90vh;display:flex;flex-direction:column;animation:slideUp .2s ease}
 @media(min-width:480px){.modal-box{border-radius:var(--r-xl);max-height:85vh}}
+/* 2026-08-14 (Proposta A do modal "Nova turma", aprovada pelo Alisson) —
+   classe opcional (largo=true em abrirModal) que só alarga ESTE modal;
+   .modal-box continua com max-width:480px por padrão, então nenhum outro
+   modal do sistema é afetado. */
+.modal-box-largo{max-width:760px}
+.nt-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+@media(max-width:700px){.nt-grid{grid-template-columns:1fr}}
+.nt-sec{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:var(--r-md);background:var(--gray-50);border:1px solid var(--border);margin-bottom:12px}
+.nt-sec .nt-ic{width:30px;height:30px;border-radius:8px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.nt-sec .nt-body{flex:1;min-width:0}
+.nt-sec .nt-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:8px}
+.nt-preview{background:linear-gradient(160deg,var(--navy),var(--navy-2));color:#fff;border-radius:var(--r-md);padding:14px;font-size:12px}
+.nt-preview .k{color:rgba(255,255,255,.55);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.nt-preview .v{color:#fff;font-weight:600;margin-bottom:10px;word-break:break-word}
+.nt-preview .v:last-child{margin-bottom:0}
 @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
 .modal-title{font-size:15px;font-weight:600;color:var(--text-1);letter-spacing:-.2px}
@@ -678,7 +693,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 </div>
 
 <div class="modal-overlay" id="modalOverlay" style="display:none">
-  <div class="modal-box">
+  <div class="modal-box" id="modalBox">
     <div class="modal-header">
       <div class="modal-title" id="modalTitulo"></div>
       <button class="modal-close" onclick="fecharModal()">
@@ -2072,11 +2087,15 @@ function fecharSidebar() {
 // ============================================================
 // MODAL GENÉRICO
 // ============================================================
-function abrirModal(titulo, corpo, rodape='') {
+function abrirModal(titulo, corpo, rodape='', largo=false) {
   document.getElementById('modalTitulo').textContent = titulo;
   document.getElementById('modalCorpo').innerHTML = corpo;
   document.getElementById('modalRodape').innerHTML = rodape;
   document.getElementById('modalOverlay').style.display = 'flex';
+  // 2026-08-14 (Proposta A do modal "Nova turma", a pedido do Alisson):
+  // .modal-box-largo é opcional e só afeta o modal aberto agora — removida
+  // em fecharModal(), então nunca "vaza" pro próximo modal genérico aberto.
+  document.getElementById('modalBox')?.classList.toggle('modal-box-largo', !!largo);
   setTimeout(()=>{
     const inp = document.querySelector('#modalCorpo input:not([readonly])');
     if (inp) inp.focus();
@@ -2084,6 +2103,7 @@ function abrirModal(titulo, corpo, rodape='') {
 }
 function fecharModal() {
   document.getElementById('modalOverlay').style.display = 'none';
+  document.getElementById('modalBox')?.classList.remove('modal-box-largo');
   _modalCurrentId = null;
   _modalEditUsuarioId = null;
 }
@@ -8562,7 +8582,15 @@ async function renderTurmas(abaInicial) {
   // pra alimentar _turmaPendencias (badge de pendência no card) — nenhum
   // outro dado, mesma técnica (contagem via nested select) já usada em
   // outros pontos do arquivo (ex.: renderHistorico, execução de turma).
-  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(id,concluida,data,instrutor_id),turma_participantes(id)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
+  // 2026-08-14 (Proposta B aprovada — "lista compacta + filtros"): sessoes
+  // ganhou hora_inicio/hora_fim e o nome do instrutor. usuarios!instrutor_id
+  // é a sintaxe explícita de FK (não `usuarios(nome)` puro) — sem isso o
+  // PostgREST recusa a consulta com "more than one relationship was found",
+  // porque `sessoes` tem mais de uma FK pra `usuarios`; mesmo padrão já
+  // usado em outras consultas do arquivo (ex.: geração de certificado).
+  // Só leitura — nenhum dado novo é gravado, é só pra mostrar/filtrar/
+  // buscar por instrutor na nova visão em lista.
+  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(id,concluida,data,hora_inicio,hora_fim,instrutor_id,usuarios!instrutor_id(nome)),turma_participantes(id)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
   if (error) throw error;
   _turmasCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Operação</div><div class="mh-name">Turmas</div>`);
@@ -8575,6 +8603,13 @@ async function renderTurmas(abaInicial) {
   const abaAtiva = abaInicial || (nAn>0?'em_andamento':nAg>0?'agendada':'concluida');
   window._turmasAbaAtual = abaAtiva;
   window._turmasBuscaAtual = '';
+  window._turmasInstrutorFiltro = '';
+  window._turmasPeriodoFiltro = 'todos';
+  // Visão (Cards/Lista) persiste por usuário, mesmo padrão já usado nos
+  // relatórios recentes (_relRecentesKey). Padrão é Cards — o visual de
+  // sempre, ninguém é forçado a mudar de hábito; quem trocar pra Lista
+  // continua vendo Lista da próxima vez que abrir esta tela.
+  window._turmasVisao = localStorage.getItem(_turmasVisaoKey()) || 'cards';
   setConteudo(`
     <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
       <div class="turmas-tabs" id="turmasTabsEl">
@@ -8586,13 +8621,29 @@ async function renderTurmas(abaInicial) {
       </div>
       ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.clip} Nova turma</button>`:''}
     </div>
-    <div style="margin-bottom:14px;position:relative;max-width:360px">
-      <input type="text" id="turmasBuscaInput" placeholder="Buscar por curso, empresa ou protocolo (TRN-...)"
-        oninput="buscarTurmas(this.value)"
-        style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit">
-      <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3)">🔍</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="position:relative;flex:1;min-width:200px;max-width:320px">
+        <input type="text" id="turmasBuscaInput" placeholder="Buscar por curso, empresa, instrutor ou protocolo"
+          oninput="buscarTurmas(this.value)"
+          style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit">
+        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3)">🔍</span>
+      </div>
+      <select id="turmasFiltroInstrutor" onchange="_turmasFiltrarInstrutor(this.value)" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1)">
+        <option value="">Instrutor: todos</option>
+        ${_turmasListaInstrutores().map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('')}
+      </select>
+      <select id="turmasFiltroPeriodo" onchange="_turmasFiltrarPeriodo(this.value)" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1)">
+        <option value="todos">Período: todos</option>
+        <option value="este_mes">Este mês</option>
+        <option value="mes_passado">Mês passado</option>
+      </select>
+      <div style="display:flex;background:var(--gray-100);border-radius:var(--r-md);padding:2px;margin-left:auto">
+        <button type="button" id="turmasBtnCards" onclick="_turmasAlternarVisao('cards')" style="border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Cards</button>
+        <button type="button" id="turmasBtnLista" onclick="_turmasAlternarVisao('lista')" style="border:none;background:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Lista</button>
+      </div>
     </div>
-    <div id="turmasGridEl">${_htmlTurmasGrid(_turmasCache, abaAtiva, podeCriar)}</div>`);
+    <div id="turmasGridEl">${_turmasRenderVisao(_turmasCache, abaAtiva, podeCriar)}</div>`);
+  _turmasAtualizarBotoesVisao();
 }
 
 // Busca textual (nome do curso, empresa cliente ou protocolo TRN-...) que
@@ -8601,7 +8652,7 @@ async function renderTurmas(abaInicial) {
 function buscarTurmas(valor) {
   window._turmasBuscaAtual = (valor||'').trim();
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
-  _setElBoth('turmasGridEl', _htmlTurmasGrid(_turmasCache, window._turmasAbaAtual, podeCriar));
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
 }
 
 function _turmaTabHtml(status, label, count, abaAtiva) {
@@ -8618,7 +8669,7 @@ function trocarAbaTurmas(status) {
   // Re-select by onclick attribute
   const tabs = document.querySelectorAll('.turmas-tab');
   tabs.forEach(t=>{ t.classList.toggle('active', t.getAttribute('onclick')===`trocarAbaTurmas('${status}')`); });
-  _setElBoth('turmasGridEl', _htmlTurmasGrid(_turmasCache, status, podeCriar));
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, status, podeCriar));
 }
 
 // Data de referência de uma turma para ordenação cronológica: a sessão
@@ -8630,16 +8681,43 @@ function _turmaDataRef(t) {
   return (t.status==='concluida'||t.status==='cancelada') ? datas[datas.length-1] : datas[0];
 }
 
-function _htmlTurmasGrid(lista, status, podeCriar) {
-  // 'pendencia' é um pseudo-status (não existe em turmas.status) — só uma
-  // forma de filtrar a mesma lista pelas turmas que têm alguma pendência
-  // (ver _turmaPendencias). Não é uma aba fixa na barra (pra não poluir a
-  // navegação de quem não veio de um alerta de pendência); chega-se aqui
-  // só via irParaTurmasComPendencia(), chamada pelos cartões de pendência
-  // do Início do Comercial/Administrador.
-  const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada',pendencia:'Com pendência'};
-  const DOT_COLOR = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626',pendencia:'#D97706'};
+// Rótulos/cores de status compartilhados entre a visão Cards e a visão
+// Lista (2026-08-14, Proposta B aprovada) — um único lugar pra manter as
+// duas visualmente consistentes.
+const TURMA_STATUS_LABEL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada',pendencia:'Com pendência'};
+const TURMA_STATUS_DOT   = {agendada:'#94A3B8',em_andamento:'#F59E0B',concluida:'#059669',cancelada:'#DC2626',pendencia:'#D97706'};
+
+// Nomes únicos de instrutor(es) já vinculados às sessões de uma turma — uma
+// turma multi-dia pode ter instrutores diferentes por encontro, por isso é
+// uma lista, não um valor único.
+function _turmaInstrutoresNomes(t) {
+  const nomes = new Set();
+  (t.sessoes||[]).forEach(s => { if (s.usuarios?.nome) nomes.add(s.usuarios.nome); });
+  return [...nomes];
+}
+
+// Todos os instrutores que aparecem em pelo menos uma turma carregada —
+// alimenta o filtro dedicado "Instrutor" da tela Turmas (Proposta B).
+function _turmasListaInstrutores() {
+  const mapa = new Map();
+  (_turmasCache||[]).forEach(t => (t.sessoes||[]).forEach(s => {
+    if (s.instrutor_id && s.usuarios?.nome && !mapa.has(s.instrutor_id)) mapa.set(s.instrutor_id, s.usuarios.nome);
+  }));
+  return [...mapa.entries()].map(([id,nome])=>({id,nome})).sort((a,b)=>a.nome.localeCompare(b.nome));
+}
+
+// Filtro + ordenação central, usado tanto pela visão Cards quanto pela
+// visão Lista — garante que as duas mostrem exatamente o mesmo conjunto de
+// turmas, na mesma ordem, pra a mesma aba/busca/filtros (2026-08-14,
+// Proposta B aprovada: busca por instrutor, filtro de instrutor e filtro de
+// período são novos. A ordenação por data em TODAS as abas — não só
+// "Todas", como era antes — é uma correção de um problema já identificado:
+// sem ordenar, a visão em Lista ficaria tão "misturada" quanto os Cards
+// ficavam, o que ia contra o motivo desta mudança ter sido pedida).
+function _turmaFiltrarLista(lista, status) {
   const busca = (window._turmasBuscaAtual||'').toLowerCase();
+  const instFiltro = window._turmasInstrutorFiltro||'';
+  const periodoFiltro = window._turmasPeriodoFiltro||'todos';
   const ehTodas = status === 'todas';
   const ehPendencia = status === 'pendencia';
   let filtrada = ehTodas ? lista.slice() : ehPendencia ? lista.filter(t=>_turmaPendencias(t).length>0) : lista.filter(t=>t.status===status);
@@ -8647,14 +8725,51 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
     filtrada = filtrada.filter(t =>
       (t.catalogo?.nome||'').toLowerCase().includes(busca) ||
       (t.clientes?.nome||'').toLowerCase().includes(busca) ||
-      (t.protocolo||'').toLowerCase().includes(busca)
+      (t.protocolo||'').toLowerCase().includes(busca) ||
+      _turmaInstrutoresNomes(t).some(n=>n.toLowerCase().includes(busca))
     );
   }
-  if (ehTodas) {
-    filtrada.sort((a,b) => _turmaDataRef(b).localeCompare(_turmaDataRef(a)));
+  if (instFiltro) {
+    filtrada = filtrada.filter(t => (t.sessoes||[]).some(s=>String(s.instrutor_id)===String(instFiltro)));
   }
-  const dotColor = ehTodas ? '#64748B' : (DOT_COLOR[status]||'#94A3B8');
-  const rotuloStatus = ehTodas ? 'no total' : (SL[status]?.toLowerCase()||'');
+  if (periodoFiltro && periodoFiltro !== 'todos') {
+    const hoje = new Date();
+    const anoMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const mesPassadoDt = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
+    const anoMesPassado = `${mesPassadoDt.getFullYear()}-${String(mesPassadoDt.getMonth()+1).padStart(2,'0')}`;
+    filtrada = filtrada.filter(t => {
+      const ref = _turmaDataRef(t);
+      if (!ref) return false;
+      const refMes = ref.slice(0,7);
+      if (periodoFiltro==='este_mes') return refMes===anoMesAtual;
+      if (periodoFiltro==='mes_passado') return refMes===anoMesPassado;
+      return true;
+    });
+  }
+  // Mesma data de referência já usada pra exibir "em ..." no card
+  // (_turmaDataRef): turma em aberto ordena pela sessão mais próxima
+  // primeiro; concluída/cancelada, pela mais recente primeiro. "Todas"
+  // mantém o comportamento de sempre (mais recente/futura primeiro).
+  if (ehTodas || status==='concluida' || status==='cancelada') {
+    filtrada.sort((a,b) => _turmaDataRef(b).localeCompare(_turmaDataRef(a)));
+  } else {
+    filtrada.sort((a,b) => _turmaDataRef(a).localeCompare(_turmaDataRef(b)));
+  }
+  return filtrada;
+}
+
+function _htmlTurmasGrid(lista, status, podeCriar) {
+  // 'pendencia' é um pseudo-status (não existe em turmas.status) — só uma
+  // forma de filtrar a mesma lista pelas turmas que têm alguma pendência
+  // (ver _turmaPendencias). Não é uma aba fixa na barra (pra não poluir a
+  // navegação de quem não veio de um alerta de pendência); chega-se aqui
+  // só via irParaTurmasComPendencia(), chamada pelos cartões de pendência
+  // do Início do Comercial/Administrador.
+  const ehTodas = status === 'todas';
+  const filtrada = _turmaFiltrarLista(lista, status);
+  const busca = window._turmasBuscaAtual||'';
+  const dotColor = ehTodas ? '#64748B' : (TURMA_STATUS_DOT[status]||'#94A3B8');
+  const rotuloStatus = ehTodas ? 'no total' : (TURMA_STATUS_LABEL[status]?.toLowerCase()||'');
   const sectionLabel = filtrada.length===0
     ? (busca ? 'Nenhuma turma encontrada' : `Nenhuma turma ${ehTodas?'cadastrada':rotuloStatus}`)
     : `${filtrada.length} turma${filtrada.length!==1?'s':''} ${rotuloStatus}`;
@@ -8662,7 +8777,7 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
   const cardsHtml = filtrada.length===0
     ? `<div class="turmas-empty-tab">
         <div style="font-size:32px;margin-bottom:4px">📋</div>
-        <div style="font-size:14px;font-weight:500;color:var(--text-2)">${busca ? 'Nenhuma turma encontrada para '+'"'+escapeHtml(window._turmasBuscaAtual)+'"' : 'Nenhuma turma '+(ehTodas?'cadastrada':rotuloStatus)}</div>
+        <div style="font-size:14px;font-weight:500;color:var(--text-2)">${busca ? 'Nenhuma turma encontrada para '+'"'+escapeHtml(busca)+'"' : 'Nenhuma turma '+(ehTodas?'cadastrada':rotuloStatus)}</div>
       </div>`
     : `<div class="turmas-grid">${filtrada.map(t=>_htmlTurmaCard(t)).join('')}${podeCriar&&(status==='agendada'||status==='em_andamento')?`
       <div class="turma-card-nova" onclick="abrirModalTurma()" title="Nova turma">
@@ -8676,6 +8791,97 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
     <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
     <div class="turmas-section-line"></div>
   </div>${cardsHtml}`;
+}
+
+// Visão em lista compacta (1 linha por turma) — Proposta B aprovada,
+// 2026-08-14. Reaproveita o mesmo data-action="verTurma" que os cards já
+// usam (ver case 'verTurma' no delegador de cliques), então abre a turma
+// pelo mesmo handler de clique já testado — nenhuma navegação nova.
+function _htmlTurmasLista(lista, status, podeCriar) {
+  const ehTodas = status === 'todas';
+  const filtrada = _turmaFiltrarLista(lista, status);
+  const busca = window._turmasBuscaAtual||'';
+  const dotColorSecao = ehTodas ? '#64748B' : (TURMA_STATUS_DOT[status]||'#94A3B8');
+  const rotuloStatus = ehTodas ? 'no total' : (TURMA_STATUS_LABEL[status]?.toLowerCase()||'');
+  const sectionLabel = filtrada.length===0
+    ? (busca ? 'Nenhuma turma encontrada' : `Nenhuma turma ${ehTodas?'cadastrada':rotuloStatus}`)
+    : `${filtrada.length} turma${filtrada.length!==1?'s':''} ${rotuloStatus}`;
+  const BADGE_BG  = {agendada:'var(--gray-100)',em_andamento:'var(--blue-l)',concluida:'var(--green-l)',cancelada:'var(--red-l)'};
+  const BADGE_TXT = {agendada:'var(--text-2)',em_andamento:'var(--blue-text)',concluida:'var(--green-text)',cancelada:'var(--red-text)'};
+
+  const linhasHtml = filtrada.length===0
+    ? `<div class="turmas-empty-tab">
+        <div style="font-size:32px;margin-bottom:4px">📋</div>
+        <div style="font-size:14px;font-weight:500;color:var(--text-2)">${busca ? 'Nenhuma turma encontrada para '+'"'+escapeHtml(busca)+'"' : 'Nenhuma turma '+(ehTodas?'cadastrada':rotuloStatus)}</div>
+      </div>`
+    : filtrada.map(t => {
+        const st = t.status;
+        const ref = _turmaDataRef(t);
+        const dataFmt = ref ? `${ref.slice(8,10)}/${ref.slice(5,7)}` : '—';
+        const sessaoRef = (t.sessoes||[]).find(s=>s.data===ref) || (t.sessoes||[])[0];
+        const horaTxt = sessaoRef?.hora_inicio ? sessaoRef.hora_inicio.slice(0,5) : '';
+        const nomesInstrutores = _turmaInstrutoresNomes(t);
+        const totalSes = (t.sessoes||[]).length;
+        const concSes = (t.sessoes||[]).filter(s=>s.concluida).length;
+        const pct = totalSes>0 ? Math.round((concSes/totalSes)*100) : 0;
+        const pend = _turmaPendencias(t);
+        const barraHtml = totalSes>0 ? `<span style="width:40px;height:4px;background:var(--gray-100);border-radius:3px;display:inline-block;overflow:hidden;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;background:var(--green);width:${pct}%"></span></span>` : '';
+        return `<div class="turma-row-lista" data-action="verTurma" data-id="${t.id}" style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:6px;font-size:12.5px;cursor:pointer">
+          <span style="width:7px;height:7px;border-radius:50%;background:${TURMA_STATUS_DOT[st]||'#94A3B8'};flex-shrink:0"></span>
+          <span style="flex:1.6;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${escapeHtml(t.catalogo?.nome||'—')}</span>
+          <span style="flex:1.3;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${escapeHtml(t.clientes?.nome||'—')}</span>
+          <span style="flex:1.4;color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${dataFmt}${horaTxt?' · '+horaTxt:''}${nomesInstrutores.length?' · '+escapeHtml(nomesInstrutores.join(', ')):''}</span>
+          ${pend.length?`<span title="${escapeHtml(pend.map(p=>p.label).join(', '))}" style="font-size:12px;flex-shrink:0">⚠</span>`:''}
+          <span style="flex-shrink:0;white-space:nowrap">${barraHtml}<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;background:${BADGE_BG[st]||'var(--gray-100)'};color:${BADGE_TXT[st]||'var(--text-2)'}">${TURMA_STATUS_LABEL[st]||st}</span></span>
+        </div>`;
+      }).join('');
+
+  return `<div class="turmas-section-header">
+    <div class="turmas-section-dot" style="background:${dotColorSecao}"></div>
+    <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
+    <div class="turmas-section-line"></div>
+  </div>${linhasHtml}`;
+}
+
+// Escolhe Cards ou Lista conforme a preferência atual (window._turmasVisao)
+// — único ponto que os 3 lugares que redesenham #turmasGridEl chamam
+// (renderTurmas, buscarTurmas, trocarAbaTurmas), pra nunca desalinhar.
+function _turmasRenderVisao(lista, status, podeCriar) {
+  return (window._turmasVisao==='lista') ? _htmlTurmasLista(lista, status, podeCriar) : _htmlTurmasGrid(lista, status, podeCriar);
+}
+
+function _turmasVisaoKey() { return `tl_turmas_visao_${usuarioAtual?.id || 'x'}`; }
+
+function _turmasAlternarVisao(visao) {
+  window._turmasVisao = visao;
+  try { localStorage.setItem(_turmasVisaoKey(), visao); } catch(e) {}
+  _turmasAtualizarBotoesVisao();
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
+}
+
+function _turmasAtualizarBotoesVisao() {
+  const visao = window._turmasVisao || 'cards';
+  [['turmasBtnCards','cards'],['turmasBtnLista','lista']].forEach(([id,val]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const ativo = visao === val;
+    btn.style.background = ativo ? 'var(--surface)' : 'none';
+    btn.style.color = ativo ? 'var(--navy)' : 'var(--text-3)';
+    btn.style.boxShadow = ativo ? 'var(--shadow)' : 'none';
+  });
+}
+
+function _turmasFiltrarInstrutor(valor) {
+  window._turmasInstrutorFiltro = valor||'';
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
+}
+
+function _turmasFiltrarPeriodo(valor) {
+  window._turmasPeriodoFiltro = valor||'todos';
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
 }
 
 // ============================================================
@@ -11634,8 +11840,41 @@ function _agEquipeRenderTimeline() {
   // horário sempre visível acima de cada bloco — não só no hover/title,
   // que em tela de toque (mobile) nunca aparece. Sem isso não tinha como
   // ler o horário exato de um compromisso no celular.
-  const linhaAltura = 54;
+  // 2026-08-14 (pedido do Alisson — Proposta A aprovada, "sub-linhas lado a
+  // lado"): quando duas ou mais sessões do mesmo instrutor se sobrepõem no
+  // horário, cada uma ganha sua própria faixa (sub-linha) dentro da linha do
+  // instrutor, em vez de dividir a mesma faixa vertical — antes, os rótulos
+  // de horário e as barras eram desenhados exatamente um em cima do outro e
+  // ficavam ilegíveis (print enviado pelo Alisson). A altura da linha só
+  // cresce quando existe sobreposição de verdade — no caso comum (nenhuma
+  // sobreposição) o resultado visual continua idêntico a antes.
+  const ALTURA_FAIXA = 54; // mesma altura de linha de antes, agora por faixa
+  const GAP_FAIXA = 6;     // mesmo espaçamento vertical já usado entre linhas
   const espacador = `<div style="height:6px"></div>`;
+
+  // Atribuição de faixa por instrutor — mesmo algoritmo "greedy interval
+  // partitioning" usado por agendas tipo Google Agenda/Outlook: percorre as
+  // sessões já ordenadas por horário de início e encaixa cada uma na
+  // primeira faixa livre (cujo último compromisso já terminou); só abre uma
+  // faixa nova quando nenhuma está livre. `alturaPorInstrutor` guarda a
+  // altura final (em px) que cada linha vai precisar, usada tanto no bloco
+  // de horários quanto na coluna de nomes, pra ficarem sempre alinhados.
+  const alturaPorInstrutor = {};
+  instrutores.forEach(i => {
+    const sessoes = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+    const fimPorFaixa = [];
+    sessoes.forEach(s => {
+      const ini = _agEquipeMinutosDeHora(s.hora_inicio);
+      if (ini==null) { s._faixa = 0; return; }
+      const fim = _agEquipeMinutosDeHora(s.hora_fim) ?? (ini+30);
+      let faixa = fimPorFaixa.findIndex(fimFaixa => fimFaixa <= ini);
+      if (faixa === -1) { faixa = fimPorFaixa.length; fimPorFaixa.push(fim); }
+      else { fimPorFaixa[faixa] = fim; }
+      s._faixa = faixa;
+    });
+    const nFaixas = Math.max(1, fimPorFaixa.length);
+    alturaPorInstrutor[i.id] = nFaixas*ALTURA_FAIXA + (nFaixas-1)*GAP_FAIXA;
+  });
 
   // Clicar num espaço vazio da linha do instrutor abre a criação rápida de
   // turma já com instrutor/data/hora daquele ponto (2026-08-08, a pedido do
@@ -11645,9 +11884,10 @@ function _agEquipeRenderTimeline() {
   // testada) só cuidando de desenhar a linha.
   const linhas = instrutores.map(i => {
     const sessoes = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+    const alturaLinha = alturaPorInstrutor[i.id];
     if (!sessoes.length) {
       return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(i.nome)} neste horário"
-        style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer">
+        style="height:${alturaLinha}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer">
         <span style="font-size:10px;color:var(--text-3)">Livre o dia todo</span>
       </div>`;
     }
@@ -11667,16 +11907,22 @@ function _agEquipeRenderTimeline() {
       const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
       const rotulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''}`;
       const titulo = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
+      // Topo da faixa (sub-linha) deste compromisso — cada faixa reserva
+      // ALTURA_FAIXA+GAP_FAIXA px, exatamente como a linha inteira reservava
+      // antes; por isso o rótulo/barra dentro de cada faixa usam os mesmos
+      // deslocamentos internos de sempre (2px/20px), só somados ao topo da
+      // faixa (2026-08-14, Proposta A — sub-linhas lado a lado).
+      const topoFaixa = s._faixa * (ALTURA_FAIXA + GAP_FAIXA);
       // Rótulo de horário (ex.: "08:30–10:00") sempre visível acima da
       // barra — pointer-events:none pra não atrapalhar o clique na barra
       // logo abaixo nem o clique-pra-criar da linha vazia.
-      const label = `<div style="position:absolute;left:${leftPct}%;top:2px;font-size:9px;color:var(--text-2);white-space:nowrap;pointer-events:none">${escapeHtml(rotulo)}</div>`;
+      const label = `<div style="position:absolute;left:${leftPct}%;top:${topoFaixa+2}px;font-size:9px;color:var(--text-2);white-space:nowrap;pointer-events:none">${escapeHtml(rotulo)}</div>`;
       const barra = `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
-        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:20px;height:30px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px"></div>`;
+        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:${topoFaixa+20}px;height:30px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px"></div>`;
       return label + barra;
     }).join('');
     return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma nova com ${escapeHtml(i.nome)}"
-      style="height:${linhaAltura}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;cursor:pointer">${blocos}</div>`;
+      style="height:${alturaLinha}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;cursor:pointer">${blocos}</div>`;
   }).join(espacador);
 
   // 2026-08-09 (pedido do Alisson): nome do instrutor com mais hierarquia
@@ -11692,7 +11938,7 @@ function _agEquipeRenderTimeline() {
   // relatório do instrutor (_relAbrirInstrutorDaAgenda, função mantida no
   // arquivo, só não é mais chamada daqui). Mesma lógica aplicada na visão
   // Semana, pra a experiência ser igual nas duas.
-  const nomes = instrutores.map(i => `<div style="height:${linhaAltura}px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}">
+  const nomes = instrutores.map(i => `<div style="height:${alturaPorInstrutor[i.id]}px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}">
     <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
     <span style="overflow:hidden;font-size:14px;color:var(--text-1);font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escapeHtml(i.nome)}</span>
   </div>`).join(espacador);
@@ -11785,71 +12031,128 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
   window._agRapidaHoraFimManual = false;
   window._agRapidaTemConflito   = false;
 
-  // 2026-08-14 — repaginação a pedido do Alisson (ajuste de ontem que
-  // tinha se perdido): campos agora agrupados em seções com o mesmo padrão
-  // visual já usado em outros modais multi-seção do sistema (ex.: modal de
-  // Nova Organização — título em uppercase + linha divisória), "Mais
-  // detalhes (opcional)" removido (nada mais fica escondido atrás de um
-  // clique) e botão "Usar endereço do cliente" adicionado, igual ao que já
-  // existe no modal Nova Turma da página Turmas (_preencherLocalComCliente).
-  abrirModal('Nova turma', `
-    <div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text-2)">
-      Criando a partir da Agenda da Equipe — o instrutor já vem selecionado; ajuste os demais campos conforme necessário.
-    </div>
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Dados da turma</div>
-    <div class="field"><label>Cliente *</label>
-      ${_comboBuscavelHtml('mNtCli', 'Buscar cliente por nome...', cliOpcoes, null)}</div>
-    <div class="field" style="margin-bottom:0"><label>Treinamento *</label>
-      ${_comboBuscavelHtml('mNtCat', 'Buscar treinamento por nome...', catOpcoes, null)}</div>
+  // 2026-08-14 (pedido do Alisson — Proposta A aprovada: "seções com ícone
+  // + painel-resumo ao vivo"): novo visual, não só reorganização de campos.
+  // Modal alargado (largo=true em abrirModal) em 2 colunas — campos à
+  // esquerda agrupados em cartões com ícone (mesmo padrão .nt-sec do CSS),
+  // painel escuro à direita (.nt-preview) resume ao vivo o que está sendo
+  // criado, atualizado por _agRapidaAtualizarPreview() a cada campo alterado.
+  // Nenhum campo mudou de id — só o layout ao redor deles — então toda a
+  // lógica de validação/gravação em _agRapidaSalvarTurmaEAgendamento segue
+  // exatamente igual.
+  abrirModal('✨ Nova turma', `
+    <div class="nt-grid">
+      <div>
+        <div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2)">
+          Criando a partir da Agenda da Equipe — o instrutor já vem selecionado; ajuste os demais campos conforme necessário.
+        </div>
 
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Agendamento</div>
-    <div class="field"><label>Instrutor</label>
-      <select id="mNtInstrutor" onchange="_agRapidaVerificarConflito()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="">Selecione o instrutor...</option>${instOpts}
-      </select>
-      <div id="mNtConflito"></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-      <div class="field"><label>Data *</label>
-        <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito()"
-          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-      <div class="field"><label>Hora início *</label>
-        <input type="time" id="mNtIni" value="${horaInicio||''}" onchange="_agRapidaCalcularHoraFim();_agRapidaVerificarConflito()"
-          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-      <div class="field" style="margin-bottom:0"><label>Hora término</label>
-        <input type="time" id="mNtFim" value="" onchange="_agRapidaHoraFimEditadaManual();_agRapidaVerificarConflito()"
-          style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-    </div>
-    <div id="mNtFimAviso" style="margin:6px 0 0"></div>
+        <div class="nt-sec">
+          <div class="nt-ic">🏢</div>
+          <div class="nt-body">
+            <div class="nt-title">Dados da turma</div>
+            <div class="field"><label>Cliente *</label>
+              ${_comboBuscavelHtml('mNtCli', 'Buscar cliente por nome...', cliOpcoes, null)}</div>
+            <div class="field" style="margin-bottom:0"><label>Treinamento *</label>
+              ${_comboBuscavelHtml('mNtCat', 'Buscar treinamento por nome...', catOpcoes, null)}</div>
+          </div>
+        </div>
 
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Detalhes do treinamento</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field"><label>Modalidade</label>
-        <select id="mNtMod" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-          <option value="presencial" selected>Presencial</option>
-          <option value="online">Online</option>
-          <option value="hibrido">Híbrido</option>
-        </select></div>
-      <div class="field"><label>Sala / complemento (desse encontro)</label>
-        <input type="text" id="mNtSala" placeholder="Ex.: Sala 1, 2º andar..." style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
-    </div>
-    <div class="field">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <label style="margin:0">Endereço do treinamento</label>
-        <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_agRapidaPreencherLocalComCliente()">📍 Usar endereço do cliente</button>
+        <div class="nt-sec">
+          <div class="nt-ic">📅</div>
+          <div class="nt-body">
+            <div class="nt-title">Agendamento</div>
+            <div class="field"><label>Instrutor</label>
+              <select id="mNtInstrutor" onchange="_agRapidaVerificarConflito();_agRapidaAtualizarPreview()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+                <option value="">Selecione o instrutor...</option>${instOpts}
+              </select>
+              <div id="mNtConflito"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+              <div class="field"><label>Data *</label>
+                <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
+                  style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+              <div class="field"><label>Hora início *</label>
+                <input type="time" id="mNtIni" value="${horaInicio||''}" onchange="_agRapidaCalcularHoraFim();_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
+                  style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+              <div class="field" style="margin-bottom:0"><label>Hora término</label>
+                <input type="time" id="mNtFim" value="" onchange="_agRapidaHoraFimEditadaManual();_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
+                  style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+            </div>
+            <div id="mNtFimAviso" style="margin:6px 0 0"></div>
+          </div>
+        </div>
+
+        <div class="nt-sec" style="margin-bottom:0">
+          <div class="nt-ic">📍</div>
+          <div class="nt-body">
+            <div class="nt-title">Detalhes</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="field"><label>Modalidade</label>
+                <select id="mNtMod" onchange="_agRapidaAtualizarPreview()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+                  <option value="presencial" selected>Presencial</option>
+                  <option value="online">Online</option>
+                  <option value="hibrido">Híbrido</option>
+                </select></div>
+              <div class="field"><label>Sala / complemento (desse encontro)</label>
+                <input type="text" id="mNtSala" placeholder="Ex.: Sala 1, 2º andar..." style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+            </div>
+            <div class="field">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <label style="margin:0">Endereço do treinamento</label>
+                <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_agRapidaPreencherLocalComCliente()">📍 Usar endereço do cliente</button>
+              </div>
+              <textarea id="mNtLocal" rows="2" oninput="_agRapidaAtualizarPreview()" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
+              <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do treinamento — pode ser diferente do endereço cadastrado do cliente.</div>
+            </div>
+            <div class="field" style="margin-bottom:0"><label>Observações</label>
+              <textarea id="mNtObs" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>
+          </div>
+        </div>
       </div>
-      <textarea id="mNtLocal" rows="2" placeholder="Endereço completo onde o treinamento será realizado" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do treinamento — pode ser diferente do endereço cadastrado do cliente.</div>
-    </div>
-    <div class="field" style="margin-bottom:0"><label>Observações</label>
-      <textarea id="mNtObs" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`);
 
-  _comboBuscavelRegistrar('mNtCli', cliOpcoes, () => _agRapidaAutoPreencherLocal());
-  _comboBuscavelRegistrar('mNtCat', catOpcoes, () => { _agRapidaCalcularHoraFim(); });
+      <div class="nt-preview" id="mNtPreview"></div>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`,
+    true);
+
+  _comboBuscavelRegistrar('mNtCli', cliOpcoes, () => { _agRapidaAutoPreencherLocal(); _agRapidaAtualizarPreview(); });
+  _comboBuscavelRegistrar('mNtCat', catOpcoes, () => { _agRapidaCalcularHoraFim(); _agRapidaAtualizarPreview(); });
 
   if (instrutorId && data) _agRapidaVerificarConflito();
+  _agRapidaAtualizarPreview();
+}
+
+// Painel-resumo ao vivo do modal "Nova turma" (Proposta A aprovada,
+// 2026-08-14) — só LÊ os campos já preenchidos e escreve num painel
+// separado (#mNtPreview); nunca decide nem valida nada sozinho, por isso
+// pode ser chamado a qualquer momento — inclusive logo que o modal abre,
+// com a maioria dos campos ainda vazios — sem nenhum risco de interferir
+// no salvamento (_agRapidaSalvarTurmaEAgendamento continua lendo os campos
+// originais direto do DOM, como sempre fez).
+function _agRapidaAtualizarPreview() {
+  const el = document.getElementById('mNtPreview');
+  if (!el) return;
+  const cli = _clientesCache.find(c => String(c.id)===String(document.getElementById('mNtCli')?.value));
+  const cat = _catalogoCache.find(c => String(c.id)===String(document.getElementById('mNtCat')?.value));
+  const instrutores = window._agEquipeInstrutores||[];
+  const inst = instrutores.find(i => String(i.id)===String(document.getElementById('mNtInstrutor')?.value));
+  const data = document.getElementById('mNtData')?.value;
+  const ini  = document.getElementById('mNtIni')?.value;
+  const fim  = document.getElementById('mNtFim')?.value;
+  const local = document.getElementById('mNtLocal')?.value.trim();
+  const dataFmt = data ? `${data.slice(8,10)}/${data.slice(5,7)}` : '';
+  const quando = [dataFmt, ini ? (fim ? `${ini}–${fim}` : ini) : ''].filter(Boolean).join(' · ');
+  const semValor = '<span style="opacity:.5">—</span>';
+  el.innerHTML = `
+    <div class="k">Prévia</div>
+    <div class="v" style="font-size:14px">${cat?escapeHtml(cat.nome):'<span style="opacity:.5">Treinamento não selecionado</span>'}</div>
+    <div class="k">Cliente</div><div class="v">${cli?escapeHtml(cli.nome):semValor}</div>
+    <div class="k">Instrutor</div><div class="v">${inst?escapeHtml(inst.nome):semValor}</div>
+    <div class="k">Quando</div><div class="v">${quando||semValor}</div>
+    <div class="k">Local</div><div class="v">${local?escapeHtml(local):semValor}</div>
+  `;
 }
 
 // Mesma lógica de _agCalcularHoraFim (modal de agendamento dentro da
@@ -11896,6 +12199,7 @@ function _agRapidaPreencherLocalComCliente() {
   if (!endereco) { showToast('Este cliente não tem endereço cadastrado. Edite o cadastro em Clientes.','error'); return; }
   const campo = document.getElementById('mNtLocal');
   if (campo) campo.value = endereco;
+  _agRapidaAtualizarPreview();
 }
 function _agRapidaAutoPreencherLocal() {
   const campo = document.getElementById('mNtLocal');
