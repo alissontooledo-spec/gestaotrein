@@ -11998,6 +11998,7 @@ async function _agRapidaSalvarTurmaEAgendamento() {
     if (errSessao) throw errSessao;
 
     fecharModal();
+    hideLoading();
     showToast('Turma criada e agendada!','success');
     await _agEquipeCarregarDados();
     _agEquipeRenderTimeline();
@@ -12014,6 +12015,7 @@ async function _agRapidaSalvarTurmaEAgendamento() {
   } catch(e) {
     setBtnModalLoading(false);
     fecharModal(); // a turma já existe — não faz sentido manter o modal de criação aberto
+    hideLoading();
     if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
       showToast('A turma foi criada, mas esse instrutor acabou de ser agendado por outro usuário nesse horário. Abra a turma em "Turmas pendentes de agendamento" pra escolher outro horário.','error');
     } else {
