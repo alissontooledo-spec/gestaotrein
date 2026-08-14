@@ -8881,7 +8881,7 @@ async function verTurma(id) {
   showLoading('Carregando turma...');
   try {
     const {data:rows,error} = await sb.from('turmas')
-      .select('*,clientes(*),catalogo(*),sessoes(*,usuarios(nome),evidencias(*)),turma_participantes(*,colaboradores(*))')
+      .select('*,clientes(*),catalogo(*),sessoes(*,usuarios!instrutor_id(nome),evidencias(*)),turma_participantes(*,colaboradores(*))')
       .eq('id',id).limit(1);
     if (error) throw error;
     if (!rows||!rows.length) throw new Error('Turma não encontrada ou sem permissão de acesso.');
@@ -13415,7 +13415,7 @@ async function renderRelatorios() {
       .select('id,status,cliente_id,catalogo_id,created_at,clientes(id,nome),catalogo(nome,carga_horaria)')
       .eq('org_id', oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id', oi),
-    sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios(id,nome)').eq('concluida', true),
+    sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios!instrutor_id(id,nome)').eq('concluida', true),
     sb.from('usuarios').select('id,nome,perfil').eq('org_id', oi).eq('ativo', true),
     sb.from('turma_participantes').select('turma_id,colaborador_id'),
     sb.from('documentos').select('turma_id,tipo,colaborador_id').eq('org_id', oi),
@@ -18218,7 +18218,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
   try {
     if (!sessaoId) throw new Error('Encontro não informado — não é possível gerar a ficha de presença.');
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome,assinatura_path,conselho_classe,sigla_conselho,uf_registro,especialidade,formacao,cpf)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios!instrutor_id(nome,assinatura_path,conselho_classe,sigla_conselho,uf_registro,especialidade,formacao,cpf)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — a ficha de presença ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -18564,7 +18564,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -19060,7 +19060,7 @@ async function gerarCertificadoColetivo(turmaId) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -19831,7 +19831,7 @@ async function gerarTudoEnviarEmail(turmaId) {
   try {
     // Carrega turma completa
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome))')
+      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios!instrutor_id(nome)),turma_participantes(*,colaboradores(nome))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
@@ -19973,7 +19973,7 @@ async function enviarDocumentosPorEmail(turmaId) {
   showLoading('Preparando documentos para envio...');
   try {
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios(nome)),turma_participantes(*,colaboradores(nome))')
+      .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios!instrutor_id(nome)),turma_participantes(*,colaboradores(nome))')
       .eq('id', turmaId).single();
     if (error) throw error;
 
