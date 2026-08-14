@@ -309,6 +309,19 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .nt-preview .k{color:rgba(255,255,255,.55);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
 .nt-preview .v{color:#fff;font-weight:600;margin-bottom:10px;word-break:break-word;overflow-wrap:anywhere}
 .nt-preview .v:last-child{margin-bottom:0}
+/* 2026-08-14 (correção pedida pelo Alisson): Data/Hora início/Hora término
+   em 3 colunas dentro de um .nt-sec (que já tem padding + ícone reduzindo a
+   largura útil) não cabiam mais em telas estreitas — "Hora término"
+   ultrapassava a borda do modal. Também: quando o rótulo de um campo é mais
+   comprido que o do campo vizinho (ex.: "Sala / complemento (desse
+   encontro)" vs "Modalidade"), os dois quebram em números de linha
+   diferentes e os campos abaixo ficam desalinhados — min-height reserva
+   sempre o mesmo espaço para o rótulo (até 2 linhas), com o texto ancorado
+   embaixo, então o campo sempre começa na mesma altura nas duas colunas. */
+.nt-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:560px){.nt-3col{grid-template-columns:1fr}}
+.nt-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.nt-2col .field label{min-height:34px;display:flex;align-items:flex-end}
 @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
 .modal-title{font-size:15px;font-weight:600;color:var(--text-1);letter-spacing:-.2px}
@@ -514,12 +527,49 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turmas-tab .tab-count{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
 .turmas-tab:not(.active) .tab-count{background:var(--gray-100);color:var(--text-3)}
 .turmas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:8px}
+/* 2026-08-14 (correção pedida pelo Alisson — visão Lista da tela Turmas):
+   colunas FIXAS via CSS Grid (não flex com proporções) — cada elemento tem
+   sua própria coluna reservada, mesmo quando fica vazio (ex.: turma sem
+   pendência, sem sessão concluída), então nenhuma linha "empurra" as
+   colunas seguintes por ter mais ou menos conteúdo do que a linha vizinha.
+   Textos longos truncam com reticências (ellipsis) em vez de alargar a
+   coluna, que é a única forma de garantir alinhamento independente do
+   tamanho do conteúdo. */
+.turma-linha-lista{display:grid;grid-template-columns:8px minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,1.3fr) 18px 56px 92px;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:6px;font-size:12.5px;cursor:pointer}
+.turma-linha-lista .tl-dot{width:7px;height:7px;border-radius:50%}
+.turma-linha-lista .tl-curso{font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-linha-lista .tl-cliente{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-linha-lista .tl-meta{color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-linha-lista .tl-pend{font-size:12px;text-align:center}
+.turma-linha-lista .tl-bar{width:46px;height:4px;background:var(--gray-100);border-radius:3px;overflow:hidden;justify-self:end}
+.turma-linha-lista .tl-bar .f{display:block;height:100%;background:var(--green)}
+.turma-linha-lista .tl-badge{font-size:9px;font-weight:700;padding:3px 8px;border-radius:999px;text-align:center;white-space:nowrap;justify-self:end}
+@media(max-width:680px){
+  .turma-linha-lista{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+  .turma-linha-lista .tl-curso{flex:1 1 100%}
+  .turma-linha-lista .tl-pend{width:auto}
+}
 .turma-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
 .turma-card:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
 .turma-card-nr{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;background:rgba(30,42,74,.09);color:var(--navy);padding:2px 7px;border-radius:10px;letter-spacing:.02em}
 .turma-card-title{font-size:14px;font-weight:600;color:var(--text-1);line-height:1.35;padding-right:44px;word-break:break-word}
 .turma-card-meta{font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-card-date{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:4px}
+/* 2026-08-14 (pedido do Alisson — modo Cards precisa ficar igual à Opção A
+   apresentada: KPIs no topo + cards agrupados por período + instrutor
+   visível no card, não só a Lista). */
+.turma-card-inst{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);margin-top:-2px}
+.turma-card-inst .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.turmas-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.turmas-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
+.turmas-kpi .n{font-size:18px;font-weight:800;color:var(--navy)}
+.turmas-kpi .l{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+@media(max-width:640px){.turmas-kpis{grid-template-columns:repeat(2,1fr)}}
+.turma-group-head{display:flex;align-items:center;gap:8px;margin:16px 0 8px}
+.turma-group-head:first-of-type{margin-top:0}
+.turma-group-head .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0}
+.turma-group-head span{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.turma-group-head .line{flex:1;height:1px;background:var(--border)}
 .turma-card-progress{display:flex;flex-direction:column;gap:5px}
 .turma-card-progress-row{display:flex;justify-content:space-between;align-items:center}
 .turma-card-progress-bar{height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden}
@@ -8624,11 +8674,11 @@ async function renderTurmas(abaInicial) {
         <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3)">🔍</span>
       </div>
       <select id="turmasFiltroInstrutor" onchange="_turmasFiltrarInstrutor(this.value)" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1)">
-        <option value="">Instrutor: todos</option>
+        <option value="">👤 Instrutor: todos</option>
         ${_turmasListaInstrutores().map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('')}
       </select>
       <select id="turmasFiltroPeriodo" onchange="_turmasFiltrarPeriodo(this.value)" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-family:inherit;background:var(--surface);color:var(--text-1)">
-        <option value="todos">Período: todos</option>
+        <option value="todos">📅 Período: todos</option>
         <option value="este_mes">Este mês</option>
         <option value="mes_passado">Mês passado</option>
       </select>
@@ -8763,6 +8813,50 @@ function _turmaFiltrarLista(lista, status) {
   return filtrada;
 }
 
+// Grupo de período de uma turma, pra visão Cards (2026-08-14, Opção A
+// aprovada — "cards agrupados por período + resumo"). Turma em aberto
+// (agendada/em andamento/todas) agrupa pela PRÓXIMA sessão; concluída/
+// cancelada agrupa pela sessão mais recente — mesma data de referência já
+// usada em todo o resto da tela (_turmaDataRef).
+function _turmaGrupoPeriodo(t, status) {
+  const ref = _turmaDataRef(t);
+  if (!ref) return 'Sem data';
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const passado = status==='concluida' || status==='cancelada';
+  if (passado) {
+    const anoMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const refMes = ref.slice(0,7);
+    if (refMes===anoMesAtual) return 'Este mês';
+    const mesPassadoDt = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
+    const anoMesPassado = `${mesPassadoDt.getFullYear()}-${String(mesPassadoDt.getMonth()+1).padStart(2,'0')}`;
+    if (refMes===anoMesPassado) return 'Mês passado';
+    return 'Mais antigas';
+  }
+  const diffDias = Math.round((new Date(ref+'T00:00:00') - hoje) / 86400000);
+  if (diffDias<0) return 'Atrasadas';
+  if (diffDias===0) return 'Hoje';
+  if (diffDias<=7) return 'Esta semana';
+  if (diffDias<=30) return 'Este mês';
+  return 'Mais adiante';
+}
+
+// Agrupa uma lista já filtrada/ordenada em blocos por período, preservando
+// a ordem cronológica dentro de cada grupo (a lista já chega ordenada por
+// _turmaFiltrarLista) e a ordem dos grupos entre si (mais urgente primeiro
+// nas abas em aberto; mais recente primeiro nas concluídas/canceladas).
+function _turmasAgruparPeriodo(filtrada, status) {
+  const ordem = (status==='concluida'||status==='cancelada')
+    ? ['Este mês','Mês passado','Mais antigas','Sem data']
+    : ['Atrasadas','Hoje','Esta semana','Este mês','Mais adiante','Sem data'];
+  const grupos = new Map();
+  filtrada.forEach(t => {
+    const g = _turmaGrupoPeriodo(t, status);
+    if (!grupos.has(g)) grupos.set(g, []);
+    grupos.get(g).push(t);
+  });
+  return ordem.filter(g=>grupos.has(g)).map(g=>({label:g, itens:grupos.get(g)}));
+}
+
 function _htmlTurmasGrid(lista, status, podeCriar) {
   // 'pendencia' é um pseudo-status (não existe em turmas.status) — só uma
   // forma de filtrar a mesma lista pelas turmas que têm alguma pendência
@@ -8775,27 +8869,49 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
   const busca = window._turmasBuscaAtual||'';
   const dotColor = ehTodas ? '#64748B' : (TURMA_STATUS_DOT[status]||'#94A3B8');
   const rotuloStatus = ehTodas ? 'no total' : (TURMA_STATUS_LABEL[status]?.toLowerCase()||'');
-  const sectionLabel = filtrada.length===0
-    ? (busca ? 'Nenhuma turma encontrada' : `Nenhuma turma ${ehTodas?'cadastrada':rotuloStatus}`)
-    : `${filtrada.length} turma${filtrada.length!==1?'s':''} ${rotuloStatus}`;
+  const sectionLabel = busca ? 'Nenhuma turma encontrada' : `Nenhuma turma ${ehTodas?'cadastrada':rotuloStatus}`;
 
-  const cardsHtml = filtrada.length===0
-    ? `<div class="turmas-empty-tab">
-        <div style="font-size:32px;margin-bottom:4px">📋</div>
-        <div style="font-size:14px;font-weight:500;color:var(--text-2)">${busca ? 'Nenhuma turma encontrada para '+'"'+escapeHtml(busca)+'"' : 'Nenhuma turma '+(ehTodas?'cadastrada':rotuloStatus)}</div>
-      </div>`
-    : `<div class="turmas-grid">${filtrada.map(t=>_htmlTurmaCard(t)).join('')}${podeCriar&&(status==='agendada'||status==='em_andamento')?`
+  // 2026-08-14 (pedido do Alisson — Opção A aprovada: "cards agrupados por
+  // período + resumo"): KPIs calculados sobre TODAS as turmas carregadas
+  // (não só a aba/filtro ativos), igual ao mockup — dão uma visão geral
+  // fixa, que não muda ao trocar de aba.
+  const hoje = new Date();
+  const anoMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  const nEsteMesKpi = lista.filter(t => (_turmaDataRef(t)||'').slice(0,7)===anoMesAtual).length;
+  const nAndamentoKpi = lista.filter(t=>t.status==='em_andamento').length;
+  const nPendenciasKpi = lista.filter(t=>_turmaPendencias(t).length>0).length;
+  const totalSesKpi = lista.reduce((acc,t)=>acc+(t.sessoes||[]).length,0);
+  const concSesKpi = lista.reduce((acc,t)=>acc+(t.sessoes||[]).filter(s=>s.concluida).length,0);
+  const pctConcluidoKpi = totalSesKpi>0 ? Math.round((concSesKpi/totalSesKpi)*100) : 0;
+  const kpiHtml = `<div class="turmas-kpis">
+    <div class="turmas-kpi"><div class="n">${nEsteMesKpi}</div><div class="l">Este mês</div></div>
+    <div class="turmas-kpi"><div class="n">${nAndamentoKpi}</div><div class="l">Em andamento</div></div>
+    <div class="turmas-kpi"><div class="n" style="color:var(--amber-h)">${nPendenciasKpi}</div><div class="l">Pendências</div></div>
+    <div class="turmas-kpi"><div class="n" style="color:var(--green)">${pctConcluidoKpi}%</div><div class="l">Concluído</div></div>
+  </div>`;
+
+  if (!filtrada.length) {
+    return `${kpiHtml}<div class="turmas-section-header">
+      <div class="turmas-section-dot" style="background:${dotColor}"></div>
+      <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
+      <div class="turmas-section-line"></div>
+    </div>
+    <div class="turmas-empty-tab">
+      <div style="font-size:32px;margin-bottom:4px">📋</div>
+      <div style="font-size:14px;font-weight:500;color:var(--text-2)">${busca ? 'Nenhuma turma encontrada para '+'"'+escapeHtml(busca)+'"' : 'Nenhuma turma '+(ehTodas?'cadastrada':rotuloStatus)}</div>
+    </div>`;
+  }
+
+  const novaCardHtml = podeCriar&&(status==='agendada'||status==='em_andamento')?`
       <div class="turma-card-nova" onclick="abrirModalTurma()" title="Nova turma">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         <span style="font-size:13px;font-weight:500">Nova turma</span>
-      </div>`:''}
-    </div>`;
+      </div>`:'';
+  const grupos = _turmasAgruparPeriodo(filtrada, status);
+  const gruposHtml = grupos.map((g,idx) => `<div class="turma-group-head"><div class="dot"></div><span>${escapeHtml(g.label)}</span><div class="line"></div></div>
+    <div class="turmas-grid">${g.itens.map(t=>_htmlTurmaCard(t)).join('')}${idx===grupos.length-1?novaCardHtml:''}</div>`).join('');
 
-  return `<div class="turmas-section-header">
-    <div class="turmas-section-dot" style="background:${dotColor}"></div>
-    <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
-    <div class="turmas-section-line"></div>
-  </div>${cardsHtml}`;
+  return `${kpiHtml}${gruposHtml}`;
 }
 
 // Visão em lista compacta (1 linha por turma) — Proposta B aprovada,
@@ -8830,14 +8946,14 @@ function _htmlTurmasLista(lista, status, podeCriar) {
         const concSes = (t.sessoes||[]).filter(s=>s.concluida).length;
         const pct = totalSes>0 ? Math.round((concSes/totalSes)*100) : 0;
         const pend = _turmaPendencias(t);
-        const barraHtml = concSes>0 ? `<span style="width:40px;height:4px;background:var(--gray-100);border-radius:3px;display:inline-block;overflow:hidden;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;background:var(--green);width:${pct}%"></span></span>` : '';
-        return `<div class="turma-row-lista" data-action="verTurma" data-id="${t.id}" style="display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:6px;font-size:12.5px;cursor:pointer">
-          <span style="width:7px;height:7px;border-radius:50%;background:${TURMA_STATUS_DOT[st]||'#94A3B8'};flex-shrink:0"></span>
-          <span style="flex:1.6;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${escapeHtml(t.catalogo?.nome||'—')}</span>
-          <span style="flex:1.3;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${escapeHtml(t.clientes?.nome||'—')}</span>
-          <span style="flex:1.4;color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${dataFmt}${horaTxt?' · '+horaTxt:''}${nomesInstrutores.length?' · '+escapeHtml(nomesInstrutores.join(', ')):''}</span>
-          ${pend.length?`<span title="${escapeHtml(pend.map(p=>p.label).join(', '))}" style="font-size:12px;flex-shrink:0">⚠</span>`:''}
-          <span style="flex-shrink:0;white-space:nowrap">${barraHtml}<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;background:${BADGE_BG[st]||'var(--gray-100)'};color:${BADGE_TXT[st]||'var(--text-2)'}">${TURMA_STATUS_LABEL[st]||st}</span></span>
+        return `<div class="turma-linha-lista" data-action="verTurma" data-id="${t.id}">
+          <span class="tl-dot" style="background:${TURMA_STATUS_DOT[st]||'#94A3B8'}"></span>
+          <span class="tl-curso">${escapeHtml(t.catalogo?.nome||'—')}</span>
+          <span class="tl-cliente">${escapeHtml(t.clientes?.nome||'—')}</span>
+          <span class="tl-meta">${dataFmt}${horaTxt?' · '+horaTxt:''}${nomesInstrutores.length?' · '+escapeHtml(nomesInstrutores.join(', ')):''}</span>
+          <span class="tl-pend" title="${pend.length?escapeHtml(pend.map(p=>p.label).join(', ')):''}">${pend.length?'⚠':''}</span>
+          <span class="tl-bar">${concSes>0?`<span class="f" style="width:${pct}%"></span>`:''}</span>
+          <span class="tl-badge" style="background:${BADGE_BG[st]||'var(--gray-100)'};color:${BADGE_TXT[st]||'var(--text-2)'}">${TURMA_STATUS_LABEL[st]||st}</span>
         </div>`;
       }).join('');
 
@@ -8946,6 +9062,21 @@ function _toggleTurmaPendencias(el, id) {
   painel.style.display = painel.style.display === 'none' ? 'flex' : 'none';
 }
 
+// Cor estável por instrutor (hash simples do id) — usada na linha de
+// instrutor do card da tela Turmas (2026-08-14). Não depende de ordem de
+// busca/fetch, ao contrário da paleta por índice usada na Agenda da
+// Equipe — aqui não existe uma única lista "instrutores desta tela" pra
+// indexar, cada card pode ter um instrutor diferente vindo de qualquer
+// posição do array de turmas.
+const PALETA_INSTRUTOR_TURMAS = ['#F59E0B','#3B82F6','#8B5CF6','#EC4899','#10B981','#EF4444','#06B6D4','#F97316'];
+function _corInstrutorTurma(instrutorId) {
+  if (!instrutorId) return 'var(--gray-400)';
+  const s = String(instrutorId);
+  let hash = 0;
+  for (let i=0;i<s.length;i++) hash = (hash*31 + s.charCodeAt(i)) >>> 0;
+  return PALETA_INSTRUTOR_TURMAS[hash % PALETA_INSTRUTOR_TURMAS.length];
+}
+
 function _htmlTurmaCard(t) {
   const SB = {agendada:'badge-gray',em_andamento:'badge-amber',concluida:'badge-green',cancelada:'badge-red'};
   const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
@@ -8997,6 +9128,7 @@ function _htmlTurmaCard(t) {
       <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       <span style="font-size:11px;color:var(--text-3)">em ${formatarData(dataRef)}</span>
     </div>`:''}
+    ${(() => { const nomesInst = _turmaInstrutoresNomes(t); if (!nomesInst.length) return ''; const instId = sessoes.find(s=>s.instrutor_id)?.instrutor_id; return `<div class="turma-card-inst"><span class="dot" style="background:${_corInstrutorTurma(instId)}"></span>${escapeHtml(nomesInst.join(', '))}</div>`; })()}
     ${progressHtml}
     ${pendHtml}
     <div class="turma-card-footer">
@@ -11963,17 +12095,20 @@ function _agEquipeRenderTimeline() {
       const titulo = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
       // Topo da faixa (sub-linha) deste compromisso — cada faixa reserva
       // ALTURA_FAIXA+GAP_FAIXA px, exatamente como a linha inteira reservava
-      // antes; por isso o rótulo/barra dentro de cada faixa usam os mesmos
-      // deslocamentos internos de sempre (2px/20px), só somados ao topo da
-      // faixa (2026-08-14, Proposta A — sub-linhas lado a lado).
+      // antes (2026-08-14, Proposta A — sub-linhas lado a lado).
       const topoFaixa = s._faixa * (ALTURA_FAIXA + GAP_FAIXA);
-      // Rótulo de horário (ex.: "08:30–10:00") sempre visível acima da
-      // barra — pointer-events:none pra não atrapalhar o clique na barra
-      // logo abaixo nem o clique-pra-criar da linha vazia.
-      const label = `<div style="position:absolute;left:${leftPct}%;top:${topoFaixa+2}px;font-size:9px;color:var(--text-2);white-space:nowrap;pointer-events:none">${escapeHtml(rotulo)}</div>`;
+      // 2026-08-14 (correção pedida pelo Alisson — fidelidade ao mockup
+      // aprovado): horário + cliente ficam ESCRITOS DENTRO da própria tarja
+      // colorida (texto branco, igual ao ".chip" do mockup), em vez de um
+      // rótulo separado flutuando acima de uma barra sem texto nenhum —
+      // era assim que a Proposta A foi apresentada e aprovada. Continua sem
+      // sobrepor nada: cada faixa (sub-linha) já tem seu próprio espaço
+      // reservado; texto que não cabe na largura do compromisso trunca com
+      // reticências (overflow:hidden) em vez de vazar pra fora da tarja.
+      const textoChip = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'}${s._conflito?' · CONFLITO':s._sobreposicaoAutorizada?' · autorizada':''}`;
       const barra = `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
-        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:${topoFaixa+20}px;height:30px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px"></div>`;
-      return label + barra;
+        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:${topoFaixa+10}px;height:34px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px;display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 2px rgba(0,0,0,.15)">${escapeHtml(textoChip)}</div>`;
+      return barra;
     }).join('');
     return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma nova com ${escapeHtml(i.nome)}"
       style="height:${alturaLinha}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;cursor:pointer">${blocos}</div>`;
@@ -12122,7 +12257,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
               </select>
               <div id="mNtConflito"></div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div class="nt-3col">
               <div class="field"><label>Data *</label>
                 <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
                   style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
@@ -12141,7 +12276,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
           <div class="nt-ic">📍</div>
           <div class="nt-body">
             <div class="nt-title">Detalhes</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="nt-2col">
               <div class="field"><label>Modalidade</label>
                 <select id="mNtMod" onchange="_agRapidaAtualizarPreview()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
                   <option value="presencial" selected>Presencial</option>
