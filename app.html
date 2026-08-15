@@ -594,7 +594,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    sistema, sem equivalente na referência) — desceu pro rodapé do card, em
    vez de disputar o canto superior direito com o badge. */
 .turma-card-title{font-size:12.5px;font-weight:700;color:var(--text-1);line-height:1.3;word-break:break-word;padding-right:96px;margin-bottom:4px}
-.turma-card .badge{position:absolute;top:12px;right:12px;font-size:9.5px}
+.turma-card-status{position:absolute;top:12px;right:12px;font-size:9.5px}
 .turma-card-meta{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-card-date{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px}
 .turma-card-inst{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);margin-top:6px}
@@ -9226,21 +9226,21 @@ function _htmlTurmaCard(t) {
   const pendHtml = pend.length ? `
     <div>
       <button type="button" class="turma-card-pend-toggle" data-action="toggleTurmaPendencias" data-id="${t.id}" onclick="event.stopPropagation()" title="${escapeHtml(pendTitle)}">
-        <span class="badge badge-warn">⚠ ${pend.length>1?`${pend.length} pendências`:'Possui pendência'}</span>
+        <span class="badge badge-warn">⚠ ${pend.length>1?`${pend.length} pendências`:'Pendência'}</span>
       </button>
       <div class="turma-card-pend-list" id="turmaPend-${t.id}" style="display:none" onclick="event.stopPropagation()">
         ${pend.map(p=>`<div class="turma-card-pend-item">• ${p.label}</div>`).join('')}
       </div>
     </div>` : '';
   return `<div class="turma-card" data-action="verTurma" data-id="${t.id}">
-    <span class="badge ${SB[st]}">${SL[st]}</span>
+    <span class="badge ${SB[st]} turma-card-status">${SL[st]}</span>
     <div class="turma-card-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
     <div class="turma-card-meta">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M3 21l1.9-5.7a8.5 8.5 0 113.8 3.8z"/></svg>
+      <span style="flex-shrink:0">🏢</span>
       <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.clientes?.nome||'—')}</span>
     </div>
     ${dataRef?`<div class="turma-card-date">
-      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span style="flex-shrink:0">📅</span>
       <span>em ${formatarData(dataRef)}${horaTxtCard?' · '+horaTxtCard:''}</span>
     </div>`:''}
     ${(() => { const nomesInst = _turmaInstrutoresNomes(t); if (!nomesInst.length) return ''; const instId = sessoes.find(s=>s.instrutor_id)?.instrutor_id; return `<div class="turma-card-inst"><span class="dot" style="background:${_corInstrutorTurma(instId)}"></span>${escapeHtml(nomesInst.join(', '))}</div>`; })()}
