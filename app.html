@@ -91,19 +91,27 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .sidebar-logo-name{font-size:14px;font-weight:700;color:#fff;letter-spacing:-.2px;line-height:1.3}
 .sidebar-logo-tag{font-size:10px;color:rgba(255,255,255,.38);font-weight:500;letter-spacing:.4px;text-transform:uppercase}
 .sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
-.sidebar-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.28);padding:14px 8px 5px;font-weight:500}
-.sidebar-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;transition:background .12s,color .12s;margin-bottom:1px}
+.sidebar-section-label{display:flex;align-items:center;gap:7px;font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.45);padding:14px 2px 6px;font-weight:700}
+.sidebar-section-label::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
+.sidebar-item{position:relative;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 12px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;transition:background .12s,color .12s;margin-bottom:2px}
 .sidebar-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.9)}
-.sidebar-item.active{background:rgba(245,158,11,.14);color:var(--amber)}
+.sidebar-item.active{background:rgba(245,158,11,.14);color:var(--amber);font-weight:600}
+.sidebar-item.active::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--amber)}
+.si-badge{margin-left:auto;background:var(--amber);color:var(--navy);font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;line-height:1.6;flex-shrink:0}
 .si-icon{font-size:17px;width:20px;text-align:center;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .si-icon svg{width:17px;height:17px}
 .sidebar-badge{margin-left:auto;background:rgba(220,38,38,.85);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;line-height:1.6}
 .sidebar-bottom{padding:12px 10px;border-top:1px solid rgba(255,255,255,.07)}
-.sidebar-user{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--r-md);cursor:pointer;transition:background .15s}
+.sidebar-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;transition:background .15s}
+.su-logout{margin-left:auto;flex-shrink:0;border:none;background:transparent;color:rgba(255,255,255,.35);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center}
+.su-logout:hover{color:#fff;background:rgba(255,255,255,.1)}
+.sidebar-collapse{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-md);color:rgba(255,255,255,.4);font-size:11.5px;font-weight:500;cursor:pointer;margin-bottom:6px;transition:background .12s,color .12s}
+.sidebar-collapse:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.8)}
+.sidebar-collapse svg{transition:transform .2s}
 .sidebar-user:hover{background:rgba(255,255,255,.06)}
 .su-avatar{width:30px;height:30px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy);flex-shrink:0}
 .su-name{font-size:12px;font-weight:500;color:#fff;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.su-role{font-size:10px;color:rgba(255,255,255,.38)}
+.su-role{font-size:9.5px;color:var(--amber);font-weight:600}
 
 /* ── Gatilho da paleta de comandos, na sidebar (visível também no mobile,
    via o menu hambúrguer — não precisa de teclado físico pra abrir) ── */
@@ -375,7 +383,33 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── Responsive breakpoints ── */
+/* ── Menu recolhido (64px) — 2026-08-15, Solução 1 aprovada. Estado por
+   usuário via localStorage (_sidebarMiniKey). Só desktop: no mobile a
+   gaveta continua sempre completa. --sidebar-w é a única variável que o
+   layout inteiro usa (sidebar + margin do conteúdo), então recolher é
+   trocar a variável no body. ── */
+@media(min-width:768px){
+  body.sidebar-mini{--sidebar-w:64px}
+  body.sidebar-mini .sidebar-logo{padding:16px 0 14px}
+  body.sidebar-mini .sidebar-logo-row{justify-content:center;gap:0}
+  body.sidebar-mini .sidebar-logo-name,body.sidebar-mini .sidebar-logo-tag{display:none}
+  body.sidebar-mini .sidebar-search{width:40px;margin:10px auto 4px;padding:8px 0;justify-content:center}
+  body.sidebar-mini .sidebar-search-label,body.sidebar-mini .sidebar-search-kbd{display:none}
+  body.sidebar-mini .sidebar-nav{padding:8px 0;overflow-x:hidden}
+  body.sidebar-mini .sidebar-section-label{padding:7px 12px 6px;font-size:0;gap:0}
+  body.sidebar-mini .sidebar-item{justify-content:center;padding:11px 0;margin:0 12px 2px}
+  body.sidebar-mini .sidebar-item .si-label{display:none}
+  body.sidebar-mini .sidebar-item .si-badge{position:absolute;top:4px;right:4px;width:8px;height:8px;padding:0;font-size:0;line-height:0;border:1.5px solid var(--navy)}
+  body.sidebar-mini .sidebar-item:hover::after{content:attr(data-label);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--navy-3);color:#fff;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;white-space:nowrap;z-index:300;box-shadow:var(--shadow-md);pointer-events:none}
+  body.sidebar-mini .sidebar-collapse{justify-content:center;padding:7px 0;margin:0 12px 6px}
+  body.sidebar-mini .sidebar-collapse .sc-label{display:none}
+  body.sidebar-mini .sidebar-collapse svg{transform:rotate(180deg)}
+  body.sidebar-mini .sidebar-bottom{padding:12px 0}
+  body.sidebar-mini .sidebar-user{justify-content:center;padding:8px 0;margin:0 12px;background:transparent;border-color:transparent}
+  body.sidebar-mini .su-info,body.sidebar-mini .su-logout{display:none}
+}
 @media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.mobile-menu-btn{display:none!important}.sidebar-close-btn{display:none!important}}
+@media(max-width:767px){.sidebar-collapse{display:none}}
 @media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:flex}.mobile-content{display:block}.hamburger{display:flex}.mobile-menu-btn{display:flex}.sidebar-close-btn{display:flex}#screenApp{flex-direction:column}}
 @media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}.rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rel2-rankings{grid-template-columns:1fr}.home-2col{grid-template-columns:1fr}}
 @media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}.rel2-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
@@ -406,6 +440,45 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .home-list-name{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-list-sub{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
+/* ── Home v2 (Alternativa 1, 2026-08-15) + cabeçalhos de seção ponto+linha.
+   Medidas idênticas ao padrão aprovado em Turmas (.turmas-kpi / mockups). ── */
+.gh-sec{display:flex;align-items:center;gap:8px;margin:16px 0 10px}
+.gh-sec .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0}
+.gh-sec .dot.red{background:var(--red)}
+.gh-sec .dot.green{background:var(--green)}
+.gh-sec .dot.navy{background:var(--navy)}
+.gh-sec span{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.gh-sec .line{flex:1;height:1px;background:var(--border)}
+.gh-sec .glink{font-size:11px;font-weight:600;color:var(--amber-h);cursor:pointer;white-space:nowrap}
+.h2-hero{background:var(--navy);border-radius:var(--r-xl);padding:18px 20px;margin-bottom:14px}
+.h2-greet{font-size:17px;font-weight:700;color:#fff;letter-spacing:-.2px}
+.h2-sub{font-size:12px;color:rgba(255,255,255,.45);margin-top:2px}
+.h2-avatar{width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy);flex-shrink:0}
+.h2-ctas{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.hbtn2{display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:var(--r-md);cursor:pointer;border:none;transition:background .15s}
+.hbtn2.amber{background:var(--amber);color:var(--navy)}
+.hbtn2.amber:hover{background:var(--amber-h)}
+.hbtn2.ghost{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.hbtn2.ghost:hover{background:rgba(255,255,255,.14)}
+.h2-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}
+.h2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
+.h2-kpi:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+.h2-kpi .ic{font-size:13px;margin-bottom:3px}
+.h2-kpi .n{font-size:18px;font-weight:800;color:var(--navy);line-height:1.2}
+.h2-kpi .l{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2-kpi .d{font-size:10px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2-kpi .d.g{color:var(--green)}
+.h2-kpi .d.a{color:var(--amber-h)}
+.h2-kpi .d.m{color:var(--text-3);font-weight:500}
+.h2-kpi.warn-b{border-left:3px solid var(--warn)}
+.qa2-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
+.qa2-row.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.qa2{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;display:flex;align-items:center;gap:9px;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,box-shadow .15s;min-width:0}
+.qa2:hover{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-l)}
+.qa2 .qic{width:30px;height:30px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.qa2 .qlb{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2-heronext{background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;margin-top:14px}
+@media(max-width:767px){.h2-kpis{grid-template-columns:repeat(2,1fr)}.qa2-row{grid-template-columns:repeat(2,minmax(0,1fr))}.qa2-row.c3{grid-template-columns:repeat(2,minmax(0,1fr))}.h2-ctas .hbtn2{flex:1;justify-content:center}}
 .fin-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .detail-layout{display:block}
 .detail-sidebar{display:flex;flex-direction:column;gap:12px;margin-bottom:14px;min-width:0}
@@ -437,7 +510,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 }
 
 /* ── Relatórios redesign v2 ── */
-.rel2-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 20px;margin-bottom:14px}
+.rel2-header{background:var(--navy);border-radius:var(--r-xl);padding:16px 18px;margin-bottom:12px}
 .rel2-title{font-size:17px;font-weight:700;color:#fff}
 .rel2-sub{font-size:12px;color:rgba(255,255,255,.4);margin-top:2px}
 .rel2-period{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
@@ -447,18 +520,19 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .rel2-export-btn{padding:5px 12px;border-radius:var(--r-md);border:0.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);font-size:11px;font-weight:500;cursor:pointer;transition:.12s}
 .rel2-export-btn:hover{background:rgba(255,255,255,.14)}
 .rel2-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.rel2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 12px;cursor:pointer;transition:box-shadow .15s}
+.rel2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
+.rel2-kpi:hover{border-color:var(--border-2)}
 .rel2-kpi:hover{box-shadow:0 2px 8px rgba(30,42,74,.1)}
-.rel2-kpi-icon{font-size:16px;margin-bottom:6px;display:block}
-.rel2-kpi-val{font-size:24px;font-weight:700;color:var(--navy);line-height:1}
-.rel2-kpi-lbl{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+.rel2-kpi-icon{font-size:13px;margin-bottom:3px;display:block}
+.rel2-kpi-val{font-size:18px;font-weight:800;color:var(--navy);line-height:1.2}
+.rel2-kpi-lbl{font-size:10px;color:var(--text-3);font-weight:600;margin-top:1px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rel2-kpi-delta{font-size:10px;color:var(--green);margin-top:5px;font-weight:600}
 .rel2-chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
 .rel2-chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
 .rel2-chart-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
-.rel2-toggle{display:flex;gap:4px}
-.rel2-tbtn{padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-3);transition:.1s}
-.rel2-tbtn.active{background:var(--navy);border-color:var(--navy);color:#fff}
+.rel2-toggle{display:flex;align-items:center;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;gap:2px}
+.rel2-tbtn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--text-3);transition:.12s;font-family:inherit}
+.rel2-tbtn.active{background:var(--surface);color:var(--navy);box-shadow:var(--shadow)}
 .rel2-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;min-width:0}
 .rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px;min-width:0;overflow:hidden}
 .rel2-card:last-child{margin-bottom:0}
@@ -493,19 +567,33 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 }
 
 .rel3-faixa{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;-webkit-overflow-scrolling:touch}
-.rel3-dcard{flex-shrink:0;min-width:96px;border:1px solid var(--border);border-radius:var(--r-lg);padding:9px 10px;cursor:pointer;background:var(--surface);transition:border-color .15s,background .15s}
+.rel3-dcard{position:relative;flex-shrink:0;min-width:104px;border:1px solid var(--border);border-radius:var(--r-md);padding:9px 12px;cursor:pointer;background:var(--surface);transition:border-color .15s,background .15s}
 .rel3-dcard:hover{border-color:var(--border-2)}
-.rel3-dcard.active{border:2px solid var(--amber);background:#FFFBEB}
+.rel3-dcard.active{border:1.5px solid var(--amber);background:rgba(245,158,11,.05)}
+.rel3-dcard.active::before{content:'';position:absolute;left:12px;right:12px;top:0;height:3px;border-radius:0 0 3px 3px;background:var(--amber)}
 .rel3-dcard.alert{border-color:#FCA5A5;background:#FEF2F2}
-.rel3-dn{font-size:15px;font-weight:700;color:var(--navy);margin-top:5px;line-height:1.1}
+.rel3-dn{font-size:16px;font-weight:800;color:var(--navy);margin-top:4px;line-height:1.2}
 .rel3-dcard.alert .rel3-dn{color:var(--red)}
 .rel3-dl{font-size:9.5px;color:var(--text-3);margin-top:1px}
 .rel3-dcard.active .rel3-dl{color:var(--amber-text);font-weight:600}
 .rel3-pill{background:var(--gray-100);border-radius:20px;padding:3px 10px;font-size:10px;font-weight:600;color:var(--navy);cursor:pointer;border:none;font-family:inherit}
 .rel3-layout{display:flex;gap:16px;align-items:flex-start}
-.rel3-filtros{width:150px;flex-shrink:0}
+.rel3-filtros{width:190px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
+.rel3-filtros input[type=checkbox]{accent-color:var(--navy);width:14px;height:14px}
 .rel3-lbl{font-size:9.5px;font-weight:600;color:var(--text-3);letter-spacing:.04em;margin-bottom:6px;text-transform:uppercase}
 .rel3-main{flex:1;min-width:0}
+/* Barra de filtros branca de Relatórios (2026-08-15, proposta aprovada) —
+   mesmo padrão dos filtros da tela Turmas (.turmas-filtro-select). Os
+   selects saíram do cabeçalho navy; comportamento idêntico. */
+.rel4-filtros{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.rel4-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;flex:1;min-width:150px;max-width:240px;padding:9px 30px 9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-weight:600;font-family:inherit;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394A3B8' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--text-1);cursor:pointer;transition:border-color .15s;outline:none}
+.rel4-select:hover{border-color:var(--border-2)}
+.rel4-select:focus{border-color:var(--navy)}
+.rel4-comp{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-md);padding:7px 12px;cursor:pointer;margin-left:auto;user-select:none}
+.rel4-comp .sw{width:32px;height:18px;border-radius:20px;position:relative;transition:background .2s;flex-shrink:0}
+.rel4-comp .sw i{width:14px;height:14px;background:#fff;border-radius:50%;position:absolute;top:2px;transition:all .2s;display:block}
+.rel4-comp span.lbl{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap}
+@media(max-width:767px){.rel4-select{max-width:none}.rel4-comp{margin-left:0;width:100%;justify-content:space-between}}
 @media(max-width:767px){
   .rel3-dcard{min-width:84px;padding:8px}
   .rel3-dn{font-size:13px}
@@ -739,9 +827,16 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
     </button>
     <div class="sidebar-nav" id="sidebarNav"></div>
     <div class="sidebar-bottom">
+      <div class="sidebar-collapse" id="sidebarCollapse" onclick="toggleSidebarMini()" title="Recolher/expandir menu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <span class="sc-label">Recolher menu</span>
+      </div>
       <div class="sidebar-user" onclick="irPara('conta')">
         <div class="su-avatar" id="sidebarAvatar">AL</div>
-        <div><div class="su-name" id="sidebarNome">Carregando...</div><div class="su-role" id="sidebarPerfil"></div></div>
+        <div class="su-info" style="flex:1;min-width:0"><div class="su-name" id="sidebarNome">Carregando...</div><div class="su-role" id="sidebarPerfil"></div></div>
+        <button class="su-logout" onclick="event.stopPropagation();fazerLogout()" title="Sair do sistema" aria-label="Sair do sistema">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </div>
   </nav>
@@ -2334,6 +2429,7 @@ const ICONS = {
   pin:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
   target:  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
   edit:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
+  clock:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>`,
 };
 
 // Botão de ação secundária com ícone em "badge" circular antes do texto
@@ -2648,8 +2744,8 @@ const NAV = {
   // então o item nunca aparecia de verdade e o Comercial não conseguia
   // acessar Relatórios nem digitando a URL (_perfilTemAcesso bloqueava).
   // Achado durante a validação de perfis antes do go-live da Avanteseg.
-  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
-  instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clip'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Análise'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clock'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 // 2026-08-09: rodapé mobile reduzido a 5 itens essenciais (Administrador
 // tinha 8, Comercial 6 — apertado demais numa barra de celular). O resto
@@ -2685,7 +2781,7 @@ function configurarNavegacao() {
 
   document.getElementById('sidebarNav').innerHTML = itens.map(i=>{
     if (i.sec) return `<div class="sidebar-section-label">${i.sec}</div>`;
-    return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}"><span class="si-icon">${ICONS[i.icon]||''}</span><span>${i.l}</span></div>`;
+    return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}" data-label="${i.l}"><span class="si-icon">${ICONS[i.icon]||''}</span><span class="si-label">${i.l}</span><span class="si-badge" id="sib-${i.id}" style="display:none"></span></div>`;
   }).join('');
 
   const navItens = itens.filter(i=>i.id);
@@ -2702,6 +2798,27 @@ function configurarNavegacao() {
   document.getElementById('sidebarNome').textContent = usuarioAtual.nome;
   document.getElementById('sidebarPerfil').textContent = labelPerfil(perfil);
   _configurarSinoVisibilidade();
+  _sidebarAplicarEstadoMini();
+}
+
+// ── Menu recolhido (2026-08-15, Solução 1 do menu) — estado por usuário ──
+function _sidebarMiniKey() { return `tl_sidebar_mini_${usuarioAtual?.id || 'x'}`; }
+function _sidebarAplicarEstadoMini() {
+  try { document.body.classList.toggle('sidebar-mini', localStorage.getItem(_sidebarMiniKey()) === '1'); } catch(e) {}
+}
+function toggleSidebarMini() {
+  const ligar = !document.body.classList.contains('sidebar-mini');
+  document.body.classList.toggle('sidebar-mini', ligar);
+  try { localStorage.setItem(_sidebarMiniKey(), ligar ? '1' : '0'); } catch(e) {}
+}
+// Badge de contagem num item do menu (ex.: turmas com pendência). A sidebar
+// é um elemento único (não dual-DOM), então getElementById direto é seguro.
+// Alimentado pelas Homes (dados já carregados lá — nenhuma consulta extra).
+function _setSidebarBadge(id, n) {
+  const el = document.getElementById('sib-' + id);
+  if (!el) return;
+  if (n > 0) { el.textContent = n; el.style.display = ''; }
+  else { el.textContent = ''; el.style.display = 'none'; }
 }
 
 function marcarNavAtivo(id) {
@@ -4024,88 +4141,85 @@ async function renderHomeAdmin() {
     </div>`;
 
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Administrador</div>`);
+  // Badge do menu: turmas com pendência (mesmo dado do alerta acima; a
+  // sidebar é elemento único, fora do dual-DOM — ver _setSidebarBadge)
+  _setSidebarBadge('turmas', comPendencia.length);
   setConteudo(`
-    <div class="home-navy-header">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div class="h2-hero">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div>
-          <div class="home-navy-greeting">${hora()}, ${usuarioAtual.nome}</div>
-          <div class="home-navy-sub">${hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</div>
+          <div class="h2-greet">${hora()}, ${usuarioAtual.nome}</div>
+          <div class="h2-sub">${hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</div>
         </div>
-        <div style="width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy);flex-shrink:0">${iniciais(usuarioAtual.nome)}</div>
+        <div class="h2-avatar">${iniciais(usuarioAtual.nome)}</div>
       </div>
-      <div class="home-kpi-grid">
-        <div class="home-kpi" onclick="irParaTurmasFiltradas('em_andamento')" style="cursor:pointer">
-          <div class="home-kpi-val">${ativas}</div>
-          <div class="home-kpi-lbl">Turmas ativas</div>
-          <div class="home-kpi-delta amber">Em andamento →</div>
-        </div>
-        <div class="home-kpi" onclick="irParaTurmasFiltradas('agendada')" style="cursor:pointer">
-          <div class="home-kpi-val">${agendadas}</div>
-          <div class="home-kpi-lbl">Agendadas</div>
-          <div class="home-kpi-delta amber">Próximas →</div>
-        </div>
-        <div class="home-kpi" onclick="irPara('clientes')" style="cursor:pointer">
-          <div class="home-kpi-val">${cliAtivos}</div>
-          <div class="home-kpi-lbl">Clientes ativos</div>
-          <div class="home-kpi-delta green">↑ ${turmasMes} turmas/mês</div>
-        </div>
-        <div class="home-kpi" onclick="irParaTurmasFiltradas('concluida')" style="cursor:pointer">
-          <div class="home-kpi-val">${concluidas}</div>
-          <div class="home-kpi-lbl">Concluídas</div>
-          <div class="home-kpi-delta green">Ver histórico →</div>
-        </div>
+      <div class="h2-ctas">
+        <button class="hbtn2 amber" data-nav="turmas">➕ Nova turma</button>
+        <button class="hbtn2 ghost" data-nav="relatorios">📊 Relatórios</button>
+        <button class="hbtn2 ghost" data-nav="agendaequipe">🗓 Agenda da equipe</button>
       </div>
+    </div>
+
+    <div class="h2-kpis" style="margin-bottom:16px">
+      <div class="h2-kpi" onclick="irParaTurmasFiltradas('em_andamento')"><div class="ic">🟢</div><div class="n">${ativas}</div><div class="l">Turmas ativas</div><div class="d a">Em andamento →</div></div>
+      <div class="h2-kpi" onclick="irParaTurmasFiltradas('agendada')"><div class="ic">📅</div><div class="n">${agendadas}</div><div class="l">Agendadas</div><div class="d m">Próximas →</div></div>
+      <div class="h2-kpi" onclick="irPara('clientes')"><div class="ic">🏢</div><div class="n">${cliAtivos}</div><div class="l">Clientes ativos</div><div class="d g">↑ ${turmasMes} turmas no mês</div></div>
+      <div class="h2-kpi" onclick="irParaTurmasFiltradas('concluida')"><div class="ic">✅</div><div class="n">${concluidas}</div><div class="l">Concluídas</div><div class="d m">Ver histórico →</div></div>
     </div>
 
     ${htmlOnboarding}
-    ${alertasHtml}
 
-    <div class="home-chart-card" style="margin-bottom:16px">
-      <div class="home-chart-title">${ICONS.shield} Conformidade</div>
-      <div style="display:grid;grid-template-columns:repeat(${planoAtinge('pro')?3:2},1fr);gap:10px;margin-top:10px">
-        <div>
-          <div style="font-size:20px;font-weight:700;color:var(--navy)">${confResumo.colaboradoresTreinados}</div>
-          <div style="font-size:11px;color:var(--text-3)">Colaboradores treinados</div>
-        </div>
-        <div>
-          <div style="font-size:20px;font-weight:700;color:var(--navy)">${certEmitidos||0}</div>
-          <div style="font-size:11px;color:var(--text-3)">Certificados emitidos</div>
+    ${alertas.length ? `<div class="gh-sec"><div class="dot red"></div><span>Requer atenção</span><div class="line"></div><span class="glink">${alertas.length} ${alertas.length===1?'item':'itens'}</span></div>${alertasHtml}` : ''}
+
+    <div class="gh-sec"><div class="dot green"></div><span>Conformidade e volume</span><div class="line"></div></div>
+    <div class="home-2col">
+      <div class="home-chart-card" style="margin-bottom:0">
+        <div class="home-chart-title">${ICONS.shield} Conformidade</div>
+        <div style="display:grid;grid-template-columns:repeat(${planoAtinge('pro')?3:2},1fr);gap:10px;margin-top:10px">
+          <div>
+            <div style="font-size:20px;font-weight:700;color:var(--navy)">${confResumo.colaboradoresTreinados}</div>
+            <div style="font-size:11px;color:var(--text-3)">Colaboradores treinados</div>
+          </div>
+          <div>
+            <div style="font-size:20px;font-weight:700;color:var(--navy)">${certEmitidos||0}</div>
+            <div style="font-size:11px;color:var(--text-3)">Certificados emitidos</div>
+          </div>
+          ${planoAtinge('pro') ? `
+          <div>
+            <div style="font-size:20px;font-weight:700;color:${confResumo.indice>=90?'var(--green)':confResumo.indice>=70?'var(--amber-h)':'var(--red)'}">${confResumo.indice}%</div>
+            <div style="font-size:11px;color:var(--text-3)">Índice de conformidade</div>
+          </div>` : ''}
         </div>
         ${planoAtinge('pro') ? `
-        <div>
-          <div style="font-size:20px;font-weight:700;color:${confResumo.indice>=90?'var(--green)':confResumo.indice>=70?'var(--amber-h)':'var(--red)'}">${confResumo.indice}%</div>
-          <div style="font-size:11px;color:var(--text-3)">Índice de conformidade</div>
-        </div>` : ''}
+          ${confResumo.statusPorTreinamento.length ? `
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px">
+            ${confResumo.statusPorTreinamento.slice(0,5).map(s => `
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;color:var(--text-2);width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(s.nome)}">${escapeHtml(s.nome)}</span>
+                <div style="flex:1;height:6px;background:var(--gray-100);border-radius:3px"><div style="width:${s.pct}%;height:6px;background:${s.pct>=90?'var(--green)':s.pct>=70?'var(--amber)':'var(--red)'};border-radius:3px"></div></div>
+                <span style="font-size:11px;color:var(--text-3);width:30px;text-align:right">${s.pct}%</span>
+              </div>`).join('')}
+          </div>` : ''}
+          <button class="btn btn-outline btn-sm" style="margin-top:12px" data-nav="conformidade">Ver detalhes →</button>
+        ` : `
+          <div style="margin-top:12px;font-size:12px;color:var(--text-2);line-height:1.5">
+            Acompanhe vencimentos por colaborador e o índice de conformidade da organização.
+            <span style="color:var(--amber-text);font-weight:600;cursor:pointer" onclick="modalUpgrade('Controle de Conformidade','pro')">Disponível no plano Pro →</span>
+          </div>
+        `}
       </div>
-      ${planoAtinge('pro') ? `
-        ${confResumo.statusPorTreinamento.length ? `
-        <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px">
-          ${confResumo.statusPorTreinamento.slice(0,5).map(s => `
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:11px;color:var(--text-2);width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(s.nome)}">${escapeHtml(s.nome)}</span>
-              <div style="flex:1;height:6px;background:var(--gray-100);border-radius:3px"><div style="width:${s.pct}%;height:6px;background:${s.pct>=90?'var(--green)':s.pct>=70?'var(--amber)':'var(--red)'};border-radius:3px"></div></div>
-              <span style="font-size:11px;color:var(--text-3);width:30px;text-align:right">${s.pct}%</span>
-            </div>`).join('')}
-        </div>` : ''}
-        <button class="btn btn-outline btn-sm" style="margin-top:12px" data-nav="conformidade">Ver detalhes →</button>
-      ` : `
-        <div style="margin-top:12px;font-size:12px;color:var(--text-2);line-height:1.5">
-          Acompanhe vencimentos por colaborador e o índice de conformidade da organização.
-          <span style="color:var(--amber-text);font-weight:600;cursor:pointer" onclick="modalUpgrade('Controle de Conformidade','pro')">Disponível no plano Pro →</span>
+      <div class="home-chart-card" style="margin-bottom:0">
+        <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
+        <div style="overflow-x:auto">
+          <svg viewBox="0 -8 240 103" width="100%" style="min-width:200px;max-width:560px;max-height:124px;display:block">${barsHtml}</svg>
         </div>
-      `}
-    </div>
-
-    <div class="home-chart-card">
-      <div class="home-chart-title">${ICONS.chart} Turmas por mês — últimos 6 meses</div>
-      <div style="overflow-x:auto">
-        <svg viewBox="0 0 240 95" width="100%" style="min-width:200px;max-width:560px;max-height:120px;display:block">${barsHtml}</svg>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
-        <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
+          <span style="width:10px;height:10px;border-radius:2px;background:var(--navy);display:inline-block"></span>Turmas criadas
+        </div>
       </div>
     </div>
 
+    <div class="gh-sec"><div class="dot navy"></div><span>Acompanhamento</span><div class="line"></div></div>
     <div class="home-2col">
       <div class="home-list-card">
         <div class="home-list-title">Próximas sessões</div>
@@ -4135,47 +4249,102 @@ async function renderHomeAdmin() {
       </div>
     </div>
 
-    <div class="home-qa">
-      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:rgba(245,158,11,.12)">${ICONS.clip}</div><div class="qa-label">Nova turma</div></button>
-      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">${ICONS.building}</div><div class="qa-label">Clientes</div></button>
-      <button class="qa-btn" data-nav="colaboradores"><div class="qa-icon" style="background:var(--blue-l)">${ICONS.users}</div><div class="qa-label">Colaboradores</div></button>
-      <button class="qa-btn" data-nav="relatorios"><div class="qa-icon" style="background:rgba(245,158,11,.08)">${ICONS.chart}</div><div class="qa-label">Relatórios</div></button>
+    <div class="qa2-row" style="margin-top:14px">
+      <button class="qa2" data-nav="clientes"><span class="qic" style="background:var(--green-l)">🏢</span><span class="qlb">Clientes</span></button>
+      <button class="qa2" data-nav="colaboradores"><span class="qic" style="background:var(--blue-l)">👥</span><span class="qlb">Colaboradores</span></button>
+      <button class="qa2" data-nav="catalogo"><span class="qic" style="background:var(--amber-l)">📚</span><span class="qlb">Catálogo</span></button>
+      <button class="qa2" data-nav="equipe"><span class="qic" style="background:var(--gray-100)">🧑‍🏫</span><span class="qlb">Equipe</span></button>
     </div>`);
 }
 
 async function renderHomeComercial() {
   const oi = usuarioAtual.org_id;
-  // local/sessoes(instrutor_id)/turma_participantes(id): 2026-08, só pra
-  // alimentar _turmaPendencias — o card "N turmas com pendência" abaixo é
-  // a versão do Comercial do mesmo mecanismo que a Home do Administrador
-  // ganhou na mesma entrega (ver renderHomeAdmin). Cobre toda a
-  // organização, o mesmo escopo que o Comercial já vê em Turmas/Agenda da
-  // Equipe hoje — não só as turmas que ele mesmo criou.
+  const hoje = new Date();
+  const hojeStr = dataLocalISO(hoje);
+  // 2026-08-15 (Home Alternativa 1): a consulta ganhou catalogo(nome)/
+  // clientes(nome) e data/hora das sessões — necessários para a lista
+  // "Próximas turmas agendadas". local/sessoes(instrutor_id)/
+  // turma_participantes(id) continuam alimentando _turmaPendencias, como
+  // antes (mesmo escopo: organização inteira, não só turmas do próprio
+  // Comercial). Clientes agora traz created_at só para o delta "novos no mês".
   const [{data:turmas},{data:clientes}] = await Promise.all([
-    sb.from('turmas').select('id,status,local,sessoes(instrutor_id),turma_participantes(id)').eq('org_id',oi),
-    sb.from('clientes').select('id').eq('org_id',oi).eq('ativo',true),
+    sb.from('turmas').select('id,status,local,catalogo(nome),clientes(nome),sessoes(instrutor_id,data,hora_inicio),turma_participantes(id)').eq('org_id',oi),
+    sb.from('clientes').select('id,created_at').eq('org_id',oi).eq('ativo',true),
   ]);
   const tAll = turmas||[];
   const nPendencia = tAll.filter(t => _turmaPendencias(t).length > 0).length;
-  const htmlPendencia = nPendencia > 0 ? `
+  const nAgendadas = tAll.filter(t=>t.status==='agendada').length;
+  const nAndamento = tAll.filter(t=>t.status==='em_andamento').length;
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  const cliNovosMes = (clientes||[]).filter(c=>c.created_at?.startsWith(mesAtual)).length;
+
+  // Próximas turmas: agendadas/em andamento com a próxima sessão >= hoje
+  const proximas = tAll
+    .filter(t => t.status==='agendada' || t.status==='em_andamento')
+    .map(t => {
+      const futuras = (t.sessoes||[]).filter(x=>x.data && x.data>=hojeStr).sort((a,b)=>a.data.localeCompare(b.data));
+      return futuras.length ? { t, s: futuras[0] } : null;
+    })
+    .filter(Boolean)
+    .sort((a,b)=>a.s.data.localeCompare(b.s.data))
+    .slice(0,5);
+
+  _setSidebarBadge('turmas', nPendencia);
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Comercial</div>`);
+  setConteudo(`
+    <div class="h2-hero">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div>
+          <div class="h2-greet">${hora()}, ${usuarioAtual.nome}</div>
+          <div class="h2-sub">${hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</div>
+        </div>
+        <div class="h2-avatar">${iniciais(usuarioAtual.nome)}</div>
+      </div>
+      <div class="h2-ctas">
+        <button class="hbtn2 amber" data-nav="turmas">➕ Agendar turma</button>
+        <button class="hbtn2 ghost" data-nav="clientes">🏢 Clientes</button>
+        <button class="hbtn2 ghost" data-nav="agendaequipe">🗓 Agenda da equipe</button>
+      </div>
+    </div>
+
+    <div class="h2-kpis" style="margin-bottom:16px">
+      <div class="h2-kpi" onclick="irParaTurmasFiltradas('agendada')"><div class="ic">📅</div><div class="n">${nAgendadas}</div><div class="l">Agendadas</div><div class="d m">Próximas →</div></div>
+      <div class="h2-kpi" onclick="irParaTurmasFiltradas('em_andamento')"><div class="ic">🟢</div><div class="n">${nAndamento}</div><div class="l">Em andamento</div><div class="d a">Acompanhar →</div></div>
+      <div class="h2-kpi" onclick="irPara('clientes')"><div class="ic">🏢</div><div class="n">${(clientes||[]).length}</div><div class="l">Clientes ativos</div><div class="d ${cliNovosMes>0?'g':'m'}">${cliNovosMes>0?`↑ ${cliNovosMes} novo${cliNovosMes!==1?'s':''} no mês`:'Ver clientes →'}</div></div>
+      <div class="h2-kpi ${nPendencia>0?'warn-b':''}" onclick="${nPendencia>0?'irParaTurmasComPendencia()':`irPara('turmas')`}"><div class="ic">📋</div><div class="n">${nPendencia}</div><div class="l">Com pendência</div><div class="d ${nPendencia>0?'a':'m'}">${nPendencia>0?'Resolver →':'Tudo em dia'}</div></div>
+    </div>
+
+    ${nPendencia > 0 ? `
+    <div class="gh-sec"><div class="dot red"></div><span>Requer atenção</span><div class="line"></div></div>
     <div onclick="irParaTurmasComPendencia()" style="cursor:pointer;background:var(--warn-l);border:1px solid rgba(217,119,6,.3);border-left:3px solid var(--warn);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <span style="font-size:16px;flex-shrink:0">⚠️</span>
       <div style="flex:1;font-size:12.5px;color:var(--warn-text);font-weight:500;line-height:1.4">${nPendencia} turma${nPendencia!==1?'s':''} com pendência (participantes, local ou instrutor)</div>
       <span style="font-size:11px;color:var(--warn-text);font-weight:600;white-space:nowrap">Ver →</span>
-    </div>` : '';
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Comercial</div>`);
-  setConteudo(`
-    ${htmlPendencia}
-    <div class="stats-grid">
-      <div class="stat-card navy"><div class="stat-label">Agendadas</div><div class="stat-value">${tAll.filter(t=>t.status==='agendada').length}</div><div class="stat-sub">Turmas</div></div>
-      <div class="stat-card accent"><div class="stat-label">Em andamento</div><div class="stat-value">${tAll.filter(t=>t.status==='em_andamento').length}</div></div>
-      <div class="stat-card accent"><div class="stat-label">Clientes ativos</div><div class="stat-value">${(clientes||[]).length}</div></div>
+    </div>` : ''}
+
+    <div class="gh-sec"><div class="dot"></div><span>Próximas turmas agendadas</span><div class="line"></div><span class="glink" data-nav="turmas">Todas →</span></div>
+    <div class="home-list-card" style="margin-bottom:14px">
+      ${proximas.length===0
+        ? `<div style="font-size:12px;color:var(--text-3);padding:6px 0">Nenhuma turma com sessão futura — que tal agendar uma?</div>`
+        : proximas.map(({t,s})=>{
+            const ehHoje = s.data===hojeStr;
+            const temPend = _turmaPendencias(t).length > 0;
+            return `<div class="home-list-item" data-action="verTurma" data-id="${t.id}" style="cursor:pointer">
+              <div class="home-list-dot" style="background:${temPend?'var(--warn)':'var(--amber)'}"></div>
+              <div class="home-list-info">
+                <div class="home-list-name">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+                <div class="home-list-sub">${escapeHtml(t.clientes?.nome||'—')} · ${ehHoje?'hoje':formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
+              </div>
+              <span class="badge ${temPend?'badge-warn':ehHoje?'badge-amber':'badge-gray'}" style="flex-shrink:0;font-size:9px">${temPend?'Pendência':ehHoje?'Hoje':formatarData(s.data)}</span>
+            </div>`;
+          }).join('')}
     </div>
-    <div class="quick-actions">
-      <button class="qa-btn" data-nav="turmas"><div class="qa-icon" style="background:rgba(245,158,11,.12)">${ICONS.clip}</div><div class="qa-label">Agendar turma</div></button>
-      <button class="qa-btn" data-nav="clientes"><div class="qa-icon" style="background:var(--green-l)">${ICONS.building}</div><div class="qa-label">Clientes</div></button>
-    </div>
-    <button class="btn btn-outline" onclick="fazerLogout()">${ICONS.logout} Sair do sistema</button>`);
+
+    <div class="qa2-row c3">
+      <button class="qa2" data-nav="turmas"><span class="qic" style="background:var(--amber-l)">📋</span><span class="qlb">Turmas</span></button>
+      <button class="qa2" data-nav="clientes"><span class="qic" style="background:var(--green-l)">🏢</span><span class="qlb">Clientes</span></button>
+      <button class="qa2" data-nav="colaboradores"><span class="qic" style="background:var(--blue-l)">👥</span><span class="qlb">Colaboradores</span></button>
+    </div>`);
 }
 
 async function renderHomeInstrutor() {
@@ -4271,6 +4440,7 @@ async function renderHomeInstrutor() {
   }
 
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${usuarioAtual.nome}</div><div class="mh-badge">Instrutor</div>`);
+  _setSidebarBadge('agenda', aulasHoje.length);
 
   // ── Helper: linha compacta de sessão (reaproveitada em vários blocos) ──
   const _linhaSessao = (s, corIcone, icone, badge) => `
@@ -4283,79 +4453,87 @@ async function renderHomeInstrutor() {
       ${badge}
     </div>`;
 
-  // ── Próximo treinamento (card destaque) ──
-  let htmlProximo = '';
+  // ── Próximo treinamento — agora em destaque DENTRO do hero navy
+  // (Alternativa 1 aprovada). Mesmos dados e mesmas ações (Iniciar/
+  // Continuar com os mesmos data-action/data-id/data-sessao). ──
+  let htmlProximoHero = '';
   if (proximo) {
     const st = proximo.turma?.status||'agendada';
     const ehHoje = proximo.data === hoje;
-    // Endereço completo da turma (proximo.turma.local) + complemento da
-    // sessão (sala/andar, se houver) — mesma lógica usada em verTurma().
     const localCardTxt = proximo.turma?.local && proximo.local ? `${proximo.turma.local} · ${proximo.local}`
       : (proximo.turma?.local || proximo.local || '');
     let btnAcao = '';
     if (ehHoje && st === 'agendada') {
-      btnAcao = `<button class="btn btn-navy" style="width:100%;margin-top:12px" data-action="iniciarExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Iniciar treinamento</button>`;
+      btnAcao = `<button class="hbtn2 amber" style="width:100%;justify-content:center;margin-top:10px" data-action="iniciarExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Iniciar treinamento</button>`;
     } else if (ehHoje && st === 'em_andamento') {
-      btnAcao = `<button class="btn" style="width:100%;margin-top:12px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Continuar treinamento</button>`;
+      btnAcao = `<button class="hbtn2" style="width:100%;justify-content:center;margin-top:10px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Continuar treinamento</button>`;
     }
-    htmlProximo = `
-      <div class="home-section">
-        <div class="section-header"><div class="section-title">Próximo treinamento</div></div>
-        <div class="card" style="border:2px solid var(--navy);cursor:pointer" data-action="verTurma" data-id="${proximo.turma_id}">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-            <div style="min-width:0">
-              <div style="font-size:16px;font-weight:700;color:var(--text-1)">${escapeHtml(proximo.turma?.catalogo?.nome||'Treinamento')}</div>
-              <div style="font-size:13px;color:var(--text-2);margin-top:2px">${escapeHtml(proximo.turma?.clientes?.nome||'—')}</div>
-            </div>
-            <span class="badge ${ehHoje?'badge-amber':'badge-gray'}" style="flex-shrink:0">${ehHoje?'Hoje':formatarData(proximo.data)}</span>
+    htmlProximoHero = `
+      <div class="h2-heronext" data-action="verTurma" data-id="${proximo.turma_id}" style="cursor:pointer">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="min-width:0">
+            <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Próximo treinamento${ehHoje?' · hoje':''}</div>
+            <div style="font-size:14.5px;font-weight:700;color:#fff">${escapeHtml(proximo.turma?.catalogo?.nome||'Treinamento')}</div>
+            <div style="font-size:11.5px;color:rgba(255,255,255,.55);margin-top:2px;line-height:1.5">🏢 ${escapeHtml(proximo.turma?.clientes?.nome||'—')}${proximo.hora_inicio?' · ⏰ '+proximo.hora_inicio.slice(0,5)+(proximo.hora_fim?' – '+proximo.hora_fim.slice(0,5):''):''}${localCardTxt?' · 📍 '+escapeHtml(localCardTxt):''}</div>
           </div>
-          <div style="font-size:12px;color:var(--text-3);margin-top:8px;line-height:1.5">${proximo.hora_inicio?'⏰ '+proximo.hora_inicio.slice(0,5)+(proximo.hora_fim?' – '+proximo.hora_fim.slice(0,5):''):''}${localCardTxt?'  ·  📍 '+escapeHtml(localCardTxt):''}</div>
-          ${btnAcao}
+          <span class="badge ${ehHoje?'badge-amber':'badge-gray'}" style="flex-shrink:0">${ehHoje?'Hoje':formatarData(proximo.data)}</span>
         </div>
+        ${btnAcao}
       </div>`;
   }
 
   // ── Treinamentos atrasados ──
   const htmlAtrasadas = atrasadas.length ? `
-    <div class="home-section">
-      <div class="section-header"><div class="section-title" style="color:var(--red-text)">⚠️ Treinamentos atrasados (${atrasadas.length})</div></div>
-      <div class="card" style="border:1px solid var(--red)">${atrasadas.map(s=>_linhaSessao(s,'#DC2626','⚠️','<span class="badge badge-red">Atrasado</span>')).join('')}</div>
-    </div>` : '';
+    <div class="gh-sec"><div class="dot red"></div><span>Treinamentos atrasados (${atrasadas.length})</span><div class="line"></div></div>
+    <div class="card" style="border:1px solid var(--red);margin-bottom:14px">${atrasadas.map(s=>_linhaSessao(s,'#DC2626','⚠️','<span class="badge badge-red">Atrasado</span>')).join('')}</div>` : '';
 
   // ── Pendências (documentos incompletos ou gerados mas não enviados) ──
   const htmlPendencias = pendenciasDocs.length ? `
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Documentos pendentes</div></div>
-      <div class="card">${pendenciasDocs.map(({turma:t, motivo})=>`
-        <div class="list-item" data-action="abrirDocumentos" data-id="${t.id}" style="cursor:pointer">
-          <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
-          <div class="li-info">
-            <div class="li-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
-            <div class="li-sub">${escapeHtml(t.clientes?.nome||'—')} · ${motivo==='gerar'?'documentos incompletos':'gerado, falta enviar por e-mail'}</div>
-          </div>
-          <span class="badge badge-amber">${motivo==='gerar'?'Gerar':'Enviar'}</span>
-        </div>`).join('')}
-      </div>
+    <div class="gh-sec"><div class="dot"></div><span>Documentos pendentes</span><div class="line"></div></div>
+    <div class="card" style="margin-bottom:14px">${pendenciasDocs.map(({turma:t, motivo})=>`
+      <div class="list-item" data-action="abrirDocumentos" data-id="${t.id}" style="cursor:pointer">
+        <div class="li-icon" style="background:var(--amber-l);color:var(--amber-text)">📄</div>
+        <div class="li-info">
+          <div class="li-title">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+          <div class="li-sub">${escapeHtml(t.clientes?.nome||'—')} · ${motivo==='gerar'?'documentos incompletos':'gerado, falta enviar por e-mail'}</div>
+        </div>
+        <span class="badge badge-amber">${motivo==='gerar'?'Gerar':'Enviar'}</span>
+      </div>`).join('')}
     </div>` : '';
 
-  // ── Indicadores resumidos — Turmas concluídas conta pelo mesmo critério
-  // que o Financeiro/Relatórios usa para "performance do instrutor" (sessão
-  // própria concluída no mês, sem exigir status geral da turma), pra não
-  // repetir a divergência 6x18 encontrada entre o Histórico do Instrutor e
-  // os Relatórios do Administrador. ──
+  // ── Agenda da semana (nova seção da Alternativa 1): próximas sessões
+  // futuras além do destaque do hero — dados já carregados, nenhuma
+  // consulta extra. ──
+  const semana = futuras.filter(s => !proximo || s.id !== proximo.id).slice(0,5);
+  const htmlSemana = semana.length ? `
+    <div class="gh-sec"><div class="dot navy"></div><span>Agenda da semana</span><div class="line"></div><span class="glink" data-nav="agenda">Minha agenda →</span></div>
+    <div class="card">${semana.map(s=>_linhaSessao(s,'#F59E0B','📅','')).join('')}</div>` : '';
+
+  // ── Indicadores — mesmos números de antes (ver comentário histórico da
+  // divergência 6x18), agora no padrão de KPI aprovado ──
   const htmlIndicadores = `
-    <div class="stats-grid">
-      <div class="stat-card navy"><div class="stat-label">Aulas hoje</div><div class="stat-value">${aulasHoje.length}</div><div class="stat-sub">Hoje</div></div>
-      <div class="stat-card accent"><div class="stat-label">Documentos pendentes</div><div class="stat-value">${pendenciasDocs.length}</div><div class="stat-sub">${pendenciasDocs.length?'Requer ação':'Em dia'}</div></div>
-      <div class="stat-card accent"><div class="stat-label">Turmas concluídas</div><div class="stat-value">${turmaIdsConcluidasMes.size}</div><div class="stat-sub">No mês</div></div>
-      <div class="stat-card accent"><div class="stat-label">Horas no mês</div><div class="stat-value">${horasMes}</div><div class="stat-sub">Ministradas</div></div>
+    <div class="h2-kpis" style="margin-bottom:16px">
+      <div class="h2-kpi" style="cursor:default"><div class="ic">📅</div><div class="n">${aulasHoje.length}</div><div class="l">Aulas hoje</div></div>
+      <div class="h2-kpi ${pendenciasDocs.length?'warn-b':''}" style="cursor:default"><div class="ic">📄</div><div class="n">${pendenciasDocs.length}</div><div class="l">Docs pendentes</div><div class="d ${pendenciasDocs.length?'a':'m'}">${pendenciasDocs.length?'Requer ação':'Em dia'}</div></div>
+      <div class="h2-kpi" style="cursor:default"><div class="ic">✅</div><div class="n">${turmaIdsConcluidasMes.size}</div><div class="l">Turmas no mês</div></div>
+      <div class="h2-kpi" style="cursor:default"><div class="ic">⏱</div><div class="n">${horasMes}</div><div class="l">Horas no mês</div></div>
     </div>`;
 
   setConteudo(`
+    <div class="h2-hero">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div>
+          <div class="h2-greet">${hora()}, ${usuarioAtual.nome}</div>
+          <div class="h2-sub">${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})} · Instrutor</div>
+        </div>
+        <div class="h2-avatar">${iniciais(usuarioAtual.nome)}</div>
+      </div>
+      ${htmlProximoHero}
+    </div>
     ${htmlIndicadores}
-    ${htmlProximo}
     ${htmlAtrasadas}
     ${htmlPendencias}
+    ${htmlSemana}
   `);
 }
 
@@ -14310,59 +14488,39 @@ function _renderRelatorioView() {
         <button class="rel2-chip${meses===6?' active':''}" onclick="relSetPeriodo(6,this)">6 meses</button>
         <button class="rel2-chip${meses===12?' active':''}" onclick="relSetPeriodo(12,this)">Este ano</button>
       </div>
-      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;cursor:pointer" onclick="relToggleComparativo()">
-          <div style="width:32px;height:18px;border-radius:20px;${window._relComparativo?'background:#059669':'background:rgba(255,255,255,.2)'};position:relative;transition:background .2s;flex-shrink:0">
-            <div style="width:14px;height:14px;background:#fff;border-radius:50%;position:absolute;top:2px;${window._relComparativo?'right:2px':'left:2px'};transition:all .2s"></div>
-          </div>
-          <span style="font-size:12px;font-weight:500;color:rgba(255,255,255,.85)">Comparar com período anterior</span>
-        </div>
-        <select id="relFiltroCat" style="flex:1;min-width:140px;max-width:220px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:rgba(0,0,0,.2);color:rgba(255,255,255,.85);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
-          <option value="">Todos os treinamentos</option>
-          ${[...new Set((window._relRaw?.turmas||[]).map(t=>t.catalogo?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}" style="color:var(--navy);background:#fff">${n}</option>`).join('')}
-        </select>
-        <select id="relFiltroCliente" style="flex:1;min-width:120px;max-width:200px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:rgba(0,0,0,.2);color:rgba(255,255,255,.85);outline:none;font-family:inherit" onchange="_renderRelatorioView()">
-          <option value="">Todos os clientes</option>
-          ${[...new Set((window._relRaw?.turmas||[]).map(t=>t.clientes?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}" style="color:var(--navy);background:#fff">${n}</option>`).join('')}
-        </select>
+    </div>
+
+    <div class="rel4-filtros">
+      <select id="relFiltroCat" class="rel4-select" onchange="_renderRelatorioView()">
+        <option value="">Todos os treinamentos</option>
+        ${(() => { const atual = _getElVisible('relFiltroCat')?.value || ''; return [...new Set((window._relRaw?.turmas||[]).map(t=>t.catalogo?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}"${n===atual?' selected':''}>${n}</option>`).join(''); })()}
+      </select>
+      <select id="relFiltroCliente" class="rel4-select" onchange="_renderRelatorioView()">
+        <option value="">Todos os clientes</option>
+        ${(() => { const atual = _getElVisible('relFiltroCliente')?.value || ''; return [...new Set((window._relRaw?.turmas||[]).map(t=>t.clientes?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}"${n===atual?' selected':''}>${n}</option>`).join(''); })()}
+      </select>
+      <div class="rel4-comp" onclick="relToggleComparativo()">
+        <span class="lbl">Comparar com período anterior</span>
+        <div class="sw" style="background:${window._relComparativo?'var(--green)':'var(--gray-300)'}"><i style="${window._relComparativo?'right:2px':'left:2px'}"></i></div>
       </div>
     </div>
 
     ${_relFaixaDestinosHtml('geral')}
     ${_relRecentesHtml()}
 
+    <div class="gh-sec" style="margin-top:2px"><div class="dot navy"></div><span>Indicadores do período</span><div class="line"></div></div>
     ${_buildKpiGrid({
       tAtivas, tConcluidas, tConcluidasAnt, partUnicos, partUnicosAnt,
       horasTotal, horasTotalAnt, tAgendadas, tCanceladas, cliAtivos, totalTurmas, meses,
       dadosTurmas, dadosSessoes, dadosPart
     })}
 
-    <div class="rel2-chart">
-      <div class="rel2-chart-header">
-        <div>
-          <div class="rel2-chart-title">Evolução mensal</div>
-          <div id="relLegLabel" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--text-3)">
-            <span style="width:10px;height:10px;border-radius:2px;background:#1E2A4A;display:inline-block"></span>Turmas criadas
-          </div>
-        </div>
-        <div class="rel2-toggle">
-          <button class="rel2-tbtn active" id="rt-turmas" onclick="relToggle(this,'turmas','Turmas criadas','#1E2A4A')">Turmas</button>
-          <button class="rel2-tbtn" id="rt-sessoes" onclick="relToggle(this,'sessoes','Sessões concluídas','#F59E0B')">Sessões</button>
-          <button class="rel2-tbtn" id="rt-participantes" onclick="relToggle(this,'participantes','Pessoas treinadas','#059669')">Pessoas</button>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <svg id="relSvg" viewBox="0 ${meses <= 6 ? '0 240 95' : '0 320 95'}" width="100%" style="min-width:200px;max-width:640px;max-height:130px;display:block">
-          ${_buildRelBars(dadosTurmas, '#1E2A4A', mesesLabel)}
-        </svg>
-      </div>
-    </div>
-
     ${(() => {
       const pend = window._relRaw.pendencias || [];
       const nEmpresas = new Set(pend.map(p => p.turma.clientes?.nome||'—')).size;
       const clicavel = pend.length > 0;
-      return `<div class="rel2-card" style="margin-top:12px${pend.length ? ';border:1px solid var(--red);cursor:pointer' : ''}"${clicavel ? ' onclick="renderDocumentosPendentesLista()"' : ''}>
+      return `<div class="gh-sec"><div class="dot ${pend.length?'red':'green'}"></div><span>Requer atenção</span><div class="line"></div></div>
+      <div class="rel2-card" style="${pend.length ? 'border:1px solid var(--red);cursor:pointer' : ''}"${clicavel ? ' onclick="renderDocumentosPendentesLista()"' : ''}>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
           <div style="display:flex;align-items:center;gap:12px;min-width:0">
             <div style="width:40px;height:40px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:${pend.length?'var(--red-l)':'var(--green-l)'}">${pend.length?'📄':'✅'}</div>
@@ -14376,6 +14534,26 @@ function _renderRelatorioView() {
       </div>`;
     })()}
 
+    <div class="gh-sec"><div class="dot"></div><span>Evolução mensal</span><div class="line"></div></div>
+    <div class="rel2-chart">
+      <div class="rel2-chart-header">
+        <div id="relLegLabel" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3)">
+          <span style="width:10px;height:10px;border-radius:2px;background:#1E2A4A;display:inline-block"></span>Turmas criadas
+        </div>
+        <div class="rel2-toggle">
+          <button class="rel2-tbtn active" id="rt-turmas" onclick="relToggle(this,'turmas','Turmas criadas','#1E2A4A')">Turmas</button>
+          <button class="rel2-tbtn" id="rt-sessoes" onclick="relToggle(this,'sessoes','Sessões concluídas','#F59E0B')">Sessões</button>
+          <button class="rel2-tbtn" id="rt-participantes" onclick="relToggle(this,'participantes','Pessoas treinadas','#059669')">Pessoas</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <svg id="relSvg" viewBox="0 ${meses <= 6 ? '-8 240 103' : '-8 320 103'}" width="100%" style="min-width:200px;max-width:640px;max-height:136px;display:block">
+          ${_buildRelBars(dadosTurmas, '#1E2A4A', mesesLabel)}
+        </svg>
+      </div>
+    </div>
+
+    <div class="gh-sec"><div class="dot navy"></div><span>Rankings do período</span><div class="line"></div></div>
     <div class="rel2-rankings">
       <div class="rel2-card" style="margin-bottom:0">
         <div class="rel2-card-title">Top clientes por turmas</div>
@@ -14386,11 +14564,22 @@ function _renderRelatorioView() {
         ${rankCatHtml}
       </div>
     </div>
+    <div class="rel2-rankings">
+      <div class="rel2-card" style="margin-bottom:0">
+        <div class="rel2-card-title">Performance instrutores — sessões concluídas</div>
+        ${instHtml}
+      </div>
+      <div class="rel2-card" style="margin-bottom:0">
+        <div class="rel2-card-title">Relatório por cliente — clique para detalhes</div>
+        ${cliListHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
+      </div>
+    </div>
 
+    <div class="gh-sec"><div class="dot green"></div><span>Conformidade e automação</span><div class="line"></div></div>
     ${(() => {
       const cd = window._relConfData;
       if (!planoAtinge('pro')) {
-        return `<div class="rel2-card" style="margin-top:12px;border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
+        return `<div class="rel2-card" style="border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
           <div class="rel2-card-title">Conformidade, vencimentos e reciclagens</div>
           <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin:6px 0 10px">Veja aqui o índice de conformidade da organização, quantos certificados vencem em breve e quais reciclagens vale priorizar. Disponível no plano Pro.</div>
           <button class="rel2-export-btn" onclick="modalUpgrade(&quot;Conformidade e Reciclagens&quot;,&quot;pro&quot;)" style="background:var(--amber);color:var(--navy);border:none">🔒 Ver planos</button>
@@ -14400,16 +14589,16 @@ function _renderRelatorioView() {
       const vencendoEmBreve = cd.proximos.filter(x => x.diffDias <= JANELA_CONFORMIDADE_DIAS && x.status !== 'vencido').length;
       const reciclagensSugeridas = cd.proximos.filter(x => x.ehReciclagem && x.sugestaoNome !== x.treinamentoNome).length;
       const piores = cd.statusPorTreinamento.slice(0, 4);
-      return `<div class="rel2-card" style="margin-top:12px">
+      return `<div class="rel2-card">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
           <div class="rel2-card-title" style="margin:0">Conformidade, vencimentos e reciclagens</div>
           <button class="btn btn-outline btn-sm" style="font-size:11px" data-nav="conformidade">Ver detalhes completos →</button>
         </div>
-        <div class="stats-grid" style="margin-top:12px;margin-bottom:4px">
-          <div class="stat-card accent"><div class="stat-label">Índice de conformidade</div><div class="stat-value" style="color:var(--green)">${cd.indice}%</div></div>
-          <div class="stat-card accent"><div class="stat-label">Vencidos</div><div class="stat-value" style="color:var(--red)">${cd.vencidos}</div></div>
-          <div class="stat-card accent"><div class="stat-label">Vencendo em ${JANELA_CONFORMIDADE_DIAS}d</div><div class="stat-value" style="color:var(--amber)">${vencendoEmBreve}</div></div>
-          <div class="stat-card accent"><div class="stat-label">Reciclagens a agendar</div><div class="stat-value" style="color:var(--navy)">${reciclagensSugeridas}</div></div>
+        <div class="rel2-kpis" style="margin-top:12px;margin-bottom:4px">
+          <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val" style="color:var(--green)">${cd.indice}%</div><div class="rel2-kpi-lbl">Índice de conformidade</div></div>
+          <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val" style="color:var(--red)">${cd.vencidos}</div><div class="rel2-kpi-lbl">Vencidos</div></div>
+          <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val" style="color:var(--amber-h)">${vencendoEmBreve}</div><div class="rel2-kpi-lbl">Vencendo em ${JANELA_CONFORMIDADE_DIAS}d</div></div>
+          <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val">${reciclagensSugeridas}</div><div class="rel2-kpi-lbl">Reciclagens a agendar</div></div>
         </div>
         ${piores.length ? `<div style="margin-top:10px">
           <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Cursos com menor conformidade</div>
@@ -14421,18 +14610,8 @@ function _renderRelatorioView() {
       </div>`;
     })()}
 
-    <div class="rel2-card" style="margin-top:12px">
-      <div class="rel2-card-title">Performance instrutores — sessões concluídas</div>
-      ${instHtml}
-    </div>
-
-    <div class="rel2-card" style="margin-top:12px">
-      <div class="rel2-card-title">Relatório por cliente — clique para detalhes</div>
-      ${cliListHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
-    </div>
-
     <!-- Relatório mensal automático (plano Pro) -->
-    <div class="rel2-card" style="margin-top:12px;border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
+    <div class="rel2-card" style="border:1px dashed var(--amber);background:rgba(245,158,11,.04)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:36px;height:36px;border-radius:var(--r-md);background:var(--amber-l);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">📅</div>
         <div style="flex:1">
