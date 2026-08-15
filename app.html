@@ -601,6 +601,50 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
   .rel3-filtros{width:100%}
 }
 
+/* ── Agenda do Instrutor v2 — "Semana em Foco" (2026-08-15, aprovada) ── */
+.ag2-layout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px;align-items:start}
+.ag2-week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:14px}
+.ag2-wd{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 4px;text-align:center;cursor:pointer;font-family:inherit;transition:border-color .15s}
+.ag2-wd:hover{border-color:var(--border-2)}
+.ag2-wd .dw{font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.ag2-wd .dn{font-size:15px;font-weight:800;color:var(--navy);margin-top:1px;line-height:1.2}
+.ag2-wd.on{background:var(--navy);border-color:var(--navy)}
+.ag2-wd.on .dw{color:rgba(255,255,255,.5)}
+.ag2-wd.on .dn{color:#fff}
+.ag2-wd .dot{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--amber)}
+.ag2-tlrow{display:flex;gap:10px;margin-bottom:8px}
+.ag2-hour{width:44px;flex-shrink:0;text-align:right;font-size:11px;font-weight:700;color:var(--text-3);padding-top:10px}
+.ag2-tcard{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.ag2-tcard:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+.ag2-tcard.destaque{border:2px solid var(--navy)}
+.ag2-tcard .tt{font-size:12.5px;font-weight:700;color:var(--text-1);padding-right:80px;line-height:1.3;word-break:break-word}
+.ag2-tcard .tm{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.5}
+.ag2-tcard .tbadge{position:absolute;top:10px;right:10px}
+.ag2-rail{display:flex;flex-direction:column;gap:10px}
+.ag2-cal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.ag2-cal-head{background:var(--navy);padding:9px 12px;display:flex;align-items:center;justify-content:space-between}
+.ag2-cal-head .m{font-size:12.5px;font-weight:700;color:#fff}
+.ag2-cal-head button{border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:26px;height:26px;border-radius:7px;font-size:14px;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.ag2-cal-body{padding:10px}
+.ag2-resline{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:5px 0}
+.ag2-resline+.ag2-resline{border-top:1px solid var(--border)}
+.ag2-resline b{color:var(--navy)}
+@media(max-width:767px){
+  .ag2-layout{grid-template-columns:1fr}
+  .ag2-wd{padding:7px 2px}
+  .ag2-wd .dn{font-size:14px}
+}
+
+/* ── Histórico do Instrutor v2 — "Camadas por Ano" (2026-08-15, aprovada) ── */
+.kpis5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}
+@media(max-width:767px){.kpis5{grid-template-columns:repeat(2,1fr)}}
+.hist2-item{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 12px;margin-bottom:6px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.hist2-item:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+.hist2-item .ch{width:40px;height:40px;border-radius:10px;background:var(--green-l);color:var(--green);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hist2-item .hi{flex:1;min-width:0}
+.hist2-item .ht{font-size:12.5px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist2-item .hs{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 /* ── Execution tabs ── */
 .exec-tab{flex:1;padding:10px 8px;background:none;border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--text-3);cursor:pointer;font-family:inherit;transition:all .15s}
 .exec-tab:hover{color:var(--text-1)}
@@ -3998,7 +4042,7 @@ async function renderHomeAdmin() {
   }).length);
   const maxV = Math.max(...vals6,1);
   const barsHtml = vals6.map((v,i)=>{
-    const barH = Math.max(v>0?Math.round(70*(v/maxV)):0, v>0?6:0);
+    const barH = Math.max(v>0?Math.round(60*(v/maxV)):0, v>0?6:0);
     const x = i*40;
     const isLast = i===vals6.length-1;
     return `<g>
@@ -4462,12 +4506,13 @@ async function renderHomeInstrutor() {
     const ehHoje = proximo.data === hoje;
     const localCardTxt = proximo.turma?.local && proximo.local ? `${proximo.turma.local} · ${proximo.local}`
       : (proximo.turma?.local || proximo.local || '');
-    let btnAcao = '';
-    if (ehHoje && st === 'agendada') {
-      btnAcao = `<button class="hbtn2 amber" style="width:100%;justify-content:center;margin-top:10px" data-action="iniciarExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Iniciar treinamento</button>`;
-    } else if (ehHoje && st === 'em_andamento') {
-      btnAcao = `<button class="hbtn2" style="width:100%;justify-content:center;margin-top:10px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${proximo.turma_id}" data-sessao="${proximo.id}">▶ Continuar treinamento</button>`;
-    }
+    // 2026-08-15 (pedido do Alisson): o botão Iniciar/Continuar saiu do
+    // card fechado da Home — clicar no card abre o detalhe da turma
+    // (verTurma), onde o botão continua existindo. Etapa de confirmação
+    // proposital: ver local/participantes antes de iniciar.
+    const dicaAcao = (ehHoje && (st === 'agendada' || st === 'em_andamento'))
+      ? `<div style="margin-top:10px;font-size:11.5px;font-weight:600;color:var(--amber);display:flex;align-items:center;gap:6px">Toque para ver detalhes e ${st==='agendada'?'iniciar':'continuar'} →</div>`
+      : '';
     htmlProximoHero = `
       <div class="h2-heronext" data-action="verTurma" data-id="${proximo.turma_id}" style="cursor:pointer">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
@@ -4478,7 +4523,7 @@ async function renderHomeInstrutor() {
           </div>
           <span class="badge ${ehHoje?'badge-amber':'badge-gray'}" style="flex-shrink:0">${ehHoje?'Hoje':formatarData(proximo.data)}</span>
         </div>
-        ${btnAcao}
+        ${dicaAcao}
       </div>`;
   }
 
@@ -9555,63 +9600,67 @@ async function verTurma(id) {
     const localMapaUrl = t.local ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.local)}` : '';
 
     const html = usuarioAtual.perfil === 'instrutor' ? `
-      <!-- ===== TELA INSTRUTOR ===== -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <!-- ===== TELA INSTRUTOR (padrão visual v2, 2026-08-15) ===== -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
         <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
       </div>
 
       <!-- Hero card -->
-      <div style="background:var(--navy);border-radius:var(--r-lg);padding:20px;margin-bottom:12px">
-        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border-radius:20px;padding:3px 10px;margin-bottom:10px">
-          <span style="width:6px;height:6px;border-radius:50%;background:${st==='em_andamento'?'#34d399':st==='concluida'?'#6ee7b7':'#93c5fd'}"></span>
-          <span style="font-size:11px;color:rgba(255,255,255,.8);font-weight:600;letter-spacing:.3px">${SL[st]}</span>
+      <div class="h2-hero" style="margin-bottom:12px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border-radius:20px;padding:4px 12px">
+            <span style="width:7px;height:7px;border-radius:50%;background:${st==='em_andamento'?'#34d399':st==='concluida'?'#6ee7b7':st==='cancelada'?'#F87171':'#93c5fd'}"></span>
+            <span style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;letter-spacing:.3px">${SL[st]}</span>
+          </div>
+          <span style="font-size:11px;color:rgba(255,255,255,.4);font-weight:600;white-space:nowrap">⏱ ${t.catalogo?.carga_horaria||'—'}h</span>
         </div>
-        <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:4px">${nomeT}</div>
-        <div style="font-size:15px;color:rgba(255,255,255,.65);font-weight:500;margin-bottom:16px">${nomeC}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:${st==='agendada'||st==='em_andamento'?'16px':'0'}">
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Data</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${agMeuAgend?formatarData(agMeuAgend.data):'—'}</div>
+        <div style="font-size:20px;font-weight:700;color:#fff;line-height:1.25;letter-spacing:-.2px">${nomeT}</div>
+        <div style="font-size:13.5px;color:rgba(255,255,255,.6);font-weight:500;margin-top:2px;margin-bottom:14px">🏢 ${nomeC}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">📅 Data</div>
+            <div style="font-size:13px;color:#fff;font-weight:600">${agMeuAgend?formatarData(agMeuAgend.data):'—'}</div>
           </div>
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Horário</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${agMeuAgend&&agMeuAgend.hora_inicio?agMeuAgend.hora_inicio.slice(0,5)+(agMeuAgend.hora_fim?' – '+agMeuAgend.hora_fim.slice(0,5):''):'—'}</div>
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">⏰ Horário</div>
+            <div style="font-size:13px;color:#fff;font-weight:600">${agMeuAgend&&agMeuAgend.hora_inicio?agMeuAgend.hora_inicio.slice(0,5)+(agMeuAgend.hora_fim?' – '+agMeuAgend.hora_fim.slice(0,5):''):'—'}</div>
           </div>
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px;grid-column:1 / -1">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">📍 Local</div>
-            <div style="font-size:13px;color:#fff;font-weight:500;line-height:1.4">${escapeHtml(localTxt)}</div>
-            ${localMapaUrl?`<a href="${localMapaUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12px;color:var(--amber);text-decoration:none;font-weight:600">🗺️ Abrir no mapa</a>`:''}
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">⏱ Carga</div>
+            <div style="font-size:13px;color:#fff;font-weight:600">${t.catalogo?.carga_horaria||'—'}h</div>
           </div>
-          <div style="background:rgba(255,255,255,.08);border-radius:var(--r-md);padding:10px 12px">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Carga</div>
-            <div style="font-size:13px;color:#fff;font-weight:500">${t.catalogo?.carga_horaria||'—'}h</div>
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px;grid-column:1 / -1">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">📍 Local</div>
+            <div style="font-size:13px;color:#fff;font-weight:600;line-height:1.4">${escapeHtml(localTxt)}</div>
+            ${localMapaUrl?`<a href="${localMapaUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:12px;color:var(--amber);text-decoration:none;font-weight:700">🗺️ Abrir no mapa →</a>`:''}
           </div>
         </div>
         ${st==='agendada'?`
-          <button class="btn" style="width:100%;background:var(--amber);color:var(--navy);font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="iniciarExecucaoSessao" data-id="${id}" data-sessao="${agMeuAgend?.id||''}">
+          <button class="hbtn2 amber" style="width:100%;justify-content:center;font-size:14px;padding:13px;margin-top:14px" data-action="iniciarExecucaoSessao" data-id="${id}" data-sessao="${agMeuAgend?.id||''}">
             ▶ Iniciar treinamento
           </button>`:``}
         ${st==='em_andamento'?`
-          <button class="btn" style="width:100%;background:var(--green);color:#fff;font-size:15px;font-weight:600;padding:14px;border-radius:var(--r-md)" data-action="abrirExecucaoSessao" data-id="${id}" data-sessao="${agMeuAgend?.id||''}">
+          <button class="hbtn2" style="width:100%;justify-content:center;font-size:14px;padding:13px;margin-top:14px;background:var(--green);color:#fff" data-action="abrirExecucaoSessao" data-id="${id}" data-sessao="${agMeuAgend?.id||''}">
             ▶ Continuar treinamento
           </button>`:``}
         ${st==='concluida'?`
-          <div style="text-align:center;padding:8px 0 4px">
-            <div style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:10px">✓ Treinamento concluído</div>
-            <button class="btn" style="width:100%;background:rgba(255,255,255,.15);color:#fff;font-size:14px;font-weight:600;padding:12px" data-action="abrirDocumentos" data-id="${id}">
+          <div style="text-align:center;padding:12px 0 0">
+            <div style="font-size:12.5px;color:rgba(255,255,255,.5);margin-bottom:10px">✓ Treinamento concluído</div>
+            <button class="hbtn2 ghost" style="width:100%;justify-content:center;font-size:13.5px;padding:12px" data-action="abrirDocumentos" data-id="${id}">
               📄 Documentos e Certificados
             </button>
-          </div>`:``}      </div>
+          </div>`:``}
+      </div>
 
       ${agendamentosInstrutor.length>1&&st!=='agendada'?`
       <!-- Encontros (turma com mais de um dia) — permite revisar um encontro
            já concluído (evidências/anotações) mesmo depois de finalizado,
            sem depender só do botão "Continuar" (que só resolve o pendente). -->
       <div class="card" style="margin-bottom:12px">
-        <div style="font-size:14px;font-weight:600;color:var(--text-1);margin-bottom:10px">Encontros (${agendamentosInstrutor.length})</div>
+        <div class="gh-sec" style="margin:0 0 10px"><div class="dot navy"></div><span>Encontros (${agendamentosInstrutor.length})</span><div class="line"></div></div>
         ${agendamentosInstrutor.map((ag,i)=>`
         <div style="display:flex;align-items:center;gap:10px;padding:9px 0;${i<agendamentosInstrutor.length-1?'border-bottom:1px solid var(--border)':''}">
-          <div style="width:28px;height:28px;border-radius:50%;background:${ag.concluida?'var(--green-l)':'var(--gray-100)'};color:${ag.concluida?'var(--green)':'var(--text-3)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+          <div style="width:28px;height:28px;border-radius:50%;background:${ag.concluida?'var(--green-l)':'var(--gray-100)'};color:${ag.concluida?'var(--green)':'var(--text-3)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ag.concluida?'✓':i+1}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--text-1)">${formatarData(ag.data)}${ag.hora_inicio?' · '+ag.hora_inicio.slice(0,5):''}</div>
             <div style="font-size:11px;color:var(--text-3)">${ag.concluida?'Concluído':'Pendente'}</div>
@@ -9622,10 +9671,7 @@ async function verTurma(id) {
 
       <!-- Participantes -->
       <div class="card" style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-size:14px;font-weight:600;color:var(--text-1)">Participantes</div>
-          <span class="badge badge-gray">${participantes.length}</span>
-        </div>
+        <div class="gh-sec" style="margin:0 0 10px"><div class="dot"></div><span>Participantes</span><div class="line"></div><span class="badge badge-gray">${participantes.length}</span></div>
         ${participantes.length===0
           ?`<div class="empty" style="padding:16px"><div class="empty-title" style="font-size:13px">Nenhum participante</div></div>`
           :participantes.map(p=>`
@@ -11328,6 +11374,9 @@ async function _socWsConfirmarImportacao() {
 }
 
 async function renderAgenda() {
+  // Consulta idêntica à versão anterior — sessões do instrutor + turmas não
+  // canceladas. O redesenho "Semana em Foco" (2026-08-15) muda só a
+  // apresentação: régua semanal + linha do tempo do dia + mini-calendário.
   const {data:sessoes} = await sb
     .from('sessoes')
     .select('id,turma_id,data,hora_inicio,hora_fim,local,modalidade,concluida')
@@ -11339,234 +11388,249 @@ async function renderAgenda() {
   if (turmaIds.length) {
     const {data:turmasData} = await sb
       .from('turmas')
-      .select('id,status,catalogo_id,cliente_id,clientes(nome),catalogo(nome,carga_horaria)')
+      .select('id,status,catalogo_id,cliente_id,local,clientes(nome),catalogo(nome,carga_horaria)')
       .in('id', turmaIds)
       .neq('status','cancelada');
     (turmasData||[]).forEach(t => { turmasMap[t.id] = t; });
   }
 
-  // Agrupar sessões por turma
-  const turmasAgrupadas = {};
-  (sessoes||[]).forEach(s => {
-    const t = turmasMap[s.turma_id];
-    if (!t) return;
-    if (!turmasAgrupadas[s.turma_id]) {
-      turmasAgrupadas[s.turma_id] = { turma: t, sessoes: [] };
-    }
-    turmasAgrupadas[s.turma_id].sessoes.push(s);
-  });
-
-  // Aulas de hoje e próximos agendamentos — antes duplicados na tela
-  // Início, agora moram só aqui na Agenda (Início fica com indicadores +
-  // ações; Agenda fica com calendário + o que vem a seguir).
-  const _hojeAgenda = dataLocalISO();
-  const sessoesValidasAgenda = (sessoes||[])
+  const hoje = dataLocalISO();
+  const sessoesValidas = (sessoes||[])
     .map(s=>({...s, turma:turmasMap[s.turma_id]||null}))
     .filter(s=>s.turma);
-  const pendentesAgenda = sessoesValidasAgenda
-    .filter(s=>!s.concluida && s.turma.status !== 'concluida')
-    .sort((a,b)=>a.data.localeCompare(b.data));
-  const aulasHojeAgenda = pendentesAgenda.filter(s=>s.data===_hojeAgenda);
-  const proximosAgenda  = pendentesAgenda.filter(s=>s.data>_hojeAgenda).slice(0,6);
+  const datasComSessao = new Set(sessoesValidas.map(s=>s.data).filter(Boolean));
 
-  const _linhaSessaoAgenda = (s, corIcone, icone, badge) => `
-    <div class="list-item" data-action="verTurma" data-id="${s.turma_id}" style="cursor:pointer">
-      <div class="li-icon" style="background:${corIcone}1a;color:${corIcone}">${icone}</div>
-      <div class="li-info">
-        <div class="li-title">${escapeHtml(s.turma?.catalogo?.nome||'Treinamento')}</div>
-        <div class="li-sub">${escapeHtml(s.turma?.clientes?.nome||'—')} · ${formatarData(s.data)}${s.hora_inicio?' · '+s.hora_inicio.slice(0,5):''}</div>
-      </div>
-      ${badge}
-    </div>`;
-
-  const htmlAulasHojeAgenda = aulasHojeAgenda.length ? `
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Aulas de hoje (${aulasHojeAgenda.length})</div></div>
-      <div class="card">${aulasHojeAgenda.map(s=>_linhaSessaoAgenda(s,'#F59E0B','☀️','<span class="badge badge-amber">Hoje</span>')).join('')}</div>
-    </div>` : '';
-
-  const htmlProximosAgenda = `
-    <div class="home-section">
-      <div class="section-header"><div class="section-title">Próximos agendamentos</div></div>
-      <div class="card">${proximosAgenda.length===0
-        ? '<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Nenhum outro agendamento</div></div>'
-        : proximosAgenda.map(s=>_linhaSessaoAgenda(s,'#2563EB','📋','<span class="badge badge-gray">Agendado</span>')).join('')}
-      </div>
-    </div>`;
+  const [anoHoje, mesHoje] = hoje.split('-').map(Number);
+  window._agendaHoje    = hoje;
+  window._agendaDataSel = hoje;        // padrão novo: hoje já selecionado
+  window._agendaMes     = mesHoje;
+  window._agendaAno     = anoHoje;
+  window._agendaSessoes = sessoesValidas;
+  window._agendaDatasComSessao = datasComSessao;
 
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
   fabOcultar();
 
-  const SL = {agendada:'Agendada',em_andamento:'Em andamento',concluida:'Concluída',cancelada:'Cancelada'};
-  const SB = {agendada:'badge-gray',em_andamento:'badge-blue',concluida:'badge-green',cancelada:'badge-red'};
-  const hoje = dataLocalISO();
+  // Contadores do hero (dados já carregados — nenhuma consulta extra)
+  const pendentes = sessoesValidas.filter(s=>!s.concluida && s.turma.status!=='concluida');
+  const nHoje = pendentes.filter(s=>s.data===hoje).length;
+  const dSem = _agendaDomingoDaSemana(hoje);
+  const fimSem = _agendaSomarDias(dSem, 6);
+  const nSemana = pendentes.filter(s=>s.data>=dSem && s.data<=fimSem).length;
 
-  // Calendário — datas com sessões
-  const datasComSessao = new Set((sessoes||[]).map(s=>s.data).filter(Boolean));
-  const [anoHoje, mesHoje] = hoje.split('-').map(Number);
-  window._agendaMes     = mesHoje;
-  window._agendaAno     = anoHoje;
-  window._agendaDataSel = null;
-  window._agendaTurmasAgrupadas = turmasAgrupadas;
-  window._agendaDatasComSessao  = datasComSessao;
-  window._agendaHoje = hoje;
-  window._agendaSL = SL; window._agendaSB = SB;
-
-  // Agenda agora é responsável só pelo calendário (a lista de turmas
-  // pendentes/concluídas com ações de iniciar/continuar/ver documentos foi
-  // consolidada no Dashboard do Início, para não duplicar a mesma
-  // informação em duas telas). A lista compacta de sessões do dia/mês
-  // (agendaCalLista) continua aqui, é parte do próprio calendário.
   setConteudo(`
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden">
-      <div style="background:var(--navy);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
-        <button onclick="_agendaNavMes(-1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">‹</button>
-        <div id="agendaCalMes" style="font-size:14px;font-weight:600;color:#fff"></div>
-        <button onclick="_agendaNavMes(1)" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center">›</button>
-      </div>
-      <div style="display:grid;grid-template-columns:auto 1fr;min-height:200px">
-        <div style="padding:12px 12px 12px 14px;border-right:1px solid var(--border)">
-          <div id="agendaCalGrid"></div>
-          <div id="agendaCalLegenda" style="display:flex;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
-              <div style="width:9px;height:9px;border-radius:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35)"></div>Com sessão
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)">
-              <div style="width:9px;height:9px;border-radius:3px;background:var(--navy)"></div>Hoje
-            </div>
-          </div>
+    <div class="h2-hero" style="padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div>
+          <div class="h2-greet" style="font-size:16px">Minha Agenda</div>
+          <div class="h2-sub" id="agendaHeroSub"></div>
         </div>
-        <div id="agendaCalLista" style="padding:12px 14px;overflow-y:auto;max-height:260px">
-          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px" id="agendaCalListaHeader">Sessões do mês</div>
-          <div id="agendaCalListaBody"></div>
+        <div style="display:flex;gap:8px">
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 14px;text-align:center">
+            <div style="font-size:16px;font-weight:800;color:var(--amber);line-height:1.2">${nHoje}</div>
+            <div style="font-size:9.5px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Hoje</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 14px;text-align:center">
+            <div style="font-size:16px;font-weight:800;color:#fff;line-height:1.2">${nSemana}</div>
+            <div style="font-size:9.5px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Semana</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div style="margin-top:20px">
-      ${htmlAulasHojeAgenda}
-      ${htmlProximosAgenda}
+    <div class="ag2-week" id="agendaWeekStrip"></div>
+
+    <div class="ag2-layout">
+      <div>
+        <div class="gh-sec" style="margin-top:0"><div class="dot"></div><span id="agendaDiaHeader">Dia</span><div class="line"></div><span class="glink" onclick="_agendaSelecionarDia(window._agendaHoje)">Hoje</span></div>
+        <div id="agendaTimeline"></div>
+        <div class="gh-sec"><div class="dot navy"></div><span>Próximos agendamentos</span><div class="line"></div></div>
+        <div id="agendaProximos"></div>
+      </div>
+      <div class="ag2-rail">
+        <div class="ag2-cal">
+          <div class="ag2-cal-head">
+            <button onclick="_agendaNavMes(-1)" aria-label="Mês anterior">‹</button>
+            <div class="m" id="agendaCalMes"></div>
+            <button onclick="_agendaNavMes(1)" aria-label="Próximo mês">›</button>
+          </div>
+          <div class="ag2-cal-body"><div id="agendaCalGrid"></div></div>
+        </div>
+        <div class="wcard" style="padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg)">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px" id="agendaResumoTitulo">Resumo do mês</div>
+          <div id="agendaResumoMes"></div>
+        </div>
+      </div>
     </div>
   `);
 
-  _agendaRenderCalendario();
+  _agendaRenderTudo();
 }
 
+// ── Helpers de data (strings YYYY-MM-DD, sem fuso) ──
+function _agendaSomarDias(dataStr, n) {
+  const [a,m,d] = dataStr.split('-').map(Number);
+  const dt = new Date(a, m-1, d+n);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+function _agendaDomingoDaSemana(dataStr) {
+  const [a,m,d] = dataStr.split('-').map(Number);
+  const dt = new Date(a, m-1, d);
+  return _agendaSomarDias(dataStr, -dt.getDay());
+}
+
+function _agendaRenderTudo() {
+  _agendaRenderSemana();
+  _agendaRenderDia();
+  _agendaRenderProximos();
+  _agendaRenderCalendario();
+  _agendaRenderResumoMes();
+}
+
+// Régua semanal — 7 dias da semana do dia selecionado; ponto âmbar = tem
+// sessão; clique seleciona o dia (mesma função do clique no calendário).
+function _agendaRenderSemana() {
+  const sel = window._agendaDataSel || window._agendaHoje;
+  const dom = _agendaDomingoDaSemana(sel);
+  const dows = ['dom','seg','ter','qua','qui','sex','sáb'];
+  const nomesMesesCurto = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  let html = '';
+  for (let i=0;i<7;i++) {
+    const dataStr = _agendaSomarDias(dom, i);
+    const dia = Number(dataStr.slice(8,10));
+    const tem = window._agendaDatasComSessao.has(dataStr);
+    const on  = dataStr === sel;
+    html += `<button class="ag2-wd${on?' on':''}" onclick="_agendaSelecionarDia('${dataStr}')">
+      <div class="dw">${dows[i]}</div><div class="dn">${dia}</div>${tem?'<span class="dot"></span>':''}
+    </button>`;
+  }
+  _setElBoth('agendaWeekStrip', html);
+  const ini = dom.slice(8,10), fim = _agendaSomarDias(dom,6);
+  const mesLabel = nomesMesesCurto[Number(fim.slice(5,7))-1];
+  _setElBoth('agendaHeroSub', `semana de ${Number(ini)} a ${Number(fim.slice(8,10))} de ${mesLabel}`);
+}
+
+// Linha do tempo do dia selecionado
+function _agendaRenderDia() {
+  const sel = window._agendaDataSel || window._agendaHoje;
+  const hoje = window._agendaHoje;
+  const ehHoje = sel === hoje;
+  const sess = (window._agendaSessoes||[]).filter(s=>s.data===sel)
+    .sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+  const dows = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const [a,m,d] = sel.split('-').map(Number);
+  const dow = dows[new Date(a,m-1,d).getDay()];
+  _setElBoth('agendaDiaHeader', `${ehHoje?'Hoje':dow} · ${sel.split('-').reverse().join('/')}${sess.length?` (${sess.length})`:''}`);
+
+  if (!sess.length) {
+    _setElBoth('agendaTimeline', `<div style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-md);padding:20px;text-align:center;font-size:12px;color:var(--text-3);margin-bottom:8px">Nenhuma sessão neste dia</div>`);
+    return;
+  }
+  const html = sess.map(s=>{
+    const t = s.turma;
+    const concl = s.concluida || t.status==='concluida';
+    const badge = concl ? '<span class="badge badge-green ag2-tbadge tbadge">Concluída</span>'
+      : ehHoje ? '<span class="badge badge-amber tbadge">Hoje</span>'
+      : '<span class="badge badge-gray tbadge">Agendado</span>';
+    const localTxt = t.local && s.local ? `${t.local} · ${s.local}` : (t.local || s.local || '');
+    return `<div class="ag2-tlrow">
+      <div class="ag2-hour">${s.hora_inicio?s.hora_inicio.slice(0,5):'—'}</div>
+      <div class="ag2-tcard${ehHoje&&!concl?' destaque':''}" data-action="verTurma" data-id="${s.turma_id}">
+        <div class="tt">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+        <div class="tm">🏢 ${escapeHtml(t.clientes?.nome||'—')}${s.hora_fim?' · ⏰ até '+s.hora_fim.slice(0,5):''}${localTxt?' · 📍 '+escapeHtml(localTxt):''}</div>
+        ${badge}
+      </div>
+    </div>`;
+  }).join('');
+  _setElBoth('agendaTimeline', html);
+}
+
+// Próximos agendamentos — mesma regra da tela anterior (pendentes futuros,
+// até 6), agora como linha do tempo com dia/hora na coluna esquerda.
+function _agendaRenderProximos() {
+  const hoje = window._agendaHoje;
+  const prox = (window._agendaSessoes||[])
+    .filter(s=>!s.concluida && s.turma.status!=='concluida' && s.data>hoje)
+    .sort((a,b)=>a.data.localeCompare(b.data)||( a.hora_inicio||'').localeCompare(b.hora_inicio||''))
+    .slice(0,6);
+  if (!prox.length) {
+    _setElBoth('agendaProximos', `<div style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-md);padding:20px;text-align:center;font-size:12px;color:var(--text-3)">📅 Nenhum outro agendamento</div>`);
+    return;
+  }
+  const html = prox.map(s=>{
+    const t = s.turma;
+    return `<div class="ag2-tlrow">
+      <div class="ag2-hour" style="line-height:1.3">${s.data.slice(8,10)}/${s.data.slice(5,7)}${s.hora_inicio?'<br>'+s.hora_inicio.slice(0,5):''}</div>
+      <div class="ag2-tcard" data-action="verTurma" data-id="${s.turma_id}">
+        <div class="tt">${escapeHtml(t.catalogo?.nome||'Treinamento')}</div>
+        <div class="tm">🏢 ${escapeHtml(t.clientes?.nome||'—')}</div>
+        <span class="badge badge-gray tbadge">${formatarData(s.data)}</span>
+      </div>
+    </div>`;
+  }).join('');
+  _setElBoth('agendaProximos', html);
+}
+
+// Mini-calendário mensal — mesma navegação ‹ › e clique-no-dia de antes.
 function _agendaRenderCalendario() {
-  const mes      = window._agendaMes;
-  const ano      = window._agendaAno;
+  const mes = window._agendaMes, ano = window._agendaAno;
   const datasSet = window._agendaDatasComSessao;
-  const hoje     = window._agendaHoje;
-  const nomesMeses = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-
-  const elMes  = _getElVisible('agendaCalMes');
-  const elGrid = _getElVisible('agendaCalGrid');
-  if (!elMes || !elGrid) return;
-
-  elMes.textContent = `${nomesMeses[mes-1]} ${ano}`;
+  const hoje = window._agendaHoje;
+  const sel  = window._agendaDataSel;
+  const nomesMeses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  _setElBoth('agendaCalMes', `${nomesMeses[mes-1]} ${ano}`);
 
   const primeiroDia = new Date(ano, mes-1, 1).getDay();
   const diasNoMes   = new Date(ano, mes, 0).getDate();
   const dow = ['D','S','T','Q','Q','S','S'];
-
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,28px);gap:2px;margin-bottom:4px">`;
-  html += dow.map(d =>
-    `<div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:3px 0">${d}</div>`
-  ).join('');
-  html += '</div>';
-
-  html += `<div style="display:grid;grid-template-columns:repeat(7,28px);gap:2px">`;
-  for (let i = 0; i < primeiroDia; i++) html += `<div style="width:28px;height:28px"></div>`;
-
-  for (let d = 1; d <= diasNoMes; d++) {
-    const dataStr   = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const temSessao = datasSet.has(dataStr);
-    const ehHoje    = dataStr === hoje;
-    const ehSel     = window._agendaDataSel === dataStr;
-
-    let bg = 'transparent', color = 'var(--text-2)', fw = '400', borda = 'none', cursor = 'default';
-    if (ehHoje)    { bg = 'var(--navy)'; color = '#fff'; fw = '600'; }
-    if (temSessao && !ehHoje) { bg = 'rgba(245,158,11,.15)'; color = 'var(--navy)'; fw = '600'; borda = '1px solid rgba(245,158,11,.4)'; cursor = 'pointer'; }
-    if (ehSel && !ehHoje)     { borda = '2px solid var(--navy)'; }
-    if (dataStr < hoje && !temSessao) color = 'var(--text-3)';
-
-    const dot = temSessao && !ehHoje
-      ? `<div style="width:4px;height:4px;background:var(--amber,#F59E0B);border-radius:50%;margin:1px auto 0"></div>` : '';
-
-    html += `<div onclick="${temSessao?`_agendaFiltrarData('${dataStr}')`:''}"
-      style="width:28px;height:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;font-size:12px;font-weight:${fw};background:${bg};color:${color};cursor:${cursor};border:${borda}"
-    >${d}${dot}</div>`;
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">`;
+  html += dow.map(d=>`<div style="text-align:center;font-size:9.5px;font-weight:700;color:var(--text-3);padding:2px 0">${d}</div>`).join('');
+  html += `</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">`;
+  for (let i=0;i<primeiroDia;i++) html += `<div style="height:26px"></div>`;
+  for (let d=1; d<=diasNoMes; d++) {
+    const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const tem = datasSet.has(dataStr);
+    const ehHoje = dataStr === hoje;
+    const ehSel = dataStr === sel;
+    let st = 'height:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-2)';
+    if (tem && !ehHoje) st += ';background:rgba(245,158,11,.12);color:var(--amber-text)';
+    if (ehHoje) st += ';background:var(--navy);color:#fff';
+    if (ehSel && !ehHoje) st += ';outline:2px solid var(--amber);outline-offset:-2px';
+    if (dataStr < hoje && !tem && !ehHoje) st += ';color:var(--text-3);font-weight:400';
+    const dot = tem && !ehHoje ? `<div style="width:3px;height:3px;background:var(--amber);border-radius:50%;margin-top:1px"></div>` : '';
+    html += `<div onclick="_agendaSelecionarDia('${dataStr}')" style="${st}">${d}${dot}</div>`;
   }
-  html += '</div>';
-  elGrid.innerHTML = html;
-  // Sincronizar o body não-visível (mobile/desktop) com o mesmo HTML
+  html += '</div><div style="display:flex;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
+    + '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35)"></div>Com sessão</div>'
+    + '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy)"></div>Hoje</div>'
+    + '</div>';
   _setElBoth('agendaCalGrid', html);
-
-  _agendaAtualizarLista(window._agendaDataSel || null);
 }
 
-function _agendaAtualizarLista(dataFiltro) {
-  const header = _getElVisible('agendaCalListaHeader');
-  const body   = _getElVisible('agendaCalListaBody');
-  if (!header || !body) return;
-
-  const turmasAgrupadas = window._agendaTurmasAgrupadas || {};
-  const mes = window._agendaMes;
-  const ano = window._agendaAno;
-  const hoje = window._agendaHoje;
-
-  let sessoesFiltradas = [];
-  Object.values(turmasAgrupadas).forEach(g => {
-    g.sessoes.forEach(s => {
-      if (!s.data) return;
-      const [sy, sm] = s.data.split('-').map(Number);
-      if (dataFiltro) {
-        if (s.data === dataFiltro) sessoesFiltradas.push({s, turma: g.turma});
-      } else {
-        if (sy === ano && sm === mes) sessoesFiltradas.push({s, turma: g.turma});
-      }
-    });
-  });
-  sessoesFiltradas.sort((a, b) => a.s.data > b.s.data ? 1 : -1);
-
-  if (dataFiltro) {
-    const partes = dataFiltro.split('-').reverse().join('/');
-    header.textContent = `${partes} — ${sessoesFiltradas.length} sessao(oes)`;
-  _setElBoth('agendaCalListaHeader', header.textContent);
-  } else {
-    const nm = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    header.textContent = `${nm[mes-1]} ${ano} — ${sessoesFiltradas.length} sessao(oes)`;
-    _setElBoth('agendaCalListaHeader', header.textContent);
-  }
-
-  if (!sessoesFiltradas.length) {
-    const emptyHtml = `<div style="font-size:12px;color:var(--text-3);padding:16px 0;text-align:center">${dataFiltro?'Nenhuma sessao neste dia':'Nenhuma sessao neste mes'}</div>`;
-    body.innerHTML = emptyHtml;
-    _setElBoth('agendaCalListaBody', emptyHtml);
-    return;
-  }
-
-  const stBg    = {agendada:'rgba(100,116,139,.1)',em_andamento:'rgba(30,42,74,.08)',concluida:'rgba(5,150,105,.1)',cancelada:'rgba(148,163,184,.1)'};
-  const stColor = {agendada:'var(--text-2)',em_andamento:'var(--navy,#1E2A4A)',concluida:'#059669',cancelada:'var(--text-3)'};
-  const stLabel = {agendada:'Agendado',em_andamento:'Em andamento',concluida:'Concluido',cancelada:'Cancelado'};
-
-  const listaHtml = sessoesFiltradas.map(({s, turma}) => {
-    const ehHoje  = s.data === hoje;
-    const hora    = s.hora_inicio ? s.hora_inicio.slice(0,5) : '';
-    const st      = turma.status || 'agendada';
-    const dataFmt = s.data ? s.data.split('-').reverse().join('/') : '';
-    return `<div style="padding:8px 10px;background:${ehHoje?'rgba(245,158,11,.08)':'var(--gray-50,#F8FAFC)'};border:1px solid ${ehHoje?'rgba(245,158,11,.3)':'var(--border)'};border-radius:8px;margin-bottom:6px">
-      ${ehHoje?`<div style="font-size:9px;font-weight:700;color:#F59E0B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Hoje</div>`:''}
-      <div style="font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${escapeHtml(turma.catalogo?.nome||'Treinamento')}</div>
-      <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span>${dataFmt}${hora?' - '+hora:''}</span>
-        <span style="padding:1px 6px;border-radius:4px;font-size:10px;font-weight:500;background:${stBg[st]};color:${stColor[st]}">${stLabel[st]||st}</span>
-      </div>
-    </div>`;
-  }).join('');
-  body.innerHTML = listaHtml;
-  _setElBoth('agendaCalListaBody', listaHtml);
+// Resumo do mês exibido no mini-calendário (dados já carregados)
+function _agendaRenderResumoMes() {
+  const mes = window._agendaMes, ano = window._agendaAno;
+  const pref = `${ano}-${String(mes).padStart(2,'0')}`;
+  const doMes = (window._agendaSessoes||[]).filter(s=>s.data?.startsWith(pref));
+  const clientes = new Set(doMes.map(s=>s.turma?.cliente_id).filter(Boolean)).size;
+  const turmasUnicas = [...new Map(doMes.map(s=>[s.turma_id, s.turma])).values()];
+  const horas = turmasUnicas.reduce((acc,t)=>acc+(t?.catalogo?.carga_horaria||0),0);
+  const nomesMesesCurto = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  _setElBoth('agendaResumoTitulo', `Resumo de ${nomesMesesCurto[mes-1]}/${ano}`);
+  _setElBoth('agendaResumoMes', `
+    <div class="ag2-resline"><span>Sessões</span><b>${doMes.length}</b></div>
+    <div class="ag2-resline"><span>Clientes</span><b>${clientes}</b></div>
+    <div class="ag2-resline"><span>Horas previstas</span><b>${horas}h</b></div>`);
 }
+
+function _agendaSelecionarDia(dataStr) {
+  window._agendaDataSel = dataStr;
+  const [a,m] = dataStr.split('-').map(Number);
+  window._agendaMes = m; window._agendaAno = a;
+  _agendaRenderTudo();
+}
+// Compatibilidade com o comportamento anterior (clique no dia do calendário)
+function _agendaFiltrarData(dataStr) { _agendaSelecionarDia(dataStr); }
 
 function _agendaNavMes(delta) {
   let mes = window._agendaMes + delta;
@@ -11575,15 +11639,7 @@ function _agendaNavMes(delta) {
   if (mes < 1)  { mes = 12; ano--; }
   window._agendaMes = mes; window._agendaAno = ano;
   _agendaRenderCalendario();
-}
-
-function _agendaFiltrarData(dataStr) {
-  // Agenda agora só cuida do calendário — selecionar um dia filtra apenas a
-  // lista compacta já embutida nele (agendaCalLista), que _agendaRenderCalendario
-  // já atualiza sozinha via _agendaAtualizarLista. Não existe mais lista
-  // separada de turmas abaixo do calendário (isso foi para o Início).
-  window._agendaDataSel = window._agendaDataSel === dataStr ? null : dataStr;
-  _agendaRenderCalendario();
+  _agendaRenderResumoMes();
 }
 
 // ============================================================
@@ -12957,8 +13013,8 @@ async function renderHistorico() {
   _paginaHistorico = paginaAtual;
 
   const htmlItems = lista.length===0
-    ? `<div class="empty" style="padding:40px 20px"><div class="empty-icon">📋</div><div class="empty-title">Nenhum treinamento concluído</div><div class="empty-sub">Seu histórico aparecerá aqui após finalizar os primeiros treinamentos.</div></div>`
-    : itensPagina.map(_htmlHistoricoItem).join('');
+    ? `<div class="card"><div class="empty" style="padding:40px 20px"><div class="empty-icon">📋</div><div class="empty-title">Nenhum treinamento concluído</div><div class="empty-sub">Seu histórico aparecerá aqui após finalizar os primeiros treinamentos.</div></div></div>`
+    : _htmlHistoricoAgrupado(itensPagina, listaOrdenada);
 
   const htmlPag = (lista.length===0) ? '' : _htmlPaginacao({
     totalPaginas, paginaAtual, porPagina: _porPaginaHistorico, total,
@@ -12967,52 +13023,36 @@ async function renderHistorico() {
   });
 
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:20px">
-      <div class="stat-card navy">
-        <div class="stat-label">Treinamentos</div>
-        <div class="stat-value">${totalTurmas}</div>
-        <div class="stat-sub">Concluídos</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Alunos treinados</div>
-        <div class="stat-value">${totalAlunos}</div>
-        <div class="stat-sub">Total histórico</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Horas ministradas</div>
-        <div class="stat-value">${totalHoras}</div>
-        <div class="stat-sub up">Acumuladas</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Este mês</div>
-        <div class="stat-value">${turmasMes}</div>
-        <div class="stat-sub">Turmas</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Clientes</div>
-        <div class="stat-value">${clientesUnicos}</div>
-        <div class="stat-sub">Atendidos</div>
-      </div>
+    <div class="h2-hero" style="padding:16px 18px">
+      <div class="h2-greet" style="font-size:16px">Histórico</div>
+      <div class="h2-sub">Treinamentos concluídos por você</div>
+    </div>
+    <div class="kpis5">
+      <div class="h2-kpi" style="cursor:default"><div class="ic">🎓</div><div class="n">${totalTurmas}</div><div class="l">Treinamentos</div></div>
+      <div class="h2-kpi" style="cursor:default"><div class="ic">👥</div><div class="n">${totalAlunos}</div><div class="l">Alunos treinados</div></div>
+      <div class="h2-kpi" style="cursor:default"><div class="ic">⏱</div><div class="n">${totalHoras}</div><div class="l">Horas ministradas</div></div>
+      <div class="h2-kpi" style="cursor:default"><div class="ic">📅</div><div class="n">${turmasMes}</div><div class="l">Este mês</div></div>
+      <div class="h2-kpi" style="cursor:default"><div class="ic">🏢</div><div class="n">${clientesUnicos}</div><div class="l">Clientes</div></div>
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-      <select id="filtHistCli" style="flex:1;min-width:140px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarHistorico()">
+      <select id="filtHistCli" class="rel4-select" style="flex:1;min-width:140px" onchange="filtrarHistorico()">
         <option value="">Todos os clientes</option>${cliOpts}
       </select>
-      <select id="filtHistCat" style="flex:1;min-width:140px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarHistorico()">
+      <select id="filtHistCat" class="rel4-select" style="flex:1;min-width:140px" onchange="filtrarHistorico()">
         <option value="">Todos os treinamentos</option>${catOpts}
       </select>
-      <select id="filtHistAno" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarHistorico()">
+      <select id="filtHistAno" class="rel4-select" style="min-width:120px" onchange="filtrarHistorico()">
         <option value="">Todos os anos</option>${anoOpts}
       </select>
-      <select id="filtHistOrdem" style="flex:1;min-width:170px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_historicoAlternarOrdem()">
+      <select id="filtHistOrdem" class="rel4-select" style="min-width:180px" onchange="_historicoAlternarOrdem()">
         <option value="desc" selected>Mais recentes primeiro</option>
         <option value="asc">Mais antigas primeiro</option>
       </select>
       <button class="btn btn-outline btn-sm" onclick="limparFiltrosHistorico()">Limpar</button>
     </div>
 
-    <div class="card" style="padding:0" id="listaHistorico">${htmlItems}</div>
+    <div id="listaHistorico">${htmlItems}</div>
     <div id="paginacaoHistorico">${htmlPag}</div>
   `);
 }
@@ -13028,17 +13068,43 @@ function _htmlHistoricoItem(g) {
   const ch    = t.catalogo?.carga_horaria||0;
   const primeiraData = g.sessoes[g.sessoes.length-1]?.data||'';
   return `
-  <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verHistoricoTurma" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-    <div style="width:42px;height:42px;border-radius:10px;background:rgba(5,150,105,.1);color:#059669;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">${ch}h</div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeT}</div>
-      <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeC} · ${formatarData(primeiraData)} · ${nPart} aluno${nPart!==1?'s':''}</div>
+  <div class="hist2-item" data-action="verHistoricoTurma" data-id="${t.id}">
+    <div class="ch">${ch}h</div>
+    <div class="hi">
+      <div class="ht">${nomeT}</div>
+      <div class="hs">${nomeC} · ${formatarData(primeiraData)} · ${nPart} aluno${nPart!==1?'s':''}</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
       <span class="badge badge-green">Concluída</span>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
     </div>
   </div>`;
+}
+
+// Agrupamento visual por ano (2026-08-15, Alternativa 1 aprovada): insere um
+// cabeçalho ponto+linha quando o ano muda entre itens consecutivos da página.
+// Só visual — filtros, ordenação e paginação intactos. Some quando o filtro
+// de ano está ativo (grupo único seria redundante). A contagem do cabeçalho
+// vem da lista COMPLETA filtrada (não só da página).
+function _htmlHistoricoAgrupado(itensPagina, listaCompleta) {
+  const filtroAno = _getElVisible('filtHistAno')?.value || '';
+  if (filtroAno) return itensPagina.map(_htmlHistoricoItem).join('');
+  const porAno = {};
+  (listaCompleta||[]).forEach(g => {
+    const ano = (g.sessoes[0]?.data||'').slice(0,4);
+    if (ano) porAno[ano] = (porAno[ano]||0) + 1;
+  });
+  let anoAtual = null, html = '';
+  itensPagina.forEach(g => {
+    const ano = (g.sessoes[0]?.data||'').slice(0,4) || '—';
+    if (ano !== anoAtual) {
+      anoAtual = ano;
+      const n = porAno[ano];
+      html += `<div class="gh-sec"><div class="dot green"></div><span>${ano}</span><div class="line"></div>${n?`<span class="glink" style="cursor:default">${n} treinamento${n!==1?'s':''}</span>`:''}</div>`;
+    }
+    html += _htmlHistoricoItem(g);
+  });
+  return html;
 }
 
 // Aplica filtros (cliente/treinamento/ano) + ordenação sobre window._historicoLista,
@@ -13071,13 +13137,13 @@ function _historicoRenderLista() {
   const elPag = _getElVisible('paginacaoHistorico');
   if (!elLista) return;
   if (!filtrada.length) {
-    elLista.innerHTML = `<div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado</div><div class="empty-sub">Tente outros filtros.</div></div>`;
+    elLista.innerHTML = `<div class="card"><div class="empty" style="padding:32px"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum resultado</div><div class="empty-sub">Tente outros filtros.</div></div></div>`;
     if (elPag) elPag.innerHTML = '';
     return;
   }
   const { itens, totalPaginas, paginaAtual, total } = _paginarLista(filtrada, _paginaHistorico, _porPaginaHistorico);
   _paginaHistorico = paginaAtual;
-  elLista.innerHTML = itens.map(_htmlHistoricoItem).join('');
+  elLista.innerHTML = _htmlHistoricoAgrupado(itens, filtrada);
   if (elPag) {
     elPag.innerHTML = _htmlPaginacao({
       totalPaginas, paginaAtual, porPagina: _porPaginaHistorico, total,
@@ -14635,7 +14701,7 @@ function _buildRelBars(vals, color, mesesLabel) {
   const slotW = n <= 6 ? 40 : Math.floor(320 / n);
   const svgW = slotW * n;
   return vals.map((v, i) => {
-    const barH = Math.max(v > 0 ? Math.round(70 * (v / maxVal)) : 0, v > 0 ? 5 : 0);
+    const barH = Math.max(v > 0 ? Math.round(60 * (v / maxVal)) : 0, v > 0 ? 5 : 0);
     const x = i * slotW;
     const bw = Math.max(slotW - 8, 10);
     const bx = x + (slotW - bw) / 2;
