@@ -19123,7 +19123,7 @@ function fmtPeriodoRealizacaoPDF(sessoesTurma) {
 // ficha específica, tanto para puxar a data/instrutor certos quanto para
 // filtrar só as presenças assinadas naquele dia (antes buscava por
 // turma_id, o que misturava presenças de dias diferentes no mesmo registro).
-async function gerarListaPresenca(turmaId, sessaoId) {
+async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
   showLoading('Gerando ficha de presença...');
   try {
     if (!sessaoId) throw new Error('Encontro não informado — não é possível gerar a ficha de presença.');
@@ -19456,11 +19456,15 @@ async function gerarListaPresenca(turmaId, sessaoId) {
     }
 
     const nomeT = pdfSafe(t.catalogo?.nome||'Treinamento');
-    doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
+    // 2026-08-16, a pedido do Alisson: o download automatico no dispositivo
+    // so acontece quando baixarAoGerar for true (padrao — preserva o botao
+    // manual "Baixar PDF" de sempre). gerarTudoEnviarEmail chama esta funcao
+    // com baixarAoGerar=false, pois so deve enviar por e-mail, sem baixar.
+    if (baixarAoGerar) doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
     const codigo = crypto.randomUUID();
     const salvou = await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
     if (salvou.ok) showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
-    else showToast(`O PDF foi baixado, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — a lista pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
+    else showToast(`O PDF foi ${baixarAoGerar?'baixado':'gerado'}, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — a lista pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
   } catch(e) {
     console.error(e);
     showToast(traduzErroSupabase(e,'Erro ao gerar PDF'),'error');
@@ -19470,7 +19474,7 @@ async function gerarListaPresenca(turmaId, sessaoId) {
 // ============================================================
 // PDF - CERTIFICADO INDIVIDUAL
 // ============================================================
-async function gerarCertificadoIndividual(turmaId, colaboradorId) {
+async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar = true) {
   showLoading('Gerando certificado...');
   try {
     const {data:t, error} = await sb.from('turmas')
@@ -19530,7 +19534,13 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
     // Logomarca da organização (plano Enterprise), se houver
     const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
-    // Assinatura digital do aluno, capturada na execução da aula, se houver
+    // Assinatura digital do aluno, capturada na execução da aula, se houver.
+    // 2026-08-16, a pedido do Alisson: a partir de agora essa assinatura NAO
+    // e mais desenhada no certificado individual (ela e passada como null
+    // nos 3 pontos de desenho abaixo) — continua aparecendo normalmente na
+    // Ficha de Presença, que usa uma consulta própria e independente desta
+    // (ver gerarListaPresenca). Mantido o carregamento aqui (inofensivo,
+    // só não é mais usado) para não alterar mais nada além do necessário.
     const imgAssinaturaAluno = await carregarAssinaturaAlunoPDF(turmaId, colaboradorId, ag?.id);
 
     const dtObj = new Date(dataCert+'T12:00:00');
@@ -19653,7 +19663,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         // cima), só nunca tinham sido encaminhadas pra esta chamada. Era a
         // causa raiz da assinatura "cadastrada mas não aparece no PDF".
         imgAssinaturaInstrutor,
-        imgAssinaturaAluno,
+        imgAssinaturaAluno: null,
         nrNum,
         codigoShort,
         rodape: t.organizacoes?.cert_texto_rodape || undefined,
@@ -19665,7 +19675,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
         cargaHorariaTexto: `Carga horaria: ${ch}h`,
         dataTexto: `Realizado em ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         imgAssinaturaInstrutor,
-        imgAssinaturaAluno,
+        imgAssinaturaAluno: null,
         qrDataUrl: qrData,
         codigoShort,
       }, W, H);
@@ -19708,7 +19718,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     doc.text(s(infoLinha,200), W/2, cy, {align:'center'});
 
     // Rodapé com assinaturas + QR
-    rodapeNavy(doc, instrutor, s(col.nome,32), imgAssinaturaAluno);
+    rodapeNavy(doc, instrutor, s(col.nome,32), null);
     if (qrData) doc.addImage(qrData,'PNG', W-50, H-28, 18, 18);
     doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text(`Cod: ${codigoShort}`, W-41, H-7, {align:'center'});
@@ -19953,10 +19963,10 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
     }
 
     const nomeSafe = s(col.nome,60).replace(/\s+/g,'-').toLowerCase();
-    doc.save(`certificado-${nomeSafe}.pdf`);
+    if (baixarAoGerar) doc.save(`certificado-${nomeSafe}.pdf`);
     const salvou = await salvarDocumentoSupabase(doc,`cert-individual-${colaboradorId}.pdf`,'certificado_individual',turmaId,colaboradorId,codigo);
     if (salvou.ok) showToast(`Certificado de ${s(col.nome,40)} gerado!`,'success');
-    else showToast(`O PDF foi baixado, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
+    else showToast(`O PDF foi ${baixarAoGerar?'baixado':'gerado'}, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
   } catch(e) {
     console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado'),'error');
   } finally { hideLoading(); }
@@ -19966,7 +19976,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId) {
 // ============================================================
 // PDF - CERTIFICADO COLETIVO
 // ============================================================
-async function gerarCertificadoColetivo(turmaId) {
+async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
   showLoading('Gerando certificado coletivo...');
   try {
     const {data:t, error} = await sb.from('turmas')
@@ -20462,10 +20472,10 @@ async function gerarCertificadoColetivo(turmaId) {
     }
 
     const nomeCli = s(nomeEmp,40).replace(/\s+/g,'-').toLowerCase();
-    doc.save(`certificado-coletivo-${nomeCli}.pdf`);
+    if (baixarAoGerar) doc.save(`certificado-coletivo-${nomeCli}.pdf`);
     const salvou = await salvarDocumentoSupabase(doc,`cert-coletivo-${turmaId}.pdf`,'certificado_coletivo',turmaId,null,codigo);
     if (salvou.ok) showToast('Certificado coletivo gerado!','success');
-    else showToast(`O PDF foi baixado, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
+    else showToast(`O PDF foi ${baixarAoGerar?'baixado':'gerado'}, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
   } catch(e) {
     console.error(e); showToast(traduzErroSupabase(e,'Erro ao gerar certificado coletivo'),'error');
   } finally { hideLoading(); }
@@ -20763,14 +20773,14 @@ async function gerarTudoEnviarEmail(turmaId) {
     for (const sess of (sessoesTurma||[])) {
       if (!docsMap['lista_presenca'+''+sess.id]) {
         showLoading(`Gerando lista de presença de ${formatarData(sess.data)}...`);
-        await gerarListaPresenca(turmaId, sess.id);
+        await gerarListaPresenca(turmaId, sess.id, false);
       }
     }
 
     // Gerar certificado coletivo se pendente
     if (!docsMap['certificado_coletivo'+'']) {
       showLoading('Gerando certificado coletivo...');
-      await gerarCertificadoColetivo(turmaId);
+      await gerarCertificadoColetivo(turmaId, false);
     }
 
     // Gerar certificados individuais pendentes — só para quem tem presença
@@ -20781,7 +20791,7 @@ async function gerarTudoEnviarEmail(turmaId) {
       if (!elegiveis.has(p.colaborador_id)) { pulados++; continue; }
       if (!docsMap['certificado_individual'+p.colaborador_id+'']) {
         showLoading(`Gerando certificado de ${escapeHtml(p.colaboradores?.nome||'participante')}...`);
-        await gerarCertificadoIndividual(turmaId, p.colaborador_id);
+        await gerarCertificadoIndividual(turmaId, p.colaborador_id, false);
       }
     }
 
