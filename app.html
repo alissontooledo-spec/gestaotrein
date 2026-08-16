@@ -697,6 +697,10 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    posicionamento de .turmas-viewtoggle, empilha em largura total no mobile. */
 .turmas-filtros-cta{margin-left:auto}
 @media(max-width:640px){.turmas-filtros-cta{margin-left:0;flex-basis:100%}.turmas-filtros-cta .btn{width:100%}}
+/* Linha de ações abaixo de .turmas-filtros (Clientes) — mesma ordem
+   vertical já usada em Turmas (filtros → linha de ação). Puramente
+   layout, não muda o estilo dos botões que já existiam. */
+.acoes-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 /* 2026-08-14 (correção pedida pelo Alisson — visão Lista da tela Turmas):
    colunas FIXAS via CSS Grid (não flex com proporções) — cada elemento tem
    sua própria coluna reservada, mesmo quando fica vazio (ex.: turma sem
@@ -6553,41 +6557,29 @@ async function renderClientes() {
   const total  = _clientesCache.length;
   const ativos = _clientesCache.filter(c=>c.ativo).length;
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:20px">
-      <div class="stat-card navy">
-        <div class="stat-label">Total de clientes</div>
-        <div class="stat-value">${total}</div>
-        <div class="stat-sub">${ativos} ativo${ativos!==1?'s':''}</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Ativos</div>
-        <div class="stat-value">${ativos}</div>
-        <div class="stat-sub up">Em operação</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Inativos</div>
-        <div class="stat-value">${total-ativos}</div>
-        <div class="stat-sub">Pausados</div>
-      </div>
+    <div class="turmas-kpis kpi-3">
+      <div class="turmas-kpi"><div class="ic">🏢</div><div class="n">${total}</div><div class="l">Total</div></div>
+      <div class="turmas-kpi"><div class="ic">✅</div><div class="n" style="color:var(--green)">${ativos}</div><div class="l">Ativos</div></div>
+      <div class="turmas-kpi"><div class="ic">💤</div><div class="n">${total-ativos}</div><div class="l">Inativos</div></div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
-      <input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="aplicarFiltrosClientes()">
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.userplus} Novo cadastro</button>
-        ${_btnAcaoBadge(ICONS.upload,'Importar CSV','abrirModalImportarCSV()')}
-        ${_btnAcaoBadge(ICONS.filesheet,'Importar modelo 1',"abrirModalImportacaoSOC('clientes')")}
-        ${usuarioAtual.orgSocIntegracaoAtiva ? _btnAcaoBadge(ICONS.search,'Buscar no SOC',"_socWsAbrirModal('clientes')",'var(--green-text)','var(--green)','#fff','var(--green-l)') : ''}`:''}
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <select id="filtroClienteStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosClientes()">
+    <div class="turmas-filtros">
+      <div class="turmas-busca"><span class="ic">🔍</span><input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." oninput="aplicarFiltrosClientes()"></div>
+      <select id="filtroClienteStatus" class="turmas-filtro-select" onchange="aplicarFiltrosClientes()">
         <option value="">Todos os status</option>
         <option value="ativo">Ativos</option>
         <option value="inativo">Inativos</option>
       </select>
-      <select id="ordenarClientes" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosClientes()">
+      <select id="ordenarClientes" class="turmas-filtro-select" onchange="aplicarFiltrosClientes()">
         <option value="nome_asc">Nome (A-Z)</option>
         <option value="nome_desc">Nome (Z-A)</option>
       </select>
     </div>
+    ${podeCriar?`<div class="acoes-row">
+      <button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.userplus} Novo cadastro</button>
+      ${_btnAcaoBadge(ICONS.upload,'Importar CSV','abrirModalImportarCSV()')}
+      ${_btnAcaoBadge(ICONS.filesheet,'Importar modelo 1',"abrirModalImportacaoSOC('clientes')")}
+      ${usuarioAtual.orgSocIntegracaoAtiva ? _btnAcaoBadge(ICONS.search,'Buscar no SOC',"_socWsAbrirModal('clientes')",'var(--green-text)','var(--green)','#fff','var(--green-l)') : ''}
+    </div>`:''}
     <div class="card" style="padding:0" id="listaClientes">${_renderClientesListaPaginada()}</div>`);
 }
 
@@ -6644,11 +6636,11 @@ function _htmlListaClientes(lista) {
     const cor = CORES[i % CORES.length];
     const corBg = cor+'14';
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verCliente" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s,box-shadow .12s" data-action="verCliente" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)';this.style.boxShadow='inset 0 0 0 1px var(--border-2)'" onmouseout="this.style.background='';this.style.boxShadow=''">
       <div style="width:40px;height:40px;border-radius:10px;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.3px">${iniciais(c.nome)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
-        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${escapeHtml(c.cidade)}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
+        <div style="font-size:12.5px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${escapeHtml(c.cidade)}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
