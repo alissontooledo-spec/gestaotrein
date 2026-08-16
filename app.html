@@ -7372,46 +7372,32 @@ async function renderCatalogo() {
   _paginaCatalogo = 1;
 
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:16px">
-      <div class="stat-card navy">
-        <div class="stat-label">Total</div>
-        <div class="stat-value">${total}</div>
-        <div class="stat-sub">${ativos} ativo${ativos !== 1 ? 's' : ''}</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Em uso</div>
-        <div class="stat-value">${emUso}</div>
-        <div class="stat-sub">Com turmas</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Sem uso</div>
-        <div class="stat-value">${semUso}</div>
-        <div class="stat-sub">Nunca utilizados</div>
-      </div>
-      <div class="stat-card" style="border-left:3px solid var(--text-3)">
-        <div class="stat-label">Arquivados</div>
-        <div class="stat-value" style="color:var(--text-3)">${arquivados}</div>
-        <div class="stat-sub">Fora do fluxo</div>
-      </div>
+    <div class="turmas-kpis">
+      <div class="turmas-kpi"><div class="ic">📚</div><div class="n">${total}</div><div class="l">Total</div></div>
+      <div class="turmas-kpi"><div class="ic">✅</div><div class="n" style="color:var(--green)">${emUso}</div><div class="l">Em uso</div></div>
+      <div class="turmas-kpi"><div class="ic">⚠️</div><div class="n" style="color:var(--amber-h)">${semUso}</div><div class="l">Sem uso</div></div>
+      <div class="turmas-kpi"><div class="ic">🗄️</div><div class="n" style="color:var(--text-3)">${arquivados}</div><div class="l">Arquivados</div></div>
     </div>
 
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-      <input type="search" id="buscaCatalogo" placeholder="Buscar por nome ou NR..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="filtrarCatalogo(this.value)">
-      <select id="filtroCatStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(_getElVisible('buscaCatalogo')?.value||'')">
+    <div class="turmas-filtros">
+      <div class="turmas-busca"><span class="ic">🔍</span><input type="search" id="buscaCatalogo" placeholder="Buscar por nome ou NR..." oninput="filtrarCatalogo(this.value)"></div>
+      <select id="filtroCatStatus" class="turmas-filtro-select" onchange="filtrarCatalogo(_getElVisible('buscaCatalogo')?.value||'')">
         <option value="">Todos os ativos</option>
         <option value="em_uso">Em uso</option>
         <option value="sem_uso">Sem uso</option>
         <option value="arquivado">Arquivados</option>
       </select>
-      <select id="filtroCatTipo" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="filtrarCatalogo(_getElVisible('buscaCatalogo')?.value||'')">
+      <select id="filtroCatTipo" class="turmas-filtro-select" onchange="filtrarCatalogo(_getElVisible('buscaCatalogo')?.value||'')">
         <option value="">Inicial/Reciclagem/Único</option>
         <option value="unico">Único</option>
         <option value="inicial">Inicial</option>
         <option value="reciclagem">Reciclagem</option>
       </select>
-      ${podeMgr ? `<button class="btn btn-outline" onclick="carregarCatalogoModeloUI()" title="Adiciona os treinamentos do catálogo modelo que ainda não existem no seu catálogo">${ICONS.book} Catálogo modelo</button>` : ''}
-      ${podeMgr ? `<button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.book} Novo</button>` : ''}
     </div>
+    ${podeMgr ? `<div class="acoes-row">
+      <button class="btn btn-outline" onclick="carregarCatalogoModeloUI()" title="Adiciona os treinamentos do catálogo modelo que ainda não existem no seu catálogo">${ICONS.book} Catálogo modelo</button>
+      <button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.book} Novo</button>
+    </div>` : ''}
 
     <div class="card" style="padding:0" id="listaCatalogo">${_renderCatalogoListaPaginada()}</div>`);
 }
@@ -7461,11 +7447,11 @@ function _htmlListaCatalogo(lista, maxUso, podeMgr) {
     const tipoBadgeEl = t.tipo_curso === 'inicial' ? `<span class="badge badge-blue" style="font-size:10px">Inicial</span>`
       : t.tipo_curso === 'reciclagem' ? `<span class="badge badge-amber" style="font-size:10px">Reciclagem</span>` : '';
     return `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;opacity:${isArq?.6:1}" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s,box-shadow .12s;opacity:${isArq?.6:1}" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)';this.style.boxShadow='inset 0 0 0 1px var(--border-2)'" onmouseout="this.style.background='';this.style.boxShadow=''">
       <div style="width:44px;height:44px;border-radius:var(--r-md);background:${t.carga_horaria?(!isArq&&t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'):'var(--amber-l)'};color:${t.carga_horaria?(!isArq&&t.ativo?'var(--navy)':'var(--text-3)'):'var(--amber-text)'};font-size:${t.carga_horaria?12:9}px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2" title="${t.carga_horaria?'':'Carga horária não cadastrada'}">${t.carga_horaria?t.carga_horaria+'h':'⚠️'}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:${isArq?'var(--text-3)':'var(--navy)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${escapeHtml(t.nome)} ${tipoBadgeEl}</div>
-        <div style="font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
+        <div style="font-size:12.5px;font-weight:700;color:${isArq?'var(--text-3)':'var(--text-1)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${nrTag}${escapeHtml(t.nome)} ${tipoBadgeEl}</div>
+        <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
           <span>Val. ${t.validade_meses}m</span>
           ${t.categoria ? `<span>· ${t.categoria}</span>` : ''}
           <span>· ${usoTag}</span>
