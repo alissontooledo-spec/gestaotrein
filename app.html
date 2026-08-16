@@ -14888,7 +14888,18 @@ function _relFaixaDestinosHtml(ativo) {
 }
 
 // ── "Recentes" — guardado no navegador por usuário, sem tabela nova ──
-function _relRecentesKey() { return `tl_rel_recentes_${usuarioAtual?.id || 'x'}`; }
+// Correção de segurança (2026-08-16): a chave incluía só o usuário, não a
+// organização. Como o Modo Suporte troca só usuarioAtual.org_id no cliente
+// (o usuário autenticado de verdade nunca muda — ver iniciarModoSuporte()),
+// a lista de "Recentes" ficava presa ao Provedor e vazava nomes de
+// instrutor/cliente/treinamento de uma organização para a tela de Relatórios
+// de outra organização, ao trocar de Modo Suporte sem recarregar a página.
+// Mesmo padrão de causa raiz já corrigido em 2026-07-22 (cache de
+// instrutores do formulário de agendamento) — ver
+// 05-Decisoes/2026-08-16-vazamento-recentes-modo-suporte.md para a análise
+// completa. Adicionar org_id à chave isola a lista por organização, sem
+// tocar em nenhuma consulta ao Supabase nem em nenhuma outra funcionalidade.
+function _relRecentesKey() { return `tl_rel_recentes_${usuarioAtual?.id || 'x'}_${usuarioAtual?.org_id || 'x'}`; }
 function _relRecentesGet() {
   try { return JSON.parse(localStorage.getItem(_relRecentesKey()) || '[]'); }
   catch (e) { return []; }
