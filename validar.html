@@ -3,8 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Validação de Certificado — Toledo Labs</title>
-  <meta name="description" content="Verifique a autenticidade de certificados emitidos através da plataforma Toledo Labs.">
+  <title>Validação de Certificado — GRID</title>
+  <meta name="description" content="Verifique a autenticidade de certificados emitidos através da plataforma GRID.">
+  <meta name="theme-color" content="#1E2A4A">
+  <meta name="apple-mobile-web-app-title" content="GRID">
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -63,15 +68,9 @@
     .logo-mark {
       width: 36px;
       height: 36px;
-      background: var(--amber);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--navy);
+      object-fit: contain;
       flex-shrink: 0;
+      display: block;
     }
     .logo-text {
       font-size: 15px;
@@ -568,13 +567,9 @@
   <!-- HEADER -->
   <header class="site-header">
     <a class="site-logo" href="https://www.toledolabs.com.br">
-      <div class="logo-mark">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E2A4A" stroke-width="2.5" stroke-linecap="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-      </div>
+      <img class="logo-mark" src="./icons/grid-simbolo-amber.png" alt="GRID">
       <div>
-        <div class="logo-text">Toledo Labs</div>
+        <div class="logo-text">GRID</div>
         <div class="logo-sub">Central de Validação de Certificados</div>
       </div>
     </a>
@@ -739,7 +734,7 @@
   <!-- FOOTER -->
   <footer class="site-footer">
     <div class="site-footer-text">
-      © 2026 <a href="https://www.toledolabs.com.br">Toledo Labs</a> — Plataforma de gestão de treinamentos
+      © 2026 <a href="https://www.toledolabs.com.br">GRID</a> — Plataforma de gestão de treinamentos
     </div>
   </footer>
 </div>
@@ -829,11 +824,9 @@
     setBtnLoading(true);
     try {
       const codigoNorm = rawInput.trim().replace(/\s/g, '').toLowerCase();
-
       const { data: doc, error: rpcErr } = await sb.rpc(
         'buscar_documento_por_codigo', { p_codigo: codigoNorm }
       );
-
       if (rpcErr || !doc || !doc.codigo_validacao) {
         mostrarErro(
           'Certificado não localizado',
@@ -841,7 +834,6 @@
         );
         return;
       }
-
       renderResultado(doc, doc.codigo_validacao.toUpperCase());
     } catch (e) {
       console.error('Erro na validação:', e);
