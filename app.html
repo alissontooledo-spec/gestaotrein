@@ -701,6 +701,10 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    vertical já usada em Turmas (filtros → linha de ação). Puramente
    layout, não muda o estilo dos botões que já existiam. */
 .acoes-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+/* Card-resumo clicável no topo de Minha Conta (leva à tela de edição). */
+.resumo-card{transition:box-shadow .15s,transform .1s}
+.resumo-card:hover{box-shadow:0 0 0 2px rgba(245,158,11,.4),var(--shadow-md)}
+.resumo-card:active{transform:scale(.99)}
 /* 2026-08-14 (correção pedida pelo Alisson — visão Lista da tela Turmas):
    colunas FIXAS via CSS Grid (não flex com proporções) — cada elemento tem
    sua própria coluna reservada, mesmo quando fica vazio (ex.: turma sem
@@ -15996,15 +16000,56 @@ async function toggleUsuarioEquipe(id) {
 // ============================================================
 // MINHA CONTA
 // ============================================================
+// 2026-08-16 (pedido do Alisson): Minha Conta virou 2 telas — antes abria
+// direto na edição. renderConta() agora é só o resumo (card clicável com os
+// dados do usuário + Sair do sistema); a edição de verdade foi pra
+// renderContaEditar(), aberta ao clicar no card. Nenhuma consulta nova aqui
+// — o resumo usa só o que já está em memória em usuarioAtual.
 async function renderConta() {
   const u = usuarioAtual;
   setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Minha conta</div>`);
   fabOcultar();
 
+  const corP = corPerfil(u.perfil);
+  const contaAtiva = u.ativo !== false;
+  setConteudo(`
+    <div class="detail-page">
+
+    <div class="resumo-card" style="background:var(--navy);border-radius:var(--r-lg);padding:20px;border-top:3px solid var(--amber);cursor:pointer" onclick="renderContaEditar()">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:56px;height:56px;border-radius:50%;background:${corP};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,.15)">${iniciais(u.nome)}</div>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:17px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'—')}</div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(245,158,11,.18);color:var(--amber);border:1px solid rgba(245,158,11,.3);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
+            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${contaAtiva?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${contaAtiva?'#6EE7B7':'#94A3B8'};border:1px solid ${contaAtiva?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${contaAtiva?'● Conta ativa':'○ Conta inativa'}</span>
+          </div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+
+    <button class="btn btn-outline" style="width:100%;margin-top:12px;color:var(--red-text);border-color:#FECACA;background:var(--red-l)" onclick="fazerLogout()">🚪 Sair do sistema</button>
+    <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:6px">Encerra sua sessão apenas neste dispositivo</div>
+
+    </div>`);
+}
+
+// Tela de edição de Minha Conta (2026-08-16, extraída de renderConta() —
+// ver comentário acima). Sem botão "Sair do sistema" aqui, como pedido:
+// fica só na tela de resumo. Voltar usa data-action="irPara" data-id="conta"
+// (mesmo padrão já usado em renderContaDocumentos()), que cai de volta no
+// resumo.
+async function renderContaEditar() {
+  const u = usuarioAtual;
+  setMobileHeader(`<div class="mh-greeting">Minha conta</div><div class="mh-name">Editar dados</div>`);
+  fabOcultar();
+
   // Só um resumo leve aqui (não busca a URL assinada nem o registro completo
   // do certificado) — os detalhes só são carregados quando o instrutor entra
   // na sub-tela renderContaDocumentos(), evitando consultas desnecessárias
-  // toda vez que Minha Conta é aberta.
+  // toda vez que a tela de edição é aberta.
   // 2026-08, a pedido do Alisson: o instrutor sentia falta de conseguir
   // preencher os próprios dados profissionais (antes só o Administrador
   // conseguia, pelo modal de Equipe) — esses campos aparecem no certificado
@@ -16014,7 +16059,7 @@ async function renderConta() {
   if (u.perfil === 'instrutor') {
     cardIdProfissional = `
     <div class="card" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:2px">🎓 Identificação profissional</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px"><span style="font-size:13px">🎓</span>Identificação profissional</div>
       <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Exibida nos certificados que você emitir.</div>
       <div class="field"><label>Formação</label><input type="text" id="editFormacao" value="${escapeHtml(u.formacao||'')}" placeholder="Ex: Bacharel em Engenharia de Segurança do Trabalho"></div>
       <div class="field"><label>Especialidade</label><input type="text" id="editEspecialidade" value="${escapeHtml(u.especialidade||'')}" placeholder="Ex: Engenheiro de Segurança do Trabalho"></div>
@@ -16040,7 +16085,7 @@ async function renderConta() {
 
     linhaDocumentos = `
     <div class="card" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:12px">📄 Documentos do instrutor</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px"><span style="font-size:13px">📄</span>Documentos do instrutor</div>
       <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="renderContaDocumentos()">
         <div style="width:34px;height:34px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">✍️</div>
         <div style="flex:1;min-width:0">
@@ -16052,27 +16097,15 @@ async function renderConta() {
     </div>`;
   }
 
-  const corP = corPerfil(u.perfil);
-  const contaAtiva = u.ativo !== false;
   setConteudo(`
     <div class="detail-page">
 
-    <div style="background:var(--navy);border-radius:var(--r-lg);padding:20px;margin-bottom:12px;border-top:3px solid var(--amber)">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:56px;height:56px;border-radius:50%;background:${corP};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,.15)">${iniciais(u.nome)}</div>
-        <div style="min-width:0;flex:1">
-          <div style="font-size:17px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'—')}</div>
-          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(245,158,11,.18);color:var(--amber);border:1px solid rgba(245,158,11,.3);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
-            <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${contaAtiva?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${contaAtiva?'#6EE7B7':'#94A3B8'};border:1px solid ${contaAtiva?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${contaAtiva?'● Conta ativa':'○ Conta inativa'}</span>
-          </div>
-        </div>
-      </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="conta">${ICONS.back} Voltar</button>
     </div>
 
     <div class="card" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:12px">👤 Dados pessoais</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px"><span style="font-size:13px">👤</span>Dados pessoais</div>
       <div class="field" style="margin-bottom:0"><label>Nome completo</label><input type="text" id="editNome" value="${escapeHtml(u.nome)}"></div>
     </div>
 
@@ -16080,7 +16113,7 @@ async function renderConta() {
     ${linhaDocumentos}
 
     <div class="card" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:2px">🛡️ Segurança</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px"><span style="font-size:13px">🛡️</span>Segurança</div>
 
       <div id="formAlterarSenha" style="display:none;margin-top:12px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:12px">
         <div class="field" style="margin-bottom:10px"><label>Senha atual</label><input type="password" id="senhaAtual" placeholder="Digite sua senha atual"></div>
@@ -16115,9 +16148,6 @@ async function renderConta() {
       <button class="btn btn-navy" onclick="salvarConta()">Salvar alterações</button>
     </div>
 
-    <button class="btn btn-outline" style="width:100%;color:var(--red-text);border-color:#FECACA;background:var(--red-l)" onclick="fazerLogout()">🚪 Sair do sistema</button>
-    <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:6px">Encerra sua sessão apenas neste dispositivo</div>
-
     </div>`);
 }
 
@@ -16148,7 +16178,7 @@ async function renderContaDocumentos() {
     <div class="detail-page">
 
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="conta">${ICONS.back} Voltar</button>
+      <button class="btn btn-ghost btn-sm" onclick="renderContaEditar()">${ICONS.back} Voltar</button>
     </div>
 
     <div style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
@@ -16430,7 +16460,7 @@ async function salvarConta() {
   const nome = _getElVisible('editNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
   // Campos de identificação profissional só existem no DOM pra Instrutor
-  // (ver cardIdProfissional em renderConta) — os demais perfis não têm
+  // (ver cardIdProfissional em renderContaEditar) — os demais perfis não têm
   // esses inputs, então os _getElVisible(...) abaixo voltam null e o
   // dado correspondente não entra no update (mantém o que já estava).
   const dados = {nome};
