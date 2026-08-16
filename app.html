@@ -2901,6 +2901,12 @@ async function irPara(pagina, params={}) {
     clearInterval(window._agEquipePollId);
     window._agEquipePollId = null;
   }
+  // 2026-08-16 (correção de navegação/URL): navegação "de verdade" via
+  // menu/roteador sempre encerra qualquer sub-rota de turma/execução em
+  // aberto (ver verTurma/abrirExecucao) — evita que o listener de
+  // popstate confunda uma navegação nova com Voltar/Avançar dentro dessa
+  // sub-rota. Não afeta nenhuma regra de negócio, só o estado de navegação.
+  window._turmaAbertaViaHash = null;
   paginaAtual = pagina;
   marcarNavAtivo(pagina);
   fecharSidebar();
@@ -9715,6 +9721,17 @@ async function verTurma(id) {
       </div>
       </div>`;
 
+    // 2026-08-16 (correção de navegação/URL, mesmo princípio já usado em
+    // Conformidade — ver _confAbrirEmpresa): reflete o detalhe da turma na
+    // URL como sub-rota da página atual (ex.: "#turmas?turma=ID",
+    // "#agendaequipe?turma=ID"), sem mudar paginaAtual nem a página
+    // registrada no menu. Guard evita pushState redundante nas várias
+    // chamadas de verTurma() que só atualizam o conteúdo em memória (ex.:
+    // depois de salvar uma edição, permanecendo na mesma turma).
+    window._turmaAbertaViaHash = id;
+    const novoHashTurma = '#' + paginaAtual + '?turma=' + id;
+    if (location.hash !== novoHashTurma) history.pushState({pagina:paginaAtual, turma:id}, '', novoHashTurma);
+
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Turma</div><div class="mh-name">${nomeT}</div>`);
   } catch(e) {
@@ -13592,6 +13609,16 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
       deCache = true;
     }
 
+    // 2026-08-16 (correção de navegação/URL, mesmo princípio de
+    // verTurma/Conformidade): reflete a execução (assinaturas/evidências)
+    // como um 2º nível de sub-rota sobre a turma já aberta — mesma página
+    // atual, mesmo turma= da URL, mais o encontro específico. 'x' cobre o
+    // caso raro sem sessão resolvida, sem quebrar o formato da URL.
+    const sessaoParaHash = sessaoAtiva?.id || sessaoIdParam || 'x';
+    window._turmaAbertaViaHash = turmaId;
+    const novoHashExec = '#' + paginaAtual + '?turma=' + turmaId + '&execucao=' + sessaoParaHash;
+    if (location.hash !== novoHashExec) history.pushState({pagina:paginaAtual, turma:turmaId, execucao:sessaoParaHash}, '', novoHashExec);
+
     window._execTurmaId   = turmaId;
     window._execClienteId = t.cliente_id;
     window._execParticipantes = t.turma_participantes||[];
@@ -13627,7 +13654,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
+        <button class="btn btn-ghost btn-sm" data-action="voltarDaExecucao" data-id="${turmaId}">${ICONS.back} Voltar</button>
         <div style="flex:1">
           <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
           <div style="font-size:13px;color:var(--text-2)">${nomeC}${infoSessao ? ' · '+infoSessao : ''}</div>
@@ -16665,6 +16692,11 @@ document.addEventListener('click', function(e) {
     // próprio guard de acesso por perfil (_perfilTemAcesso), então não
     // precisa duplicar essa checagem aqui.
     case 'irParaOrigem':    irPara(paginaAtual); break;
+    // 2026-08-16 (correção de navegação/URL): Voltar de dentro da execução
+    // (assinaturas/evidências) volta 1 nível — pro detalhe da turma —, não
+    // direto pra página principal como 'irParaOrigem' faz. Ver verTurma()/
+    // abrirExecucao() para a sincronização de URL correspondente.
+    case 'voltarDaExecucao': if(id) verTurma(id); break;
     case 'irPara':          if(id) irPara(id); break;
     case 'verTurma':        if(id) verTurma(id); break;
     case 'verHistoricoTurma': verHistoricoTurma(id); break;
@@ -16761,6 +16793,32 @@ window.addEventListener('popstate', async (e) => {
     _confSincronizarComHash();
     _confRenderTudo();
     return;
+  }
+  // 2026-08-16 (correção de navegação/URL, mesmo princípio do bloco de
+  // Conformidade acima, generalizado pra qualquer página-pai que abra
+  // verTurma — Turmas, Agenda, Agenda da Equipe, Início, Relatórios etc.):
+  // resincroniza os 2 níveis extras (turma / execução) a partir da URL,
+  // sem pushar um novo estado, cobrindo Voltar/Avançar do navegador.
+  if (pagina === paginaAtual) {
+    const qIdxTurma = location.hash.indexOf('?');
+    const paramsTurma = qIdxTurma !== -1 ? new URLSearchParams(location.hash.slice(qIdxTurma + 1)) : null;
+    const turmaParam = paramsTurma?.get('turma') || null;
+    const execParam  = paramsTurma?.get('execucao') || null;
+    if (turmaParam && execParam) {
+      window._turmaAbertaViaHash = turmaParam;
+      await abrirExecucao(turmaParam, execParam === 'x' ? null : execParam);
+      return;
+    }
+    if (turmaParam) {
+      window._turmaAbertaViaHash = turmaParam;
+      await verTurma(turmaParam);
+      return;
+    }
+    if (window._turmaAbertaViaHash) {
+      window._turmaAbertaViaHash = null;
+      await irPara(pagina);
+      return;
+    }
   }
   if (TITULOS[pagina] && _perfilTemAcesso(pagina) && pagina !== paginaAtual) {
     paginaAtual = pagina;
