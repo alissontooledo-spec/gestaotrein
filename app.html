@@ -693,6 +693,10 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turmas-viewtoggle{display:flex;align-items:center;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;margin-left:auto;gap:2px}
 .turmas-viewtoggle button{display:flex;align-items:center;gap:5px;border:none;background:none;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--text-3);transition:background .15s,color .15s}
 @media(max-width:767px){.turmas-busca{max-width:none;min-width:0;flex-basis:100%}}
+/* CTA à direita da barra .turmas-filtros (Colaboradores) — mesmo
+   posicionamento de .turmas-viewtoggle, empilha em largura total no mobile. */
+.turmas-filtros-cta{margin-left:auto}
+@media(max-width:640px){.turmas-filtros-cta{margin-left:0;flex-basis:100%}.turmas-filtros-cta .btn{width:100%}}
 /* 2026-08-14 (correção pedida pelo Alisson — visão Lista da tela Turmas):
    colunas FIXAS via CSS Grid (não flex com proporções) — cada elemento tem
    sua própria coluna reservada, mesmo quando fica vazio (ex.: turma sem
@@ -745,6 +749,10 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turmas-kpi .n{font-size:18px;font-weight:800;color:var(--navy)}
 .turmas-kpi .l{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
 @media(max-width:640px){.turmas-kpis{grid-template-columns:repeat(2,1fr)}}
+/* Variante de 3 colunas (Colaboradores) — aditiva, não altera .turmas-kpis
+   base usada em Turmas (4 colunas). */
+.turmas-kpis.kpi-3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:640px){.turmas-kpis.kpi-3{grid-template-columns:repeat(2,1fr)}}
 .turma-group-head{display:flex;align-items:center;gap:8px;margin:16px 0 8px}
 .turma-group-head:first-of-type{margin-top:0}
 .turma-group-head .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0}
@@ -7036,41 +7044,27 @@ async function renderColaboradores() {
   const semEmpresa = _colabsCache.filter(c=>!c.cliente_id).length;
   const cliOptsFiltro = _clientesCache.map(c=>`<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:20px">
-      <div class="stat-card navy">
-        <div class="stat-label">Total</div>
-        <div class="stat-value">${total}</div>
-        <div class="stat-sub">Colaboradores</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Com cargo</div>
-        <div class="stat-value">${comCargo}</div>
-        <div class="stat-sub">Cadastrados</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Sem empresa</div>
-        <div class="stat-value" style="color:${semEmpresa>0?'var(--amber)':'var(--text-1)'}">${semEmpresa}</div>
-        <div class="stat-sub">a vincular</div>
-      </div>
+    <div class="turmas-kpis kpi-3">
+      <div class="turmas-kpi"><div class="ic">👥</div><div class="n">${total}</div><div class="l">Total</div></div>
+      <div class="turmas-kpi"><div class="ic">💼</div><div class="n">${comCargo}</div><div class="l">Com cargo</div></div>
+      <div class="turmas-kpi"><div class="ic">⚠️</div><div class="n"${semEmpresa>0?' style="color:var(--amber-h)"':''}>${semEmpresa}</div><div class="l">Sem empresa</div></div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
-      <input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." style="flex:1;min-width:160px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="aplicarFiltrosColabs()">
-      <!-- 2026-08: importação (CSV, Modelo 1 SOC, Buscar no SOC) centralizada
-      na tela Clientes — a pedido do Alisson, pra não ter a mesma ação
-      "Importar" duplicada com nomes ambíguos em duas telas. Colaboradores
-      fica só com o cadastro manual. -->
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.userplus} Novo cadastro</button>`:''}
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <select id="filtroColabEmpresa" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosColabs()">
+    <div class="turmas-filtros">
+      <div class="turmas-busca"><span class="ic">🔍</span><input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." oninput="aplicarFiltrosColabs()"></div>
+      <select id="filtroColabEmpresa" class="turmas-filtro-select" onchange="aplicarFiltrosColabs()">
         <option value="">Todas as empresas</option>
         <option value="__sem__">Sem empresa vinculada</option>
         ${cliOptsFiltro}
       </select>
-      <select id="ordenarColabs" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosColabs()">
+      <select id="ordenarColabs" class="turmas-filtro-select" onchange="aplicarFiltrosColabs()">
         <option value="nome_asc">Nome (A-Z)</option>
         <option value="nome_desc">Nome (Z-A)</option>
       </select>
+      <!-- 2026-08: importação (CSV, Modelo 1 SOC, Buscar no SOC) centralizada
+      na tela Clientes — a pedido do Alisson, pra não ter a mesma ação
+      "Importar" duplicada com nomes ambíguos em duas telas. Colaboradores
+      fica só com o cadastro manual. -->
+      ${podeCriar?`<div class="turmas-filtros-cta"><button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.userplus} Novo cadastro</button></div>`:''}
     </div>
     <div class="card" style="padding:0" id="listaColabs">${_renderColabsListaPaginada()}</div>`);
 }
@@ -7106,11 +7100,11 @@ function _htmlListaColabs(lista) {
     const corBg = CORES_BG[i%CORES_BG.length];
     const empresaNome = c.cliente_id ? (window._clientesPorId?.[c.cliente_id] || null) : null;
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verColab" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s,box-shadow .12s" data-action="verColab" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)';this.style.boxShadow='inset 0 0 0 1px var(--border-2)'" onmouseout="this.style.background='';this.style.boxShadow=''">
       <div style="width:40px;height:40px;border-radius:50%;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(c.nome)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
-        <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[empresaNome?escapeHtml(empresaNome):'<span style="color:var(--amber-text)">Sem empresa</span>',c.cpf?`CPF ${c.cpf}`:null,c.cargo||null].filter(Boolean).join(' · ')}</div>
+        <div style="font-size:12.5px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[empresaNome?escapeHtml(empresaNome):'<span style="color:var(--amber-text)">Sem empresa</span>',c.cpf?`CPF ${c.cpf}`:null,c.cargo||null].filter(Boolean).join(' · ')}</div>
       </div>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
     </div>`;
