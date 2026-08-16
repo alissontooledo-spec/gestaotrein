@@ -16001,22 +16001,23 @@ async function renderConta() {
   setConteudo(`
     <div class="detail-page">
 
-    <div class="resumo-card" style="background:var(--navy);border-radius:var(--r-lg);padding:20px;border-top:3px solid var(--amber);cursor:pointer" onclick="renderContaEditar()">
+    <div style="background:var(--navy);border-radius:var(--r-lg);padding:20px;border-top:3px solid var(--amber)">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:56px;height:56px;border-radius:50%;background:${corP};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,.15)">${iniciais(u.nome)}</div>
         <div style="min-width:0;flex:1">
           <div style="font-size:17px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:2px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'—')}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'—')}</div>
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
             <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(245,158,11,.18);color:var(--amber);border:1px solid rgba(245,158,11,.3);text-transform:capitalize">${labelPerfil(u.perfil)}</span>
             <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${contaAtiva?'rgba(16,185,129,.18)':'rgba(148,163,184,.15)'};color:${contaAtiva?'#6EE7B7':'#94A3B8'};border:1px solid ${contaAtiva?'rgba(16,185,129,.3)':'rgba(148,163,184,.2)'}">${contaAtiva?'● Conta ativa':'○ Conta inativa'}</span>
           </div>
         </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
+      <div style="height:1px;background:rgba(255,255,255,.1);margin:16px 0"></div>
+      <button class="btn btn-amber" style="width:100%" onclick="renderContaEditar()">✏️ Editar minhas informações</button>
     </div>
 
-    <button class="btn btn-outline" style="width:100%;margin-top:12px;color:var(--red-text);border-color:#FECACA;background:var(--red-l)" onclick="fazerLogout()">🚪 Sair do sistema</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:16px;color:var(--red-text);border-color:#FECACA;background:var(--red-l)" onclick="fazerLogout()">🚪 Sair do sistema</button>
     <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:6px">Encerra sua sessão apenas neste dispositivo</div>
 
     </div>`);
@@ -16131,7 +16132,8 @@ async function renderContaEditar() {
     </div>
 
     <div class="detail-actions" style="margin-bottom:16px">
-      <button class="btn btn-navy" onclick="salvarConta()">Salvar alterações</button>
+      <button class="btn btn-outline" onclick="renderConta()">Cancelar</button>
+      <button class="btn btn-navy" id="btnSalvarConta" onclick="salvarConta()">Salvar alterações</button>
     </div>
 
     </div>`);
@@ -16463,6 +16465,17 @@ async function salvarConta() {
       conselho_classe: conselho_classe||null, cpf: cpf||null,
     });
   }
+  // Fluxo de conclusão (2026-08-16, a pedido do Alisson — antes o toast
+  // aparecia mas a tela de edição continuava igual, sem sinal de que o
+  // fluxo tinha terminado): botão mostra "Salvando..." durante a chamada;
+  // em caso de sucesso, mostra o toast e volta sozinho pra tela de resumo
+  // (renderConta()) depois de um instante — mesmo padrão já usado por
+  // GitHub/Google em telas de configuração de conta. Em caso de erro, o
+  // botão volta ao normal e o usuário permanece na tela de edição, como
+  // antes (nada muda no fluxo de erro).
+  const btn = _getElVisible('btnSalvarConta');
+  const textoOriginalBtn = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; btn.style.opacity = '.7'; }
   try {
     const {error} = await sb.from('usuarios').update(dados).eq('id',usuarioAtual.id);
     if (error) throw error;
@@ -16470,7 +16483,11 @@ async function salvarConta() {
     document.getElementById('sidebarAvatar').textContent = iniciais(nome);
     document.getElementById('sidebarNome').textContent   = nome;
     showToast('Dados atualizados!','success');
-  } catch(e) { showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
+    setTimeout(() => renderConta(), 700);
+  } catch(e) {
+    showToast(traduzErroSupabase(e,'Erro ao salvar'),'error');
+    if (btn) { btn.disabled = false; btn.textContent = textoOriginalBtn; btn.style.opacity = ''; }
+  }
 }
 
 // ============================================================
