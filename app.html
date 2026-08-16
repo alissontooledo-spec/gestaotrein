@@ -15795,7 +15795,6 @@ async function renderEquipe() {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Equipe</div>`);
   fabOcultar();
 
-  const ativos   = usuarios.filter(u=>u.ativo).length;
   const inativos = usuarios.filter(u=>!u.ativo);
 
   const PERFIL_STYLE = {
@@ -15815,11 +15814,11 @@ async function renderEquipe() {
   function _itemUsuario(u) {
     const st = PERFIL_STYLE[u.perfil] || {bg:'rgba(100,116,139,.12)',cor:'#64748B',badge:'badge-gray'};
     return `
-      <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s,box-shadow .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)';this.style.boxShadow='inset 0 0 0 1px var(--border-2)'" onmouseout="this.style.background='';this.style.boxShadow=''">
         <div style="width:40px;height:40px;border-radius:50%;background:${st.bg};color:${st.cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
-          <div style="font-size:12px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'Sem e-mail')}</div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.email||'Sem e-mail')}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <span class="badge ${st.badge}" style="text-transform:capitalize">${labelPerfil(u.perfil)}</span>
@@ -15861,10 +15860,10 @@ async function renderEquipe() {
             ${inativos.map(u => {
               const st = PERFIL_STYLE[u.perfil] || {bg:'rgba(100,116,139,.12)',cor:'#64748B',badge:'badge-gray'};
               return `
-              <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;opacity:.65;transition:background .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;opacity:.65;transition:background .12s,box-shadow .12s" data-action="verUsuarioEquipe" data-id="${u.id}" onmouseover="this.style.background='var(--gray-50)';this.style.boxShadow='inset 0 0 0 1px var(--border-2)'" onmouseout="this.style.background='';this.style.boxShadow=''">
                 <div style="width:36px;height:36px;border-radius:50%;background:var(--gray-100);color:var(--text-3);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(u.nome)}</div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
+                  <div style="font-size:12.5px;font-weight:700;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(u.nome)}</div>
                   <div style="font-size:11px;color:var(--text-3);margin-top:1px;text-transform:capitalize">${labelPerfil(u.perfil)}</div>
                 </div>
                 <span class="badge badge-gray">Inativo</span>
@@ -15876,22 +15875,10 @@ async function renderEquipe() {
   }
 
   setConteudo(`
-    <div class="stats-grid" style="margin-bottom:16px">
-      <div class="stat-card navy">
-        <div class="stat-label">Total da equipe</div>
-        <div class="stat-value">${usuarios.length}</div>
-        <div class="stat-sub">${ativos} ativo${ativos!==1?'s':''}</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Instrutores</div>
-        <div class="stat-value">${usuarios.filter(u=>u.ativo&&u.perfil==='instrutor').length}</div>
-        <div class="stat-sub">Em campo</div>
-      </div>
-      <div class="stat-card accent">
-        <div class="stat-label">Inativos</div>
-        <div class="stat-value">${inativos.length}</div>
-        <div class="stat-sub">Pausados</div>
-      </div>
+    <div class="turmas-kpis kpi-3" style="margin-bottom:16px">
+      <div class="turmas-kpi"><div class="ic">👥</div><div class="n">${usuarios.length}</div><div class="l">Total</div></div>
+      <div class="turmas-kpi"><div class="ic">🎓</div><div class="n" style="color:var(--amber-h)">${usuarios.filter(u=>u.ativo&&u.perfil==='instrutor').length}</div><div class="l">Instrutores</div></div>
+      <div class="turmas-kpi"><div class="ic">💤</div><div class="n" style="color:var(--text-3)">${inativos.length}</div><div class="l">Inativos</div></div>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
