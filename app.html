@@ -9811,6 +9811,19 @@ async function verTurma(id) {
           </div>`:``}
       </div>
 
+      ${t.observacoes?`
+      <!-- Observações da turma (preenchidas no cadastro/edição pelo Comercial/
+           Administrador) — 2026-08-17, pedido do Alisson: instrutor precisa
+           ver isso antes/durante a execução. Mesmo campo já existente
+           (t.observacoes), sem novo campo nem consulta nova (a query desta
+           função já usa select('*')). Estilo reaproveitado de .home-alert
+           (mesmo tratamento de atenção já usado na Home), só pra não passar
+           despercebido — aprovado por mockup antes da implementação. -->
+      <div class="card" style="margin-bottom:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.22);border-left:3px solid var(--amber)">
+        <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">📌 Observações</div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6">${escapeHtml(t.observacoes)}</div>
+      </div>`:``}
+
       ${agendamentosInstrutor.length>1&&st!=='agendada'?`
       <!-- Encontros (turma com mais de um dia) — permite revisar um encontro
            já concluído (evidências/anotações) mesmo depois de finalizado,
