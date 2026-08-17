@@ -5289,7 +5289,7 @@ async function renderLogsAuditoria() {
 
   const [{ data: logins, error: e1 }, { data: acessos, error: e2 }, { data: usuarios }, { data: orgs }] = await Promise.all([
     sb.from('logs_login').select('id,usuario_id,org_id,perfil,criado_em').order('criado_em', { ascending: false }),
-    sb.from('logs_acesso').select('id,provedor_uid,org_id,created_at,encerrado_em,acoes').order('created_at', { ascending: false }),
+    sb.from('logs_acesso').select('id,provedor_uid,org_id,iniciado_em,encerrado_em,acoes').order('iniciado_em', { ascending: false }),
     sb.from('usuarios').select('id,nome,email'),
     sb.from('organizacoes').select('id,nome'),
   ]);
@@ -5307,13 +5307,13 @@ async function renderLogsAuditoria() {
     perfil: l.perfil || '',
   }));
   const itensSuporte = (acessos||[]).map(a => ({
-    id: 'suporte-' + a.id, tipo: 'modo_suporte', data: a.created_at,
+    id: 'suporte-' + a.id, tipo: 'modo_suporte', data: a.iniciado_em,
     nome:  userMap.get(a.provedor_uid)?.nome  || 'Provedor',
     email: userMap.get(a.provedor_uid)?.email || '',
     orgNome: orgMap.get(a.org_id) || '—',
     perfil: 'provedor',
     emAndamento: !a.encerrado_em,
-    duracaoTexto: _duracaoAcessoTexto(a.created_at, a.encerrado_em, (a.acoes||[]).length),
+    duracaoTexto: _duracaoAcessoTexto(a.iniciado_em, a.encerrado_em, (a.acoes||[]).length),
   }));
 
   _logsCache = [...itensLogin, ...itensSuporte].sort((a,b) => (b.data||'').localeCompare(a.data||''));
