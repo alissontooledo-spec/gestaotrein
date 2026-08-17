@@ -2675,7 +2675,15 @@ async function fazerLogin() {
     // Log de login (tela "Logs / Auditoria" do Provedor) — roda em paralelo,
     // de propósito fora do fluxo principal: se essa gravação falhar por
     // qualquer motivo, não pode impedir nem atrasar o login do usuário.
-    sb.from('logs_login').insert({ usuario_id: perfil.id }).catch(()=>{});
+    // Correção 2026-08-17: o retorno de sb.from(...).insert(...) é apenas
+    // "thenable" (funciona com await), não uma Promise de verdade — não
+    // tem método .catch(). Encadear .catch() direto nele quebrava o login
+    // de todo mundo. IIFE async com try/catch funciona com qualquer
+    // thenable e continua não bloqueando nem atrasando o login.
+    (async () => {
+      try { await sb.from('logs_login').insert({ usuario_id: perfil.id }); }
+      catch (e) { /* silencioso — nunca pode afetar o login */ }
+    })();
     await entrarNoApp();
   } catch(e) {
     err.textContent = traduzErroSupabase(e, 'E-mail ou senha incorretos.');
