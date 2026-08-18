@@ -118,13 +118,16 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .su-name{font-size:12px;font-weight:500;color:#fff;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .su-role{font-size:9.5px;color:var(--amber);font-weight:600}
 
-/* ── Gatilho da paleta de comandos, na sidebar (visível também no mobile,
-   via o menu hambúrguer — não precisa de teclado físico pra abrir) ── */
-.sidebar-search{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:8px 10px;border-radius:var(--r-md);border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-size:12px;font-family:inherit;cursor:pointer;transition:background .12s,color .12s;width:calc(100% - 20px)}
-.sidebar-search:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.85)}
+/* ── Campo de busca do menu lateral (2026-08-18) — filtro local dos itens
+   de navegação, direto no menu (sem modal, sem atalho de teclado) ── */
+.sidebar-search{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:8px 10px;border-radius:var(--r-md);border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-size:12px;font-family:inherit;transition:background .12s,color .12s,border-color .12s;width:calc(100% - 20px)}
+.sidebar-search:focus-within{background:rgba(255,255,255,.08);color:rgba(255,255,255,.85);border-color:rgba(255,255,255,.22)}
 .sidebar-search svg{width:14px;height:14px;flex-shrink:0}
-.sidebar-search-label{flex:1;text-align:left}
-.sidebar-search-kbd{font-size:9.5px;font-weight:600;background:rgba(255,255,255,.08);padding:2px 5px;border-radius:4px;letter-spacing:.03em;flex-shrink:0}
+.sidebar-search-input{flex:1;min-width:0;border:0;background:transparent;outline:0;font-family:inherit;font-size:12px;color:#fff}
+.sidebar-search-input::placeholder{color:rgba(255,255,255,.4)}
+.sidebar-search-clear{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;border:0;background:transparent;color:rgba(255,255,255,.5);cursor:pointer;border-radius:4px}
+.sidebar-search-clear:hover{color:#fff;background:rgba(255,255,255,.12)}
+.sidebar-search-clear svg{width:11px;height:11px}
 
 /* ── Main content area ── */
 .main-content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
@@ -399,8 +402,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
   body.sidebar-mini .sidebar-logo-row{justify-content:center;gap:0}
   body.sidebar-mini .sidebar-logo-name{display:none}
   body.sidebar-mini .sidebar-tagline{display:none}
-  body.sidebar-mini .sidebar-search{width:40px;margin:10px auto 4px;padding:8px 0;justify-content:center}
-  body.sidebar-mini .sidebar-search-label,body.sidebar-mini .sidebar-search-kbd{display:none}
+  body.sidebar-mini .sidebar-search{display:none}
   body.sidebar-mini .sidebar-nav{padding:8px 0;overflow-x:hidden}
   body.sidebar-mini .sidebar-section-label{padding:7px 12px 6px;font-size:0;gap:0}
   body.sidebar-mini .sidebar-item{justify-content:center;padding:11px 0;margin:0 12px 2px}
@@ -868,7 +870,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
         <img class="sidebar-logo-icon" src="./icons/grid-simbolo-amber.png" alt="GRID">
         <div>
           <div class="sidebar-logo-name">GRID</div>
-          <div class="sidebar-tagline">Gestão inteligente de segurança</div>
+          <div class="sidebar-tagline">Segurança inteligente</div>
         </div>
         <!-- Fecha o menu — só aparece no mobile (ver .sidebar-close-btn no
              <style>). Controle dedicado, separado do botão que abre (agora
@@ -879,11 +881,13 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
         </button>
       </div>
     </div>
-    <button class="sidebar-search" onclick="abrirPaletaComandos()">
+    <div class="sidebar-search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <span class="sidebar-search-label">Buscar</span>
-      <span class="sidebar-search-kbd">Ctrl K</span>
-    </button>
+      <input type="text" id="menuFiltroInput" class="sidebar-search-input" placeholder="Buscar no menu..." autocomplete="off" oninput="_filtrarMenuLateral(this.value)" onkeydown="if(event.key==='Escape'){_limparFiltroMenu();this.blur();}">
+      <button class="sidebar-search-clear" id="menuFiltroClear" onclick="_limparFiltroMenu()" style="display:none" aria-label="Limpar busca" title="Limpar busca">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
     <div class="sidebar-nav" id="sidebarNav"></div>
     <div class="sidebar-bottom">
       <div class="sidebar-collapse" id="sidebarCollapse" onclick="toggleSidebarMini()" title="Recolher/expandir menu">
@@ -1561,22 +1565,50 @@ function _cmdkGarantirVisivel() {
   if (ativo) ativo.scrollIntoView({ block:'nearest' });
 }
 
-// Atalho global — Ctrl+K (Windows/Linux) ou Cmd+K (Mac). Não abre se não
-// estiver logado, ou se já houver um modal genérico aberto (evita
-// empilhar duas camadas de overlay concorrendo pela tecla Esc).
-document.addEventListener('keydown', (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
-  e.preventDefault();
-  if (!usuarioAtual) return;
-  const modalAberto = document.getElementById('modalOverlay')?.style.display !== 'none';
-  if (modalAberto) return;
-  const overlay = document.getElementById('cmdkOverlay');
-  if (overlay && overlay.classList.contains('show')) {
-    document.getElementById('cmdkInput')?.focus();
-  } else {
-    abrirPaletaComandos();
-  }
-});
+// 2026-08-18: atalho global Ctrl+K/Cmd+K removido — o Alisson pediu pra não
+// usar atalho de teclado pra busca. A paleta de comandos (abrirPaletaComandos
+// e as funções _cmdk* acima) ficou sem nenhum gatilho ativo; o código continua
+// no arquivo (não removido, pra manter o diff pequeno e de baixo risco) mas
+// não é mais chamado por nada. A busca agora é o campo _filtrarMenuLateral()
+// direto na sidebar, definido perto de configurarNavegacao().
+
+// ── Filtro do menu lateral (2026-08-18) — busca simples e local: digitar no
+// campo da sidebar mostra só os itens de NAV[perfil] cujo rótulo contém o
+// termo (sem acentuar/maiúsculas). Não é busca no banco — só filtra os
+// mesmos itens já renderizados em #sidebarNav, então funciona offline e não
+// faz nenhuma consulta ao Supabase nem depende de rede.
+function _normalizarBusca(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function _filtrarMenuLateral(termo) {
+  const t = _normalizarBusca(termo);
+  const clearBtn = document.getElementById('menuFiltroClear');
+  if (clearBtn) clearBtn.style.display = t ? 'flex' : 'none';
+
+  let secaoAtual = null;
+  let secaoTemVisivel = false;
+  document.querySelectorAll('#sidebarNav > *').forEach(el => {
+    if (el.classList.contains('sidebar-section-label')) {
+      if (secaoAtual) secaoAtual.style.display = secaoTemVisivel ? '' : 'none';
+      secaoAtual = el;
+      secaoTemVisivel = false;
+      return;
+    }
+    if (el.classList.contains('sidebar-item')) {
+      const visivel = !t || _normalizarBusca(el.dataset.label).includes(t);
+      el.style.display = visivel ? '' : 'none';
+      if (visivel) secaoTemVisivel = true;
+    }
+  });
+  if (secaoAtual) secaoAtual.style.display = secaoTemVisivel ? '' : 'none';
+}
+
+function _limparFiltroMenu() {
+  const input = document.getElementById('menuFiltroInput');
+  if (input) { input.value = ''; input.focus(); }
+  _filtrarMenuLateral('');
+}
 
 // ============================================================
 // SESSÃO — timeout por inatividade
@@ -2897,6 +2929,12 @@ function configurarNavegacao() {
     if (i.sec) return `<div class="sidebar-section-label">${i.sec}</div>`;
     return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}" data-label="${i.l}"><span class="si-icon">${ICONS[i.icon]||''}</span><span class="si-label">${i.l}</span><span class="si-badge" id="sib-${i.id}" style="display:none"></span></div>`;
   }).join('');
+  // Menu recém-renderizado (troca de perfil/login) — limpa o campo de busca
+  // e garante que nenhum item fique escondido por um filtro de uma sessão
+  // anterior.
+  const filtroInput = document.getElementById('menuFiltroInput');
+  if (filtroInput) filtroInput.value = '';
+  _filtrarMenuLateral('');
 
   const navItens = itens.filter(i=>i.id);
   const bnItens = navItens.filter(i=>bottom.includes(i.id));
