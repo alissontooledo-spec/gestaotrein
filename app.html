@@ -2384,6 +2384,18 @@ function _setElBoth(id, html) {
       if (el) el.innerHTML = html;
     });
 }
+// 2026-08-18 (pedido do Alisson — Dia/Semana mobile, primeiro caso no
+// sistema em que Web e Mobile precisam de HTML genuinamente diferente, não
+// só CSS diferente por cima do mesmo HTML). Igual a _setElBoth, mas escreve
+// um HTML no #mainBody e outro no #mobileBody, em vez do mesmo HTML nos
+// dois. Usado só pelas visões Dia/Semana da Agenda da Equipe por enquanto —
+// todo o resto do sistema continua em _setElBoth (HTML idêntico nos dois).
+function _setElResponsive(id, htmlDesktop, htmlMobile) {
+  const main = document.getElementById('mainBody');
+  const mobile = document.getElementById('mobileBody');
+  if (main) { const el = main.querySelector('#' + id); if (el) el.innerHTML = htmlDesktop; }
+  if (mobile) { const el = mobile.querySelector('#' + id); if (el) el.innerHTML = htmlMobile; }
+}
 function _getElVisible(id) {
   // Retorna o elemento do body visível (desktop ou mobile).
   // Corrigido em 2026-07-30: a checagem antiga usava
@@ -12399,8 +12411,76 @@ function _agEquipeRenderSemana() {
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
-  el.innerHTML = html;
-  _setElBoth('agEquipeTimeline', html);
+
+  // 2026-08-18 (pedido do Alisson — visão Semana mobile, aprovada por
+  // mockup depois de 3 rodadas: 1ª corrigiu cor errada por instrutor -> por
+  // status; 2ª virou um seletor-de-dia; 3ª — a escolhida, depois do
+  // feedback "dia e semana não estão basicamente iguais?" — trocou pra
+  // panorâmica). No celular, a grade de colunas fixas (pensada pra tela
+  // larga) só mostra ~2 dias por vez e corta nomes de cliente reais sem
+  // "...". Layout alternativo só pra <768px: panorâmica agrupada por DIA
+  // (não por instrutor, ao contrário da Dia mobile — é essa a diferenciação
+  // pedida) — rola a tela e vê a semana inteira de uma vez, sem tocar em
+  // nada. Reaproveita os MESMOS dados já calculados acima (sessoesPorDia,
+  // dias, _conflito/_sobreposicaoAutorizada, corDoInstrutorAg). Cor por
+  // status, igual sempre; bolinha da cor do instrutor como prefixo, só pra
+  // identificar quem sem precisar abrir. Clique num compromisso abre a
+  // turma (data-action="verTurma"); clique no resto do dia (cabeçalho ou
+  // "+N mais") abre a Dia completa daquela data — reaproveita
+  // _agEquipeCelulaSemanaClique/_agEquipeAbrirDia, os mesmos já usados pela
+  // grade desktop, então o guard contra clique em cima de um compromisso
+  // (evita abrir a Dia por engano ao tocar num chip) já vem pronto e
+  // testado. Desktop (>=768px) continua com a grade de colunas de sempre,
+  // sem nenhuma alteração.
+  const htmlMobile = (() => {
+    const MAX_VISIVEL_DIA = 3;
+    const diasSemanaMobile = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    const secoes = dias.map(data => {
+      const dd = Number(data.slice(8,10));
+      const ehHoje = data === hoje;
+      const sessoesDia = (sessoesPorDia[data]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+      const cabecalhoDia = `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
+        <span style="font-size:10px;font-weight:700;color:${ehHoje?'var(--amber-text)':'var(--text-2)'};text-transform:uppercase;letter-spacing:.03em">${diasSemanaMobile[new Date(data+'T12:00:00').getDay()]}</span>
+        <span style="font-size:14px;font-weight:700;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dd}</span>
+        ${ehHoje?'<span style="font-size:8.5px;font-weight:700;color:var(--amber-text);background:var(--amber-l);padding:1px 6px;border-radius:999px">HOJE</span>':''}
+      </div>`;
+      let corpoDia;
+      if (!sessoesDia.length) {
+        corpoDia = `<div style="font-size:10.5px;color:var(--text-3);padding-left:2px">Sem compromissos</div>`;
+      } else {
+        const itens = sessoesDia.slice(0,MAX_VISIVEL_DIA).map(s => {
+          const concluida = !!s.concluida;
+          const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
+          const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
+          const cliente = s.turmas?.clientes?.nome||'—';
+          const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
+          const corInst = s.instrutor_id ? (corDoInstrutorAg[s.instrutor_id]||'#94A3B8') : '#94A3B8';
+          return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+            style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;margin-bottom:4px;min-width:0;cursor:pointer;background:${bg}">
+            <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${corInst};box-shadow:0 0 0 1.5px rgba(255,255,255,.5) inset"></span>
+            <span style="font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${horaTxt}</span>
+            <span style="font-size:11px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${escapeHtml(cliente)}</span>
+          </div>`;
+        }).join('');
+        const extra = sessoesDia.length>MAX_VISIVEL_DIA ? `<div style="font-size:10px;font-weight:700;color:var(--text-3);padding-left:2px;cursor:pointer" onclick="event.stopPropagation();_agEquipeAbrirDia('${data}')">+${sessoesDia.length-MAX_VISIVEL_DIA} mais — ver dia completo →</div>` : '';
+        corpoDia = itens + extra;
+      }
+      return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);cursor:pointer">
+        ${cabecalhoDia}
+        ${corpoDia}
+      </div>`;
+    }).join('');
+    return `${secoes}
+    <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
+    </div>`;
+  })();
+
+  el.innerHTML = isMobile() ? htmlMobile : html;
+  _setElResponsive('agEquipeTimeline', html, htmlMobile);
 }
 
 // Visão Mês: calendário tradicional (Dom–Sáb). Redesenhada em 2026-08-17
@@ -12803,8 +12883,62 @@ function _agEquipeRenderTimeline() {
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
-  el.innerHTML = html;
-  _setElBoth('agEquipeTimeline', html);
+
+  // 2026-08-18 (pedido do Alisson — visão Dia mobile, aprovada por mockup
+  // depois de 2 rodadas: 1ª corrigiu cor errada por instrutor -> por status;
+  // 2ª foi a diferenciação da Semana). No celular, a timeline horizontal
+  // (pensada pra mouse + tela larga) obriga arrastar de lado com barras
+  // minúsculas e texto ilegível. Layout alternativo só pra <768px: lista
+  // vertical agrupada por instrutor, reaproveitando os MESMOS dados já
+  // calculados acima (sessoesPorInstrutor, corDoInstrutorAg, _conflito/
+  // _sobreposicaoAutorizada) — cor do compromisso continua por STATUS
+  // (âmbar/verde/vermelho/azul), igual à Web, NÃO por instrutor; o
+  // instrutor vira só o agrupamento (bolinha + nome), preservando a mesma
+  // lógica e a mesma legenda de sempre. Clique no compromisso abre a turma
+  // (mesmo data-action="verTurma" do delegate central); clique em "Livre o
+  // dia todo" abre a criação rápida já com o instrutor selecionado (mesma
+  // _agEquipeAbrirCriacaoRapida que o nome do instrutor já usa no desktop,
+  // com horaInicio null — o operador digita a hora). Desktop (>=768px)
+  // continua com a timeline de sempre, sem nenhuma alteração.
+  const htmlMobile = (() => {
+    const secoes = instrutores.map(i => {
+      const sessoesInst = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+      const corpo = sessoesInst.length ? sessoesInst.map(s => {
+        const concluida = !!s.concluida;
+        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
+        const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
+        const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
+        const cliente = s.turmas?.clientes?.nome||'Cliente não identificado';
+        const statusTxt = s._conflito?'CONFLITO':s._sobreposicaoAutorizada?'Sobreposição autorizada':(concluida?'Concluído':'Agendado');
+        const titulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
+        return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+          style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:5px;min-width:0;cursor:pointer;background:${bg}">
+          <span style="font-size:12px;font-weight:700;color:#fff;width:40px;flex-shrink:0">${horaTxt}</span>
+          <div style="min-width:0;flex:1">
+            <span style="font-size:11.5px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">${escapeHtml(cliente)}</span>
+            <span style="font-size:9px;color:rgba(255,255,255,.85);font-weight:600">${statusTxt}</span>
+          </div>
+        </div>`;
+      }).join('') : `<div style="font-size:11px;color:var(--text-3);padding:8px 9px;border-radius:7px;background:var(--gray-50,#F8FAFC);cursor:pointer" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}">Livre o dia todo — toque para agendar</div>`;
+      return `<div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
+          <span style="font-size:13px;font-weight:700;color:var(--text-1)">${escapeHtml(i.nome)}</span>
+        </div>
+        ${corpo}
+      </div>`;
+    }).join('');
+    return `${secoes}
+    <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
+    </div>`;
+  })();
+
+  el.innerHTML = isMobile() ? htmlMobile : html;
+  _setElResponsive('agEquipeTimeline', html, htmlMobile);
 }
 
 // ============================================================
