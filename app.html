@@ -12518,8 +12518,18 @@ function _agEquipeRenderMes() {
     // Zona 3: clique em qualquer outro ponto da célula — guard idêntico ao
     // já usado na Semana, ver _agEquipeCelulaMesClique.
     const corpo = sessoesDia.length ? `<div style="margin-top:4px">${chips}${maisMais}</div>` : '';
+    // 2026-08-18 (pedido do Alisson — semanas/dias com altura desigual +
+    // grade estourando a largura com nomes de cliente longos, achado num
+    // print real em produção): min-height:72px virou height:92px fixa
+    // (medida real, com o CSS do próprio app — dia + 2 chips + "+N mais",
+    // o pior caso que MAX_VISIVEL já permite) e ganhou min-width:0 +
+    // overflow:hidden (era overflow:visible) — sem isso, um chip com nome
+    // de cliente comprido forçava a coluna inteira a esticar em vez de
+    // truncar com "...", estourando a largura da grade (7 colunas) e
+    // cortando o sábado. O popover (position:fixed) não é afetado pelo
+    // overflow:hidden aqui — position:fixed ignora overflow de ancestral.
     celulas.push(`<div onclick="_agEquipeCelulaMesClique(event,'${dataISO}')"
-      style="position:relative;min-height:72px;border-radius:6px;padding:6px;cursor:pointer;overflow:visible;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F8FAFC)'}">
+      style="position:relative;height:92px;min-width:0;border-radius:6px;padding:6px;cursor:pointer;overflow:hidden;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F8FAFC)'}">
       <div style="font-size:15px;font-weight:${ehHoje?'700':'600'};color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
       ${corpo}
       ${popoverHtml}
