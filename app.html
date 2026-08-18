@@ -12190,6 +12190,61 @@ function _agEquipeCelulaSemanaClique(event, data, instrutorId) {
   _agEquipeAbrirDia(data, instrutorId);
 }
 
+// 2026-08-17 (pedido do Alisson — visão Mês redesenhada, ver
+// _agEquipeRenderMes): mesmo guard da Semana acima, adaptado pra visão Mês
+// — ignora o clique se caiu num chip de turma (data-action="verTurma",
+// tratado pelo delegate central) ou no "+N mais" (que já para a propagação
+// sozinho em _agEquipeTogglePopoverMes, então nem chega aqui) — só nesses
+// dois casos o clique NÃO deve abrir a visão Dia.
+function _agEquipeCelulaMesClique(event, dataISO) {
+  if (event.target.closest('[data-action]')) return;
+  _agEquipeAbrirDia(dataISO);
+}
+
+// Painel "+N mais" da visão Mês — só um aberto por vez
+// (window._agEquipeMesPopoverDia guarda a data do dia aberto, ou null).
+// Usa position:fixed com coordenadas calculadas na hora do clique (não
+// position:absolute dentro da célula) de propósito: o card que envolve a
+// grade do Mês tem overflow:hidden (pra arredondar os cantos do cabeçalho
+// navy — não pode ser tocado só por causa disso, Dia/Semana dependem do
+// mesmo wrapper), e um painel maior que a célula seria cortado se ficasse
+// preso a ela. position:fixed escapa desse overflow por ser relativo à
+// janela, não a nenhum ancestral.
+window._agEquipeMesPopoverDia = null;
+window._agEquipeMesPopoverPos = null;
+
+function _agEquipeTogglePopoverMes(event, dataISO) {
+  event.stopPropagation(); // não deixa o clique borbulhar pro onclick da célula (abriria o Dia)
+  const jaAberto = window._agEquipeMesPopoverDia === dataISO;
+  if (jaAberto) {
+    window._agEquipeMesPopoverDia = null;
+    window._agEquipeMesPopoverPos = null;
+  } else {
+    const r = event.currentTarget.getBoundingClientRect();
+    const LARGURA_POPOVER = 220, ALTURA_ESTIMADA = 220; // aproximado, só pra decidir de que lado abrir
+    let left = r.left;
+    if (left + LARGURA_POPOVER > window.innerWidth - 12) left = Math.max(12, window.innerWidth - LARGURA_POPOVER - 12);
+    const abrirParaCima = (r.bottom + ALTURA_ESTIMADA) > window.innerHeight - 12;
+    window._agEquipeMesPopoverDia = dataISO;
+    window._agEquipeMesPopoverPos = abrirParaCima
+      ? { left, bottom: Math.round(window.innerHeight - r.top + 4) }
+      : { left, top: Math.round(r.bottom + 4) };
+  }
+  _agEquipeRenderMes();
+}
+
+// Fecha o painel "+N mais" do Mês ao clicar fora dele — listener único,
+// registrado uma vez no carregamento do script. Mesmo padrão já usado pelo
+// painel de notificações (sino), ver _fecharSino/document.addEventListener
+// logo no início do arquivo.
+document.addEventListener('click', (e) => {
+  if (!window._agEquipeMesPopoverDia) return;
+  if (e.target.closest('.ag-mes-popover') || e.target.closest('.ag-mes-maismais')) return;
+  window._agEquipeMesPopoverDia = null;
+  window._agEquipeMesPopoverPos = null;
+  _agEquipeRenderMes();
+});
+
 // Visão Semana: uma coluna por dia (Dom–Sáb), uma linha por instrutor.
 // Cada célula mostra até 3 compromissos daquele instrutor naquele dia (hora
 // + cliente) e um "+N" se houver mais. Clicar numa célula abre a visão Dia
@@ -12348,11 +12403,28 @@ function _agEquipeRenderSemana() {
   _setElBoth('agEquipeTimeline', html);
 }
 
-// Visão Mês: calendário tradicional (Dom–Sáb). Cada dia mostra um ponto
-// colorido por instrutor com compromisso naquele dia (uma cor fixa por
-// instrutor, só pra diferenciar visualmente — sem checagem de conflito
-// aqui, que é um detalhe fino demais pra uma visão de panorama do mês) e a
-// contagem de sessões do dia. Clicar num dia abre a visão Dia nessa data.
+// Visão Mês: calendário tradicional (Dom–Sáb). Redesenhada em 2026-08-17
+// (pedido do Alisson — a versão anterior só mostrava bolinha+contagem, e
+// pra saber o que de fato tinha em cada dia era preciso entrar na visão
+// Dia). 3 rodadas de mockup aprovadas antes de implementar (posição do
+// card de destaque, nível de destaque visual, e por fim esta comparação de
+// comportamento de clique/hover) — resultado final, 3 zonas na mesma
+// célula, cada uma reaproveitando o máximo possível do que a visão Semana
+// já faz:
+//  1) até 2 chips (horário · cliente, cor do instrutor — mesma paleta já
+//     usada aqui) ficam sempre visíveis, cada um clicável direto pra turma
+//     (data-action="verTurma", mesmo delegate central que a Semana usa) e
+//     com tooltip nativo (title) mostrando os detalhes completos;
+//  2) "+N mais" (quando há mais de 2 no dia) abre um mini painel ali mesmo
+//     com a lista inteira do dia — por CLIQUE, não hover (hover não existe
+//     em touch/mobile; clique funciona igual nos dois, sem duplicar
+//     comportamento por dispositivo — decisão discutida explicitamente com
+//     o Alisson antes de implementar). Cada item do painel também é
+//     clicável pra turma, mais um link "Abrir o dia completo";
+//  3) clicar no resto da célula continua abrindo a visão Dia — nenhuma
+//     mudança nesse caminho, mesmo comportamento de sempre.
+// Sem checagem de conflito aqui (mantido da versão anterior) — ainda é um
+// detalhe fino demais pra uma visão de panorama do mês.
 function _agEquipeRenderMes() {
   const el = _getElVisible('agEquipeTimeline');
   if (!el) return;
@@ -12383,29 +12455,74 @@ function _agEquipeRenderMes() {
   // D/S/T/Q... de 10.5px para 11px, mesma cor/peso de antes.
   const cabecalho = ['D','S','T','Q','Q','S','S'].map(d=>`<div style="text-align:center;font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.03em;padding:4px 0">${d}</div>`).join('');
 
+  const diasSemanaCompleto = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  const mesesCompleto = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const MAX_VISIVEL = 2;
+
   const celulas = [];
   for (let i=0;i<primeiroDiaSemana;i++) celulas.push(`<div></div>`);
   for (let dia=1; dia<=totalDias; dia++) {
     const dataISO = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-    const sessoesDia = sessoesPorDia[dataISO] || [];
+    const sessoesDia = (sessoesPorDia[dataISO] || []).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
     const ehHoje = dataISO === window._agEquipeHoje;
-    const instrutoresComSessao = [...new Set(sessoesDia.map(s=>s.instrutor_id).filter(Boolean))];
-    const MAX_PONTOS = 5;
-    // 2026-08-12: pontos de 6px->8px (mesmo tamanho da legenda logo abaixo,
-    // que já usava 8px — os dois ficavam com tamanhos diferentes por engano).
-    const pontos = instrutoresComSessao.slice(0,MAX_PONTOS).map(id => `<span style="width:8px;height:8px;border-radius:50%;background:${corDoInstrutor[id]||'var(--amber)'};display:inline-block;margin:1px"></span>`).join('');
-    const extraCount = instrutoresComSessao.length > MAX_PONTOS ? `<span style="font-size:9px;color:var(--text-2);font-weight:600">+${instrutoresComSessao.length-MAX_PONTOS}</span>` : '';
-    // 2026-08-12 (mockup aprovado): célula de 56px->72px (mesma altura da
-    // Semana, mais espaço pra respirar); número do dia de 11px->15px e
-    // sempre em cor legível (var(--text-1) — antes var(--text-2), o mesmo
-    // tom apagado usado pra texto secundário — só "hoje" tinha contraste
-    // de verdade); contorno âmbar em "hoje" pra reforçar o destaque que já
-    // tinha só no fundo; contagem de sessões de 8px/--text-3 (apagado) para
-    // 10px/--text-2, mesmo princípio já usado no cabeçalho D/S/T/Q.
-    celulas.push(`<div onclick="_agEquipeAbrirDia('${dataISO}')" title="${sessoesDia.length} sessão(ões) em ${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}"
-      style="min-height:72px;border-radius:6px;padding:6px;cursor:pointer;${ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F8FAFC)'}">
+    const popoverAberto = window._agEquipeMesPopoverDia === dataISO;
+
+    // Zona 1: chips sempre visíveis (até MAX_VISIVEL), cor por instrutor —
+    // mesmo padrão de dado (horário · cliente) que a Semana já mostra em
+    // cada chip, só que colorido por instrutor em vez de por status
+    // (concluída/conflito), pra manter a legenda de cores que o Mês já usa.
+    const chips = sessoesDia.slice(0,MAX_VISIVEL).map(s => {
+      const cor = corDoInstrutor[s.instrutor_id] || 'var(--amber)';
+      const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
+      const cliente = s.turmas?.clientes?.nome || '—';
+      const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s.concluida?' · concluído':''}`;
+      return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+        style="background:${cor};color:#fff;border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
+    }).join('');
+
+    // Zona 2: "+N mais", só quando sobra algum compromisso fora dos
+    // MAX_VISIVEL já mostrados — abre/fecha o painel via
+    // _agEquipeTogglePopoverMes (que já para a propagação do clique).
+    let maisMais = '';
+    if (sessoesDia.length > MAX_VISIVEL) {
+      const restante = sessoesDia.length - MAX_VISIVEL;
+      maisMais = `<div class="ag-mes-maismais" onclick="_agEquipeTogglePopoverMes(event,'${dataISO}')"
+        style="font-size:9px;font-weight:700;cursor:pointer;${popoverAberto?'color:var(--amber-h);text-decoration:underline':'color:var(--text-3)'}">+${restante} mais</div>`;
+    }
+
+    // Painel do "+N mais" — position:fixed com coordenadas já calculadas em
+    // window._agEquipeMesPopoverPos (ver _agEquipeTogglePopoverMes), pra
+    // escapar do overflow:hidden do card que envolve a grade.
+    let popoverHtml = '';
+    if (popoverAberto && window._agEquipeMesPopoverPos) {
+      const pos = window._agEquipeMesPopoverPos;
+      const itens = sessoesDia.map(s => {
+        const cor = corDoInstrutor[s.instrutor_id] || 'var(--amber)';
+        const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
+        const cliente = s.turmas?.clientes?.nome || '—';
+        return `<div data-action="verTurma" data-id="${s.turma_id}" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;cursor:pointer">
+          <span style="width:6px;height:6px;border-radius:50%;background:${cor};flex-shrink:0"></span>
+          <b style="color:var(--text-1);width:38px;flex-shrink:0">${escapeHtml(horaTxt)}</b>
+          <span style="color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(cliente)}</span>
+        </div>`;
+      }).join('');
+      const dow = diasSemanaCompleto[new Date(dataISO+'T12:00:00').getDay()];
+      const totalTxt = `${sessoesDia.length} ${sessoesDia.length===1?'compromisso':'compromissos'}`;
+      popoverHtml = `<div class="ag-mes-popover" style="position:fixed;${pos.top!=null?'top:'+pos.top+'px':'bottom:'+pos.bottom+'px'};left:${pos.left}px;z-index:200;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 14px 32px rgba(0,0,0,.18);padding:10px 12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${dow}, ${dia} de ${mesesCompleto[mes-1]} · ${totalTxt}</div>
+        ${itens}
+        <div onclick="_agEquipeAbrirDia('${dataISO}')" style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:10.5px;color:var(--amber-h);font-weight:700;cursor:pointer">Abrir o dia completo →</div>
+      </div>`;
+    }
+
+    // Zona 3: clique em qualquer outro ponto da célula — guard idêntico ao
+    // já usado na Semana, ver _agEquipeCelulaMesClique.
+    const corpo = sessoesDia.length ? `<div style="margin-top:4px">${chips}${maisMais}</div>` : '';
+    celulas.push(`<div onclick="_agEquipeCelulaMesClique(event,'${dataISO}')"
+      style="position:relative;min-height:72px;border-radius:6px;padding:6px;cursor:pointer;overflow:visible;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F8FAFC)'}">
       <div style="font-size:15px;font-weight:${ehHoje?'700':'600'};color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
-      ${sessoesDia.length?`<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:5px">${pontos}${extraCount}</div><div style="font-size:10px;color:var(--text-2);font-weight:500;margin-top:2px">${sessoesDia.length} sessão${sessoesDia.length!==1?'ões':''}</div>`:''}
+      ${corpo}
+      ${popoverHtml}
     </div>`);
   }
 
@@ -12416,7 +12533,7 @@ function _agEquipeRenderMes() {
   // 2026-08-12: espaçamento da grade de 4px->6px (mockup aprovado), mesmo
   // "respiro" já usado entre as colunas da visão Semana.
   const html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px 6px;margin-bottom:4px">${cabecalho}</div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">${celulas.join('')}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;overflow:visible">${celulas.join('')}</div>
     ${legenda}`;
   el.innerHTML = html;
   _setElBoth('agEquipeTimeline', html);
