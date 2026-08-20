@@ -253,6 +253,38 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    marca, usado em CTAs/destaques, pra não confundir os dois sentidos. */
 .badge-warn{background:var(--warn-l);color:var(--warn-text)}
 
+/* ── Documentos da turma — Central de Ações por Cartão (Opção B2), 2026-08-20 ── */
+.doc-status-row{display:flex;align-items:stretch;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.doc-stat{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;flex:1 1 220px}
+.doc-stat .ring{width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.doc-stat .ring i{width:26px;height:26px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:var(--text-1)}
+.doc-stat .tx{flex:1;font-size:12px;color:var(--text-2)}
+.doc-stat .tx b{color:var(--text-1)}
+.doc-chip{display:flex;flex-direction:column;justify-content:center;gap:1px;font-size:12px;font-weight:600;padding:10px 14px;border-radius:var(--r-lg);cursor:pointer;border:1px solid transparent;flex:1 1 220px}
+.doc-chip.warn{background:var(--amber-l);color:var(--amber-text);border-color:var(--amber)}
+.doc-chip.ok{background:var(--green-l);color:var(--green-text);border-color:var(--green);cursor:default}
+.doc-chip .sub{font-size:10px;font-weight:400;opacity:.85}
+.doc-section-label{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 8px}
+.doc-cards{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:16px}
+@media(min-width:900px){.doc-cards{grid-template-columns:repeat(3,1fr)}}
+.doc-card{border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;background:var(--surface);cursor:pointer;display:flex;align-items:center;gap:12px;transition:box-shadow .15s,transform .15s}
+.doc-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.doc-card .bic{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--gray-100)}
+.doc-card.done .bic{background:var(--green-l)}
+.doc-card.parcial .bic{background:var(--amber-l)}
+.doc-card .bt{flex:1;min-width:0}
+.doc-card .bt .ti{font-size:13px;font-weight:700;color:var(--text-1)}
+.doc-card .bt .su{font-size:11px;color:var(--text-3);margin-top:3px}
+.doc-card .arrow{color:var(--border-2);font-size:14px;flex-shrink:0}
+.doc-checklist{display:flex;flex-direction:column;margin-bottom:12px}
+.doc-check-item{display:flex;align-items:center;gap:10px;padding:6px 0;position:relative}
+.doc-check-item:not(:last-child)::after{content:'';position:absolute;left:9px;top:25px;width:2px;height:10px;background:var(--border)}
+.doc-check-item .ck{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;z-index:1}
+.doc-check-item.ok .ck{background:var(--green);color:#fff}
+.doc-check-item.pend .ck{background:var(--surface);border:2px solid var(--border-2);color:var(--text-3)}
+.doc-check-item .lb{font-size:12.5px;color:var(--text-2)}
+.doc-check-item.ok .lb{color:var(--text-1);font-weight:500}
+
 /* ── Buttons ── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--r-md);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:all .15s;text-decoration:none;white-space:nowrap}
 .btn-sm{padding:6px 12px;font-size:12px}
@@ -21421,19 +21453,20 @@ async function renderDocumentosTurma(turmaId) {
     // gerado. Agora compara contra quem de fato pode receber certificado.
     const totalIndElegivel = elegiveisDoc.size;
 
-    // Banner de reaproveitamento de assinatura entre dias (2026-08-13) —
-    // só calculado e mostrado para Administrador/Provedor; o banco confirma
-    // o perfil de novo na RPC, então esconder da tela é só uma segunda camada.
-    let htmlReaproveitamento = '';
+    // Faixa de pendência de reaproveitamento de assinatura entre dias
+    // (2026-08-13) — só calculado e mostrado para Administrador/Provedor; o
+    // banco confirma o perfil de novo na RPC, então esconder da tela é só
+    // uma segunda camada. 2026-08-20 (Opção B2): vira um chip clicável em
+    // vez de card cheio, que abre direto o modal de revisão já existente.
+    let htmlReapChip = '';
     if (usuarioAtual?.perfil === 'provedor' || usuarioAtual?.perfil === 'administrador') {
       const propostasReap = await _calcularReaproveitamentosDisponiveis(turmaId);
       if (propostasReap.length) {
         const alunosAfetados = new Set(propostasReap.map(p=>p.colaboradorId)).size;
-        htmlReaproveitamento = `
-          <div class="card" style="margin-bottom:16px;background:var(--amber-l);border:1px solid var(--amber)">
-            <div style="font-size:13px;font-weight:600;color:var(--amber-text)">⚠️ ${alunosAfetados} aluno(s) com assinatura em outro dia, mas faltando em ${propostasReap.length} dia(s)</div>
-            <div style="font-size:12px;color:var(--amber-text);margin-top:4px;line-height:1.5">É possível reaproveitar, de forma controlada e auditável, a assinatura já coletada em outro encontro desta turma para cobrir os dias sem coleta.</div>
-            <button class="btn btn-amber btn-sm" style="margin-top:10px" onclick="abrirModalReaproveitamentoAssinaturas('${turmaId}')">Revisar e reaproveitar assinaturas</button>
+        htmlReapChip = `
+          <div class="doc-chip warn" onclick="abrirModalReaproveitamentoAssinaturas('${turmaId}')">
+            <span>⚠️ ${alunosAfetados} aluno(s) com pendência de assinatura</span>
+            <span class="sub">${propostasReap.length} dia(s) podem ser cobertos por reaproveitamento — toque para revisar</span>
           </div>`;
       }
     }
@@ -21458,123 +21491,118 @@ async function renderDocumentosTurma(turmaId) {
     // tabela soc_ged_envios já tem RLS restringindo a leitura a esses dois
     // perfis (ver migration-soc-ged-certificados.sql), mas o filtro de
     // perfil aqui também evita disparar a consulta à toa para quem não vai
-    // ver o resultado.
-    let htmlStatusSoc = '';
+    // ver o resultado. 2026-08-20 (Opção B2): vira chip ao lado do status
+    // de reaproveitamento, em vez de card cheio no fim da tela.
+    let htmlSocChip = '';
     if (usuarioAtual?.perfil === 'provedor' || usuarioAtual?.perfil === 'administrador') {
       const {data: statusSoc} = await sb.from('soc_ged_envios').select('status').eq('turma_id', turmaId);
       if (statusSoc && statusSoc.length > 0) {
         const okCount   = statusSoc.filter(s => s.status === 'enviado').length;
         const erroCount = statusSoc.filter(s => s.status === 'erro').length;
-        const cor = erroCount > 0 ? 'var(--amber-text)' : 'var(--green)';
-        const bg  = erroCount > 0 ? 'var(--amber-l)' : 'var(--green-l)';
+        const classeChip = erroCount > 0 ? 'warn' : 'ok';
         const texto = erroCount > 0
           ? `⚠️ ${okCount} certificado(s) enviado(s) ao SOCGED, ${erroCount} com falha`
-          : `✓ ${okCount} certificado(s) enviado(s) ao SOCGED`;
-        htmlStatusSoc = `
-          <div class="card" style="margin-top:16px;background:${bg};border:1px solid ${cor}">
-            <div style="font-size:12px;font-weight:600;color:${cor}">${texto}</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:2px">Visível só para Provedor/Administrador · integração SOC (SOCGED)</div>
+          : `✓ Status SOCGED: ${okCount} enviado(s), 0 erro`;
+        htmlSocChip = `
+          <div class="doc-chip ${classeChip}">
+            <span>${texto}</span>
+            <span class="sub">Visível só para Provedor/Administrador</span>
           </div>`;
       }
     }
 
-    // ---- Trilha de progresso (3 etapas: agendamentos → documentos → envio) ----
-    const _step = (estado, label, sub) => {
-      // estado: 'ok' | 'atencao' | 'aguardando'
-      const cor = estado==='ok' ? {bg:'var(--green-l)',fg:'var(--green)',bd:'var(--green)'}
-                : estado==='atencao' ? {bg:'var(--amber-l)',fg:'var(--amber-text)',bd:'var(--amber)'}
-                : {bg:'var(--bg-2,#f1f5f9)',fg:'var(--text-3)',bd:'var(--border)'};
-      const icone = estado==='ok' ? '✓' : (estado==='atencao' ? '!' : '');
-      return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
-          <div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:${cor.bg};color:${cor.fg};border:2px solid ${cor.bd}">${icone}</div>
-          <div style="font-size:12px;font-weight:600;color:var(--text-1);line-height:1.2">${label}</div>
-          <div style="font-size:11px;color:var(--text-3);line-height:1.2">${sub}</div>
-        </div>`;
-    };
-    const _linha = ok => `<div style="flex:0 0 20px;height:2px;background:${ok?'var(--green)':'var(--border)'};margin-top:14px"></div>`;
-
-    const estadoAgendamentos = todosConcluidos ? 'ok' : 'atencao';
-    const estadoDocumentos   = todosDocsGerados ? 'ok' : (todosConcluidos ? 'atencao' : 'aguardando');
-    const estadoEnvio        = envio ? 'ok' : (todosDocsGerados && emailCliente ? 'atencao' : 'aguardando');
-
-    const htmlTrilha = `
-      <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:flex-start">
-          ${_step(estadoAgendamentos, 'Agendamentos', totalAg ? `${concluidosAg}/${totalAg} concluídos` : 'sem sessões')}
-          ${_linha(todosConcluidos)}
-          ${_step(estadoDocumentos, 'Documentos', `${geradosDocs}/${totalDocs} gerados`)}
-          ${_linha(todosDocsGerados)}
-          ${_step(estadoEnvio, 'Envio', envio ? 'enviado ao cliente' : (emailCliente ? 'pendente' : 'sem e-mail'))}
+    // ---- Faixa de status (Opção B2): anel único com as 3 etapas macro
+    // (agendamentos → documentos → envio), substitui a trilha de 3 círculos
+    // — libera espaço no topo da tela, mesma leitura de progresso. ----
+    const etapasConcluidas = (todosConcluidos?1:0) + (todosDocsGerados?1:0) + (envio?1:0);
+    const statusMsg = etapasConcluidas === 3 ? 'tudo concluído e enviado'
+      : !todosConcluidos ? 'falta concluir os agendamentos'
+      : !todosDocsGerados ? 'falta gerar documentos e certificados'
+      : 'falta enviar ao cliente';
+    const degRing = Math.round(etapasConcluidas/3*360);
+    const htmlStatusRow = `
+      <div class="doc-status-row">
+        <div class="doc-stat">
+          <div class="ring" style="background:conic-gradient(var(--green) 0deg ${degRing}deg, var(--border-2) ${degRing}deg 360deg)"><i>${etapasConcluidas}/3</i></div>
+          <div class="tx"><b>${etapasConcluidas} de 3 etapas concluídas</b> · ${statusMsg}</div>
         </div>
+        ${htmlReapChip}
+        ${htmlSocChip}
       </div>`;
 
-    // ---- Card unificado de documentos ----
-    const _linhaDoc = (icone, titulo, subtitulo, pronto, onclick, corIcone='var(--blue-l)') => `
-      <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--border)">
-        <div style="width:36px;height:36px;border-radius:10px;background:${corIcone};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icone}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--text-1)">${titulo}</div>
-          <div style="font-size:11px;margin-top:2px;color:${pronto?'var(--green)':'var(--text-3)'}">${subtitulo}</div>
-        </div>
-        <button class="btn ${pronto?'btn-outline':'btn-navy'} btn-sm" onclick="${onclick}" style="flex-shrink:0">${pronto?'↻ Refazer':'⬇ Gerar'}</button>
-      </div>`;
-
+    // ---- Cartões de tarefa (Opção B2) — cada um abre o detalhe no modal
+    // genérico do GRID (mesmo componente já usado em todo o app), em vez
+    // de expandir a própria tela. O conteúdo de cada modal fica em cache
+    // (window._docsDrawerCache) para _abrirDrawerDocumento() poder reabrir
+    // com dado fresco depois de qualquer geração feita de dentro do modal. ----
     const htmlIndividuaisSub = totalInd === 0
-      ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0 0 48px">Nenhum participante nesta turma.</div>`
-      : participantes.map(p => {
+      ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum participante nesta turma.</div>`
+      : (elegiveisDoc.size>0 ? `<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:6px" onclick="gerarTodosCertificados('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('individuais')))">⬇ Gerar todos</button>` : '')
+        + participantes.map(p => {
           const col = p.colaboradores||{};
           const elegivel = elegiveisDoc.has(p.colaborador_id);
           const jaGerado = docsMap['certificado_individual'+p.colaborador_id+''];
           const status = !elegivel ? '⚠ presença incompleta' : (jaGerado ? '✓ gerado' : 'pendente');
           const corStatus = !elegivel ? 'var(--amber-text)' : (jaGerado ? 'var(--green)' : 'var(--text-3)');
-          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 8px 48px">
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--gray-100)">
               <div style="width:26px;height:26px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
               <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${escapeHtml(col.nome||'-')}</div>
               <span style="font-size:11px;color:${corStatus};margin-right:4px">${status}</span>
-              ${elegivel ? `<button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}').then(()=>renderDocumentosTurma('${turmaId}'))">${jaGerado?'↻':'⬇'} PDF</button>` : ''}
+              ${elegivel ? `<button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}').then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('individuais')))">${jaGerado?'↻':'⬇'} PDF</button>` : ''}
             </div>`;
         }).join('');
 
     const htmlListasSub = totalListas === 0
-      ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0 0 48px">Nenhum encontro agendado.</div>`
+      ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum encontro agendado.</div>`
       : sessoesOrdenadas.map(sess => {
           const jaGerado = !!docsMap['lista_presenca'+''+sess.id];
-          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 8px 48px">
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--gray-100)">
               <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${formatarData(sess.data)}</div>
               <span style="font-size:11px;color:${jaGerado?'var(--green)':'var(--text-3)'};margin-right:4px">${jaGerado?'✓ gerada':'pendente'}</span>
-              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarListaPresenca('${turmaId}','${sess.id}').then(()=>renderDocumentosTurma('${turmaId}'))">${jaGerado?'↻':'⬇'} PDF</button>
+              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarListaPresenca('${turmaId}','${sess.id}').then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('lista')))">${jaGerado?'↻':'⬇'} PDF</button>
             </div>`;
         }).join('');
 
-    const htmlDocumentos = `
-      <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
-          <div style="font-size:15px;font-weight:600;color:var(--text-1)">📄 Documentos da turma</div>
-          <span class="badge ${todosDocsGerados?'badge-green':'badge-amber'}">${geradosDocs}/${totalDocs}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;padding:13px 0 ${totalListas?'4px':'0'} 0;${totalListas?'border-bottom:1px solid var(--border)':''}">
-          <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📋</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--text-1)">Lista de Presença</div>
-            <div style="font-size:11px;margin-top:2px;color:${temTodasListas?'var(--green)':'var(--text-3)'}">Uma por encontro · ${listasGeradas}/${totalListas} geradas</div>
-          </div>
-        </div>
-        ${htmlListasSub}
-        ${_linhaDoc('🏢','Certificado Coletivo', `Para a empresa · ${elegiveisDoc.size} elegível(is) de ${totalInd} participante(s)`, temColetivo,
-            `gerarCertificadoColetivo('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}'))`)}
-        <div style="display:flex;align-items:center;gap:12px;padding:13px 0 ${totalInd?'4px':'0'} 0;${totalInd?'border-bottom:1px solid var(--border)':''}">
-          <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎓</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--text-1)">Certificados Individuais</div>
-            <div style="font-size:11px;margin-top:2px;color:${temTodosInd?'var(--green)':'var(--text-3)'}">${geradosInd}/${totalIndElegivel} gerados${elegiveisDoc.size<totalInd?` · ${totalInd-elegiveisDoc.size} com presença incompleta`:''}</div>
-          </div>
-          ${elegiveisDoc.size>0 ? `<button class="btn btn-outline btn-sm" onclick="gerarTodosCertificados('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}'))" style="flex-shrink:0">⬇ Gerar todos</button>` : ''}
-        </div>
-        ${htmlIndividuaisSub}
+    const htmlColetivoDrawer = `
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:14px;line-height:1.5">Para a empresa · ${elegiveisDoc.size} elegível(is) de ${totalInd} participante(s).</div>
+      <button class="btn ${temColetivo?'btn-outline':'btn-navy'}" style="width:100%" onclick="gerarCertificadoColetivo('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('coletivo')))">${temColetivo?'↻ Refazer certificado coletivo':'⬇ Gerar certificado coletivo'}</button>`;
+
+    window._docsDrawerCache = {
+      turmaId,
+      lista:       {titulo: `Lista de Presença · ${listasGeradas}/${totalListas}`, corpo: htmlListasSub},
+      coletivo:    {titulo: 'Certificado Coletivo', corpo: htmlColetivoDrawer},
+      individuais: {titulo: `Certificados Individuais · ${geradosInd}/${totalIndElegivel}`, corpo: htmlIndividuaisSub},
+    };
+
+    const _docCard = (id, icone, titulo, subtitulo, badgeTxt, badgeClasse, estadoClasse) => `
+      <div class="doc-card ${estadoClasse}" onclick="_abrirDrawerDocumento('${id}')">
+        <div class="bic">${icone}</div>
+        <div class="bt"><div class="ti">${titulo}</div><div class="su">${subtitulo}</div></div>
+        <span class="badge ${badgeClasse}">${badgeTxt}</span>
+        <div class="arrow">›</div>
+      </div>`;
+
+    const htmlCardLista = totalListas === 0
+      ? _docCard('lista','📋','Lista de Presença','Nenhum encontro agendado','—','badge-gray','')
+      : _docCard('lista','📋','Lista de Presença','Uma por encontro', temTodasListas?'✓':`${listasGeradas}/${totalListas}`, temTodasListas?'badge-green':'badge-amber', temTodasListas?'done':'parcial');
+
+    const htmlCardColetivo = _docCard('coletivo','🏢','Certificado Coletivo', `Para a empresa · ${elegiveisDoc.size} elegível(is) de ${totalInd}`, temColetivo?'✓':'Pendente', temColetivo?'badge-green':'badge-amber', temColetivo?'done':'parcial');
+
+    const htmlCardIndividuais = totalInd === 0
+      ? _docCard('individuais','🎓','Certificados Individuais','Nenhum participante nesta turma','—','badge-gray','')
+      : _docCard('individuais','🎓','Certificados Individuais', `${geradosInd}/${totalIndElegivel} gerados${elegiveisDoc.size<totalInd?` · ${totalInd-elegiveisDoc.size} com presença incompleta`:''}`, temTodosInd?'✓':`${geradosInd}/${totalIndElegivel}`, temTodosInd?'badge-green':'badge-amber', temTodosInd?'done':'parcial');
+
+    const htmlDocCards = `
+      <div class="doc-section-label">Documentos</div>
+      <div class="doc-cards">
+        ${htmlCardLista}
+        ${htmlCardColetivo}
+        ${htmlCardIndividuais}
       </div>`;
 
     // ---- Card único de envio por e-mail (substitui os dois cards antigos) ----
     let htmlEnvioConteudo;
+    let htmlChecklistEnvio = '';
     if (!planoAtinge('pro')) {
       htmlEnvioConteudo = `
         <div style="display:flex;align-items:center;gap:10px;background:var(--amber-l);border:1px solid var(--amber);padding:12px;border-radius:var(--r-md)">
@@ -21594,6 +21622,15 @@ async function renderDocumentosTurma(turmaId) {
       if (!todosConcluidos) {
         htmlEnvioConteudo = destHtml + `<div style="font-size:12px;color:var(--amber);background:var(--amber-l);padding:8px 12px;border-radius:var(--r-md)">⏳ Aguardando conclusão de todos os agendamentos.</div>`;
       } else {
+        // Checklist explícito (Opção B2) — só aparece quando o envio é
+        // efetivamente alcançável (mesmo ramo que mostra o botão de envio),
+        // pra não duplicar/contradizer os avisos dos outros ramos acima.
+        htmlChecklistEnvio = `
+          <div class="doc-checklist">
+            <div class="doc-check-item ok"><span class="ck">✓</span><span class="lb">Todos os encontros concluídos</span></div>
+            <div class="doc-check-item ${todosDocsGerados?'ok':'pend'}"><span class="ck">${todosDocsGerados?'✓':'○'}</span><span class="lb">Documentos: ${geradosDocs}/${totalDocs} gerados</span></div>
+            <div class="doc-check-item ${envio?'ok':'pend'}"><span class="ck">${envio?'✓':'○'}</span><span class="lb">${envio?'Enviado ao cliente':'Ainda não enviado ao cliente'}</span></div>
+          </div>`;
         const btnLabel = envio ? '📦 Regenerar e reenviar documentos' : '📦 Gerar tudo e enviar por e-mail';
         const ultimoEnvio = envio ? `<div style="font-size:11px;color:var(--green);margin-top:8px;text-align:center">✓ Último envio: ${formatarDataHora(envio.enviado_em)}</div>` : '';
         // Recuperação manual: só aparece quando ainda não há registro de envio —
@@ -21610,6 +21647,7 @@ async function renderDocumentosTurma(turmaId) {
         <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
           Gera automaticamente os documentos pendentes e envia tudo por e-mail para a empresa cliente em uma única ação.
         </div>
+        ${htmlChecklistEnvio}
         ${htmlEnvioConteudo}
       </div>`;
 
@@ -21623,11 +21661,9 @@ async function renderDocumentosTurma(turmaId) {
         <span class="badge badge-green">Concluída</span>
       </div>
 
-      ${htmlTrilha}
-      ${htmlReaproveitamento}
-      ${htmlDocumentos}
-      ${htmlEnvio}
-      ${htmlStatusSoc}`;
+      ${htmlStatusRow}
+      ${htmlDocCards}
+      ${htmlEnvio}`;
 
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Documentos</div><div class="mh-name">${nomeT}</div>`);
@@ -21640,6 +21676,19 @@ async function renderDocumentosTurma(turmaId) {
     showToast(traduzErroSupabase(e,'Erro ao carregar documentos da turma'),'error');
   } finally { hideLoading(); }
 }
+
+// Abre o cartão de documento no modal genérico do GRID (mesmo componente já
+// usado em todo o app) — lê de window._docsDrawerCache, preenchido no fim de
+// renderDocumentosTurma(). Cada ação de gerar/refazer dentro do modal
+// re-renderiza a tela (atualiza os cartões por trás) e reabre este mesmo
+// modal com dado fresco, então o usuário nunca vê conteúdo desatualizado
+// sem precisar fechar e reabrir.
+function _abrirDrawerDocumento(which) {
+  const c = window._docsDrawerCache;
+  if (!c || !c[which]) return;
+  abrirModal(c[which].titulo, c[which].corpo);
+}
+
 // ============================================================
 // ENVIO DE DOCUMENTOS POR E-MAIL
 // ============================================================
