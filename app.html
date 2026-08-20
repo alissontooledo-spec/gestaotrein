@@ -4612,13 +4612,19 @@ async function renderHomeInstrutor() {
 
   let pendenciasDocs = [];
   if (idsConcluidasRecentes.length) {
-    const [{data:docs}, {data:partsData}, {data:envios}] = await Promise.all([
+    const [{data:docs}, {data:envios}, {data:sessoesTurmasData}, {data:presencasData}] = await Promise.all([
       sb.from('documentos').select('turma_id,tipo,colaborador_id').in('turma_id', idsConcluidasRecentes),
-      sb.from('turma_participantes').select('turma_id').in('turma_id', idsConcluidasRecentes),
       sb.from('envios_email').select('turma_id,status').in('turma_id', idsConcluidasRecentes),
+      // Sessões (todos os instrutores da turma, não só as deste usuário) e
+      // presença por encontro — necessárias pra saber quem é ELEGÍVEL a
+      // certificado (presença em 100% dos encontros), mesma regra de
+      // _participantesElegiveisCertificado. Corrige o bug de 2026-08-20: antes
+      // comparava contra o total de MATRICULADOS, então uma turma com
+      // qualquer ausente nunca saía da lista de pendências, mesmo com tudo
+      // que era possível já gerado e enviado.
+      sb.from('sessoes').select('id,turma_id').in('turma_id', idsConcluidasRecentes),
+      sb.from('presencas').select('turma_id,colaborador_id,sessao_id,presente').in('turma_id', idsConcluidasRecentes),
     ]);
-    const partsCountPorTurma = {};
-    (partsData||[]).forEach(p=>{ partsCountPorTurma[p.turma_id]=(partsCountPorTurma[p.turma_id]||0)+1; });
     const docsPorTurma = {};
     (docs||[]).forEach(d=>{
       if (!docsPorTurma[d.turma_id]) docsPorTurma[d.turma_id] = {lista:false,coletivo:false,individuais:new Set()};
@@ -4628,15 +4634,38 @@ async function renderHomeInstrutor() {
     });
     const enviadoPorTurma = {};
     (envios||[]).forEach(e=>{ enviadoPorTurma[e.turma_id] = e.status === 'enviado'; });
+    const sessoesIdsPorTurma = {};
+    (sessoesTurmasData||[]).forEach(s=>{ (sessoesIdsPorTurma[s.turma_id] ||= new Set()).add(s.id); });
+    const presencasPorTurma = {};
+    (presencasData||[]).forEach(p=>{
+      if (!p.presente) return;
+      (presencasPorTurma[p.turma_id] ||= {});
+      (presencasPorTurma[p.turma_id][p.colaborador_id] ||= new Set()).add(p.sessao_id);
+    });
+    const elegiveisPorTurma = {};
+    Object.keys(sessoesIdsPorTurma).forEach(tid=>{
+      const totalSess = sessoesIdsPorTurma[tid].size;
+      const porColab = presencasPorTurma[tid] || {};
+      const elegiveis = new Set();
+      Object.entries(porColab).forEach(([colId, sessoesPresentes])=>{
+        if (totalSess > 0 && sessoesPresentes.size === totalSess) elegiveis.add(colId);
+      });
+      elegiveisPorTurma[tid] = elegiveis;
+    });
 
     // Duas causas possíveis de pendência: (1) documentos ainda incompletos
-    // (falta gerar lista/certificado coletivo/algum certificado individual),
-    // ou (2) documentos 100% gerados mas a turma nunca foi enviada por
-    // e-mail ao cliente (tabela envios_email, 1 registro por turma).
+    // (falta gerar lista/certificado coletivo/algum certificado individual
+    // de quem é elegível), ou (2) documentos 100% gerados mas a turma nunca
+    // foi enviada por e-mail ao cliente (tabela envios_email, 1 registro por
+    // turma). Lista de presença é exigível sempre; coletivo e individuais só
+    // quando há ao menos 1 elegível.
     pendenciasDocs = idsConcluidasRecentes.map(id => {
       const dp = docsPorTurma[id] || {lista:false,coletivo:false,individuais:new Set()};
-      const totalPart = partsCountPorTurma[id]||0;
-      const incompletos   = !dp.lista || !dp.coletivo || dp.individuais.size < totalPart;
+      const totalElegivel = (elegiveisPorTurma[id]||new Set()).size;
+      const semListaGerada      = !dp.lista;
+      const semColetivoGerado   = totalElegivel > 0 && !dp.coletivo;
+      const individuaisFaltando = dp.individuais.size < totalElegivel;
+      const incompletos   = semListaGerada || semColetivoGerado || individuaisFaltando;
       const temDocumento   = dp.lista || dp.coletivo || dp.individuais.size > 0;
       const naoEnviado     = !incompletos && temDocumento && !enviadoPorTurma[id];
       if (!incompletos && !naoEnviado) return null;
@@ -14817,11 +14846,30 @@ async function _recalcularVencimentosCatalogo(catalogoId, validadeMeses) {
 async function _atualizarConformidadeTurma(turmaId, sessoesTurma) {
   try {
     const oi = usuarioAtual.org_id;
-    const [{data:turma}, {data:parts}] = await Promise.all([
+    const [{data:turma}, {data:parts}, {data:presencasTurma}] = await Promise.all([
       sb.from('turmas').select('catalogo_id,cliente_id,catalogo(validade_meses)').eq('id',turmaId).single(),
       sb.from('turma_participantes').select('colaborador_id').eq('turma_id',turmaId),
+      sb.from('presencas').select('colaborador_id,sessao_id,presente').eq('turma_id',turmaId),
     ]);
     if (!turma?.catalogo_id || !parts?.length) return;
+
+    // Só marca como concluído no módulo de Conformidade quem de fato tem
+    // presença em 100% dos encontros — mesma regra já usada para liberar o
+    // certificado (_participantesElegiveisCertificado). Sem isso, um
+    // participante que faltou em todos os dias era gravado como tendo
+    // concluído o treinamento (correção 2026-08-20, ver
+    // "análise-documentos-pendentes-pos-finalizacao"). Não mexe em
+    // conformidade_status já gravado antes desta correção — isso é uma
+    // decisão separada, ainda não tomada.
+    const sessaoIds = (sessoesTurma||[]).map(s=>s.id).filter(Boolean);
+    const presentesPorColaborador = {};
+    (presencasTurma||[]).forEach(p=>{
+      if (!p.presente || !sessaoIds.includes(p.sessao_id)) return;
+      (presentesPorColaborador[p.colaborador_id] ||= new Set()).add(p.sessao_id);
+    });
+    const partsElegiveis = parts.filter(p =>
+      sessaoIds.length > 0 && (presentesPorColaborador[p.colaborador_id]?.size||0) === sessaoIds.length);
+    if (!partsElegiveis.length) return;
 
     const datas = (sessoesTurma||[]).map(s => s.data).filter(Boolean).sort();
     const dataConclusao = datas[datas.length-1];
@@ -14832,7 +14880,7 @@ async function _atualizarConformidadeTurma(turmaId, sessoesTurma) {
     dtVenc.setMonth(dtVenc.getMonth()+validadeMeses);
     const dataVencimento = dtVenc.toISOString().split('T')[0];
 
-    const registros = parts.map(p => ({
+    const registros = partsElegiveis.map(p => ({
       org_id: oi,
       colaborador_id: p.colaborador_id,
       catalogo_id: turma.catalogo_id,
@@ -14876,6 +14924,7 @@ async function renderRelatorios() {
     {data:participantesRaw},
     {data:documentosRaw},
     {data:enviosRaw},
+    {data:presencasRaw},
     confData,
   ] = await Promise.all([
     sb.from('turmas')
@@ -14887,6 +14936,11 @@ async function renderRelatorios() {
     sb.from('turma_participantes').select('turma_id,colaborador_id'),
     sb.from('documentos').select('turma_id,tipo,colaborador_id').eq('org_id', oi),
     sb.from('envios_email').select('turma_id,status').eq('org_id', oi),
+    // Presença por encontro — necessária pra saber quem é ELEGÍVEL a
+    // certificado (presença em 100% dos encontros da turma, mesma regra de
+    // _participantesElegiveisCertificado), usada abaixo em `pendencias` pra
+    // não tratar aluno ausente como "documento pendente" (correção 2026-08-20).
+    sb.from('presencas').select('turma_id,colaborador_id,sessao_id,presente'),
     // Indicadores de conformidade/reciclagem só fazem sentido no plano Pro (mesma
     // regra da tela Conformidade) — busca só quando o plano já dá acesso, para
     // não gastar consulta à toa em quem ainda não tem a feature.
@@ -14907,8 +14961,6 @@ async function renderRelatorios() {
     // instrutor (mesma lógica usada no Início do Instrutor: documentos
     // incompletos OU gerados mas nunca enviados por e-mail) ──
     pendencias: (() => {
-      const partsCountPorTurma = {};
-      (participantesRaw||[]).forEach(p=>{ partsCountPorTurma[p.turma_id]=(partsCountPorTurma[p.turma_id]||0)+1; });
       const docsPorTurma = {};
       (documentosRaw||[]).forEach(d=>{
         if (!docsPorTurma[d.turma_id]) docsPorTurma[d.turma_id] = {lista:false,coletivo:false,individuais:new Set()};
@@ -14924,10 +14976,38 @@ async function renderRelatorios() {
         if (!instrutoresPorTurma[s.turma_id]) instrutoresPorTurma[s.turma_id] = new Set();
         instrutoresPorTurma[s.turma_id].add(s.usuarios.nome);
       });
+      // Elegibilidade por turma (mesma regra de _participantesElegiveisCertificado:
+      // presença em 100% dos encontros) — corrige o bug de 2026-08-20, em que
+      // "pendente" era calculado contra o total de MATRICULADOS, então uma
+      // turma com qualquer ausente nunca fechava.
+      const sessoesIdsPorTurma = {};
+      sessoesOrg.forEach(s=>{ (sessoesIdsPorTurma[s.turma_id] ||= new Set()).add(s.id); });
+      const presencasPorTurma = {};
+      (presencasRaw||[]).forEach(p=>{
+        if (!p.presente || !turmaIdsOrg.has(p.turma_id)) return;
+        (presencasPorTurma[p.turma_id] ||= {});
+        (presencasPorTurma[p.turma_id][p.colaborador_id] ||= new Set()).add(p.sessao_id);
+      });
+      const elegiveisPorTurma = {};
+      Object.keys(sessoesIdsPorTurma).forEach(tid=>{
+        const totalSess = sessoesIdsPorTurma[tid].size;
+        const porColab = presencasPorTurma[tid] || {};
+        const elegiveis = new Set();
+        Object.entries(porColab).forEach(([colId, sessoesPresentes])=>{
+          if (totalSess > 0 && sessoesPresentes.size === totalSess) elegiveis.add(colId);
+        });
+        elegiveisPorTurma[tid] = elegiveis;
+      });
       return (turmasRaw||[]).filter(t=>t.status==='concluida').map(t => {
         const dp = docsPorTurma[t.id] || {lista:false,coletivo:false,individuais:new Set()};
-        const totalPart = partsCountPorTurma[t.id]||0;
-        const incompletos = !dp.lista || !dp.coletivo || dp.individuais.size < totalPart;
+        const totalElegivel = (elegiveisPorTurma[t.id]||new Set()).size;
+        // Lista de presença é exigível sempre (independe de quem compareceu);
+        // coletivo e individuais só são exigíveis quando há ao menos 1
+        // elegível — não é pendência algo que nunca vai poder ser gerado.
+        const semListaGerada    = !dp.lista;
+        const semColetivoGerado = totalElegivel > 0 && !dp.coletivo;
+        const individuaisFaltando = dp.individuais.size < totalElegivel;
+        const incompletos = semListaGerada || semColetivoGerado || individuaisFaltando;
         const temDocumento = dp.lista || dp.coletivo || dp.individuais.size > 0;
         const naoEnviado   = !incompletos && temDocumento && !enviadoPorTurma[t.id];
         if (!incompletos && !naoEnviado) return null;
@@ -21184,11 +21264,16 @@ async function renderDocumentosTurma(turmaId) {
     const temTodasListas = totalListas > 0 && listasGeradas === totalListas;
 
     const temColetivo  = !!docsMap['certificado_coletivo'+''];
-    const totalInd      = participantes.length;
+    const totalInd      = participantes.length; // matriculados — só para exibição (ex.: "N elegível(is) de M participante(s)")
     // Só participantes com presença em 100% dos encontros são elegíveis —
     // os demais aparecem marcados como "presença incompleta", não "pendente"
     // (não é que falte gerar, é que não podem receber certificado).
     const elegiveisDoc  = await _participantesElegiveisCertificado(turmaId);
+    // Base real para "está tudo gerado?" — corrige o bug de 2026-08-20: antes
+    // comparava contra o total de MATRICULADOS (totalInd), então uma turma
+    // com qualquer ausente nunca fechava, mesmo com tudo que era possível já
+    // gerado. Agora compara contra quem de fato pode receber certificado.
+    const totalIndElegivel = elegiveisDoc.size;
 
     // Banner de reaproveitamento de assinatura entre dias (2026-08-13) —
     // só calculado e mostrado para Administrador/Provedor; o banco confirma
@@ -21209,11 +21294,15 @@ async function renderDocumentosTurma(turmaId) {
 
     const geradosIndArr = participantes.filter(p => !!docsMap['certificado_individual'+p.colaborador_id+'']);
     const geradosInd    = geradosIndArr.length;
-    const temTodosInd   = totalInd > 0 && geradosInd === totalInd;
+    const temTodosInd   = totalIndElegivel > 0 && geradosInd === totalIndElegivel;
 
-    const totalDocs   = totalListas + 1 + totalInd;
+    // Coletivo só é exigível quando há pelo menos 1 elegível — com zero
+    // elegíveis (turma concluída sem nenhuma presença completa) não há
+    // coletivo possível de gerar, então não deve contar como pendência.
+    const coletivoExigivel = totalIndElegivel > 0;
+    const totalDocs   = totalListas + (coletivoExigivel?1:0) + totalIndElegivel;
     const geradosDocs = listasGeradas + (temColetivo?1:0) + geradosInd;
-    const todosDocsGerados = geradosDocs === totalDocs;
+    const todosDocsGerados = totalDocs > 0 && geradosDocs === totalDocs;
 
     // Status de envio anterior
     const {data:envio} = await sb.from('envios_email').select('*').eq('turma_id', turmaId).maybeSingle();
@@ -21331,7 +21420,7 @@ async function renderDocumentosTurma(turmaId) {
           <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎓</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--text-1)">Certificados Individuais</div>
-            <div style="font-size:11px;margin-top:2px;color:${temTodosInd?'var(--green)':'var(--text-3)'}">${geradosInd}/${totalInd} gerados${elegiveisDoc.size<totalInd?` · ${totalInd-elegiveisDoc.size} com presença incompleta`:''}</div>
+            <div style="font-size:11px;margin-top:2px;color:${temTodosInd?'var(--green)':'var(--text-3)'}">${geradosInd}/${totalIndElegivel} gerados${elegiveisDoc.size<totalInd?` · ${totalInd-elegiveisDoc.size} com presença incompleta`:''}</div>
           </div>
           ${elegiveisDoc.size>0 ? `<button class="btn btn-outline btn-sm" onclick="gerarTodosCertificados('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}'))" style="flex-shrink:0">⬇ Gerar todos</button>` : ''}
         </div>
