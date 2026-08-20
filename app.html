@@ -654,12 +654,56 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .hist2-item .ht{font-size:12.5px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hist2-item .hs{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* ── Execution tabs ── */
+/* ── Execution tabs (não usadas mais — trocarAbaExec/.exec-tab/.exec-aba
+   ficaram sem gatilho depois da Jornada em Etapas Guiadas abaixo, mantidas
+   por segurança/histórico só, mesmo critério já usado neste projeto pra
+   código antigo sem uso, ver changelog 2026-08-18 sobre a paleta de
+   comandos) ── */
 .exec-tab{flex:1;padding:10px 8px;background:none;border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--text-3);cursor:pointer;font-family:inherit;transition:all .15s}
 .exec-tab:hover{color:var(--text-1)}
 .exec-tab.active{color:var(--navy);border-bottom-color:var(--amber)}
 .exec-aba{animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Jornada em Etapas Guiadas (execução: Presenças → Evidências → Finalizar),
+   2026-08-20 — Opção B escolhida pelo Alisson (ver
+   01-Requisitos/documentos-turma-redesign-proposta.md). Estrutura única e
+   responsiva: no mobile o trilho de etapas fica horizontal no topo; a partir
+   de 768px vira uma coluna fixa à esquerda, com o conteúdo sempre dentro de
+   um card de largura constante — evita o "salto" de layout entre etapas que
+   o Alisson apontou na 1ª versão do desktop. ── */
+.exec-wizard-wrap{display:flex;flex-direction:column}
+.exec-stepper{display:flex;margin-bottom:18px}
+.exec-step{display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;padding:8px 4px;border-radius:var(--r-md);justify-content:center;text-align:center;min-width:0}
+.exec-step-c{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2px solid var(--border-2);color:var(--text-3);background:var(--surface);flex-shrink:0}
+.exec-step.done .exec-step-c{background:var(--green);border-color:var(--green);color:#fff}
+.exec-step.current .exec-step-c{background:var(--navy);border-color:var(--navy);color:var(--amber)}
+.exec-step-txt{display:flex;flex-direction:column;min-width:0}
+.exec-step-l{font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exec-step.current .exec-step-l{color:var(--navy)}
+.exec-step.done .exec-step-l{color:var(--text-1)}
+.exec-step-s{font-size:9.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exec-step-line{flex:0 0 16px;height:2px;background:var(--border-2);align-self:center}
+.exec-step-line.done{background:var(--green)}
+.exec-panel{display:none;flex-direction:column}
+.exec-panel.active{display:flex}
+.exec-footer{display:flex;justify-content:flex-end;margin-top:16px}
+.exec-footer .btn{width:100%}
+.exec-countbadge{display:inline-flex;background:var(--amber-l);color:var(--amber-text);font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;margin-bottom:12px}
+.exec-prow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);margin-bottom:8px;background:var(--surface);border:1px solid var(--border)}
+.exec-prow:last-child{margin-bottom:0}
+@media(min-width:768px){
+  .exec-wizard-wrap{flex-direction:row;gap:32px;align-items:flex-start}
+  .exec-stepper{flex-direction:column;width:196px;flex-shrink:0;margin-bottom:0;position:sticky;top:0}
+  .exec-step{justify-content:flex-start;text-align:left;padding:9px 10px}
+  .exec-step:hover{background:var(--gray-100)}
+  .exec-step.current{background:rgba(30,42,74,.07)}
+  .exec-step-l,.exec-step-s{white-space:normal}
+  .exec-step-line{flex:none;width:2px;height:22px;margin:0 0 0 23px}
+  .exec-panel-wrap{flex:1;max-width:600px;min-width:0}
+  .exec-panel-wrap .card{max-width:600px}
+  .exec-footer .btn{width:auto;padding:11px 22px}
+}
 
 /* ── Turmas grid v2 ── */
 .turmas-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;min-width:0}
@@ -14270,6 +14314,14 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
       ? `${formatarData(sessaoAtiva.data)}${totalSessoes > 1 ? ` · Dia ${concluidasSessoes + 1} de ${totalSessoes}` : ''}`
       : '';
 
+    // Jornada em Etapas Guiadas (2026-08-20) — contadores calculados uma vez
+    // aqui pra abrir a tela já com o trilho e os resumos corretos; depois disso
+    // quem mantém tudo em dia é _execAtualizarResumoEtapas() (chamada a cada
+    // navegação de etapa e a cada ação que muda presença/evidência).
+    const totalPartExec  = (t.turma_participantes||[]).length;
+    const assinCountExec = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
+    const evidCountExec  = window._execEvidencias.length;
+
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
         <button class="btn btn-ghost btn-sm" data-action="voltarDaExecucao" data-id="${turmaId}">${ICONS.back} Voltar</button>
@@ -14286,87 +14338,106 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         ⏳ <span class="badge-fila-offline-n">0</span> ação(ões) guardadas offline aguardando conexão para sincronizar
       </div>
 
-      <!-- Abas de execução -->
-      <div style="display:flex;border-bottom:2px solid var(--border);margin-bottom:20px;gap:0">
-        <button class="exec-tab active" data-tab="presenca" onclick="trocarAbaExec('presenca',this)">
-          Presenças
-        </button>
-        <button class="exec-tab" data-tab="evidencias" onclick="trocarAbaExec('evidencias',this)">
-          Evidências
-        </button>
-        <button class="exec-tab" data-tab="finalizar" onclick="trocarAbaExec('finalizar',this)">
-          Finalizar
-        </button>
-      </div>
-
-      <!-- Aba Presenças -->
-      <div id="abaPresenca" class="exec-aba">
-        <div class="card">
-          <div class="card-title">Lista de presença</div>
-          <div id="listaPresencas">
-            ${_htmlListaPresencas(t.turma_participantes||[])}
+      <!-- Jornada em Etapas Guiadas (Presenças → Evidências → Finalizar),
+           2026-08-20 — Opção B escolhida pelo Alisson, no lugar das antigas
+           abas soltas. Mesma estrutura pro mobile e desktop (setConteudo()
+           grava este html em #mainBody e #mobileBody); o CSS reposiciona o
+           trilho de horizontal (mobile) pra coluna fixa à esquerda (desktop,
+           ≥768px) — ver .exec-wizard-wrap no CSS. -->
+      <div class="exec-wizard-wrap">
+        <div class="exec-stepper" id="execStepper">
+          <div class="exec-step current" data-step="1" onclick="execIrEtapa(1,this)">
+            <div class="exec-step-c">1</div>
+            <div class="exec-step-txt"><div class="exec-step-l">Presenças</div><div class="exec-step-s" id="execSubPresenca">${totalPartExec?`${assinCountExec}/${totalPartExec} assinaram`:'—'}</div></div>
+          </div>
+          <div class="exec-step-line"></div>
+          <div class="exec-step" data-step="2" onclick="execIrEtapa(2,this)">
+            <div class="exec-step-c">2</div>
+            <div class="exec-step-txt"><div class="exec-step-l">Evidências</div><div class="exec-step-s" id="execSubEvidencias">${evidCountExec} registrada${evidCountExec===1?'':'s'}</div></div>
+          </div>
+          <div class="exec-step-line"></div>
+          <div class="exec-step" data-step="3" onclick="execIrEtapa(3,this)">
+            <div class="exec-step-c">3</div>
+            <div class="exec-step-txt"><div class="exec-step-l">Finalizar</div><div class="exec-step-s">Revisão final</div></div>
           </div>
         </div>
-      </div>
 
-      <!-- Aba Evidências -->
-      <div id="abaEvidencias" class="exec-aba" style="display:none">
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-title">Fotos e registros</div>
-          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-            <button class="btn btn-outline" type="button" onclick="this.nextElementSibling.click()">📷 Tirar foto</button>
-            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="adicionarEvidencia(this,'foto')">
-            <button class="btn btn-outline" type="button" onclick="this.nextElementSibling.click()">🖼 Galeria</button>
-            <input type="file" accept="image/*" style="display:none" onchange="adicionarEvidencia(this,'foto')">
+        <div class="exec-panel-wrap" id="execPanelWrap">
+          <!-- Etapa 1 — Presenças -->
+          <div id="abaPresenca" class="exec-panel active" data-step="1">
+            <div class="card">
+              <div class="card-title">Quem participou?</div>
+              <div style="font-size:12px;color:var(--text-2);margin:4px 0 12px">Toque em "Assinar" para coletar a assinatura de cada aluno.</div>
+              ${totalPartExec ? `<div class="exec-countbadge" id="execCountBadge">${assinCountExec} de ${totalPartExec} assinaram</div>` : ''}
+              <div id="listaPresencas">
+                ${_htmlListaPresencas(t.turma_participantes||[])}
+              </div>
+              <div class="exec-footer"><button class="btn btn-navy" onclick="execIrEtapa(2,this)">Próximo: Evidências →</button></div>
+            </div>
           </div>
-          <div id="listaEvidencias">
-            ${_htmlListaEvidencias(window._execEvidencias)}
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">Anotações do instrutor</div>
-          <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${escapeHtml(sessaoAtiva?.anotacoes_instrutor||'')}</textarea>
-          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-            <button class="btn btn-navy btn-sm" id="btnSalvarAnotacoes" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
-            <button class="btn btn-outline btn-sm" id="btnEditarAnotacoes" style="display:none" onclick="editarAnotacoes()">✏ Editar</button>
-            <span id="anotacoesSalvas" style="display:none;font-size:13px;color:var(--green);font-weight:500">✓ Salvo</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Aba Finalizar -->
-      <div id="abaFinalizar" class="exec-aba" style="display:none">
-        <div class="card">
-          <div class="card-title">Resumo da execução</div>
-          <div style="display:grid;gap:12px;margin-bottom:20px">
-            <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
-              <span style="font-size:14px;color:var(--text-2)">Total de participantes</span>
-              <span style="font-size:14px;font-weight:600">${(t.turma_participantes||[]).length}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
-              <span style="font-size:14px;color:var(--text-2)">Com assinatura</span>
-              <span style="font-size:14px;font-weight:600" id="totalAssinados">
-                ${Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length}
-              </span>
-            </div>
-            <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
-              <span style="font-size:14px;color:var(--text-2)">Evidências registradas</span>
-              <span style="font-size:14px;font-weight:600" id="totalEvidencias">${window._execEvidencias.length}</span>
+          <!-- Etapa 2 — Evidências -->
+          <div id="abaEvidencias" class="exec-panel" data-step="2">
+            <div class="card">
+              <div class="card-title">Registre evidências</div>
+              <div style="font-size:12px;color:var(--text-2);margin:4px 0 14px">Fotos do treinamento e observações do instrutor.</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:10px">Fotos e registros</div>
+              <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+                <button class="btn btn-outline" type="button" onclick="this.nextElementSibling.click()">📷 Tirar foto</button>
+                <input type="file" accept="image/*" capture="environment" style="display:none" onchange="adicionarEvidencia(this,'foto')">
+                <button class="btn btn-outline" type="button" onclick="this.nextElementSibling.click()">🖼 Galeria</button>
+                <input type="file" accept="image/*" style="display:none" onchange="adicionarEvidencia(this,'foto')">
+              </div>
+              <div id="listaEvidencias">
+                ${_htmlListaEvidencias(window._execEvidencias)}
+              </div>
+              <div style="font-size:13px;font-weight:600;color:var(--text-1);margin:20px 0 8px">Anotações do instrutor</div>
+              <textarea id="anotacoesInstrutor" rows="4" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none" placeholder="Observações sobre o treinamento...">${escapeHtml(sessaoAtiva?.anotacoes_instrutor||'')}</textarea>
+              <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+                <button class="btn btn-navy btn-sm" id="btnSalvarAnotacoes" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
+                <button class="btn btn-outline btn-sm" id="btnEditarAnotacoes" style="display:none" onclick="editarAnotacoes()">✏ Editar</button>
+                <span id="anotacoesSalvas" style="display:none;font-size:13px;color:var(--green);font-weight:500">✓ Salvo</span>
+              </div>
+              <div class="exec-footer"><button class="btn btn-navy" onclick="execIrEtapa(3,this)">Próximo: Finalizar →</button></div>
             </div>
           </div>
-          ${sessaoAtiva?.concluida ? `
-          <div style="background:var(--green-l);color:var(--green);border-radius:var(--r-md);padding:12px 14px;font-size:13px;font-weight:600;text-align:center">
-            ✓ Este encontro já foi finalizado${sessaoAtiva?.data?' em '+formatarData(sessaoAtiva.data):''}. Você está revisando os dados registrados.
-          </div>` : `
-          <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:20px;font-size:13px;line-height:1.5">
-            <div style="font-weight:600;margin-bottom:4px">⚠️ Atenção</div>
-            ${(t.sessoes||[]).filter(s=>s.id!==sessaoAtiva?.id).every(s=>s.concluida)
-              ? 'Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>. Os documentos ficarão disponíveis para geração.'
-              : 'Isso finaliza apenas o encontro de hoje. A turma só fica <strong>Concluída</strong> (com documentos liberados) depois que todos os encontros forem finalizados.'}
+
+          <!-- Etapa 3 — Finalizar -->
+          <div id="abaFinalizar" class="exec-panel" data-step="3">
+            <div class="card">
+              <div class="card-title">Revisar e finalizar</div>
+              <div style="font-size:12px;color:var(--text-2);margin:4px 0 14px">Confira o resumo antes de concluir o treinamento.</div>
+              <div style="display:grid;gap:12px;margin-bottom:20px">
+                <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
+                  <span style="font-size:14px;color:var(--text-2)">Total de participantes</span>
+                  <span style="font-size:14px;font-weight:600">${totalPartExec}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
+                  <span style="font-size:14px;color:var(--text-2)">Com assinatura</span>
+                  <span style="font-size:14px;font-weight:600" id="totalAssinados">
+                    ${assinCountExec}
+                  </span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
+                  <span style="font-size:14px;color:var(--text-2)">Evidências registradas</span>
+                  <span style="font-size:14px;font-weight:600" id="totalEvidencias">${evidCountExec}</span>
+                </div>
+              </div>
+              ${sessaoAtiva?.concluida ? `
+              <div style="background:var(--green-l);color:var(--green);border-radius:var(--r-md);padding:12px 14px;font-size:13px;font-weight:600;text-align:center">
+                ✓ Este encontro já foi finalizado${sessaoAtiva?.data?' em '+formatarData(sessaoAtiva.data):''}. Você está revisando os dados registrados.
+              </div>` : `
+              <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:20px;font-size:13px;line-height:1.5">
+                <div style="font-weight:600;margin-bottom:4px">⚠️ Atenção</div>
+                ${(t.sessoes||[]).filter(s=>s.id!==sessaoAtiva?.id).every(s=>s.concluida)
+                  ? 'Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>. Os documentos ficarão disponíveis para geração.'
+                  : 'Isso finaliza apenas o encontro de hoje. A turma só fica <strong>Concluída</strong> (com documentos liberados) depois que todos os encontros forem finalizados.'}
+              </div>
+              <div class="exec-footer"><button class="btn btn-navy" onclick="finalizarTurma('${turmaId}')">
+                ✓ Finalizar treinamento
+              </button></div>`}
+            </div>
           </div>
-          <button class="btn btn-navy" style="width:100%" onclick="finalizarTurma('${turmaId}')">
-            ✓ Finalizar treinamento
-          </button>`}
         </div>
       </div>`;
 
@@ -14418,6 +14489,69 @@ function trocarAbaExec(aba, btn) {
   }
 }
 
+// ---- Jornada em Etapas Guiadas (2026-08-20) — navegação entre as 3 etapas da
+// execução (Presenças/Evidências/Finalizar), no lugar das antigas abas soltas.
+// trocarAbaExec (acima) ficou sem gatilho — mantida por segurança/histórico,
+// mesmo critério já usado neste projeto pra código antigo sem uso (ver
+// changelog 2026-08-18, paleta de comandos). Escopado ao container clicado
+// (mainBody OU mobileBody), mesmo princípio de trocarAbaExec: setConteudo()
+// grava o mesmo html nos dois, só um fica visível por vez.
+function execIrEtapa(step, el) {
+  const container = (el && el.closest('#mainBody, #mobileBody')) || _execContainer();
+  const stepper = container.querySelector('#execStepper');
+  if (stepper) {
+    stepper.querySelectorAll('.exec-step').forEach(s => {
+      const n = parseInt(s.getAttribute('data-step'), 10);
+      s.classList.remove('current','done');
+      if (n < step) s.classList.add('done');
+      if (n === step) s.classList.add('current');
+    });
+    stepper.querySelectorAll('.exec-step-line').forEach((l, i) => {
+      l.classList.toggle('done', (i+1) < step);
+    });
+  }
+  const panelWrap = container.querySelector('#execPanelWrap');
+  if (panelWrap) {
+    panelWrap.querySelectorAll('.exec-panel').forEach(p => {
+      p.classList.toggle('active', parseInt(p.getAttribute('data-step'), 10) === step);
+    });
+  }
+
+  // Mesma cautela que trocarAbaExec já tinha: ao entrar na etapa de
+  // Presenças, re-renderiza a lista (cobre o caso de algo ter mudado em
+  // segundo plano — ex.: sincronização da fila offline — enquanto o
+  // instrutor estava em outra etapa); em qualquer etapa, mantém os
+  // contadores do trilho em dia.
+  if (step === 1) {
+    const lista = container.querySelector('#listaPresencas');
+    if (lista && window._execParticipantes) {
+      lista.innerHTML = _htmlListaPresencas(window._execParticipantes);
+    }
+  }
+  _execAtualizarResumoEtapas();
+}
+
+// Mantém em dia os contadores exibidos no trilho de etapas ("6/8 assinaram",
+// "3 registradas"), o selo acima da lista de presença e o resumo da etapa
+// Finalizar — chamada ao navegar entre etapas e depois de qualquer ação que
+// mude presença/evidência (assinar, tirar foto, remover foto).
+function _execAtualizarResumoEtapas() {
+  const totalPart  = (window._execParticipantes||[]).length;
+  const assinCount = Object.values(window._execPresencas||{}).filter(p=>p.assinatura_path||p.presente).length;
+  const evidCount  = (window._execEvidencias||[]).length;
+
+  const subP = execEl('execSubPresenca');
+  if (subP) subP.textContent = totalPart ? `${assinCount}/${totalPart} assinaram` : '—';
+  const subE = execEl('execSubEvidencias');
+  if (subE) subE.textContent = `${evidCount} registrada${evidCount===1?'':'s'}`;
+  const badge = execEl('execCountBadge');
+  if (badge) badge.textContent = totalPart ? `${assinCount} de ${totalPart} assinaram` : '';
+  const totalAssinEl = execEl('totalAssinados');
+  if (totalAssinEl) totalAssinEl.textContent = assinCount;
+  const totalEvEl = execEl('totalEvidencias');
+  if (totalEvEl) totalEvEl.textContent = evidCount;
+}
+
 // ---- Lista de presenças ----
 function _htmlListaPresencas(participantes) {
   if (!participantes.length) return `<div class="empty" style="padding:20px"><div class="empty-title">Nenhum participante</div><div class="empty-sub">Adicione participantes à turma primeiro.</div></div>`;
@@ -14426,8 +14560,12 @@ function _htmlListaPresencas(participantes) {
     const presen = window._execPresencas[p.colaborador_id];
     const assinou= presen && (presen.assinatura_path || presen.presente);
     const pendente = presen && presen._pendente;
+    // Destaque visual (borda âmbar) pra quem ainda falta assinar — Jornada em
+    // Etapas Guiadas, 2026-08-20 — ajuda a achar rápido quem falta numa turma
+    // grande, sem precisar de um filtro separado.
+    const faltaAssinar = !assinou && !pendente;
     return `
-      <div class="list-item" style="padding:12px 0">
+      <div class="exec-prow"${faltaAssinar ? ' style="border-left:3px solid var(--amber);background:var(--amber-l)"' : ''}>
         <div class="li-icon" style="background:${pendente?'var(--amber-l)':assinou?'var(--green-l)':'var(--gray-100)'};color:${pendente?'var(--amber-text)':assinou?'var(--green)':'var(--text-3)'};font-size:12px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
           ${pendente?'⏳':assinou?'✓':iniciais(col.nome||'?')}
         </div>
@@ -14582,6 +14720,11 @@ async function confirmarAssinatura() {
   // Atualizar contador na aba finalizar
   const totalEl = execEl('totalAssinados');
   if (totalEl) totalEl.textContent = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
+
+  // Mantém o trilho de etapas (Jornada em Etapas Guiadas) em dia mesmo sem
+  // trocar de etapa — ex.: assinar o último pendente já atualiza "8/8
+  // assinaram" no trilho sem precisar sair da etapa 1.
+  _execAtualizarResumoEtapas();
 }
 
 // ---- Evidências fotográficas ----
@@ -14680,6 +14823,7 @@ async function adicionarEvidencia(input, tipo) {
   } finally {
     const listaEvEl = execEl('listaEvidencias');
     if (listaEvEl) listaEvEl.innerHTML = _htmlListaEvidencias(window._execEvidencias);
+    _execAtualizarResumoEtapas();
     hideLoading();
   }
 }
@@ -14692,6 +14836,7 @@ async function removerEvidenciaPendente(filaIdStr) {
   window._execEvidencias = window._execEvidencias.filter(e => e.id !== ('pendente-'+idNum));
   const listaEvEl = execEl('listaEvidencias');
   if (listaEvEl) listaEvEl.innerHTML = _htmlListaEvidencias(window._execEvidencias);
+  _execAtualizarResumoEtapas();
   showToast('Foto pendente removida.','info');
   _atualizarBadgeFilaOffline();
 }
@@ -14706,6 +14851,7 @@ async function removerEvidencia(evId, path) {
     window._execEvidencias = window._execEvidencias.filter(e=>e.id!==evId);
     const listaEvEl2 = execEl('listaEvidencias');
     if (listaEvEl2) listaEvEl2.innerHTML = _htmlListaEvidencias(window._execEvidencias);
+    _execAtualizarResumoEtapas();
     showToast('Evidência removida','info');
   } catch(e) { showToast(traduzErroSupabase(e,'Erro'),'error'); }
 }
