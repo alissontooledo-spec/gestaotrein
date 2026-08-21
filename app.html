@@ -3156,7 +3156,7 @@ async function renderHomeProvedor() {
   const [{ data: orgs }, { data: usuarios }, { data: acessos }, { data: eventosAuditoria }, { data: colaboradoresOrgId }, { data: dispensadosRows }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_id').order('created_at', { ascending: false }),
     sb.from('usuarios').select('id,nome,org_id,perfil,ativo,created_at'),
-    sb.from('logs_acesso').select('id,org_id,created_at,encerrado_em,organizacoes(nome)').order('created_at', { ascending: false }).limit(5),
+    sb.from('logs_acesso').select('id,org_id,iniciado_em,encerrado_em,organizacoes(nome)').order('iniciado_em', { ascending: false }).limit(5),
     sb.from('eventos_sistema').select('id,tabela,acao,dados_antigos,dados_novos,usuario_id,criado_em').order('criado_em', { ascending: false }).limit(8),
     sb.from('colaboradores').select('org_id'),
     sb.from('alertas_dispensados').select('id,org_id,categoria,assinatura'),
@@ -3239,7 +3239,7 @@ async function renderHomeProvedor() {
   const eventos = [
     ...eventosAud,
     ...eventosFallback,
-    ...acessosAll.map(a => ({ data:a.created_at, texto:`Acesso de suporte: <strong>${escapeHtml(a.organizacoes?.nome||'—')}</strong>${a.encerrado_em?'':' <span style="color:var(--amber-h)">(em andamento)</span>'}`, icone:'🔧' })),
+    ...acessosAll.map(a => ({ data:a.iniciado_em, texto:`Acesso de suporte: <strong>${escapeHtml(a.organizacoes?.nome||'—')}</strong>${a.encerrado_em?'':' <span style="color:var(--amber-h)">(em andamento)</span>'}`, icone:'🔧' })),
   ].sort((a,b) => b.data > a.data ? 1 : -1).slice(0,6);
 
   const htmlFeed = eventos.length ? eventos.map(e => `
