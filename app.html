@@ -8,6 +8,7 @@
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 <meta name="theme-color" content="#1E2A4A">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GRID">
 <title>GRID — Treinamentos</title>
@@ -907,13 +908,15 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
     <div class="login-title">Bem-vindo de volta</div>
     <div class="login-sub">Acesse sua conta para continuar</div>
     <div class="login-error" id="loginError"></div>
-    <div class="field"><label for="loginEmail">E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email" inputmode="email"></div>
-    <div class="field">
-      <label for="loginPass">Senha</label>
-      <input type="password" id="loginPass" placeholder="..." autocomplete="current-password">
-      <span onclick="abrirRecuperacaoSenhaLogin()" class="login-forgot">Esqueceu sua senha?</span>
-    </div>
-    <button class="btn-primary" id="loginBtn" onclick="fazerLogin()">Entrar</button>
+    <form id="loginForm" onsubmit="event.preventDefault(); fazerLogin(); return false;">
+      <div class="field"><label for="loginEmail">E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email" inputmode="email"></div>
+      <div class="field">
+        <label for="loginPass">Senha</label>
+        <input type="password" id="loginPass" placeholder="..." autocomplete="current-password">
+        <span onclick="abrirRecuperacaoSenhaLogin()" class="login-forgot">Esqueceu sua senha?</span>
+      </div>
+      <button class="btn-primary" id="loginBtn" type="submit">Entrar</button>
+    </form>
     <div class="login-footer">GRID · 2026</div>
     <div style="text-align:center;margin-top:10px;font-size:11px">
       <a href="/privacidade.html" target="_blank" rel="noopener" style="color:rgba(255,255,255,.45);text-decoration:none">Privacidade</a>
@@ -2830,10 +2833,6 @@ function _comboBuscavelBlur(id) {
 // ============================================================
 // AUTENTICAÇÃO
 // ============================================================
-document.getElementById('loginPass').addEventListener('keydown', e => {
-  if (e.key === 'Enter') fazerLogin();
-});
-
 async function fazerLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const senha = document.getElementById('loginPass').value;
