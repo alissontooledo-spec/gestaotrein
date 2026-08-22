@@ -4666,6 +4666,30 @@ async function renderHomeInstrutor() {
   const futuras    = pendentes.filter(s=>s.data>hoje);
   const proximo    = aulasHoje[0] || futuras[0] || null;
 
+  // 2026-08-22 (pedido do Alisson, item 10 — a Home precisa mostrar
+  // compromisso com o mesmo padrão visual do treinamento): compromissos
+  // futuros/hoje do instrutor, mesmo carregador já usado em Minha Agenda —
+  // devolve [] em qualquer falha, então esta tela nunca quebra por causa
+  // disso. NÃO entra nos contadores (Aulas hoje/Docs/Turmas/Horas) — esses
+  // continuam só de treinamento, mesma decisão já tomada pro resto da
+  // Agenda (Decisão 3, 2026-08-22).
+  const compromissosInst = await _compCarregarDoInstrutor(usuarioAtual.id);
+  const compsFuturos = (compromissosInst||[])
+    .filter(x => x.data >= hoje)
+    .sort((a,b) => (a.data+(a.hora_inicio||'')).localeCompare(b.data+(b.hora_inicio||'')));
+  const proximoComp = compsFuturos[0] || null;
+
+  // Qual dos dois (treinamento x compromisso) é o item mais próximo no
+  // tempo — vai pro card de destaque do hero. Empate (mesmo horário) fica
+  // com o treinamento, por ser o item de maior consequência operacional.
+  let proximoTipo = null;
+  if (proximo && proximoComp) {
+    const chaveT = proximo.data + (proximo.hora_inicio||'99:99');
+    const chaveC = proximoComp.data + (proximoComp.hora_inicio||'99:99');
+    proximoTipo = chaveC < chaveT ? 'comp' : 'sessao';
+  } else if (proximoComp) { proximoTipo = 'comp'; }
+  else if (proximo) { proximoTipo = 'sessao'; }
+
   // ── Indicadores resumidos ──
   const mesAtual = hoje.slice(0,7);
   const turmaIdsConcluidasMes = new Set(
@@ -4766,7 +4790,24 @@ async function renderHomeInstrutor() {
   // (Alternativa 1 aprovada). Mesmos dados e mesmas ações (Iniciar/
   // Continuar com os mesmos data-action/data-id/data-sessao). ──
   let htmlProximoHero = '';
-  if (proximo) {
+  if (proximoTipo === 'comp' && proximoComp) {
+    // 2026-08-22 — compromisso em destaque no hero, mesmo componente
+    // (.h2-heronext) e mesma hierarquia visual que o treinamento usa
+    // logo abaixo — só o conteúdo muda.
+    const tipoC = _compTipo(proximoComp.tipo);
+    const ehHojeC = proximoComp.data === hoje;
+    htmlProximoHero = `
+      <div class="h2-heronext" data-action="verCompromisso" data-id="${proximoComp.id}" style="cursor:pointer">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="min-width:0">
+            <div style="font-size:10px;font-weight:700;color:#93c5fd;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Próximo compromisso${ehHojeC?' · hoje':''}</div>
+            <div style="font-size:14.5px;font-weight:700;color:#fff">${tipoC.icone} ${escapeHtml(proximoComp.titulo)}</div>
+            <div style="font-size:11.5px;color:rgba(255,255,255,.55);margin-top:2px;line-height:1.5">${tipoC.label}${proximoComp.hora_inicio?' · ⏰ '+proximoComp.hora_inicio.slice(0,5)+(proximoComp.hora_fim?' – '+proximoComp.hora_fim.slice(0,5):''):''}${proximoComp.local?' · 📍 '+escapeHtml(proximoComp.local):''}</div>
+          </div>
+          <span class="badge ${ehHojeC?'badge-amber':'badge-gray'}" style="flex-shrink:0">${ehHojeC?'Hoje':formatarData(proximoComp.data)}</span>
+        </div>
+      </div>`;
+  } else if (proximo) {
     const st = proximo.turma?.status||'agendada';
     const ehHoje = proximo.data === hoje;
     const localCardTxt = proximo.turma?.local && proximo.local ? `${proximo.turma.local} · ${proximo.local}`
@@ -4814,10 +4855,29 @@ async function renderHomeInstrutor() {
   // ── Agenda da semana (nova seção da Alternativa 1): próximas sessões
   // futuras além do destaque do hero — dados já carregados, nenhuma
   // consulta extra. ──
-  const semana = futuras.filter(s => !proximo || s.id !== proximo.id).slice(0,5);
-  const htmlSemana = semana.length ? `
+  // 2026-08-22 — compromissos entram na mesma lista, no mesmo componente
+  // visual (.list-item) que o treinamento já usa aqui — só ícone/cor/ação
+  // mudam por tipo. O item já mostrado no card de destaque do hero (seja
+  // treinamento ou compromisso) não se repete aqui embaixo.
+  const sessoesRestantes = futuras.filter(s => !(proximoTipo==='sessao' && proximo && s.id===proximo.id));
+  const compsRestantes = compsFuturos.filter(x => !(proximoTipo==='comp' && proximoComp && x.id===proximoComp.id));
+  const _linhaCompromissoHome = (x) => {
+    const t = _compTipo(x.tipo);
+    return `<div class="list-item" data-action="verCompromisso" data-id="${x.id}" style="cursor:pointer">
+      <div class="li-icon" style="background:rgba(46,63,107,.15);color:${COMPROMISSO_COR}">${t.icone}</div>
+      <div class="li-info">
+        <div class="li-title">${escapeHtml(x.titulo)}</div>
+        <div class="li-sub">${t.label} · ${formatarData(x.data)}${x.hora_inicio?' · '+x.hora_inicio.slice(0,5):''}</div>
+      </div>
+    </div>`;
+  };
+  const semanaItens = [
+    ...sessoesRestantes.map(s => ({_tipo:'sessao', chave:s.data+(s.hora_inicio||''), html:_linhaSessao(s,'#F59E0B','📅','')})),
+    ...compsRestantes.map(x => ({_tipo:'comp', chave:x.data+(x.hora_inicio||''), html:_linhaCompromissoHome(x)})),
+  ].sort((a,b) => a.chave.localeCompare(b.chave)).slice(0,5);
+  const htmlSemana = semanaItens.length ? `
     <div class="gh-sec"><div class="dot navy"></div><span>Agenda da semana</span><div class="line"></div><span class="glink" data-nav="agenda">Minha agenda →</span></div>
-    <div class="card">${semana.map(s=>_linhaSessao(s,'#F59E0B','📅','')).join('')}</div>` : '';
+    <div class="card">${semanaItens.map(it=>it.html).join('')}</div>` : '';
 
   // ── Indicadores — mesmos números de antes (ver comentário histórico da
   // divergência 6x18), agora no padrão de KPI aprovado ──
@@ -12332,39 +12392,92 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
   const tipoSel  = cm?.tipo || 'reuniao';
   const tipoOpts = COMPROMISSO_TIPOS.map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('');
 
-  abrirModal(cm ? 'Editar compromisso' : 'Novo compromisso', `
-    <div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2);line-height:1.5">
-      Reserva de agenda do instrutor. <b>Não gera turma, alunos, assinaturas, evidências nem certificados</b> — serve para bloquear o horário.
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="field"><label for="mCompTipo">Tipo *</label>
-        <select id="mCompTipo" style="${_COMP_INPUT_ST}">${tipoOpts}</select></div>
-      <div class="field"><label for="mCompInstrutor">Instrutor *</label>
-        <select id="mCompInstrutor" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}">
-          <option value="">Selecione o instrutor...</option>${instOpts}</select></div>
-    </div>
-    <div class="field"><label for="mCompTitulo">Título *</label>
-      <input type="text" id="mCompTitulo" maxlength="120" value="${escapeHtml(cm?.titulo||'')}" placeholder="Ex.: Palestra de abertura da SIPAT"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-      <div class="field"><label for="mCompData">Data *</label>
-        <input type="date" id="mCompData" value="${cm?.data||preset.data||''}" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}"></div>
-      <div class="field"><label for="mCompIni">Início *</label>
-        <input type="time" id="mCompIni" value="${cm?.hora_inicio?.slice(0,5)||preset.horaInicio||''}" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}"></div>
-      <div class="field"><label for="mCompFim">Término *</label>
-        <input type="time" id="mCompFim" value="${cm?.hora_fim?.slice(0,5)||''}" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}"></div>
-    </div>
-    <div id="mCompConflito"></div>
-    <div class="field"><label for="mCompDesc">Descrição</label>
-      <textarea id="mCompDesc" rows="2" maxlength="2000" placeholder="O que é esse compromisso" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.descricao||'')}</textarea></div>
-    <div class="field"><label for="mCompLocal">Informações adicionais</label>
-      <input type="text" id="mCompLocal" maxlength="200" value="${escapeHtml(cm?.local||'')}" placeholder="Ex.: Auditório central, sala 2, link da reunião...">
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Aparece para o instrutor no card da Agenda.</div></div>
-    <div class="field" style="margin-bottom:0"><label for="mCompObs">Observações</label>
-      <textarea id="mCompObs" rows="2" maxlength="2000" placeholder="Orientações para o instrutor" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.observacoes||'')}</textarea></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`);
+  // 2026-08-22 (pedido do Alisson — revisão de UX/UI): mesmo padrão
+  // visual/estrutural do modal "Nova turma" (.nt-grid/.nt-sec com ícone +
+  // .nt-preview ao vivo, modal alargado). A caixa que explicava a regra
+  // interna ("não gera turma, alunos...") foi removida — é lógica de
+  // negócio, não informação que o operador precisa ver. O campo
+  // "Informações adicionais" também saiu — Observações já cobre a mesma
+  // necessidade, e ter os dois só duplicava a decisão pro operador.
+  abrirModal(cm ? 'Editar compromisso' : '📌 Novo compromisso', `
+    <div class="nt-grid">
+      <div>
+        <div class="nt-sec">
+          <div class="nt-ic">📌</div>
+          <div class="nt-body">
+            <div class="nt-title">Compromisso</div>
+            <div class="nt-2col">
+              <div class="field"><label for="mCompTipo">Tipo *</label>
+                <select id="mCompTipo" onchange="_compAtualizarPreview()" style="${_COMP_INPUT_ST}">${tipoOpts}</select></div>
+              <div class="field"><label for="mCompInstrutor">Instrutor *</label>
+                <select id="mCompInstrutor" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}">
+                  <option value="">Selecione o instrutor...</option>${instOpts}</select></div>
+            </div>
+            <div class="field" style="margin-bottom:0"><label for="mCompTitulo">Título *</label>
+              <input type="text" id="mCompTitulo" maxlength="120" oninput="_compAtualizarPreview()" value="${escapeHtml(cm?.titulo||'')}" placeholder="Ex.: Palestra de abertura da SIPAT" style="${_COMP_INPUT_ST}"></div>
+          </div>
+        </div>
 
+        <div class="nt-sec">
+          <div class="nt-ic">📅</div>
+          <div class="nt-body">
+            <div class="nt-title">Agendamento</div>
+            <div class="nt-3col">
+              <div class="field"><label>Data *</label>
+                <input type="date" id="mCompData" value="${cm?.data||preset.data||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
+              <div class="field"><label>Início *</label>
+                <input type="time" id="mCompIni" value="${cm?.hora_inicio?.slice(0,5)||preset.horaInicio||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
+              <div class="field" style="margin-bottom:0"><label>Término *</label>
+                <input type="time" id="mCompFim" value="${cm?.hora_fim?.slice(0,5)||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
+            </div>
+            <div id="mCompConflito"></div>
+          </div>
+        </div>
+
+        <div class="nt-sec" style="margin-bottom:0">
+          <div class="nt-ic">📝</div>
+          <div class="nt-body">
+            <div class="nt-title">Detalhes</div>
+            <div class="field"><label for="mCompDesc">Descrição</label>
+              <textarea id="mCompDesc" rows="2" maxlength="2000" oninput="_compAtualizarPreview()" placeholder="O que é esse compromisso" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.descricao||'')}</textarea></div>
+            <div class="field" style="margin-bottom:0"><label for="mCompObs">Observações</label>
+              <textarea id="mCompObs" rows="2" maxlength="2000" placeholder="Orientações para o instrutor" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.observacoes||'')}</textarea></div>
+          </div>
+        </div>
+      </div>
+      <div class="nt-preview" id="mCompPreview"></div>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`,
+    true);
+
+  _compAtualizarPreview();
   if (instrutorSel && (cm?.data || preset.data)) _compVerificarConflito();
+}
+
+// Painel-resumo ao vivo do modal Novo/Editar compromisso (mesmo padrão de
+// _turmaAtualizarPreview/_agRapidaAtualizarPreview) — só LÊ os campos já
+// preenchidos, nunca decide nem valida nada sozinha.
+function _compAtualizarPreview() {
+  const el = document.getElementById('mCompPreview');
+  if (!el) return;
+  const tipo = _compTipo(document.getElementById('mCompTipo')?.value || 'outro');
+  const instrutores = window._agEquipeInstrutores||[];
+  const inst = instrutores.find(i => String(i.id)===String(document.getElementById('mCompInstrutor')?.value));
+  const titulo = document.getElementById('mCompTitulo')?.value.trim();
+  const data = document.getElementById('mCompData')?.value;
+  const ini  = document.getElementById('mCompIni')?.value;
+  const fim  = document.getElementById('mCompFim')?.value;
+  const dataFmt = data ? `${data.slice(8,10)}/${data.slice(5,7)}` : '';
+  const quando = [dataFmt, ini ? (fim ? `${ini}–${fim}` : ini) : ''].filter(Boolean).join(' · ');
+  const semValor = '<span style="opacity:.5">—</span>';
+  el.innerHTML = `
+    <div class="k">Prévia</div>
+    <div class="v" style="font-size:14px">${titulo?escapeHtml(titulo):`<span style="opacity:.5">${tipo.icone} ${tipo.label}</span>`}</div>
+    <div class="k">Tipo</div><div class="v">${tipo.icone} ${tipo.label}</div>
+    <div class="k">Instrutor</div><div class="v">${inst?escapeHtml(inst.nome):semValor}</div>
+    <div class="k">Quando</div><div class="v">${quando||semValor}</div>
+  `;
 }
 
 // Checagem de conflito AO VIVO — mesma filosofia de _agVerificarConflito:
@@ -12442,7 +12555,11 @@ async function salvarCompromisso() {
     titulo,
     descricao:    document.getElementById('mCompDesc')?.value.trim()  || null,
     data, hora_inicio: ini, hora_fim: fim,
-    local:        document.getElementById('mCompLocal')?.value.trim() || null,
+    // 2026-08-22 — "Informações adicionais" saiu do modal (pedido do
+    // Alisson, item 7): Observações já cobre a mesma necessidade. A coluna
+    // `local` continua existindo no banco (registros antigos, se houver,
+    // mantêm o que já tinham); só para de ser preenchida a partir daqui.
+    local:        null,
     observacoes:  document.getElementById('mCompObs')?.value.trim()   || null,
   };
 
@@ -12466,9 +12583,19 @@ async function salvarCompromisso() {
   }
 }
 
-// Detalhe do compromisso. Aberto tanto pelo instrutor (somente leitura)
-// quanto por Administrador/Comercial (com Editar/Cancelar).
+// Detalhe do compromisso.
+// 2026-08-22 (pedido do Alisson, item 11 — revisão de UX/UI): pro
+// INSTRUTOR, deixa de ser um modal "diferente" e passa a ser uma tela
+// cheia, no mesmo padrão visual/estrutural que verTurma() usa pro
+// treinamento (hero navy, blocos de Data/Horário, botão Voltar) — mesma
+// experiência de abrir um treinamento, só com os campos que fazem sentido
+// pra um compromisso (sem alunos/certificado, que não existem aqui).
+// Administrador/Comercial CONTINUAM vendo o modal de sempre (não
+// reclamado, preservado) — só perde a caixa de texto que explicava a
+// regra interna, mesmo espírito do que já saiu do modal de criação.
 async function verCompromisso(id) {
+  if (usuarioAtual.perfil === 'instrutor') { await _verCompromissoTelaInstrutor(id); return; }
+
   const {data:cm, error} = await sb.from('compromissos').select(COMPROMISSO_COLS).eq('id', id).maybeSingle();
   if (error || !cm) { showToast('Não foi possível abrir o compromisso','error'); return; }
   const t = _compTipo(cm.tipo);
@@ -12489,15 +12616,69 @@ async function verCompromisso(id) {
       ${linha('Descrição', cm.descricao)}
       ${linha('Informações', cm.local)}
       ${linha('Observações', cm.observacoes)}
-    </div>
-    <div style="background:var(--gray-50,#F8FAFC);border-radius:var(--r-md);padding:10px 12px;margin-top:14px;font-size:11.5px;color:var(--text-2);line-height:1.55">
-      Este é um compromisso de agenda, não um treinamento — não exige alunos, assinaturas ou evidências, e não gera certificados nem documentos.
     </div>`,
     _compPodeGerenciar()
       ? `<button class="btn btn-outline" onclick="cancelarCompromisso('${cm.id}')" style="color:var(--red);border-color:var(--red)">Cancelar reserva</button>
          <button class="btn btn-outline" onclick="abrirModalCompromisso('${cm.id}')">Editar</button>
          <button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`
       : `<button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`);
+}
+
+// Tela cheia do compromisso pro instrutor — mesmo padrão de verTurma()
+// (TELA INSTRUTOR): botão Voltar (data-action="irParaOrigem", já tratado
+// pelo delegate central), hero navy com badge + título, blocos de
+// Data/Horário no mesmo estilo dos cards de Data/Horário/Carga/Local de
+// um treinamento. Somente leitura — instrutor nunca edita/cancela
+// compromisso, igual já era no modal antigo.
+async function _verCompromissoTelaInstrutor(id) {
+  showLoading('Carregando compromisso...');
+  try {
+    const {data:cm, error} = await sb.from('compromissos').select(COMPROMISSO_COLS).eq('id', id).maybeSingle();
+    if (error) throw error;
+    if (!cm) throw new Error('Compromisso não encontrado ou sem permissão de acesso.');
+    const t = _compTipo(cm.tipo);
+
+    const html = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
+      </div>
+      <div class="h2-hero" style="margin-bottom:12px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border-radius:20px;padding:4px 12px">
+            <span style="width:7px;height:7px;border-radius:50%;background:#93c5fd"></span>
+            <span style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;letter-spacing:.3px">Reserva de agenda</span>
+          </div>
+        </div>
+        <div style="font-size:20px;font-weight:700;color:#fff;line-height:1.25;letter-spacing:-.2px">${t.icone} ${escapeHtml(cm.titulo)}</div>
+        <div style="font-size:13.5px;color:rgba(255,255,255,.6);font-weight:500;margin-top:2px;margin-bottom:14px">${t.label}</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">📅 Data</div>
+            <div style="font-size:13px;color:#fff;font-weight:600">${formatarData(cm.data)}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">⏰ Horário</div>
+            <div style="font-size:13px;color:#fff;font-weight:600">${(cm.hora_inicio||'').slice(0,5)} – ${(cm.hora_fim||'').slice(0,5)}</div>
+          </div>
+        </div>
+      </div>
+      ${cm.descricao?`
+      <div class="card" style="margin-bottom:12px">
+        <div class="gh-sec" style="margin:0 0 10px"><div class="dot navy"></div><span>Descrição</span><div class="line"></div></div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6;white-space:pre-wrap">${escapeHtml(cm.descricao)}</div>
+      </div>`:''}
+      ${cm.observacoes?`
+      <div class="card" style="margin-bottom:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.22);border-left:3px solid var(--amber)">
+        <div style="font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">📌 Observações</div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6">${escapeHtml(cm.observacoes)}</div>
+      </div>`:''}`;
+
+    setConteudo(html);
+    setMobileHeader(`<div class="mh-greeting">Compromisso</div><div class="mh-name">${escapeHtml(cm.titulo)}</div>`);
+  } catch(e) {
+    console.error(e);
+    showToast(traduzErroSupabase(e,'Erro ao abrir o compromisso'),'error');
+  } finally { hideLoading(); }
 }
 
 // Cancelamento = exclusao logica (cancelado=true). Nao existe policy de
@@ -12515,6 +12696,26 @@ async function cancelarCompromisso(id) {
   fecharModal();
   showToast('Reserva cancelada','info');
   if (paginaAtual === 'agendaequipe') await _agEquipeCarregarEExibir();
+}
+
+// 2026-08-22 (pedido do Alisson — cliques na visao Mes, que nao sabem
+// sozinhos de qual instrutor, sem filtro ativo): passo intermediario que
+// pergunta o instrutor antes de seguir pra "O que voce quer agendar?".
+// Mesmo estilo de cartao clicavel do passo seguinte, pra manter a
+// experiencia igual — o usuario nao percebe que sao dois componentes
+// diferentes, so um fluxo continuo.
+function _agEquipeEscolherInstrutorEAgendar(data, horaInicio) {
+  const instrutores = window._agEquipeInstrutores || [];
+  if (!instrutores.length) { showToast('Cadastre instrutores em Equipe para usar a Agenda.','error'); return; }
+  const cardSt = 'width:100%;text-align:left;border:1.5px solid var(--border);background:var(--surface);border-radius:var(--r-lg);padding:12px 14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:10px';
+  const linhas = instrutores.map(i => `<button type="button" style="${cardSt}" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${i.id}','${data}','${horaInicio||''}')">
+      <span style="width:30px;height:30px;border-radius:50%;background:var(--gray-100);color:var(--text-2);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(i.nome)}</span>
+      <span style="font-size:14px;font-weight:600;color:var(--text-1)">${escapeHtml(i.nome)}</span>
+    </button>`).join('');
+  abrirModal('Escolha o instrutor', `
+    <div style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">${escapeHtml(formatarData(data))}</div>
+    <div style="display:grid;gap:8px">${linhas}</div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
 }
 
 // Escolha "Nova turma" x "Novo compromisso" ao clicar num espaco livre da
@@ -12581,9 +12782,6 @@ async function renderAgendaEquipe() {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div id="agEquipeVisaoSwitchWrap">${_agEquipeHtmlVisaoSwitch()}</div>
-        <button type="button" onclick="abrirModalCompromisso(null,{data:window._agEquipeData})"
-          title="Reservar a agenda de um instrutor para evento, palestra ou reunião"
-          style="border:1.5px solid var(--border);background:var(--surface);color:var(--navy);cursor:pointer;padding:7px 13px;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;min-height:30px;white-space:nowrap">＋ Compromisso</button>
       </div>
       <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)"
         style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);min-width:200px">
@@ -12913,9 +13111,16 @@ function _agEquipeAbrirDia(data, instrutorId) {
 // em cima de um chip de turma (data-action="verTurma") — nesse caso o
 // clique já é tratado pelo delegate central e deve abrir a turma, não
 // trocar de visão. Mesmo guard já usado em _agEquipeCliqueNaLinha (visão Dia).
+// 2026-08-22 (pedido do Alisson — clicar num dia/horario nao pode trocar
+// a visao atual da Agenda): quando o clique ja identifica o instrutor
+// (celula da linha dele), pula direto pra "O que voce quer agendar?",
+// mantendo a visao Semana. So quando o clique NAO tem instrutor associado
+// (cabecalho do dia) e que continua abrindo a visao Dia — essa parte nao
+// mudou, e a forma de "ver o dia completo" a partir do panorama.
 function _agEquipeCelulaSemanaClique(event, data, instrutorId) {
   if (event.target.closest('[data-action]')) return;
-  _agEquipeAbrirDia(data, instrutorId);
+  if (instrutorId) { _agEquipeEscolherTipoAgendamento(instrutorId, data, null); return; }
+  _agEquipeAbrirDia(data);
 }
 
 // 2026-08-17 (pedido do Alisson — visão Mês redesenhada, ver
@@ -12924,9 +13129,16 @@ function _agEquipeCelulaSemanaClique(event, data, instrutorId) {
 // tratado pelo delegate central) ou no "+N mais" (que já para a propagação
 // sozinho em _agEquipeTogglePopoverMes, então nem chega aqui) — só nesses
 // dois casos o clique NÃO deve abrir a visão Dia.
+// 2026-08-22 (pedido do Alisson — mesma correcao da Semana, adaptada pro
+// Mes: aqui a celula do dia nunca sabe de qual instrutor sozinha, entao,
+// se a Agenda ja estiver filtrada num instrutor so, pula direto pro
+// "O que voce quer agendar?"; senao, pergunta primeiro "Escolha o
+// instrutor". Em nenhum dos dois casos a visao Mes e trocada.
 function _agEquipeCelulaMesClique(event, dataISO) {
   if (event.target.closest('[data-action]')) return;
-  _agEquipeAbrirDia(dataISO);
+  const sel = window._agEquipeInstrutorSel;
+  if (sel) { _agEquipeEscolherTipoAgendamento(sel, dataISO, null); return; }
+  _agEquipeEscolherInstrutorEAgendar(dataISO);
 }
 
 // Painel "+N mais" da visão Mês — só um aberto por vez
@@ -13072,7 +13284,7 @@ function _agEquipeRenderSemana() {
   // abre "Nova turma" (_agEquipeAbrirCriacaoRapida) — como a visão Semana
   // não tem uma data única selecionada, abre sem data pré-preenchida (o
   // usuário escolhe no modal); instrutor já vem selecionado.
-  const nomes = instrutores.map((i,idx) => `<div style="height:${alturaCelula}px;display:flex;align-items:center;gap:7px;padding-right:6px;cursor:pointer;${idx>0?'border-top:1px solid var(--border)':''}" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', null, null)" title="Agendar turma com ${escapeHtml(i.nome)}">
+  const nomes = instrutores.map((i,idx) => `<div style="height:${alturaCelula}px;display:flex;align-items:center;gap:7px;padding-right:6px;cursor:pointer;${idx>0?'border-top:1px solid var(--border)':''}" onclick="_agEquipeEscolherTipoAgendamento('${i.id}', window._agEquipeData, null)" title="Agendar turma ou reservar compromisso com ${escapeHtml(i.nome)}">
     <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
     <span style="font-size:13.5px;font-weight:600;color:var(--text-1);line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(i.nome)}</span>
   </div>`).join('');
@@ -13168,7 +13380,7 @@ function _agEquipeRenderSemana() {
       </div>`;
       let corpoDia;
       if (!sessoesDia.length) {
-        corpoDia = `<div style="font-size:10.5px;color:var(--text-3);padding-left:2px">Sem compromissos</div>`;
+        corpoDia = `<div style="font-size:10.5px;color:var(--text-3);padding-left:2px">Sem agendamentos</div>`;
       } else {
         const itens = sessoesDia.slice(0,MAX_VISIVEL_DIA).map(s => {
           const vi = _agItemVisual(s);
@@ -13321,7 +13533,7 @@ function _agEquipeRenderMes() {
         </div>`;
       }).join('');
       const dow = diasSemanaCompleto[new Date(dataISO+'T12:00:00').getDay()];
-      const totalTxt = `${sessoesDia.length} ${sessoesDia.length===1?'compromisso':'compromissos'}`;
+      const totalTxt = `${sessoesDia.length} ${sessoesDia.length===1?'agendamento':'agendamentos'}`;
       popoverHtml = `<div class="ag-mes-popover" style="position:fixed;${pos.top!=null?'top:'+pos.top+'px':'bottom:'+pos.bottom+'px'};left:${pos.left}px;z-index:200;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 14px 32px rgba(0,0,0,.18);padding:10px 12px">
         <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${dow}, ${dia} de ${mesesCompleto[mes-1]} · ${totalTxt}</div>
         ${itens}
@@ -13607,7 +13819,7 @@ function _agEquipeRenderTimeline() {
   // relatório do instrutor (_relAbrirInstrutorDaAgenda, função mantida no
   // arquivo, só não é mais chamada daqui). Mesma lógica aplicada na visão
   // Semana, pra a experiência ser igual nas duas.
-  const nomes = instrutores.map(i => `<div style="height:${alturaPorInstrutor[i.id]}px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}">
+  const nomes = instrutores.map(i => `<div style="height:${alturaPorInstrutor[i.id]}px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="_agEquipeEscolherTipoAgendamento('${i.id}', window._agEquipeData, null)" title="Agendar turma ou reservar compromisso com ${escapeHtml(i.nome)}">
     <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
     <span style="overflow:hidden;font-size:14px;color:var(--text-1);font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escapeHtml(i.nome)}</span>
   </div>`).join(espacador);
