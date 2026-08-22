@@ -12227,7 +12227,7 @@ const COMPROMISSO_TIPOS = [
 ];
 // Lista explicita de colunas — nunca select('*'), mesmo cuidado contra
 // over-fetching apontado nas auditorias de seguranca de agosto/2026.
-const COMPROMISSO_COLS = 'id,instrutor_id,tipo,titulo,descricao,data,hora_inicio,hora_fim,local,observacoes';
+const COMPROMISSO_COLS = 'id,instrutor_id,tipo,titulo,descricao,data,hora_inicio,hora_fim,local,observacoes,empresa_id,clientes(nome)';
 // Cor do compromisso nas visoes da Agenda. Reaproveita --navy-3, token que
 // ja existe no sistema (regra do projeto: nunca introduzir cor nova) — e
 // que nao colide com nenhum dos 4 estados ja usados para treinamento
@@ -12380,6 +12380,15 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
   const instrutores = (window._agEquipeInstrutores||[]).length ? window._agEquipeInstrutores : await _carregarInstrutores();
   if (!instrutores.length) { showToast('Cadastre instrutores em Equipe antes de reservar a agenda','error'); return; }
 
+  // 2026-08-22 (item 6 do pedido de revisão de UX — migration
+  // compromissos.empresa_id aplicada pelo Alisson): mesmo cache/consulta já
+  // usados pela Nova turma para "Cliente" — nenhuma consulta nova, só
+  // reaproveitada aqui.
+  if (!_clientesCache.length) {
+    const {data:cd} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
+    _clientesCache = cd||[];
+  }
+
   let cm = null;
   if (compromissoId) {
     const {data} = await sb.from('compromissos').select(COMPROMISSO_COLS).eq('id', compromissoId).maybeSingle();
@@ -12387,10 +12396,21 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
     if (!cm) { showToast('Compromisso não encontrado','error'); return; }
   }
 
+  // 2026-08-22 (ajuste do Alisson — "← Voltar | Cancelar" nas telas de
+  // criação): só mostra Voltar quando é um compromisso NOVO aberto a
+  // partir de "O que você quer agendar?" (tem instrutorId+data no preset).
+  // Editando um compromisso já existente (compromissoId setado) o rodapé
+  // continua igual — só Cancelar/Salvar, como sempre foi.
+  const podeVoltarComp = !cm && preset.instrutorId && preset.data;
+  const rodapeComp = `${podeVoltarComp ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${preset.instrutorId}','${preset.data}','${preset.horaInicio||''}', ${!!preset.veioDeEscolherInstrutor})">← Voltar</button>` : ''}
+     <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`;
+
   const instrutorSel = cm?.instrutor_id || preset.instrutorId || '';
   const instOpts = instrutores.map(i => `<option value="${i.id}" ${i.id===instrutorSel?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
   const tipoSel  = cm?.tipo || 'reuniao';
   const tipoOpts = COMPROMISSO_TIPOS.map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('');
+  const cliOpcoes = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
 
   // 2026-08-22 (pedido do Alisson — revisão de UX/UI): mesmo padrão
   // visual/estrutural do modal "Nova turma" (.nt-grid/.nt-sec com ícone +
@@ -12413,8 +12433,10 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
                 <select id="mCompInstrutor" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}">
                   <option value="">Selecione o instrutor...</option>${instOpts}</select></div>
             </div>
-            <div class="field" style="margin-bottom:0"><label for="mCompTitulo">Título *</label>
+            <div class="field"><label for="mCompTitulo">Título *</label>
               <input type="text" id="mCompTitulo" maxlength="120" oninput="_compAtualizarPreview()" value="${escapeHtml(cm?.titulo||'')}" placeholder="Ex.: Palestra de abertura da SIPAT" style="${_COMP_INPUT_ST}"></div>
+            <div class="field" style="margin-bottom:0"><label>Cliente *</label>
+              ${_comboBuscavelHtml('mCompCliente', 'Buscar cliente por nome...', cliOpcoes, cm?.empresa_id||'')}</div>
           </div>
         </div>
 
@@ -12424,7 +12446,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
             <div class="nt-title">Agendamento</div>
             <div class="nt-3col">
               <div class="field"><label>Data *</label>
-                <input type="date" id="mCompData" value="${cm?.data||preset.data||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
+                <input type="date" id="mCompData" value="${cm?.data||preset.data||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST};padding-right:34px"></div>
               <div class="field"><label>Início *</label>
                 <input type="time" id="mCompIni" value="${cm?.hora_inicio?.slice(0,5)||preset.horaInicio||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
               <div class="field" style="margin-bottom:0"><label>Término *</label>
@@ -12438,19 +12460,17 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
           <div class="nt-ic">📝</div>
           <div class="nt-body">
             <div class="nt-title">Detalhes</div>
-            <div class="field"><label for="mCompDesc">Descrição</label>
-              <textarea id="mCompDesc" rows="2" maxlength="2000" oninput="_compAtualizarPreview()" placeholder="O que é esse compromisso" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.descricao||'')}</textarea></div>
-            <div class="field" style="margin-bottom:0"><label for="mCompObs">Observações</label>
+            <div class="field" style="margin-bottom:0"><label for="mCompObs">Observações *</label>
               <textarea id="mCompObs" rows="2" maxlength="2000" placeholder="Orientações para o instrutor" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.observacoes||'')}</textarea></div>
           </div>
         </div>
       </div>
       <div class="nt-preview" id="mCompPreview"></div>
     </div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`,
+    rodapeComp,
     true);
 
+  _comboBuscavelRegistrar('mCompCliente', cliOpcoes, () => _compAtualizarPreview());
   _compAtualizarPreview();
   if (instrutorSel && (cm?.data || preset.data)) _compVerificarConflito();
 }
@@ -12465,10 +12485,11 @@ function _compAtualizarPreview() {
   const instrutores = window._agEquipeInstrutores||[];
   const inst = instrutores.find(i => String(i.id)===String(document.getElementById('mCompInstrutor')?.value));
   const titulo = document.getElementById('mCompTitulo')?.value.trim();
+  const cliente = _clientesCache.find(c => String(c.id)===String(document.getElementById('mCompCliente')?.value));
   const data = document.getElementById('mCompData')?.value;
   const ini  = document.getElementById('mCompIni')?.value;
   const fim  = document.getElementById('mCompFim')?.value;
-  const dataFmt = data ? `${data.slice(8,10)}/${data.slice(5,7)}` : '';
+  const dataFmt = data ? `${data.slice(8,10)}/${data.slice(5,7)}/${data.slice(0,4)}` : '';
   const quando = [dataFmt, ini ? (fim ? `${ini}–${fim}` : ini) : ''].filter(Boolean).join(' · ');
   const semValor = '<span style="opacity:.5">—</span>';
   el.innerHTML = `
@@ -12476,6 +12497,7 @@ function _compAtualizarPreview() {
     <div class="v" style="font-size:14px">${titulo?escapeHtml(titulo):`<span style="opacity:.5">${tipo.icone} ${tipo.label}</span>`}</div>
     <div class="k">Tipo</div><div class="v">${tipo.icone} ${tipo.label}</div>
     <div class="k">Instrutor</div><div class="v">${inst?escapeHtml(inst.nome):semValor}</div>
+    <div class="k">Cliente</div><div class="v">${cliente?escapeHtml(cliente.nome):semValor}</div>
     <div class="k">Quando</div><div class="v">${quando||semValor}</div>
   `;
 }
@@ -12538,29 +12560,50 @@ async function salvarCompromisso() {
   if (!_compPodeGerenciar()) { showToast('Você não tem permissão para isso','error'); return; }
   const titulo      = document.getElementById('mCompTitulo')?.value.trim() || '';
   const instrutorId = document.getElementById('mCompInstrutor')?.value || '';
+  const clienteId   = document.getElementById('mCompCliente')?.value || '';
   const data        = document.getElementById('mCompData')?.value || '';
   const ini         = document.getElementById('mCompIni')?.value || '';
   const fim         = document.getElementById('mCompFim')?.value || '';
+  const observacoes = document.getElementById('mCompObs')?.value.trim() || '';
   if (!titulo)      { showToast('Informe o título do compromisso','error'); return; }
   if (titulo.length > 120) { showToast('O título deve ter no máximo 120 caracteres','error'); return; }
   if (!instrutorId) { showToast('Selecione o instrutor','error'); return; }
+  // 2026-08-22 (ajuste do Alisson — 3ª rodada): Cliente deixou de ser
+  // opcional. Mesmo padrão de mensagem dos outros campos obrigatórios.
+  if (!clienteId)   { showToast('Selecione o cliente','error'); return; }
   if (!data)        { showToast('Informe a data','error'); return; }
   if (!ini || !fim) { showToast('Informe a hora de início e de término','error'); return; }
   if (fim <= ini)   { showToast('A hora de término deve ser depois da hora de início.','error'); return; }
+  // 2026-08-22 (ajuste do Alisson — 3ª rodada): Observações deixou de ser
+  // opcional (o campo Descrição, que era o outro lugar de escrever isso,
+  // foi removido do modal — não sobrou nenhum campo de texto livre
+  // alternativo).
+  if (!observacoes) { showToast('Informe as observações','error'); return; }
 
   const dados = {
     org_id:       usuarioAtual.org_id,
     instrutor_id: instrutorId,
     tipo:         document.getElementById('mCompTipo')?.value || 'outro',
     titulo,
-    descricao:    document.getElementById('mCompDesc')?.value.trim()  || null,
+    // 2026-08-22 (ajuste do Alisson — 3ª rodada) — campo "Descrição" saiu
+    // do modal (Observações, agora obrigatório, cobre sozinho essa
+    // necessidade). Mesmo padrão já usado pra `local`: a coluna continua
+    // existindo no banco (registros antigos mantêm o que já tinham), só
+    // para de ser preenchida a partir daqui.
+    descricao:    null,
     data, hora_inicio: ini, hora_fim: fim,
     // 2026-08-22 — "Informações adicionais" saiu do modal (pedido do
     // Alisson, item 7): Observações já cobre a mesma necessidade. A coluna
     // `local` continua existindo no banco (registros antigos, se houver,
     // mantêm o que já tinham); só para de ser preenchida a partir daqui.
     local:        null,
-    observacoes:  document.getElementById('mCompObs')?.value.trim()   || null,
+    observacoes,
+    // 2026-08-22 (item 6, migration-compromissos-empresa-OPCIONAL.sql já
+    // aplicada) — campo renomeado de "Empresa" pra "Cliente" (ajuste do
+    // Alisson, 3ª rodada) e agora obrigatório. A coluna do banco continua
+    // `empresa_id` (já aponta pra `clientes`) — não precisou de migration
+    // nova, só o rótulo/validação no front-end mudaram.
+    empresa_id:   clienteId,
   };
 
   const editandoId = window._compEditId;
@@ -12613,6 +12656,7 @@ async function verCompromisso(id) {
       ${linha('Data', formatarData(cm.data))}
       ${linha('Horário', `${(cm.hora_inicio||'').slice(0,5)} às ${(cm.hora_fim||'').slice(0,5)}`)}
       ${inst ? linha('Instrutor', inst.nome) : ''}
+      ${linha('Cliente', cm.clientes?.nome)}
       ${linha('Descrição', cm.descricao)}
       ${linha('Informações', cm.local)}
       ${linha('Observações', cm.observacoes)}
@@ -12650,7 +12694,7 @@ async function _verCompromissoTelaInstrutor(id) {
           </div>
         </div>
         <div style="font-size:20px;font-weight:700;color:#fff;line-height:1.25;letter-spacing:-.2px">${t.icone} ${escapeHtml(cm.titulo)}</div>
-        <div style="font-size:13.5px;color:rgba(255,255,255,.6);font-weight:500;margin-top:2px;margin-bottom:14px">${t.label}</div>
+        <div style="font-size:13.5px;color:rgba(255,255,255,.6);font-weight:500;margin-top:2px;margin-bottom:14px">${t.label}${cm.clientes?.nome?' · 🏢 '+escapeHtml(cm.clientes.nome):''}</div>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
           <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
             <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">📅 Data</div>
@@ -12708,7 +12752,7 @@ function _agEquipeEscolherInstrutorEAgendar(data, horaInicio) {
   const instrutores = window._agEquipeInstrutores || [];
   if (!instrutores.length) { showToast('Cadastre instrutores em Equipe para usar a Agenda.','error'); return; }
   const cardSt = 'width:100%;text-align:left;border:1.5px solid var(--border);background:var(--surface);border-radius:var(--r-lg);padding:12px 14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:10px';
-  const linhas = instrutores.map(i => `<button type="button" style="${cardSt}" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${i.id}','${data}','${horaInicio||''}')">
+  const linhas = instrutores.map(i => `<button type="button" style="${cardSt}" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${i.id}','${data}','${horaInicio||''}', true)">
       <span style="width:30px;height:30px;border-radius:50%;background:var(--gray-100);color:var(--text-2);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(i.nome)}</span>
       <span style="font-size:14px;font-weight:600;color:var(--text-1)">${escapeHtml(i.nome)}</span>
     </button>`).join('');
@@ -12721,23 +12765,30 @@ function _agEquipeEscolherInstrutorEAgendar(data, horaInicio) {
 // Escolha "Nova turma" x "Novo compromisso" ao clicar num espaco livre da
 // linha do instrutor (visao Dia). Antes o clique abria "Nova turma" direto;
 // alteracao aprovada pelo Alisson em 2026-08-22 (Decisao 4 da proposta).
-function _agEquipeEscolherTipoAgendamento(instrutorId, data, horaInicio) {
+function _agEquipeEscolherTipoAgendamento(instrutorId, data, horaInicio, veioDeEscolherInstrutor=false) {
   const inst  = (window._agEquipeInstrutores||[]).find(i => i.id === instrutorId);
   const quando = `${formatarData(data)}${horaInicio ? ' às ' + horaInicio : ''}`;
   const cardSt = 'width:100%;text-align:left;border:1.5px solid var(--border);background:var(--surface);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;font-family:inherit;display:block';
+  // 2026-08-22 (ajuste do Alisson — "← Voltar | Cancelar"): só mostra
+  // Voltar quando esse passo veio de "Escolha o instrutor" (fluxo da Mês
+  // sem instrutor pré-selecionado). Nos demais casos (clique direto no
+  // nome/horário de um instrutor já conhecido) não existe etapa anterior
+  // pra voltar — o rodapé continua só com Cancelar, como sempre foi.
+  const rodapeTipo = `${veioDeEscolherInstrutor ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherInstrutorEAgendar('${data}','${horaInicio||''}')">← Voltar</button>` : ''}
+     <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`;
   abrirModal('O que você quer agendar?', `
     <div style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">${escapeHtml(quando)}${inst ? ' · ' + escapeHtml(inst.nome) : ''}</div>
     <div style="display:grid;gap:10px">
-      <button type="button" style="${cardSt}" onclick="fecharModal();_agEquipeAbrirCriacaoRapida('${instrutorId}','${data}','${horaInicio||''}')">
+      <button type="button" style="${cardSt}" onclick="fecharModal();_agEquipeAbrirCriacaoRapida('${instrutorId}','${data}','${horaInicio||''}', ${veioDeEscolherInstrutor})">
         <div style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:3px">📚 Nova turma</div>
         <div style="font-size:11.5px;color:var(--text-2);line-height:1.5">Treinamento completo — alunos, presença, evidências e certificados.</div>
       </button>
-      <button type="button" style="${cardSt}" onclick="fecharModal();abrirModalCompromisso(null,{instrutorId:'${instrutorId}',data:'${data}',horaInicio:'${horaInicio||''}'})">
+      <button type="button" style="${cardSt}" onclick="fecharModal();abrirModalCompromisso(null,{instrutorId:'${instrutorId}',data:'${data}',horaInicio:'${horaInicio||''}',veioDeEscolherInstrutor:${veioDeEscolherInstrutor}})">
         <div style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:3px">📌 Novo compromisso</div>
         <div style="font-size:11.5px;color:var(--text-2);line-height:1.5">Só reserva o horário — evento, palestra ou reunião. Não gera certificado.</div>
       </button>
     </div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
+    rodapeTipo);
 }
 
 // ============================================================
@@ -13952,7 +14003,7 @@ function _agEquipeCliqueNaLinha(event, instrutorId) {
 // lugar de um clique num ponto exato da linha — pensado pro mobile, onde
 // acertar um X específico numa barra fina é difícil). Nesse caso o campo
 // Hora início nasce vazio e o operador digita.
-async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
+async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDeEscolherInstrutor=false) {
   if (!_clientesCache.length) {
     const {data:cd} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = cd||[];
@@ -13970,6 +14021,15 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
 
   window._agRapidaHoraFimManual = false;
   window._agRapidaTemConflito   = false;
+
+  // 2026-08-22 (ajuste do Alisson — "← Voltar | Cancelar" nas telas de
+  // criação): Voltar reabre "O que você quer agendar?" com o mesmo
+  // instrutor/data/horário, preservando veioDeEscolherInstrutor pra essa
+  // tela também saber se deve oferecer Voltar pra "Escolha o instrutor".
+  const podeVoltarNt = !!(instrutorId && data);
+  const rodapeNt = `${podeVoltarNt ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${instrutorId}','${data}','${horaInicio||''}', ${!!veioDeEscolherInstrutor})">← Voltar</button>` : ''}
+     <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`;
 
   // 2026-08-14 (pedido do Alisson — Proposta A aprovada: "seções com ícone
   // + painel-resumo ao vivo"): novo visual, não só reorganização de campos.
@@ -14011,7 +14071,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
             <div class="nt-3col">
               <div class="field"><label>Data *</label>
                 <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
-                  style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
+                  style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none;padding-right:34px"></div>
               <div class="field"><label>Início *</label>
                 <input type="time" id="mNtIni" value="${horaInicio||''}" onchange="_agRapidaCalcularHoraFim();_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
                   style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
@@ -14053,8 +14113,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio) {
 
       <div class="nt-preview" id="mNtPreview"></div>
     </div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`,
+    rodapeNt,
     true);
 
   _comboBuscavelRegistrar('mNtCli', cliOpcoes, () => { _agRapidaAutoPreencherLocal(); _agRapidaAtualizarPreview(); });
@@ -14082,7 +14141,7 @@ function _agRapidaAtualizarPreview() {
   const ini  = document.getElementById('mNtIni')?.value;
   const fim  = document.getElementById('mNtFim')?.value;
   const local = document.getElementById('mNtLocal')?.value.trim();
-  const dataFmt = data ? `${data.slice(8,10)}/${data.slice(5,7)}` : '';
+  const dataFmt = data ? `${data.slice(8,10)}/${data.slice(5,7)}/${data.slice(0,4)}` : '';
   const quando = [dataFmt, ini ? (fim ? `${ini}–${fim}` : ini) : ''].filter(Boolean).join(' · ');
   const semValor = '<span style="opacity:.5">—</span>';
   el.innerHTML = `
