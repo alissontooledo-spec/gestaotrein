@@ -10706,12 +10706,17 @@ async function _agVerificarConflito() {
     .eq('instrutor_id', instrutorId)
     .eq('data', data)
     .neq('id', window._agendamentoEditId || '00000000-0000-0000-0000-000000000000');
+  // 2026-08-22 — bloco ADITIVO: nao altera nenhuma regra do conflito entre
+  // turmas (window._agTemConflito, botao desabilitado e sobreposicao
+  // autorizada continuam decididos exatamente como antes, so pelas sessoes).
+  const _compsChoque = await _compChoquesDoDia(instrutorId, data, ini, fim);
+  window._agTemChoqueCompromisso = _compsChoque.length > 0;
   // Turmas canceladas liberam o horário do instrutor de volta, e sessões já
   // CONCLUÍDAS não são mais "compromissos" a proteger — são histórico
   // (mesmo critério usado na constraint do banco, ver migration Parte 3:
   // cancelada=false e concluida=false).
   const relevantes = (existentes||[]).filter(s => s.turmas?.status !== 'cancelada' && !s.concluida);
-  if (!relevantes.length) { box.innerHTML = ''; _agAtualizarBotaoSalvar(); return; }
+  if (!relevantes.length && !_compsChoque.length) { box.innerHTML = ''; _agAtualizarBotaoSalvar(); return; }
   const sobrepoe = (s) => {
     // Sem horário suficiente pra comparar com precisão (ini/fim novos ou
     // do registro existente em branco) — trata como risco e avisa mesmo
@@ -10724,12 +10729,12 @@ async function _agVerificarConflito() {
   window._agTemConflito = conflitantes.length > 0;
   const corAviso = conflitantes.length ? 'var(--red)' : 'var(--amber-h)';
   const fundoAviso = conflitantes.length ? 'var(--red-l)' : 'rgba(245,158,11,.1)';
-  box.innerHTML = `<div style="background:${fundoAviso};color:${corAviso};border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px;line-height:1.6">
-    <strong>${conflitantes.length?'⚠ Conflito de horário':'ℹ Este instrutor já tem compromisso(s) neste dia'}</strong>
+  box.innerHTML = `${relevantes.length ? `<div style="background:${fundoAviso};color:${corAviso};border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px;line-height:1.6">
+    <strong>${conflitantes.length?'⚠ Conflito de horário':'ℹ Este instrutor já tem turma(s) neste dia'}</strong>
     <ul style="margin:6px 0 0;padding-left:18px">
       ${avaliadas.map(a=>`<li>${a.s.hora_inicio?a.s.hora_inicio.slice(0,5):'horário não definido'}${a.s.hora_fim?'–'+a.s.hora_fim.slice(0,5):''} — ${escapeHtml(a.s.turmas?.clientes?.nome||'Cliente não identificado')} (${escapeHtml(a.s.turmas?.catalogo?.nome||'')})</li>`).join('')}
     </ul>
-  </div>`;
+  </div>` : ''}${_compAvisoHtml(_compsChoque)}`;
   _agAtualizarBotaoSalvar();
 }
 
@@ -10742,6 +10747,16 @@ async function _agVerificarConflito() {
 function _agAtualizarBotaoSalvar() {
   const btn = document.getElementById('btnSalvarModal');
   if (!btn) return;
+  // 2026-08-22 — choque com compromisso de agenda e barrado pelo banco para
+  // TODOS os perfis (nao existe "sobreposicao autorizada" entre treinamento
+  // e compromisso), entao nem Provedor/Administrador/Comercial podem forcar.
+  // Antes desta funcionalidade a variavel e sempre undefined, entao o
+  // comportamento anterior fica intacto.
+  if (window._agTemChoqueCompromisso) {
+    btn.disabled = true;
+    btn.title = 'Este instrutor tem um compromisso reservado neste horário — escolha outro horário.';
+    return;
+  }
   const podeForcar = usuarioAtual.perfil === 'provedor' || usuarioAtual.perfil === 'administrador' || usuarioAtual.perfil === 'comercial';
   if (window._agTemConflito && !podeForcar) {
     btn.disabled = true;
@@ -10821,7 +10836,13 @@ async function salvarAgendamento() {
     // (ver migration) barrando de verdade, provavelmente porque outro
     // usuário gravou um horário conflitante entre a checagem ao vivo e o
     // clique em salvar. Mensagem amigável em vez do erro técnico do banco.
-    if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
+    // 2026-08-22 — mensagem do trigger de compromisso (ver migration
+    // opcional aprovada pelo Alisson). Vem antes da checagem de 23P01
+    // porque e um erro P0001, com mensagem propria.
+    if (/compromisso reservado/i.test(e.message||'')) {
+      showToast('Este instrutor tem um compromisso reservado na agenda nesse horário — escolha outro horário.','error');
+      _agVerificarConflito();
+    } else if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
       showToast('Esse instrutor acabou de ser agendado por outro usuário para esse horário — escolha outro horário ou instrutor.','error');
       _agVerificarConflito();
     } else {
@@ -11825,6 +11846,12 @@ async function renderAgenda() {
   window._agendaAno     = anoHoje;
   window._agendaSessoes = sessoesValidas;
   window._agendaDatasComSessao = datasComSessao;
+  // 2026-08-22 — compromissos do proprio instrutor. A RLS ja garante que
+  // ele so enxerga os dele (policy compromissos_instrutor_select); o filtro
+  // aqui e defesa em profundidade, nao a barreira de seguranca. Array
+  // separado das sessoes — a mescla acontece so nas funcoes de render.
+  window._agendaCompromissos = await _compCarregarDoInstrutor(usuarioAtual.id);
+  window._agendaDatasComCompromisso = new Set((window._agendaCompromissos||[]).map(x=>x.data).filter(Boolean));
 
   setMobileHeader(`<div class="mh-greeting">Agenda</div><div class="mh-name">Meus agendamentos</div>`);
   fabOcultar();
@@ -11835,6 +11862,11 @@ async function renderAgenda() {
   const dSem = _agendaDomingoDaSemana(hoje);
   const fimSem = _agendaSomarDias(dSem, 6);
   const nSemana = pendentes.filter(s=>s.data>=dSem && s.data<=fimSem).length;
+  // 2026-08-22 (Decisao 3 aprovada pelo Alisson — "contadores proprios"):
+  // compromissos NAO entram em "Hoje"/"Semana", que continuam significando
+  // exatamente o que significavam antes (treinamento). Ganham um contador
+  // separado, que so aparece quando existe algum na semana.
+  const nComp = (window._agendaCompromissos||[]).filter(x=>x.data>=dSem && x.data<=fimSem).length;
 
   setConteudo(`
     <div class="h2-hero" style="padding:16px 18px">
@@ -11851,7 +11883,11 @@ async function renderAgenda() {
           <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 14px;text-align:center">
             <div style="font-size:16px;font-weight:800;color:#fff;line-height:1.2">${nSemana}</div>
             <div style="font-size:9.5px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Semana</div>
-          </div>
+          </div>${nComp ? `
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 14px;text-align:center" title="Compromissos reservados nesta semana (eventos, palestras, reuniões)">
+            <div style="font-size:16px;font-weight:800;color:#fff;line-height:1.2">${nComp}</div>
+            <div style="font-size:9.5px;color:rgba(255,255,255,.45);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Compromissos</div>
+          </div>` : ''}
         </div>
       </div>
     </div>
@@ -11917,9 +11953,13 @@ function _agendaRenderSemana() {
     const dataStr = _agendaSomarDias(dom, i);
     const dia = Number(dataStr.slice(8,10));
     const tem = window._agendaDatasComSessao.has(dataStr);
+    // 2026-08-22 — dia com compromisso tambem ganha ponto (senao a regua
+    // mostraria como livre um dia que esta reservado). Ponto navy quando o
+    // dia so tem compromisso; ambar de sempre quando tem treinamento.
+    const temComp = (window._agendaDatasComCompromisso||new Set()).has(dataStr);
     const on  = dataStr === sel;
     html += `<button class="ag2-wd${on?' on':''}" onclick="_agendaSelecionarDia('${dataStr}')">
-      <div class="dw">${dows[i]}</div><div class="dn">${dia}</div>${tem?'<span class="dot"></span>':''}
+      <div class="dw">${dows[i]}</div><div class="dn">${dia}</div>${(tem||temComp)?`<span class="dot"${tem?'':` style="background:${COMPROMISSO_COR}"`}></span>`:''}
     </button>`;
   }
   _setElBoth('agendaWeekStrip', html);
@@ -11933,8 +11973,13 @@ function _agendaRenderDia() {
   const sel = window._agendaDataSel || window._agendaHoje;
   const hoje = window._agendaHoje;
   const ehHoje = sel === hoje;
-  const sess = (window._agendaSessoes||[]).filter(s=>s.data===sel)
-    .sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+  // 2026-08-22 — treinamentos e compromissos na mesma linha do tempo,
+  // ordenados juntos por horario. Os arrays de origem continuam separados;
+  // a mescla e local a esta funcao.
+  const sess = [
+    ...(window._agendaSessoes||[]).filter(s=>s.data===sel),
+    ...(window._agendaCompromissos||[]).filter(x=>x.data===sel).map(_compParaBloco),
+  ].sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
   const dows = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   const [a,m,d] = sel.split('-').map(Number);
   const dow = dows[new Date(a,m-1,d).getDay()];
@@ -11945,6 +11990,17 @@ function _agendaRenderDia() {
     return;
   }
   const html = sess.map(s=>{
+    if (s._comp) {
+      const tp = _compTipo(s.tipo);
+      return `<div class="ag2-tlrow">
+        <div class="ag2-hour">${s.hora_inicio?s.hora_inicio.slice(0,5):'—'}</div>
+        <div class="ag2-tcard" style="border-left:3px solid ${COMPROMISSO_COR}" data-action="verCompromisso" data-id="${s._compId}">
+          <div class="tt">${tp.icone} ${escapeHtml(s.titulo)}</div>
+          <div class="tm">${escapeHtml(tp.label)}${s.hora_fim?' · ⏰ até '+s.hora_fim.slice(0,5):''}${s.local?' · 📍 '+escapeHtml(s.local):''}</div>
+          <span class="badge badge-navy tbadge">Reserva de agenda</span>
+        </div>
+      </div>`;
+    }
     const t = s.turma;
     const concl = s.concluida || t.status==='concluida';
     const badge = concl ? '<span class="badge badge-green ag2-tbadge tbadge">Concluída</span>'
@@ -11967,8 +12023,10 @@ function _agendaRenderDia() {
 // até 6), agora como linha do tempo com dia/hora na coluna esquerda.
 function _agendaRenderProximos() {
   const hoje = window._agendaHoje;
-  const prox = (window._agendaSessoes||[])
-    .filter(s=>!s.concluida && s.turma.status!=='concluida' && s.data>hoje)
+  const prox = [
+    ...(window._agendaSessoes||[]).filter(s=>!s.concluida && s.turma.status!=='concluida' && s.data>hoje),
+    ...(window._agendaCompromissos||[]).filter(x=>x.data>hoje).map(_compParaBloco),
+  ]
     .sort((a,b)=>a.data.localeCompare(b.data)||( a.hora_inicio||'').localeCompare(b.hora_inicio||''))
     .slice(0,6);
   if (!prox.length) {
@@ -11976,6 +12034,17 @@ function _agendaRenderProximos() {
     return;
   }
   const html = prox.map(s=>{
+    if (s._comp) {
+      const tp = _compTipo(s.tipo);
+      return `<div class="ag2-tlrow">
+        <div class="ag2-hour" style="line-height:1.3">${s.data.slice(8,10)}/${s.data.slice(5,7)}${s.hora_inicio?'<br>'+s.hora_inicio.slice(0,5):''}</div>
+        <div class="ag2-tcard" style="border-left:3px solid ${COMPROMISSO_COR}" data-action="verCompromisso" data-id="${s._compId}">
+          <div class="tt">${tp.icone} ${escapeHtml(s.titulo)}</div>
+          <div class="tm">${escapeHtml(tp.label)}${s.local?' · 📍 '+escapeHtml(s.local):''}</div>
+          <span class="badge badge-navy tbadge">${formatarData(s.data)}</span>
+        </div>
+      </div>`;
+    }
     const t = s.turma;
     return `<div class="ag2-tlrow">
       <div class="ag2-hour" style="line-height:1.3">${s.data.slice(8,10)}/${s.data.slice(5,7)}${s.hora_inicio?'<br>'+s.hora_inicio.slice(0,5):''}</div>
@@ -11993,6 +12062,7 @@ function _agendaRenderProximos() {
 function _agendaRenderCalendario() {
   const mes = window._agendaMes, ano = window._agendaAno;
   const datasSet = window._agendaDatasComSessao;
+  const datasCompSet = window._agendaDatasComCompromisso || new Set();
   const hoje = window._agendaHoje;
   const sel  = window._agendaDataSel;
   const nomesMeses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -12007,19 +12077,25 @@ function _agendaRenderCalendario() {
   for (let i=0;i<primeiroDia;i++) html += `<div style="height:26px"></div>`;
   for (let d=1; d<=diasNoMes; d++) {
     const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const tem = datasSet.has(dataStr);
+    const temTreino = datasSet.has(dataStr);
+    const temComp   = datasCompSet.has(dataStr);
+    // 2026-08-22 — "tem" passa a significar "tem algo agendado" (treinamento
+    // OU compromisso), para o calendario nao mostrar como livre um dia que
+    // esta reservado. A cor continua indicando o que predomina.
+    const tem = temTreino || temComp;
     const ehHoje = dataStr === hoje;
     const ehSel = dataStr === sel;
     let st = 'height:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-2)';
-    if (tem && !ehHoje) st += ';background:rgba(245,158,11,.12);color:var(--amber-text)';
+    if (tem && !ehHoje) st += temTreino ? ';background:rgba(245,158,11,.12);color:var(--amber-text)' : ';background:rgba(46,63,107,.10);color:var(--navy)';
     if (ehHoje) st += ';background:var(--navy);color:#fff';
     if (ehSel && !ehHoje) st += ';outline:2px solid var(--amber);outline-offset:-2px';
     if (dataStr < hoje && !tem && !ehHoje) st += ';color:var(--text-3);font-weight:400';
-    const dot = tem && !ehHoje ? `<div style="width:3px;height:3px;background:var(--amber);border-radius:50%;margin-top:1px"></div>` : '';
+    const dot = tem && !ehHoje ? `<div style="width:3px;height:3px;background:${temTreino?'var(--amber)':COMPROMISSO_COR};border-radius:50%;margin-top:1px"></div>` : '';
     html += `<div onclick="_agendaSelecionarDia('${dataStr}')" style="${st}">${d}${dot}</div>`;
   }
   html += '</div><div style="display:flex;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
-    + '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35)"></div>Com sessão</div>'
+    + '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35)"></div>Com treinamento</div>'
+    + '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:rgba(46,63,107,.12);border:1px solid rgba(46,63,107,.35)"></div>Com compromisso</div>'
     + '<div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy)"></div>Hoje</div>'
     + '</div>';
   _setElBoth('agendaCalGrid', html);
@@ -12035,10 +12111,15 @@ function _agendaRenderResumoMes() {
   const horas = turmasUnicas.reduce((acc,t)=>acc+(t?.catalogo?.carga_horaria||0),0);
   const nomesMesesCurto = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   _setElBoth('agendaResumoTitulo', `Resumo de ${nomesMesesCurto[mes-1]}/${ano}`);
+  // 2026-08-22 (Decisao 3 — contadores proprios): "Sessões", "Clientes" e
+  // "Horas previstas" continuam contando SO treinamento, exatamente como
+  // antes. Compromissos entram numa linha separada, so quando existem.
+  const compsMes = (window._agendaCompromissos||[]).filter(x=>x.data?.startsWith(pref)).length;
   _setElBoth('agendaResumoMes', `
     <div class="ag2-resline"><span>Sessões</span><b>${doMes.length}</b></div>
     <div class="ag2-resline"><span>Clientes</span><b>${clientes}</b></div>
-    <div class="ag2-resline"><span>Horas previstas</span><b>${horas}h</b></div>`);
+    <div class="ag2-resline"><span>Horas previstas</span><b>${horas}h</b></div>${compsMes ? `
+    <div class="ag2-resline"><span>Compromissos</span><b>${compsMes}</b></div>` : ''}`);
 }
 
 function _agendaSelecionarDia(dataStr) {
@@ -12058,6 +12139,404 @@ function _agendaNavMes(delta) {
   window._agendaMes = mes; window._agendaAno = ano;
   _agendaRenderCalendario();
   _agendaRenderResumoMes();
+}
+
+// ============================================================
+// COMPROMISSOS DE AGENDA (2026-08-22)
+// ============================================================
+// Reserva de agenda feita pelo Comercial/Administrador para um instrutor —
+// Evento, Palestra, Reuniao ou Outro. E uma modalidade DELIBERADAMENTE
+// separada do treinamento: mora na tabela `compromissos`, que nao tem
+// turma_id e nao e referenciada por presencas/evidencias/documentos/
+// turma_participantes. Por isso um compromisso nunca gera aluno,
+// assinatura, evidencia, certificado, documento, envio de e-mail nem
+// integracao SOCGED — a garantia e estrutural (o schema do banco), nao um
+// `if` aqui que alguem pode esquecer de repetir numa tela futura.
+// Ver 01-Requisitos/compromissos-agenda-proposta.md.
+//
+// REGRA DE OURO deste bloco: um card de compromisso NUNCA usa
+// data-action="verTurma". O caminho para a tela de turma (e portanto para
+// presencas/evidencias/documentos/certificados) simplesmente nao existe
+// a partir daqui.
+
+const COMPROMISSO_TIPOS = [
+  { v:'evento',   label:'Evento',   icone:'🎪' },
+  { v:'palestra', label:'Palestra', icone:'🎤' },
+  { v:'reuniao',  label:'Reunião',  icone:'👥' },
+  { v:'outro',    label:'Outro',    icone:'📌' },
+];
+// Lista explicita de colunas — nunca select('*'), mesmo cuidado contra
+// over-fetching apontado nas auditorias de seguranca de agosto/2026.
+const COMPROMISSO_COLS = 'id,instrutor_id,tipo,titulo,descricao,data,hora_inicio,hora_fim,local,observacoes';
+// Cor do compromisso nas visoes da Agenda. Reaproveita --navy-3, token que
+// ja existe no sistema (regra do projeto: nunca introduzir cor nova) — e
+// que nao colide com nenhum dos 4 estados ja usados para treinamento
+// (ambar=agendado, verde=concluido, vermelho=conflito, azul=sobreposicao).
+const COMPROMISSO_COR = 'var(--navy-3)';
+
+function _compTipo(v) {
+  return COMPROMISSO_TIPOS.find(t => t.v === v) || COMPROMISSO_TIPOS[COMPROMISSO_TIPOS.length - 1];
+}
+
+// Quem pode criar/editar/cancelar. Em Modo Suporte o Provedor assume
+// perfil 'administrador' (ver iniciarModoSuporte), entao esta checagem ja o
+// cobre. E so experiencia de tela: quem decide de verdade e a RLS —
+// chamar estas funcoes pelo Console nao contorna nada.
+function _compPodeGerenciar() {
+  return ['administrador','comercial'].includes(usuarioAtual.perfil);
+}
+
+// Normaliza um item da agenda (sessao de treinamento OU compromisso) nos
+// campos que as visoes usam para desenhar. Existe para reaproveitar os
+// componentes visuais ja testados sem duplicar codigo — e para centralizar
+// num lugar so a decisao de qual data-action cada tipo recebe.
+function _agItemVisual(s) {
+  if (s._comp) {
+    const t = _compTipo(s.tipo);
+    return {
+      acao: 'verCompromisso',
+      alvoId: s._compId,
+      nome: `${t.icone} ${s.titulo}`,
+      detalhe: `${t.label}: ${s.titulo}${s.local ? ' · ' + s.local : ''}`,
+      bg: COMPROMISSO_COR,
+      cor: '#fff',
+      status: 'Reserva de agenda',
+    };
+  }
+  const concluida = !!s.concluida;
+  return {
+    acao: 'verTurma',
+    alvoId: s.turma_id,
+    nome: s.turmas?.clientes?.nome || 'Cliente não identificado',
+    detalhe: `${s.turmas?.clientes?.nome || 'Cliente não identificado'} · ${s.turmas?.catalogo?.nome || ''}${concluida ? ' · concluída' : ''}`,
+    bg: concluida ? 'var(--green)' : 'var(--amber)',
+    cor: concluida ? '#fff' : 'var(--navy)',
+    status: concluida ? 'Concluído' : 'Agendado',
+  };
+}
+
+// Adapta uma linha de `compromissos` para o mesmo formato que as visoes da
+// Agenda ja esperam de uma sessao — assim o algoritmo de faixas
+// (sub-linhas), a deteccao de sobreposicao e a ordenacao por horario, todos
+// ja testados, funcionam sem alteracao. `concluida`/`conflito_autorizado`
+// vem fixos em false de proposito: sao conceitos de treinamento que nao se
+// aplicam a uma reserva de agenda.
+function _compParaBloco(c) {
+  return {
+    _comp: true, _compId: c.id,
+    instrutor_id: c.instrutor_id,
+    data: c.data, hora_inicio: c.hora_inicio, hora_fim: c.hora_fim,
+    concluida: false, conflito_autorizado: false,
+    tipo: c.tipo, titulo: c.titulo, local: c.local,
+  };
+}
+
+// ---- Carregamento -------------------------------------------------------
+// Os dois carregadores devolvem [] em qualquer falha, de proposito: se a
+// migration ainda nao tiver sido aplicada (ou a RLS barrar), a Agenda tem
+// que continuar funcionando exatamente como antes, sem quebrar. Mesmo
+// padrao defensivo ja usado com soc_ged_config em verOrgProvedor.
+async function _compCarregarPeriodoOrg(dataIni, dataFim) {
+  try {
+    const {data, error} = await sb.from('compromissos')
+      .select(COMPROMISSO_COLS)
+      .eq('org_id', usuarioAtual.org_id)
+      .eq('cancelado', false)
+      .gte('data', dataIni)
+      .lte('data', dataFim)
+      .order('hora_inicio', {ascending:true});
+    if (error) throw error;
+    return data || [];
+  } catch(e) { console.warn('Compromissos indisponiveis:', e.message); return []; }
+}
+
+async function _compCarregarDoInstrutor(instrutorId) {
+  try {
+    const {data, error} = await sb.from('compromissos')
+      .select(COMPROMISSO_COLS)
+      .eq('instrutor_id', instrutorId)
+      .eq('cancelado', false)
+      .order('data', {ascending:true});
+    if (error) throw error;
+    return data || [];
+  } catch(e) { console.warn('Compromissos indisponiveis:', e.message); return []; }
+}
+
+// ---- Traducao dos erros do banco ---------------------------------------
+// As mensagens vem dos triggers/constraints criados na migration. Traduzir
+// aqui evita despejar erro tecnico do Postgres na cara do usuario.
+function _compTraduzErro(e) {
+  const msg = e?.message || '';
+  if (e?.code === '23P01' || /exclu(s|d)/i.test(msg)) return 'Este instrutor já tem outro compromisso nesse horário — escolha outro horário.';
+  if (/treinamento agendado/i.test(msg))               return 'Este instrutor já tem um treinamento agendado nesse dia e horário.';
+  if (/não pertence a esta organiza/i.test(msg))       return 'O instrutor selecionado não pertence a esta organização.';
+  if (/inativo/i.test(msg))                            return 'Este instrutor está inativo — não é possível reservar a agenda dele.';
+  if (/somente podem ser reservados|só podem ser reservados/i.test(msg)) return 'Compromissos só podem ser reservados para um instrutor.';
+  return traduzErroSupabase(e, 'Não foi possível salvar o compromisso');
+}
+
+// ---- Choque de horario com o agendamento de TURMA ----------------------
+// Desde 2026-08-22 o banco bloqueia criar/editar uma sessao de treinamento
+// em cima de um compromisso (trigger trg_sessoes_checar_conflito_
+// compromissos). Sem estes dois helpers o usuario so descobriria o choque
+// ao clicar em salvar, recebendo um erro cru do Postgres.
+async function _compChoquesDoDia(instrutorId, data, ini, fim) {
+  if (!instrutorId || !data) return [];
+  try {
+    const {data:lista, error} = await sb.from('compromissos')
+      .select('id,tipo,titulo,hora_inicio,hora_fim')
+      .eq('instrutor_id', instrutorId).eq('data', data).eq('cancelado', false);
+    if (error) throw error;
+    return (lista||[]).filter(x => {
+      if (!x.hora_inicio || !x.hora_fim) return false;
+      if (!ini || !fim) return true;   // horario ainda incompleto: mostra o dia todo
+      return ini < x.hora_fim.slice(0,5) && x.hora_inicio.slice(0,5) < fim;
+    });
+  } catch(e) { console.warn('Compromissos indisponiveis:', e.message); return []; }
+}
+
+// Caixa de aviso. Vermelha porque, diferente da sobreposicao entre turmas,
+// esta o banco NAO deixa passar para nenhum perfil — nao existe
+// "sobreposicao autorizada" entre treinamento e compromisso.
+function _compAvisoHtml(lista) {
+  if (!lista || !lista.length) return '';
+  return `<div style="background:var(--red-l);color:var(--red-text);border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px;line-height:1.6">
+    <strong>⛔ Compromisso reservado neste horário</strong>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      ${lista.map(x=>`<li>${(x.hora_inicio||'').slice(0,5)}–${(x.hora_fim||'').slice(0,5)} — ${escapeHtml(_compTipo(x.tipo).label)}: ${escapeHtml(x.titulo)}</li>`).join('')}
+    </ul>
+    <div style="margin-top:6px">A agenda deste instrutor está reservada — escolha outro horário, ou cancele o compromisso na Agenda da Equipe.</div>
+  </div>`;
+}
+
+// ---- Modal de criacao / edicao -----------------------------------------
+const _COMP_INPUT_ST = 'width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none';
+
+async function abrirModalCompromisso(compromissoId = null, preset = {}) {
+  if (!_compPodeGerenciar()) { showToast('Você não tem permissão para criar compromissos','error'); return; }
+  window._compEditId = compromissoId || null;
+  window._compTemConflito = false;
+
+  const instrutores = (window._agEquipeInstrutores||[]).length ? window._agEquipeInstrutores : await _carregarInstrutores();
+  if (!instrutores.length) { showToast('Cadastre instrutores em Equipe antes de reservar a agenda','error'); return; }
+
+  let cm = null;
+  if (compromissoId) {
+    const {data} = await sb.from('compromissos').select(COMPROMISSO_COLS).eq('id', compromissoId).maybeSingle();
+    cm = data;
+    if (!cm) { showToast('Compromisso não encontrado','error'); return; }
+  }
+
+  const instrutorSel = cm?.instrutor_id || preset.instrutorId || '';
+  const instOpts = instrutores.map(i => `<option value="${i.id}" ${i.id===instrutorSel?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
+  const tipoSel  = cm?.tipo || 'reuniao';
+  const tipoOpts = COMPROMISSO_TIPOS.map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('');
+
+  abrirModal(cm ? 'Editar compromisso' : 'Novo compromisso', `
+    <div style="background:rgba(30,42,74,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2);line-height:1.5">
+      Reserva de agenda do instrutor. <b>Não gera turma, alunos, assinaturas, evidências nem certificados</b> — serve para bloquear o horário.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field"><label for="mCompTipo">Tipo *</label>
+        <select id="mCompTipo" style="${_COMP_INPUT_ST}">${tipoOpts}</select></div>
+      <div class="field"><label for="mCompInstrutor">Instrutor *</label>
+        <select id="mCompInstrutor" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}">
+          <option value="">Selecione o instrutor...</option>${instOpts}</select></div>
+    </div>
+    <div class="field"><label for="mCompTitulo">Título *</label>
+      <input type="text" id="mCompTitulo" maxlength="120" value="${escapeHtml(cm?.titulo||'')}" placeholder="Ex.: Palestra de abertura da SIPAT"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div class="field"><label for="mCompData">Data *</label>
+        <input type="date" id="mCompData" value="${cm?.data||preset.data||''}" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}"></div>
+      <div class="field"><label for="mCompIni">Início *</label>
+        <input type="time" id="mCompIni" value="${cm?.hora_inicio?.slice(0,5)||preset.horaInicio||''}" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}"></div>
+      <div class="field"><label for="mCompFim">Término *</label>
+        <input type="time" id="mCompFim" value="${cm?.hora_fim?.slice(0,5)||''}" onchange="_compVerificarConflito()" style="${_COMP_INPUT_ST}"></div>
+    </div>
+    <div id="mCompConflito"></div>
+    <div class="field"><label for="mCompDesc">Descrição</label>
+      <textarea id="mCompDesc" rows="2" maxlength="2000" placeholder="O que é esse compromisso" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.descricao||'')}</textarea></div>
+    <div class="field"><label for="mCompLocal">Informações adicionais</label>
+      <input type="text" id="mCompLocal" maxlength="200" value="${escapeHtml(cm?.local||'')}" placeholder="Ex.: Auditório central, sala 2, link da reunião...">
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Aparece para o instrutor no card da Agenda.</div></div>
+    <div class="field" style="margin-bottom:0"><label for="mCompObs">Observações</label>
+      <textarea id="mCompObs" rows="2" maxlength="2000" placeholder="Orientações para o instrutor" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.observacoes||'')}</textarea></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`);
+
+  if (instrutorSel && (cm?.data || preset.data)) _compVerificarConflito();
+}
+
+// Checagem de conflito AO VIVO — mesma filosofia de _agVerificarConflito:
+// e so a camada de EXPERIENCIA (avisar antes de tentar salvar). Quem
+// garante de verdade e a constraint EXCLUDE + o trigger no banco.
+async function _compVerificarConflito() {
+  const box = document.getElementById('mCompConflito');
+  if (!box) return;
+  const instrutorId = document.getElementById('mCompInstrutor')?.value;
+  const data = document.getElementById('mCompData')?.value;
+  const ini  = document.getElementById('mCompIni')?.value;
+  const fim  = document.getElementById('mCompFim')?.value;
+  window._compTemConflito = false;
+  const btn = document.getElementById('btnSalvarModal');
+  if (!instrutorId || !data || !ini || !fim || fim <= ini) {
+    box.innerHTML = '';
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  const idAtual = window._compEditId || '00000000-0000-0000-0000-000000000000';
+  const [sesResp, compResp] = await Promise.all([
+    sb.from('sessoes')
+      .select('hora_inicio,hora_fim,concluida,turmas(status,catalogo(nome),clientes(nome))')
+      .eq('instrutor_id', instrutorId).eq('data', data),
+    sb.from('compromissos')
+      .select('id,tipo,titulo,hora_inicio,hora_fim')
+      .eq('instrutor_id', instrutorId).eq('data', data).eq('cancelado', false).neq('id', idAtual),
+  ]);
+
+  const choques = [];
+  (sesResp.data||[]).forEach(s => {
+    if (s.turmas?.status === 'cancelada' || s.concluida) return;
+    if (!s.hora_inicio || !s.hora_fim) return;
+    if (ini < s.hora_fim.slice(0,5) && s.hora_inicio.slice(0,5) < fim) {
+      choques.push(`${s.hora_inicio.slice(0,5)}–${s.hora_fim.slice(0,5)} — Treinamento: ${s.turmas?.clientes?.nome||'cliente não identificado'}`);
+    }
+  });
+  (compResp.data||[]).forEach(x => {
+    if (!x.hora_inicio || !x.hora_fim) return;
+    if (ini < x.hora_fim.slice(0,5) && x.hora_inicio.slice(0,5) < fim) {
+      choques.push(`${x.hora_inicio.slice(0,5)}–${x.hora_fim.slice(0,5)} — ${_compTipo(x.tipo).label}: ${x.titulo}`);
+    }
+  });
+
+  window._compTemConflito = choques.length > 0;
+  box.innerHTML = choques.length
+    ? `<div style="background:var(--red-l);color:var(--red-text);border-radius:8px;padding:10px 12px;font-size:12px;margin:-4px 0 14px;line-height:1.6">
+        <strong>⚠ Este instrutor já está ocupado neste horário</strong>
+        <ul style="margin:6px 0 0;padding-left:18px">${choques.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>
+        <div style="margin-top:6px">Ajuste o horário — o sistema não permite reservar em cima de outro compromisso.</div>
+      </div>`
+    : '';
+  if (btn) btn.disabled = choques.length > 0;
+}
+
+async function salvarCompromisso() {
+  if (!_compPodeGerenciar()) { showToast('Você não tem permissão para isso','error'); return; }
+  const titulo      = document.getElementById('mCompTitulo')?.value.trim() || '';
+  const instrutorId = document.getElementById('mCompInstrutor')?.value || '';
+  const data        = document.getElementById('mCompData')?.value || '';
+  const ini         = document.getElementById('mCompIni')?.value || '';
+  const fim         = document.getElementById('mCompFim')?.value || '';
+  if (!titulo)      { showToast('Informe o título do compromisso','error'); return; }
+  if (titulo.length > 120) { showToast('O título deve ter no máximo 120 caracteres','error'); return; }
+  if (!instrutorId) { showToast('Selecione o instrutor','error'); return; }
+  if (!data)        { showToast('Informe a data','error'); return; }
+  if (!ini || !fim) { showToast('Informe a hora de início e de término','error'); return; }
+  if (fim <= ini)   { showToast('A hora de término deve ser depois da hora de início.','error'); return; }
+
+  const dados = {
+    org_id:       usuarioAtual.org_id,
+    instrutor_id: instrutorId,
+    tipo:         document.getElementById('mCompTipo')?.value || 'outro',
+    titulo,
+    descricao:    document.getElementById('mCompDesc')?.value.trim()  || null,
+    data, hora_inicio: ini, hora_fim: fim,
+    local:        document.getElementById('mCompLocal')?.value.trim() || null,
+    observacoes:  document.getElementById('mCompObs')?.value.trim()   || null,
+  };
+
+  const editandoId = window._compEditId;
+  try {
+    setBtnModalLoading(true);
+    const {data:gravado, error} = editandoId
+      ? await sb.from('compromissos').update(dados).eq('id', editandoId).select('id')
+      : await sb.from('compromissos').insert(dados).select('id');
+    if (error) throw error;
+    // PostgREST devolve 0 linhas sem erro quando a RLS barra a operacao —
+    // padrao defensivo ja usado no resto do projeto.
+    if (!gravado || !gravado.length) throw new Error('Nada foi gravado — verifique suas permissões.');
+    fecharModal();
+    window._compEditId = null;
+    showToast(editandoId ? 'Compromisso atualizado!' : 'Agenda reservada!', 'success');
+    if (paginaAtual === 'agendaequipe') await _agEquipeCarregarEExibir();
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(_compTraduzErro(e), 'error');
+  }
+}
+
+// Detalhe do compromisso. Aberto tanto pelo instrutor (somente leitura)
+// quanto por Administrador/Comercial (com Editar/Cancelar).
+async function verCompromisso(id) {
+  const {data:cm, error} = await sb.from('compromissos').select(COMPROMISSO_COLS).eq('id', id).maybeSingle();
+  if (error || !cm) { showToast('Não foi possível abrir o compromisso','error'); return; }
+  const t = _compTipo(cm.tipo);
+  const inst = (window._agEquipeInstrutores||[]).find(i => i.id === cm.instrutor_id);
+
+  const linha = (rot, val) => val ? `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;width:112px;flex-shrink:0;padding-top:2px">${rot}</span>
+      <span style="font-size:13px;color:var(--text-1);line-height:1.55;white-space:pre-wrap;min-width:0">${escapeHtml(val)}</span>
+    </div>` : '';
+
+  abrirModal(`${t.icone} ${t.label}`, `
+    <div style="font-size:17px;font-weight:700;color:var(--text-1);line-height:1.35;margin-bottom:4px">${escapeHtml(cm.titulo)}</div>
+    <span class="badge badge-navy" style="margin-bottom:12px">Reserva de agenda</span>
+    <div style="margin-top:10px">
+      ${linha('Data', formatarData(cm.data))}
+      ${linha('Horário', `${(cm.hora_inicio||'').slice(0,5)} às ${(cm.hora_fim||'').slice(0,5)}`)}
+      ${inst ? linha('Instrutor', inst.nome) : ''}
+      ${linha('Descrição', cm.descricao)}
+      ${linha('Informações', cm.local)}
+      ${linha('Observações', cm.observacoes)}
+    </div>
+    <div style="background:var(--gray-50,#F8FAFC);border-radius:var(--r-md);padding:10px 12px;margin-top:14px;font-size:11.5px;color:var(--text-2);line-height:1.55">
+      Este é um compromisso de agenda, não um treinamento — não exige alunos, assinaturas ou evidências, e não gera certificados nem documentos.
+    </div>`,
+    _compPodeGerenciar()
+      ? `<button class="btn btn-outline" onclick="cancelarCompromisso('${cm.id}')" style="color:var(--red);border-color:var(--red)">Cancelar reserva</button>
+         <button class="btn btn-outline" onclick="abrirModalCompromisso('${cm.id}')">Editar</button>
+         <button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`
+      : `<button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`);
+}
+
+// Cancelamento = exclusao logica (cancelado=true). Nao existe policy de
+// DELETE para Administrador/Comercial no banco, de proposito: o registro
+// fica no historico para auditoria e o horario e liberado de volta.
+async function cancelarCompromisso(id) {
+  if (!_compPodeGerenciar()) { showToast('Você não tem permissão para isso','error'); return; }
+  const ok = await confirmarAcao(
+    'Cancelar esta reserva de agenda? O horário do instrutor fica livre novamente. O registro é mantido no histórico para auditoria.',
+    'Cancelar reserva', true);
+  if (!ok) return;
+  const {data, error} = await sb.from('compromissos').update({cancelado:true}).eq('id', id).select('id');
+  if (error) { showToast(traduzErroSupabase(error,'Não foi possível cancelar a reserva'),'error'); return; }
+  if (!data || !data.length) { showToast('Nada foi alterado — verifique suas permissões.','error'); return; }
+  fecharModal();
+  showToast('Reserva cancelada','info');
+  if (paginaAtual === 'agendaequipe') await _agEquipeCarregarEExibir();
+}
+
+// Escolha "Nova turma" x "Novo compromisso" ao clicar num espaco livre da
+// linha do instrutor (visao Dia). Antes o clique abria "Nova turma" direto;
+// alteracao aprovada pelo Alisson em 2026-08-22 (Decisao 4 da proposta).
+function _agEquipeEscolherTipoAgendamento(instrutorId, data, horaInicio) {
+  const inst  = (window._agEquipeInstrutores||[]).find(i => i.id === instrutorId);
+  const quando = `${formatarData(data)}${horaInicio ? ' às ' + horaInicio : ''}`;
+  const cardSt = 'width:100%;text-align:left;border:1.5px solid var(--border);background:var(--surface);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;font-family:inherit;display:block';
+  abrirModal('O que você quer agendar?', `
+    <div style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">${escapeHtml(quando)}${inst ? ' · ' + escapeHtml(inst.nome) : ''}</div>
+    <div style="display:grid;gap:10px">
+      <button type="button" style="${cardSt}" onclick="fecharModal();_agEquipeAbrirCriacaoRapida('${instrutorId}','${data}','${horaInicio||''}')">
+        <div style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:3px">📚 Nova turma</div>
+        <div style="font-size:11.5px;color:var(--text-2);line-height:1.5">Treinamento completo — alunos, presença, evidências e certificados.</div>
+      </button>
+      <button type="button" style="${cardSt}" onclick="fecharModal();abrirModalCompromisso(null,{instrutorId:'${instrutorId}',data:'${data}',horaInicio:'${horaInicio||''}'})">
+        <div style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:3px">📌 Novo compromisso</div>
+        <div style="font-size:11.5px;color:var(--text-2);line-height:1.5">Só reserva o horário — evento, palestra ou reunião. Não gera certificado.</div>
+      </button>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
 }
 
 // ============================================================
@@ -12100,7 +12579,12 @@ async function renderAgendaEquipe() {
   // própria forma de mostrar disponibilidade visualmente.
   setConteudo(`
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <div id="agEquipeVisaoSwitchWrap">${_agEquipeHtmlVisaoSwitch()}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div id="agEquipeVisaoSwitchWrap">${_agEquipeHtmlVisaoSwitch()}</div>
+        <button type="button" onclick="abrirModalCompromisso(null,{data:window._agEquipeData})"
+          title="Reservar a agenda de um instrutor para evento, palestra ou reunião"
+          style="border:1.5px solid var(--border);background:var(--surface);color:var(--navy);cursor:pointer;padding:7px 13px;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;min-height:30px;white-space:nowrap">＋ Compromisso</button>
+      </div>
       <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)"
         style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);min-width:200px">
         <option value="">Todos os instrutores</option>${optsInstrutor}
@@ -12164,6 +12648,11 @@ async function _agEquipeCarregarDados() {
   window._agEquipeInstrutores     = instrutores || [];
   window._agEquipeSessoesDoDia    = sessoesDoDia;
   window._agEquipeTurmasPendentes = (turmasResp.data||[]).filter(t => !(t.sessoes||[]).length);
+  // 2026-08-22 — compromissos de agenda. Guardados numa variavel PROPRIA,
+  // nunca concatenados em _agEquipeSessoesDoDia: assim nenhum calculo ja
+  // existente (pendencias, contagens, conflito entre turmas) passa a
+  // enxerga-los por acidente. A mesclagem acontece so na renderizacao.
+  window._agEquipeCompromissosDoDia = await _compCarregarPeriodoOrg(data, data);
 }
 
 async function _agEquipeAtualizarSilenciosamente() {
@@ -12172,6 +12661,7 @@ async function _agEquipeAtualizarSilenciosamente() {
   if (paginaAtual !== 'agendaequipe') { clearInterval(window._agEquipePollId); window._agEquipePollId = null; return; }
   const assinatura = () => JSON.stringify([
     (window._agEquipeSessoesDoDia||[]).map(s=>[s.id,s.hora_inicio,s.hora_fim,s.instrutor_id,s.concluida]),
+    (window._agEquipeCompromissosDoDia||[]).map(x=>[x.id,x.hora_inicio,x.hora_fim,x.instrutor_id,x.titulo]),
     window._agEquipeTurmasPendentes?.length,
   ]);
   const antes = assinatura();
@@ -12392,6 +12882,9 @@ async function _agEquipeCarregarDadosIntervalo(dataIni, dataFim) {
   window._agEquipeInstrutores     = instrutores || [];
   window._agEquipeSessoesPeriodo  = sessoes;
   window._agEquipeTurmasPendentes = (turmasResp.data||[]).filter(t => !(t.sessoes||[]).length);
+  // 2026-08-22 — mesma logica de _agEquipeCarregarDados: variavel propria,
+  // separada das sessoes (ver comentario la).
+  window._agEquipeCompromissosPeriodo = await _compCarregarPeriodoOrg(dataIni, dataFim);
 }
 async function _agEquipeCarregarDadosSemana() {
   const {inicio, fim} = _agEquipeSemanaAtual();
@@ -12507,6 +13000,11 @@ function _agEquipeRenderSemana() {
   (window._agEquipeSessoesPeriodo||[]).forEach(s => {
     (sessoesPorDia[s.data] = sessoesPorDia[s.data] || []).push(s);
   });
+  // 2026-08-22 — compromissos adaptados (ver _compParaBloco). Estrutura
+  // local; window._agEquipeSessoesPeriodo continua so com treinamentos.
+  (window._agEquipeCompromissosPeriodo||[]).forEach(x => {
+    (sessoesPorDia[x.data] = sessoesPorDia[x.data] || []).push(_compParaBloco(x));
+  });
   // Mesma regra de conflito da visão Dia (sobreposição real entre sessões
   // do mesmo instrutor, com pelo menos uma ainda não concluída), calculada
   // dia a dia dentro da semana.
@@ -12600,13 +13098,13 @@ function _agEquipeRenderSemana() {
       }
       const MAX_VISIVEL = 3;
       const chips = sessoes.slice(0,MAX_VISIVEL).map(s => {
-        const concluida = !!s.concluida;
-        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
-        const corTexto = (concluida || s._conflito || s._sobreposicaoAutorizada) ? '#fff' : 'var(--navy)';
+        const vi = _agItemVisual(s);
+        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
+        const corTexto = (s._conflito || s._sobreposicaoAutorizada) ? '#fff' : vi.cor;
         const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
-        const cliente = s.turmas?.clientes?.nome||'—';
-        const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
-        return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+        const cliente = vi.nome;
+        const titulo = `${horaTxt} · ${vi.detalhe}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}`;
+        return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
           style="background:${bg};color:${corTexto};border-radius:4px;padding:3px 5px;font-size:9.5px;font-weight:600;margin-bottom:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
       }).join('');
       const extra = sessoes.length>MAX_VISIVEL ? `<div style="font-size:9px;color:var(--text-3);text-align:center">+${sessoes.length-MAX_VISIVEL}</div>` : '';
@@ -12629,7 +13127,8 @@ function _agEquipeRenderSemana() {
     </div>
   </div>
   <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
@@ -12672,13 +13171,13 @@ function _agEquipeRenderSemana() {
         corpoDia = `<div style="font-size:10.5px;color:var(--text-3);padding-left:2px">Sem compromissos</div>`;
       } else {
         const itens = sessoesDia.slice(0,MAX_VISIVEL_DIA).map(s => {
-          const concluida = !!s.concluida;
-          const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
+          const vi = _agItemVisual(s);
+          const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
           const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
-          const cliente = s.turmas?.clientes?.nome||'—';
-          const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
+          const cliente = vi.nome;
+          const titulo = `${horaTxt} · ${vi.detalhe}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}`;
           const corInst = s.instrutor_id ? (corDoInstrutorAg[s.instrutor_id]||'#94A3B8') : '#94A3B8';
-          return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+          return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
             style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;margin-bottom:4px;min-width:0;cursor:pointer;background:${bg}">
             <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${corInst};box-shadow:0 0 0 1.5px rgba(255,255,255,.5) inset"></span>
             <span style="font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${horaTxt}</span>
@@ -12695,7 +13194,8 @@ function _agEquipeRenderSemana() {
     }).join('');
     return `${secoes}
     <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
@@ -12752,6 +13252,12 @@ function _agEquipeRenderMes() {
     if (sel && s.instrutor_id !== sel) return;
     (sessoesPorDia[s.data] = sessoesPorDia[s.data] || []).push(s);
   });
+  // 2026-08-22 — compromissos adaptados, respeitando o mesmo filtro de
+  // instrutor aplicado acima.
+  (window._agEquipeCompromissosPeriodo||[]).forEach(x => {
+    if (sel && x.instrutor_id !== sel) return;
+    (sessoesPorDia[x.data] = sessoesPorDia[x.data] || []).push(_compParaBloco(x));
+  });
 
   // 2026-08-12 (pedido do Alisson, revisão de legibilidade Dia/Mês tomando
   // a visão Semana como referência — mockup aprovado em chat): letras
@@ -12775,11 +13281,15 @@ function _agEquipeRenderMes() {
     // cada chip, só que colorido por instrutor em vez de por status
     // (concluída/conflito), pra manter a legenda de cores que o Mês já usa.
     const chips = sessoesDia.slice(0,MAX_VISIVEL).map(s => {
-      const cor = corDoInstrutor[s.instrutor_id] || 'var(--amber)';
+      const vi = _agItemVisual(s);
+      // Compromisso mantem a cor propria (navy) em vez da cor do instrutor:
+      // e a unica forma de distinguir tipo de compromisso x treinamento
+      // nesta visao, que ja usa cor para identificar o instrutor.
+      const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || 'var(--amber)');
       const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
-      const cliente = s.turmas?.clientes?.nome || '—';
-      const titulo = `${horaTxt} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s.concluida?' · concluído':''}`;
-      return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+      const cliente = vi.nome;
+      const titulo = `${horaTxt} · ${vi.detalhe}`;
+      return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
         style="background:${cor};color:#fff;border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
     }).join('');
 
@@ -12800,10 +13310,11 @@ function _agEquipeRenderMes() {
     if (popoverAberto && window._agEquipeMesPopoverPos) {
       const pos = window._agEquipeMesPopoverPos;
       const itens = sessoesDia.map(s => {
-        const cor = corDoInstrutor[s.instrutor_id] || 'var(--amber)';
+        const vi = _agItemVisual(s);
+        const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || 'var(--amber)');
         const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
-        const cliente = s.turmas?.clientes?.nome || '—';
-        return `<div data-action="verTurma" data-id="${s.turma_id}" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;cursor:pointer">
+        const cliente = vi.nome;
+        return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;cursor:pointer">
           <span style="width:6px;height:6px;border-radius:50%;background:${cor};flex-shrink:0"></span>
           <b style="color:var(--text-1);width:38px;flex-shrink:0">${escapeHtml(horaTxt)}</b>
           <span style="color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(cliente)}</span>
@@ -12908,6 +13419,15 @@ function _agEquipeRenderTimeline() {
   (window._agEquipeSessoesDoDia||[]).forEach(s => {
     if (!s.instrutor_id) return;
     (sessoesPorInstrutor[s.instrutor_id] = sessoesPorInstrutor[s.instrutor_id] || []).push(s);
+  });
+  // 2026-08-22 — compromissos entram aqui adaptados ao mesmo formato das
+  // sessoes (_compParaBloco), para reaproveitar sem alteracao o algoritmo
+  // de faixas, a ordenacao e a deteccao de sobreposicao ja testados abaixo.
+  // Esta variavel local e descartada ao fim do render — a lista original
+  // (window._agEquipeSessoesDoDia) continua so com treinamentos.
+  (window._agEquipeCompromissosDoDia||[]).forEach(x => {
+    if (!x.instrutor_id) return;
+    (sessoesPorInstrutor[x.instrutor_id] = sessoesPorInstrutor[x.instrutor_id] || []).push(_compParaBloco(x));
   });
   if (!instrutores.length) {
     const vazio = `<div style="font-size:12px;color:var(--text-3);padding:20px 0;text-align:center">Cadastre instrutores em Equipe para usar a Agenda da Equipe.</div>`;
@@ -13031,7 +13551,7 @@ function _agEquipeRenderTimeline() {
     const sessoes = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
     const alturaLinha = alturaPorInstrutor[i.id];
     if (!sessoes.length) {
-      return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(i.nome)} neste horário"
+      return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique para agendar uma turma ou reservar um compromisso com ${escapeHtml(i.nome)} neste horário"
         style="height:${alturaLinha}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer">
         <span style="font-size:10px;color:var(--text-3)">Livre o dia todo</span>
       </div>`;
@@ -13046,12 +13566,13 @@ function _agEquipeRenderTimeline() {
       // 2026-08-09: cor de "concluído" trocada de cinza pra verde (pedido
       // do Alisson) — mesmo var(--green) já usado no resto do sistema pra
       // indicar status finalizado/positivo (ex.: badge de turma concluída).
-      const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
+      const vi = _agItemVisual(s);
+      const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
       const borda = s._conflito ? '2px solid var(--red)' : s._sobreposicaoAutorizada ? '2px solid var(--blue-h)' : 'none';
       const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
       const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
       const rotulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''}`;
-      const titulo = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
+      const titulo = `${rotulo} · ${vi.detalhe}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}`;
       // Topo da faixa (sub-linha) deste compromisso — cada faixa reserva
       // ALTURA_FAIXA+GAP_FAIXA px, exatamente como a linha inteira reservava
       // antes (2026-08-14, Proposta A — sub-linhas lado a lado).
@@ -13064,12 +13585,12 @@ function _agEquipeRenderTimeline() {
       // sobrepor nada: cada faixa (sub-linha) já tem seu próprio espaço
       // reservado; texto que não cabe na largura do compromisso trunca com
       // reticências (overflow:hidden) em vez de vazar pra fora da tarja.
-      const textoChip = `${rotulo} · ${s.turmas?.clientes?.nome||'Cliente não identificado'}${s._conflito?' · CONFLITO':s._sobreposicaoAutorizada?' · autorizada':''}`;
-      const barra = `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+      const textoChip = `${rotulo} · ${vi.nome}${s._conflito?' · CONFLITO':s._sobreposicaoAutorizada?' · autorizada':''}`;
+      const barra = `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
         style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:${topoFaixa+10}px;height:34px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px;display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 2px rgba(0,0,0,.15)">${escapeHtml(textoChip)}</div>`;
       return barra;
     }).join('');
-    return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma nova com ${escapeHtml(i.nome)}"
+    return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma ou reservar um compromisso com ${escapeHtml(i.nome)}"
       style="height:${alturaLinha}px;position:relative;background:var(--gray-50,#F8FAFC);border-left:3px solid ${corDoInstrutorAg[i.id]};border-radius:6px;cursor:pointer">${blocos}</div>`;
   }).join(espacador);
 
@@ -13101,7 +13622,8 @@ function _agEquipeRenderTimeline() {
     </div>
   </div>
   <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
@@ -13127,14 +13649,14 @@ function _agEquipeRenderTimeline() {
     const secoes = instrutores.map(i => {
       const sessoesInst = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
       const corpo = sessoesInst.length ? sessoesInst.map(s => {
-        const concluida = !!s.concluida;
-        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : (concluida ? 'var(--green)' : 'var(--amber)');
+        const vi = _agItemVisual(s);
+        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
         const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
         const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
-        const cliente = s.turmas?.clientes?.nome||'Cliente não identificado';
-        const statusTxt = s._conflito?'CONFLITO':s._sobreposicaoAutorizada?'Sobreposição autorizada':(concluida?'Concluído':'Agendado');
-        const titulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''} · ${cliente} · ${s.turmas?.catalogo?.nome||''}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}${concluida?' · concluída':''}`;
-        return `<div data-action="verTurma" data-id="${s.turma_id}" title="${escapeHtml(titulo)}"
+        const cliente = vi.nome;
+        const statusTxt = s._conflito?'CONFLITO':s._sobreposicaoAutorizada?'Sobreposição autorizada':vi.status;
+        const titulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''} · ${vi.detalhe}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · 🔓 Sobreposição autorizada':''}`;
+        return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
           style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:5px;min-width:0;cursor:pointer;background:${bg}">
           <span style="font-size:12px;font-weight:700;color:#fff;width:40px;flex-shrink:0">${horaTxt}</span>
           <div style="min-width:0;flex:1">
@@ -13142,7 +13664,7 @@ function _agEquipeRenderTimeline() {
             <span style="font-size:9px;color:rgba(255,255,255,.85);font-weight:600">${statusTxt}</span>
           </div>
         </div>`;
-      }).join('') : `<div style="font-size:11px;color:var(--text-3);padding:8px 9px;border-radius:7px;background:var(--gray-50,#F8FAFC);cursor:pointer" onclick="_agEquipeAbrirCriacaoRapida('${i.id}', window._agEquipeData, null)" title="Agendar turma com ${escapeHtml(i.nome)}">Livre o dia todo — toque para agendar</div>`;
+      }).join('') : `<div style="font-size:11px;color:var(--text-3);padding:8px 9px;border-radius:7px;background:var(--gray-50,#F8FAFC);cursor:pointer" onclick="_agEquipeEscolherTipoAgendamento('${i.id}', window._agEquipeData, null)" title="Agendar turma ou reservar compromisso com ${escapeHtml(i.nome)}">Livre o dia todo — toque para agendar</div>`;
       return `<div style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
           <span style="width:9px;height:9px;border-radius:50%;background:${corDoInstrutorAg[i.id]};flex-shrink:0"></span>
@@ -13153,7 +13675,8 @@ function _agEquipeRenderTimeline() {
     }).join('');
     return `${secoes}
     <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
@@ -13207,7 +13730,10 @@ function _agEquipeCliqueNaLinha(event, instrutorId) {
   const minutosArred = Math.round(minutos/15)*15;
   const hh = String(Math.floor(minutosArred/60)).padStart(2,'0');
   const mm = String(minutosArred%60).padStart(2,'0');
-  _agEquipeAbrirCriacaoRapida(instrutorId, window._agEquipeData, `${hh}:${mm}`);
+  // 2026-08-22 (Decisao 4 aprovada pelo Alisson): antes abria "Nova turma"
+  // direto; agora pergunta antes se e turma ou compromisso, mantendo
+  // instrutor/data/hora ja preenchidos nos dois caminhos.
+  _agEquipeEscolherTipoAgendamento(instrutorId, window._agEquipeData, `${hh}:${mm}`);
 }
 
 // horaInicio pode vir null (disparado pelo botão "+" ao lado do nome, no
@@ -13428,8 +13954,11 @@ async function _agRapidaVerificarConflito() {
     .select('id,hora_inicio,hora_fim,concluida,turmas(status,catalogo(nome),clientes(nome))')
     .eq('instrutor_id', instrutorId)
     .eq('data', data);
+  // 2026-08-22 — bloco aditivo, mesma logica de _agVerificarConflito.
+  const _compsChoque = await _compChoquesDoDia(instrutorId, data, ini, fim);
+  window._agRapidaTemChoqueCompromisso = _compsChoque.length > 0;
   const relevantes = (existentes||[]).filter(s => s.turmas?.status !== 'cancelada' && !s.concluida);
-  if (!relevantes.length) { box.innerHTML = ''; _agRapidaAtualizarBotaoSalvar(); return; }
+  if (!relevantes.length && !_compsChoque.length) { box.innerHTML = ''; _agRapidaAtualizarBotaoSalvar(); return; }
   const sobrepoe = (s) => {
     if (!ini || !fim || !s.hora_inicio || !s.hora_fim) return null;
     return ini < s.hora_fim.slice(0,5) && s.hora_inicio.slice(0,5) < fim;
@@ -13439,18 +13968,24 @@ async function _agRapidaVerificarConflito() {
   window._agRapidaTemConflito = conflitantes.length > 0;
   const corAviso = conflitantes.length ? 'var(--red)' : 'var(--amber-h)';
   const fundoAviso = conflitantes.length ? 'var(--red-l)' : 'rgba(245,158,11,.1)';
-  box.innerHTML = `<div style="background:${fundoAviso};color:${corAviso};border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px;line-height:1.6">
-    <strong>${conflitantes.length?'⚠ Conflito de horário':'ℹ Este instrutor já tem compromisso(s) neste dia'}</strong>
+  box.innerHTML = `${relevantes.length ? `<div style="background:${fundoAviso};color:${corAviso};border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px;line-height:1.6">
+    <strong>${conflitantes.length?'⚠ Conflito de horário':'ℹ Este instrutor já tem turma(s) neste dia'}</strong>
     <ul style="margin:6px 0 0;padding-left:18px">
       ${avaliadas.map(a=>`<li>${a.s.hora_inicio?a.s.hora_inicio.slice(0,5):'horário não definido'}${a.s.hora_fim?'–'+a.s.hora_fim.slice(0,5):''} — ${escapeHtml(a.s.turmas?.clientes?.nome||'Cliente não identificado')} (${escapeHtml(a.s.turmas?.catalogo?.nome||'')})</li>`).join('')}
     </ul>
-  </div>`;
+  </div>` : ''}${_compAvisoHtml(_compsChoque)}`;
   _agRapidaAtualizarBotaoSalvar();
 }
 
 function _agRapidaAtualizarBotaoSalvar() {
   const btn = document.getElementById('btnSalvarModal');
   if (!btn) return;
+  // 2026-08-22 — ver comentario equivalente em _agAtualizarBotaoSalvar.
+  if (window._agRapidaTemChoqueCompromisso) {
+    btn.disabled = true;
+    btn.title = 'Este instrutor tem um compromisso reservado neste horário — escolha outro horário.';
+    return;
+  }
   const podeForcar = usuarioAtual.perfil === 'provedor' || usuarioAtual.perfil === 'administrador' || usuarioAtual.perfil === 'comercial';
   if (window._agRapidaTemConflito && !podeForcar) {
     btn.disabled = true;
@@ -13565,7 +14100,11 @@ async function _agRapidaSalvarTurmaEAgendamento() {
     setBtnModalLoading(false);
     fecharModal(); // a turma já existe — não faz sentido manter o modal de criação aberto
     hideLoading();
-    if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
+    // 2026-08-22 — mensagem propria quando o choque foi com um compromisso
+    // de agenda (trigger trg_sessoes_checar_conflito_compromissos).
+    if (/compromisso reservado/i.test(e.message||'')) {
+      showToast('A turma foi criada, mas esse instrutor tem um compromisso reservado nesse horário. Abra a turma em "Turmas pendentes de agendamento" pra escolher outro horário.','error');
+    } else if (e.code === '23P01' || /exclu(s|d)/i.test(e.message||'')) {
       showToast('A turma foi criada, mas esse instrutor acabou de ser agendado por outro usuário nesse horário. Abra a turma em "Turmas pendentes de agendamento" pra escolher outro horário.','error');
     } else {
       showToast(`A turma foi criada, mas não foi possível agendar: ${traduzErroSupabase(e,'erro desconhecido')}. Abra a turma em "Turmas pendentes de agendamento" pra tentar de novo.`,'error');
@@ -17590,6 +18129,10 @@ document.addEventListener('click', function(e) {
     case 'editarTurma':           document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalTurma(id); break;
     case 'cancelarTurma':   cancelarTurma(id); break;
     case 'addAgendamento':  abrirModalAgendamento(id); break;
+    // Compromissos de agenda (2026-08-22). Ver bloco "COMPROMISSOS DE
+    // AGENDA" — proposital que NAO exista aqui nenhuma rota de compromisso
+    // para verTurma/documentos/certificados.
+    case 'verCompromisso':  if(id) verCompromisso(id); break;
     case 'menuAgendamento':  menuAgendamento(el,id,el.getAttribute('data-turma')); break;
     case 'editarAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalAgendamento(extra,id); break;
     case 'excluirAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); excluirAgendamento(id,extra); break;
