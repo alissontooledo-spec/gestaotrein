@@ -12402,7 +12402,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
   // Editando um compromisso já existente (compromissoId setado) o rodapé
   // continua igual — só Cancelar/Salvar, como sempre foi.
   const podeVoltarComp = !cm && preset.instrutorId && preset.data;
-  const rodapeComp = `${podeVoltarComp ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${preset.instrutorId}','${preset.data}','${preset.horaInicio||''}', ${!!preset.veioDeEscolherInstrutor})">← Voltar</button>` : ''}
+  const rodapeComp = `${podeVoltarComp ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${preset.instrutorId}','${preset.data}','${preset.horaInicio||''}', ${!!preset.veioDeEscolherInstrutor})">Voltar</button>` : ''}
      <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`;
 
@@ -12444,9 +12444,9 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
           <div class="nt-ic">📅</div>
           <div class="nt-body">
             <div class="nt-title">Agendamento</div>
-            <div class="nt-3col">
-              <div class="field"><label>Data *</label>
-                <input type="date" id="mCompData" value="${cm?.data||preset.data||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST};padding-right:34px"></div>
+            <div class="field"><label>Data *</label>
+              <input type="date" id="mCompData" value="${cm?.data||preset.data||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST};padding-right:34px"></div>
+            <div class="nt-2col">
               <div class="field"><label>Início *</label>
                 <input type="time" id="mCompIni" value="${cm?.hora_inicio?.slice(0,5)||preset.horaInicio||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
               <div class="field" style="margin-bottom:0"><label>Término *</label>
@@ -12460,6 +12460,14 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
           <div class="nt-ic">📝</div>
           <div class="nt-body">
             <div class="nt-title">Detalhes</div>
+            <div class="field">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <label style="margin:0">Endereço</label>
+                <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_compPreencherLocalComCliente()">📍 Usar endereço do cliente</button>
+              </div>
+              <textarea id="mCompLocal" rows="2" oninput="_compAtualizarPreview()" placeholder="Endereço completo onde o compromisso será realizado" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.local||'')}</textarea>
+              <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do compromisso — pode ser diferente do endereço cadastrado do cliente.</div>
+            </div>
             <div class="field" style="margin-bottom:0"><label for="mCompObs">Observações *</label>
               <textarea id="mCompObs" rows="2" maxlength="2000" placeholder="Orientações para o instrutor" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.observacoes||'')}</textarea></div>
           </div>
@@ -12470,7 +12478,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
     rodapeComp,
     true);
 
-  _comboBuscavelRegistrar('mCompCliente', cliOpcoes, () => _compAtualizarPreview());
+  _comboBuscavelRegistrar('mCompCliente', cliOpcoes, () => { _compAutoPreencherLocal(); _compAtualizarPreview(); });
   _compAtualizarPreview();
   if (instrutorSel && (cm?.data || preset.data)) _compVerificarConflito();
 }
@@ -12489,6 +12497,7 @@ function _compAtualizarPreview() {
   const data = document.getElementById('mCompData')?.value;
   const ini  = document.getElementById('mCompIni')?.value;
   const fim  = document.getElementById('mCompFim')?.value;
+  const local = document.getElementById('mCompLocal')?.value.trim();
   const dataFmt = data ? `${data.slice(8,10)}/${data.slice(5,7)}/${data.slice(0,4)}` : '';
   const quando = [dataFmt, ini ? (fim ? `${ini}–${fim}` : ini) : ''].filter(Boolean).join(' · ');
   const semValor = '<span style="opacity:.5">—</span>';
@@ -12499,7 +12508,32 @@ function _compAtualizarPreview() {
     <div class="k">Instrutor</div><div class="v">${inst?escapeHtml(inst.nome):semValor}</div>
     <div class="k">Cliente</div><div class="v">${cliente?escapeHtml(cliente.nome):semValor}</div>
     <div class="k">Quando</div><div class="v">${quando||semValor}</div>
+    <div class="k">Endereço</div><div class="v">${local?escapeHtml(local):semValor}</div>
   `;
+}
+
+// "Usar endereço do cliente" no modal Novo compromisso — 2026-08-22
+// (pedido do Alisson, 4ª rodada), mesmo padrão já usado em Nova Turma
+// (_preencherLocalComCliente/_agRapidaPreencherLocalComCliente): busca o
+// endereço já cadastrado do cliente selecionado, mas deixa o campo
+// editável — o operador pode ajustar se o compromisso for num lugar
+// diferente do endereço da empresa.
+function _compPreencherLocalComCliente() {
+  const cliId = document.getElementById('mCompCliente')?.value;
+  const c = _clientesCache.find(x=>x.id===cliId);
+  if (!c) { showToast('Selecione um cliente primeiro','error'); return; }
+  const endereco = _enderecoFormatado(c);
+  if (!endereco) { showToast('Este cliente não tem endereço cadastrado. Edite o cadastro em Clientes.','error'); return; }
+  const campo = document.getElementById('mCompLocal');
+  if (campo) campo.value = endereco;
+  _compAtualizarPreview();
+}
+function _compAutoPreencherLocal() {
+  const campo = document.getElementById('mCompLocal');
+  if (!campo || campo.value.trim()) return; // já preenchido manualmente — não sobrescrever
+  const cliId = document.getElementById('mCompCliente')?.value;
+  const c = _clientesCache.find(x=>x.id===cliId);
+  if (c) campo.value = _enderecoFormatado(c);
 }
 
 // Checagem de conflito AO VIVO — mesma filosofia de _agVerificarConflito:
@@ -12596,7 +12630,7 @@ async function salvarCompromisso() {
     // Alisson, item 7): Observações já cobre a mesma necessidade. A coluna
     // `local` continua existindo no banco (registros antigos, se houver,
     // mantêm o que já tinham); só para de ser preenchida a partir daqui.
-    local:        null,
+    local:        document.getElementById('mCompLocal')?.value.trim() || null,
     observacoes,
     // 2026-08-22 (item 6, migration-compromissos-empresa-OPCIONAL.sql já
     // aplicada) — campo renomeado de "Empresa" pra "Cliente" (ajuste do
@@ -12658,7 +12692,7 @@ async function verCompromisso(id) {
       ${inst ? linha('Instrutor', inst.nome) : ''}
       ${linha('Cliente', cm.clientes?.nome)}
       ${linha('Descrição', cm.descricao)}
-      ${linha('Informações', cm.local)}
+      ${linha('Endereço', cm.local)}
       ${linha('Observações', cm.observacoes)}
     </div>`,
     _compPodeGerenciar()
@@ -12706,6 +12740,12 @@ async function _verCompromissoTelaInstrutor(id) {
           </div>
         </div>
       </div>
+      ${cm.local?`
+      <div class="card" style="margin-bottom:12px">
+        <div class="gh-sec" style="margin:0 0 10px"><div class="dot navy"></div><span>Local</span><div class="line"></div></div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6;white-space:pre-wrap">${escapeHtml(cm.local)}</div>
+        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cm.local)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;color:var(--amber-h);text-decoration:none;font-weight:600">🗺️ Abrir no mapa</a>
+      </div>`:''}
       ${cm.descricao?`
       <div class="card" style="margin-bottom:12px">
         <div class="gh-sec" style="margin:0 0 10px"><div class="dot navy"></div><span>Descrição</span><div class="line"></div></div>
@@ -12774,7 +12814,7 @@ function _agEquipeEscolherTipoAgendamento(instrutorId, data, horaInicio, veioDeE
   // sem instrutor pré-selecionado). Nos demais casos (clique direto no
   // nome/horário de um instrutor já conhecido) não existe etapa anterior
   // pra voltar — o rodapé continua só com Cancelar, como sempre foi.
-  const rodapeTipo = `${veioDeEscolherInstrutor ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherInstrutorEAgendar('${data}','${horaInicio||''}')">← Voltar</button>` : ''}
+  const rodapeTipo = `${veioDeEscolherInstrutor ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherInstrutorEAgendar('${data}','${horaInicio||''}')">Voltar</button>` : ''}
      <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`;
   abrirModal('O que você quer agendar?', `
     <div style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">${escapeHtml(quando)}${inst ? ' · ' + escapeHtml(inst.nome) : ''}</div>
@@ -14027,7 +14067,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
   // instrutor/data/horário, preservando veioDeEscolherInstrutor pra essa
   // tela também saber se deve oferecer Voltar pra "Escolha o instrutor".
   const podeVoltarNt = !!(instrutorId && data);
-  const rodapeNt = `${podeVoltarNt ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${instrutorId}','${data}','${horaInicio||''}', ${!!veioDeEscolherInstrutor})">← Voltar</button>` : ''}
+  const rodapeNt = `${podeVoltarNt ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${instrutorId}','${data}','${horaInicio||''}', ${!!veioDeEscolherInstrutor})">Voltar</button>` : ''}
      <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`;
 
@@ -14068,10 +14108,10 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
               </select>
               <div id="mNtConflito"></div>
             </div>
-            <div class="nt-3col">
-              <div class="field"><label>Data *</label>
-                <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
-                  style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none;padding-right:34px"></div>
+            <div class="field"><label>Data *</label>
+              <input type="date" id="mNtData" value="${data||''}" onchange="_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
+                style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none;padding-right:34px"></div>
+            <div class="nt-2col">
               <div class="field"><label>Início *</label>
                 <input type="time" id="mNtIni" value="${horaInicio||''}" onchange="_agRapidaCalcularHoraFim();_agRapidaVerificarConflito();_agRapidaAtualizarPreview()"
                   style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none"></div>
