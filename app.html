@@ -4311,7 +4311,7 @@ async function renderHomeAdmin() {
     alertas.push({
       tipo: 'warning',
       icone: '👤',
-      texto: `${semInstrutor.length} sessão${semInstrutor.length!==1?'ões':''} nos próximos 7 dias sem instrutor atribuído`,
+      texto: `${semInstrutor.length} aula${semInstrutor.length!==1?'s':''} nos próximos 7 dias sem instrutor atribuído`,
       acao: "irParaTurmasFiltradas('em_andamento')",
       label: 'Ver turmas',
     });
@@ -4327,7 +4327,7 @@ async function renderHomeAdmin() {
     alertas.push({
       tipo: 'warning',
       icone: '⏸',
-      texto: `${travadas.length} turma${travadas.length!==1?'s':''} em andamento sem próximas sessões agendadas`,
+      texto: `${travadas.length} turma${travadas.length!==1?'s':''} em andamento sem próximas aulas agendadas`,
       acao: "irParaTurmasFiltradas('em_andamento')",
       label: 'Verificar',
     });
@@ -4500,9 +4500,9 @@ async function renderHomeAdmin() {
     <div class="gh-sec"><div class="dot navy"></div><span>Acompanhamento</span><div class="line"></div></div>
     <div class="home-2col">
       <div class="home-list-card">
-        <div class="home-list-title">Próximas sessões</div>
+        <div class="home-list-title">Próximas aulas</div>
         ${proxSessoes.length===0
-          ?`<div style="font-size:12px;color:var(--text-3);padding:6px 0">Nenhuma sessão próxima</div>`
+          ?`<div style="font-size:12px;color:var(--text-3);padding:6px 0">Nenhuma aula próxima</div>`
           :proxSessoes.map(s=>{
             const t=tMapHome[s.turma_id];
             return `<div class="home-list-item">
@@ -4605,7 +4605,7 @@ async function renderHomeComercial() {
     <div class="gh-sec"><div class="dot"></div><span>Próximas turmas agendadas</span><div class="line"></div><span class="glink" data-nav="turmas">Todas →</span></div>
     <div class="home-list-card" style="margin-bottom:14px">
       ${proximas.length===0
-        ? `<div style="font-size:12px;color:var(--text-3);padding:6px 0">Nenhuma turma com sessão futura — que tal agendar uma?</div>`
+        ? `<div style="font-size:12px;color:var(--text-3);padding:6px 0">Nenhuma turma com aula futura — que tal agendar uma?</div>`
         : proximas.map(({t,s})=>{
             const ehHoje = s.data===hojeStr;
             const temPend = _turmaPendencias(t).length > 0;
@@ -9880,7 +9880,7 @@ function _htmlTurmaCard(t) {
   const progressHtml = totalSes>0?`
     <div class="turma-card-progress">
       <div class="turma-card-progress-row">
-        <span style="font-size:11px;color:var(--text-3)">Sessões: ${concSes} de ${totalSes}</span>
+        <span style="font-size:11px;color:var(--text-3)">Aulas: ${concSes} de ${totalSes}</span>
       </div>
       <div class="turma-card-progress-bar"><div class="turma-card-progress-fill fill-${st}" style="width:${pct}%"></div></div>
     </div>`:'';
@@ -10732,7 +10732,7 @@ function _agCalcularHoraFim() {
   const totalMin = h*60 + m + Math.round(ch*60);
   if (totalMin >= 24*60) {
     fimEl.value = '';
-    if (avisoEl) avisoEl.innerHTML = `<div style="font-size:11px;color:var(--red);line-height:1.5">A carga horária (${ch}h) não cabe num único dia a partir desse horário de início. Informe a hora de término manualmente, ou registre o restante como outra sessão em outro dia.</div>`;
+    if (avisoEl) avisoEl.innerHTML = `<div style="font-size:11px;color:var(--red);line-height:1.5">A carga horária (${ch}h) não cabe num único dia a partir desse horário de início. Informe a hora de término manualmente, ou registre o restante como outra aula em outro dia.</div>`;
     return;
   }
   if (avisoEl) avisoEl.innerHTML = '';
@@ -12046,7 +12046,7 @@ function _agendaRenderDia() {
   _setElBoth('agendaDiaHeader', `${ehHoje?'Hoje':dow} · ${sel.split('-').reverse().join('/')}${sess.length?` (${sess.length})`:''}`);
 
   if (!sess.length) {
-    _setElBoth('agendaTimeline', `<div style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-md);padding:20px;text-align:center;font-size:12px;color:var(--text-3);margin-bottom:8px">Nenhuma sessão neste dia</div>`);
+    _setElBoth('agendaTimeline', `<div style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-md);padding:20px;text-align:center;font-size:12px;color:var(--text-3);margin-bottom:8px">Nenhuma aula neste dia</div>`);
     return;
   }
   const html = sess.map(s=>{
@@ -12176,7 +12176,7 @@ function _agendaRenderResumoMes() {
   // antes. Compromissos entram numa linha separada, so quando existem.
   const compsMes = (window._agendaCompromissos||[]).filter(x=>x.data?.startsWith(pref)).length;
   _setElBoth('agendaResumoMes', `
-    <div class="ag2-resline"><span>Sessões</span><b>${doMes.length}</b></div>
+    <div class="ag2-resline"><span>Aulas</span><b>${doMes.length}</b></div>
     <div class="ag2-resline"><span>Clientes</span><b>${clientes}</b></div>
     <div class="ag2-resline"><span>Horas previstas</span><b>${horas}h</b></div>${compsMes ? `
     <div class="ag2-resline"><span>Compromissos</span><b>${compsMes}</b></div>` : ''}`);
@@ -14240,7 +14240,7 @@ function _agRapidaCalcularHoraFim() {
   const totalMin = h*60 + m + Math.round(ch*60);
   if (totalMin >= 24*60) {
     fimEl.value = '';
-    if (avisoEl) avisoEl.innerHTML = `<div style="font-size:11px;color:var(--red);line-height:1.5">A carga horária (${ch}h) não cabe num único dia a partir desse horário de início. Informe a hora de término manualmente, ou registre o restante como outra sessão em outro dia.</div>`;
+    if (avisoEl) avisoEl.innerHTML = `<div style="font-size:11px;color:var(--red);line-height:1.5">A carga horária (${ch}h) não cabe num único dia a partir desse horário de início. Informe a hora de término manualmente, ou registre o restante como outra aula em outro dia.</div>`;
     return;
   }
   if (avisoEl) avisoEl.innerHTML = '';
@@ -15020,7 +15020,7 @@ async function _enviarFinalizarSessao(reg) {
     .update({concluida:true}).eq('id', reg.sessaoId).select('id');
   if (errSessao) throw errSessao;
   if (!sessaoAtualizada || !sessaoAtualizada.length) {
-    throw new Error('Não foi possível marcar a sessão como concluída (nenhum registro encontrado). Tente novamente ou avise o suporte.');
+    throw new Error('Não foi possível marcar a aula como concluída (nenhum registro encontrado). Tente novamente ou avise o suporte.');
   }
   const {data:todasSessoes} = await sb.from('sessoes').select('id,concluida,data').eq('turma_id', reg.turmaId);
   // Só considera "todas concluídas" com base no estado real do banco —
@@ -15588,7 +15588,7 @@ async function confirmarAssinatura() {
   const turmaId  = window._execTurmaId;
   const colId    = window._assinaturaColId;
   const sessaoId = window._execSessaoId;
-  if (!sessaoId) { showToast('Sessão não encontrada. Certifique-se de que há um agendamento vinculado a você nesta turma.','error'); return; }
+  if (!sessaoId) { showToast('Aula não encontrada. Certifique-se de que há um agendamento vinculado a você nesta turma.','error'); return; }
 
   const dataUrl = canvas.toDataURL('image/png');
   const blob    = _dataUrlToBlob(dataUrl);
@@ -15795,7 +15795,7 @@ async function salvarAnotacoes(turmaId) {
   // (window._execSessaoId — o mesmo id que presenças e evidências já usam
   // corretamente há tempos).
   const sessaoId = window._execSessaoId;
-  if (!sessaoId) { showToast('Sessão não encontrada — reabra a execução.','error'); return; }
+  if (!sessaoId) { showToast('Aula não encontrada — reabra a execução.','error'); return; }
   const texto = textarea.value.trim();
   const reg = {tipo:'anotacoes', turmaId, sessaoId, texto, criado_em:new Date().toISOString()};
   try {
@@ -15847,7 +15847,7 @@ async function finalizarTurma(turmaId) {
   if (!okFinalizar) return;
 
   const sessaoId = window._execSessaoId;
-  if (!sessaoId) { showToast('Sessão não encontrada.','error'); return; }
+  if (!sessaoId) { showToast('Aula não encontrada.','error'); return; }
   const reg = {tipo:'finalizar_sessao', turmaId, sessaoId, criado_em:new Date().toISOString()};
 
   try {
@@ -16317,7 +16317,7 @@ function _renderRelatorioView() {
         </div>
         <div class="rel2-toggle">
           <button class="rel2-tbtn active" id="rt-turmas" onclick="relToggle(this,'turmas','Turmas criadas','#1E2A4A')">Turmas</button>
-          <button class="rel2-tbtn" id="rt-sessoes" onclick="relToggle(this,'sessoes','Sessões concluídas','#F59E0B')">Sessões</button>
+          <button class="rel2-tbtn" id="rt-sessoes" onclick="relToggle(this,'sessoes','Aulas concluídas','#F59E0B')">Aulas</button>
           <button class="rel2-tbtn" id="rt-participantes" onclick="relToggle(this,'participantes','Pessoas treinadas','#059669')">Pessoas</button>
         </div>
       </div>
@@ -16341,7 +16341,7 @@ function _renderRelatorioView() {
     </div>
     <div class="rel2-rankings">
       <div class="rel2-card" style="margin-bottom:0">
-        <div class="rel2-card-title">Performance instrutores — sessões concluídas</div>
+        <div class="rel2-card-title">Performance instrutores — aulas concluídas</div>
         ${instHtml}
       </div>
       <div class="rel2-card" style="margin-bottom:0">
@@ -16395,7 +16395,7 @@ function _renderRelatorioView() {
           </div>
           <div style="font-size:12px;color:var(--text-2);margin-top:3px;line-height:1.5">
             ${planoAtinge('pro')
-              ? 'Todo dia 1º, você recebe por e-mail um resumo do mês anterior (turmas concluídas, certificados emitidos, sessões realizadas e novos clientes).'
+              ? 'Todo dia 1º, você recebe por e-mail um resumo do mês anterior (turmas concluídas, certificados emitidos, aulas realizadas e novos clientes).'
               : 'No plano Pro, receba um relatório mensal consolidado automaticamente por e-mail. <span style="color:var(--amber-text);font-weight:600;cursor:pointer" onclick="modalUpgrade(&quot;Relatório mensal automático&quot;,&quot;pro&quot;)">Saiba mais →</span>'}
           </div>
         </div>
