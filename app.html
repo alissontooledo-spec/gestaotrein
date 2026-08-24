@@ -4675,7 +4675,7 @@ async function renderHomeInstrutor() {
   // Agenda (Decisão 3, 2026-08-22).
   const compromissosInst = await _compCarregarDoInstrutor(usuarioAtual.id);
   const compsFuturos = (compromissosInst||[])
-    .filter(x => x.data >= hoje)
+    .filter(x => x.data >= hoje && !x.concluido)
     .sort((a,b) => (a.data+(a.hora_inicio||'')).localeCompare(b.data+(b.hora_inicio||'')));
   const proximoComp = compsFuturos[0] || null;
 
@@ -12085,7 +12085,7 @@ function _agendaRenderProximos() {
   const hoje = window._agendaHoje;
   const prox = [
     ...(window._agendaSessoes||[]).filter(s=>!s.concluida && s.turma.status!=='concluida' && s.data>hoje),
-    ...(window._agendaCompromissos||[]).filter(x=>x.data>hoje).map(_compParaBloco),
+    ...(window._agendaCompromissos||[]).filter(x=>x.data>hoje && !x.concluido).map(_compParaBloco),
   ]
     .sort((a,b)=>a.data.localeCompare(b.data)||( a.hora_inicio||'').localeCompare(b.hora_inicio||''))
     .slice(0,6);
@@ -12227,7 +12227,7 @@ const COMPROMISSO_TIPOS = [
 ];
 // Lista explicita de colunas — nunca select('*'), mesmo cuidado contra
 // over-fetching apontado nas auditorias de seguranca de agosto/2026.
-const COMPROMISSO_COLS = 'id,instrutor_id,tipo,titulo,descricao,data,hora_inicio,hora_fim,local,observacoes,empresa_id,clientes(nome)';
+const COMPROMISSO_COLS = 'id,instrutor_id,tipo,titulo,descricao,data,hora_inicio,hora_fim,local,observacoes,empresa_id,clientes(nome),concluido,concluido_em';
 // Cor do compromisso nas visoes da Agenda. Reaproveita --navy-3, token que
 // ja existe no sistema (regra do projeto: nunca introduzir cor nova) — e
 // que nao colide com nenhum dos 4 estados ja usados para treinamento
@@ -12728,8 +12728,8 @@ async function _verCompromissoTelaInstrutor(id) {
           </div>
         </div>
         <div style="font-size:20px;font-weight:700;color:#fff;line-height:1.25;letter-spacing:-.2px">${t.icone} ${escapeHtml(cm.titulo)}</div>
-        <div style="font-size:13.5px;color:rgba(255,255,255,.6);font-weight:500;margin-top:2px;margin-bottom:14px">${t.label}${cm.clientes?.nome?' · 🏢 '+escapeHtml(cm.clientes.nome):''}</div>
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+        <div style="font-size:13.5px;color:rgba(255,255,255,.6);font-weight:500;margin-top:2px;margin-bottom:14px">${t.label}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
           <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
             <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">📅 Data</div>
             <div style="font-size:13px;color:#fff;font-weight:600">${formatarData(cm.data)}</div>
@@ -12738,14 +12738,24 @@ async function _verCompromissoTelaInstrutor(id) {
             <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">⏰ Horário</div>
             <div style="font-size:13px;color:#fff;font-weight:600">${(cm.hora_inicio||'').slice(0,5)} – ${(cm.hora_fim||'').slice(0,5)}</div>
           </div>
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">🏢 Empresa</div>
+            <div style="font-size:13px;color:#fff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cm.clientes?.nome?escapeHtml(cm.clientes.nome):'—'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px;grid-column:1 / -1">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">📍 Local</div>
+            <div style="font-size:13px;color:#fff;font-weight:600;line-height:1.4">${cm.local?escapeHtml(cm.local):'—'}</div>
+            ${cm.local?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cm.local)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:12px;color:var(--amber);text-decoration:none;font-weight:700">🗺️ Abrir no mapa →</a>`:''}
+          </div>
         </div>
+        ${!cm.concluido?`
+          <button class="hbtn2" style="width:100%;justify-content:center;font-size:14px;padding:13px;margin-top:14px;background:var(--green);color:#fff" data-action="concluirCompromisso" data-id="${id}">
+            ✓ Concluído
+          </button>`:`
+          <div style="text-align:center;padding:12px 0 0">
+            <div style="font-size:12.5px;color:rgba(255,255,255,.5)">✓ Compromisso concluído${cm.concluido_em?' em '+formatarData(cm.concluido_em.slice(0,10)):''}</div>
+          </div>`}
       </div>
-      ${cm.local?`
-      <div class="card" style="margin-bottom:12px">
-        <div class="gh-sec" style="margin:0 0 10px"><div class="dot navy"></div><span>Local</span><div class="line"></div></div>
-        <div style="font-size:13px;color:var(--text-1);line-height:1.6;white-space:pre-wrap">${escapeHtml(cm.local)}</div>
-        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cm.local)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;color:var(--amber-h);text-decoration:none;font-weight:600">🗺️ Abrir no mapa</a>
-      </div>`:''}
       ${cm.descricao?`
       <div class="card" style="margin-bottom:12px">
         <div class="gh-sec" style="margin:0 0 10px"><div class="dot navy"></div><span>Descrição</span><div class="line"></div></div>
@@ -12768,6 +12778,25 @@ async function _verCompromissoTelaInstrutor(id) {
 // Cancelamento = exclusao logica (cancelado=true). Nao existe policy de
 // DELETE para Administrador/Comercial no banco, de proposito: o registro
 // fica no historico para auditoria e o horario e liberado de volta.
+// 2026-08-22 (pedido do Alisson): botão "Concluído" na tela do instrutor —
+// simples e rápido, pensado pra uso no celular logo depois do compromisso
+// acontecer. Depende da migration-compromissos-concluido.sql (coluna nova
+// + função concluir_compromisso) já ter sido aplicada pelo Alisson.
+async function concluirCompromisso(id) {
+  const ok = await confirmarAcao('Confirma que este compromisso foi concluído?', 'Concluído', false);
+  if (!ok) return;
+  try {
+    showLoading('Salvando...');
+    const {error} = await sb.rpc('concluir_compromisso', {p_id: id});
+    if (error) throw error;
+    showToast('Compromisso concluído!', 'success');
+    await irPara('home');
+  } catch(e) {
+    console.error(e);
+    showToast(traduzErroSupabase(e, 'Não foi possível concluir o compromisso'), 'error');
+  } finally { hideLoading(); }
+}
+
 async function cancelarCompromisso(id) {
   if (!_compPodeGerenciar()) { showToast('Você não tem permissão para isso','error'); return; }
   const ok = await confirmarAcao(
@@ -18443,7 +18472,8 @@ document.addEventListener('click', function(e) {
     // Compromissos de agenda (2026-08-22). Ver bloco "COMPROMISSOS DE
     // AGENDA" — proposital que NAO exista aqui nenhuma rota de compromisso
     // para verTurma/documentos/certificados.
-    case 'verCompromisso':  if(id) verCompromisso(id); break;
+    case 'verCompromisso':     if(id) verCompromisso(id); break;
+    case 'concluirCompromisso': if(id) concluirCompromisso(id); break;
     case 'menuAgendamento':  menuAgendamento(el,id,el.getAttribute('data-turma')); break;
     case 'editarAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalAgendamento(extra,id); break;
     case 'excluirAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); excluirAgendamento(id,extra); break;
