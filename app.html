@@ -2043,15 +2043,86 @@ function mascararCnpj(input) {
 // secundários) seguindo a convenção de nomes `${prefix}Campo`. Usado pelos
 // cadastros de cliente (mCli/mCR); organizações não usam prefix e continuam
 // funcionando exatamente como antes.
+// 2026-08-25 — consulta de CNPJ na BrasilAPI com TEMPO LIMITE e NOVA
+// TENTATIVA automática.
+//
+// Motivo: em 25/08 a BrasilAPI oscilou e o botão "Consultar" desistia na
+// primeira falha, mostrando "Falha de conexão". O contorno manual do
+// operador era clicar de novo — e funcionava. Um erro de rede que se
+// resolve repetindo a chamada é exatamente o que o código deve repetir
+// sozinho. A BrasilAPI é serviço de terceiro em infraestrutura serverless
+// (sujeita a cold start), então oscilação pontual é esperada, não exceção.
+//
+// Regra importante: só erro de REDE gera nova tentativa. Se a resposta
+// chegou com status de erro (CNPJ inexistente, por exemplo), repetir não
+// melhora nada — nesse caso o erro sobe na hora, sem insistir à toa.
+//
+// Sem tempo limite, um fetch pendurado deixaria o botão travado em
+// "Consultando..." indefinidamente; o AbortController garante o teto.
+async function _consultarCnpjBrasilApi(raw, {tentativas = 3, timeoutMs = 12000, aoRepetir = null} = {}) {
+  let ultimoErroRede = null;
+  for (let i = 0; i < tentativas; i++) {
+    if (i > 0 && typeof aoRepetir === 'function') aoRepetir(i + 1, tentativas);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${raw}`, {signal: ctrl.signal});
+      clearTimeout(timer);
+      if (!res.ok) throw Object.assign(new Error('CNPJ não encontrado na Receita Federal'), {_respostaChegou: true});
+      return await res.json();
+    } catch (e) {
+      clearTimeout(timer);
+      if (e && e._respostaChegou) throw e; // servidor respondeu: insistir não ajuda
+      ultimoErroRede = e;
+      if (i < tentativas - 1) await new Promise(r => setTimeout(r, 800 * (i + 1)));
+    }
+  }
+  throw ultimoErroRede || new Error('Failed to fetch');
+}
+
+// 2026-08-25 — converte a resposta da BrasilAPI nas colunas da tabela
+// `clientes`, exatamente os mesmos campos que buscarCnpjModal preenche no
+// formulário. Usado pela importação do SOC para já criar a empresa com o
+// cadastro completo.
+// Campos sem valor são REMOVIDOS do objeto (em vez de irem como null) para
+// que um update nunca apague informação que já exista no registro.
+function _dadosClienteDoCnpj(d) {
+  const cnaesSec = Array.isArray(d.cnaes_secundarios)
+    ? d.cnaes_secundarios.map(x=>({codigo:String(x.codigo||''),descricao:x.descricao||''})).filter(x=>x.codigo)
+    : [];
+  const dados = {
+    cnae: d.cnae_fiscal ? String(d.cnae_fiscal) : null,
+    cnae_descricao: d.cnae_fiscal_descricao || null,
+    cnaes_secundarios: cnaesSec.length ? cnaesSec : null,
+    cep: d.cep || null,
+    logradouro: d.logradouro || null,
+    numero: d.numero || null,
+    complemento: d.complemento || null,
+    bairro: d.bairro || null,
+    cidade: d.municipio || null,
+    uf: d.uf ? String(d.uf).toUpperCase() : null,
+    email: d.email || null,
+    telefone: d.ddd_telefone_1 || null,
+    situacao_cadastral: d.descricao_situacao_cadastral || null,
+    data_situacao_cadastral: d.data_situacao_cadastral || null,
+    motivo_situacao_cadastral: d.descricao_motivo_situacao_cadastral || null,
+    porte: d.descricao_porte || null,
+    opcao_simples: d.opcao_pelo_simples === true ? true : d.opcao_pelo_simples === false ? false : null,
+    opcao_mei: d.opcao_pelo_mei === true ? true : d.opcao_pelo_mei === false ? false : null,
+  };
+  Object.keys(dados).forEach(k => { if (dados[k] === null) delete dados[k]; });
+  return dados;
+}
+
 async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId, cnaeId, prefix) {
   const raw = document.getElementById(cnpjId)?.value.replace(/\D/g,'');
   if (!raw || raw.length !== 14) { showToast('Digite um CNPJ completo (14 dígitos)','error'); return; }
   const btn = document.getElementById('btnBuscarCnpj_'+cnpjId);
   if (btn) { btn.disabled=true; btn.textContent='Consultando...'; }
   try {
-    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${raw}`);
-    if (!res.ok) throw new Error('CNPJ não encontrado na Receita Federal');
-    const d = await res.json();
+    const d = await _consultarCnpjBrasilApi(raw, {
+      aoRepetir: (n, total) => { if (btn) btn.textContent = `Tentando ${n}/${total}...`; },
+    });
     const nome = d.razao_social || d.nome_fantasia || '';
     const cidade = d.municipio || '';
     const uf = d.uf || '';
@@ -11641,9 +11712,40 @@ async function executarImportacaoSOC() {
       .upsert(payloadColabs, {onConflict:'org_id,cpf', ignoreDuplicates:false}).select('id');
     if (eUp) throw eUp;
 
+    // 3) 2026-08-25 — completa o cadastro das empresas NOVAS com os dados
+    // públicos da Receita Federal (BrasilAPI) — a mesma fonte do botão
+    // "Consultar" da tela de Clientes.
+    // Antes desta etapa, a empresa criada pela importação nascia só com
+    // nome, CNPJ e código do SOC, e o operador precisava abrir o cadastro
+    // depois para preencher endereço, CNAE, porte etc. à mão.
+    //
+    // Só empresas CRIADAS AGORA (decisão do Alisson, 2026-08-25): empresa
+    // que já existia nunca é tocada, para não sobrescrever ajuste manual.
+    //
+    // Roda DEPOIS do upsert de colaboradores e falha em silêncio de
+    // propósito: neste ponto a importação já está gravada, e cadastro
+    // incompleto é exatamente o comportamento de hoje. Nunca vale perder
+    // uma importação inteira por causa de um complemento opcional vindo de
+    // um serviço de terceiro. Menos tentativas e tempo limite mais curto
+    // que no botão, porque aqui o operador está esperando o fim da
+    // importação, não uma consulta pontual.
+    let _empresasCompletadas = 0;
+    for (const emp of empresasNovas) {
+      if (!emp.clienteId || !emp.cnpjDigits) continue;
+      try {
+        const dadosReceita = _dadosClienteDoCnpj(await _consultarCnpjBrasilApi(emp.cnpjDigits, {tentativas: 2, timeoutMs: 8000}));
+        if (!Object.keys(dadosReceita).length) continue;
+        const {error: eCompl} = await sb.from('clientes').update(dadosReceita).eq('id', emp.clienteId);
+        if (eCompl) { console.warn('Importação SOC: não foi possível completar o cadastro da empresa', emp.cnpjDigits, eCompl.message); continue; }
+        _empresasCompletadas++;
+      } catch (e) {
+        console.warn('Importação SOC: Receita Federal indisponível para o CNPJ', emp.cnpjDigits, '— empresa criada sem os dados complementares.', e?.message || e);
+      }
+    }
+
     const qtd = salvos?.length || payloadColabs.length;
     fecharModal();
-    showToast(`${qtd} colaborador${qtd!==1?'es':''} importado${qtd!==1?'s':''} do SOC (${empresasNovas.length} empresa${empresasNovas.length!==1?'s':''} nova${empresasNovas.length!==1?'s':''})${_duplicadosIgnorados>0?` — ${_duplicadosIgnorados} registro${_duplicadosIgnorados!==1?'s':''} com CPF repetido unificado${_duplicadosIgnorados!==1?'s':''}`:''}!`, 'success');
+    showToast(`${qtd} colaborador${qtd!==1?'es':''} importado${qtd!==1?'s':''} do SOC (${empresasNovas.length} empresa${empresasNovas.length!==1?'s':''} nova${empresasNovas.length!==1?'s':''})${_empresasCompletadas>0?`, cadastro completado pela Receita Federal`:''}${empresasNovas.length>_empresasCompletadas?` — ${empresasNovas.length-_empresasCompletadas} empresa${empresasNovas.length-_empresasCompletadas!==1?'s':''} sem os dados da Receita, complete à mão`:''}${_duplicadosIgnorados>0?` — ${_duplicadosIgnorados} registro${_duplicadosIgnorados!==1?'s':''} com CPF repetido unificado${_duplicadosIgnorados!==1?'s':''}`:''}!`, 'success');
     _clientesCache = []; // força recarregar (com as empresas novas) na próxima tela que precisar
     // Atualiza a MESMA tela de onde o import foi aberto — nunca "pula" o
     // usuário para uma tela diferente da que ele estava vendo.
