@@ -11597,9 +11597,34 @@ async function executarImportacaoSOC() {
 
     const clienteIdPorCnpj = new Map(_socImportEmpresas.map(e => [e.cnpjDigits, e.clienteId]));
 
+    // 2026-08-25 — DEDUPLICAÇÃO POR CPF, obrigatória antes do upsert.
+    // O upsert abaixo usa onConflict:'org_id,cpf'. Se duas linhas do MESMO
+    // comando tiverem o mesmo CPF, o Postgres aborta a operação inteira com
+    // "ON CONFLICT DO UPDATE command cannot affect row a second time" e
+    // NENHUM colaborador é gravado (erro reproduzido em laboratório).
+    // Isso acontece de verdade: o SOC devolve um registro por VÍNCULO, e a
+    // mesma pessoa pode ter dois vínculos simultaneamente ATIVOS — visto na
+    // empresa 07.022.984/0001-50 (ARTHUR MOLINARI, CPF 096.826.079-90,
+    // matrículas Matriz0001000083a e Matriz0001000103a, ambas "Ativo").
+    // O filtro de situação (_socFuncionarioPareceInativo) resolve o caso
+    // comum "um ativo + um inativo", mas não resolve dois ativos.
+    // O caminho da planilha Modelo 1 já deduplicava por CPF (porCpf, acima);
+    // o caminho "Buscar no SOC" reaproveita esta função e não deduplicava.
+    // Por isso a deduplicação fica AQUI, na gravação: vale para as duas
+    // origens e protege qualquer origem futura.
+    // Critério: vence o ÚLTIMO registro de cada CPF — na busca ao vivo os
+    // registros vêm em ordem crescente de código do SOC, então o último é o
+    // vínculo mais recente. Linhas sem CPF recebem chave própria e nunca são
+    // descartadas por engano.
+    const _linhasPorCpf = new Map();
+    _socImportRows.forEach((r, i) => _linhasPorCpf.set(r.cpfDigits || `__sem_cpf_${i}`, r));
+    const _linhasUnicas = [..._linhasPorCpf.values()];
+    const _duplicadosIgnorados = _socImportRows.length - _linhasUnicas.length;
+    if (_duplicadosIgnorados > 0) console.warn(`Importação SOC: ${_duplicadosIgnorados} registro(s) com CPF repetido unificado(s) — mantido o vínculo mais recente de cada pessoa.`);
+
     // 2) Colaboradores — upsert por (org_id, cpf), mesmo padrão já usado na
     // importação CSV (executarImportacao, acima) e já validado em produção.
-    const payloadColabs = _socImportRows.map(r => ({
+    const payloadColabs = _linhasUnicas.map(r => ({
       nome: r.nome,
       cpf: _socFormatarCpf(r.cpfDigits),
       cargo: r.cargo,
@@ -11618,7 +11643,7 @@ async function executarImportacaoSOC() {
 
     const qtd = salvos?.length || payloadColabs.length;
     fecharModal();
-    showToast(`${qtd} colaborador${qtd!==1?'es':''} importado${qtd!==1?'s':''} do SOC (${empresasNovas.length} empresa${empresasNovas.length!==1?'s':''} nova${empresasNovas.length!==1?'s':''})!`, 'success');
+    showToast(`${qtd} colaborador${qtd!==1?'es':''} importado${qtd!==1?'s':''} do SOC (${empresasNovas.length} empresa${empresasNovas.length!==1?'s':''} nova${empresasNovas.length!==1?'s':''})${_duplicadosIgnorados>0?` — ${_duplicadosIgnorados} registro${_duplicadosIgnorados!==1?'s':''} com CPF repetido unificado${_duplicadosIgnorados!==1?'s':''}`:''}!`, 'success');
     _clientesCache = []; // força recarregar (com as empresas novas) na próxima tela que precisar
     // Atualiza a MESMA tela de onde o import foi aberto — nunca "pula" o
     // usuário para uma tela diferente da que ele estava vendo.
