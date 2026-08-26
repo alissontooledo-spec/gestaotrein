@@ -2904,6 +2904,57 @@ function _comboBuscavelBlur(id) {
 // ============================================================
 // AUTENTICAÇÃO
 // ============================================================
+// ════════════════════════════════════════════════════════════════════
+// BLINDAGEM DO PERFIL EM MEMÓRIA  (2026-08-26)
+//
+// `usuarioAtual.perfil` e `usuarioAtual.org_id` deixam de ser campos comuns
+// e passam a ser propriedades de acesso com `configurable:false`. O valor
+// verdadeiro vem do banco no login e fica preso num closure — o console não
+// alcança, e `Object.defineProperty` não consegue redefinir.
+//
+// O único caso legítimo em que esses dois campos mudam é o Modo Suporte,
+// que é exclusivo do Provedor. Por isso a escrita só é aceita quando o
+// perfil REAL (o do banco, imutável) é 'provedor'. Para qualquer outro
+// perfil a atribuição é ignorada e o menu não muda.
+//
+// ⚠️  O QUE ISTO É E O QUE NÃO É
+// Isto NÃO é a segurança do sistema — é uma trava contra manipulação casual
+// do navegador. A segurança real está no RLS do banco, que lê a identidade
+// do token assinado (auth.uid()) e ignora por completo qualquer variável
+// vinda do navegador. Comprovado no PASSO-20: personificando um Instrutor
+// de verdade, o banco recusou tanto inativar um colega quanto editar o
+// cadastro dele — 0 linhas afetadas, sem depender de nada daqui.
+// ════════════════════════════════════════════════════════════════════
+function _blindarPerfil(u) {
+  if (!u || typeof u !== 'object') return;
+  const PERFIL_REAL = u.perfil;   // preso no closure; nada no console alcança
+  let perfilVisivel = PERFIL_REAL;
+  let orgVisivel    = u.org_id;
+  const ehProvedorDeVerdade = () => PERFIL_REAL === 'provedor';
+  const recusar = (campo) => {
+    console.warn(
+      '[Toledo Labs] Tentativa de alterar "' + campo + '" pelo navegador foi ignorada. ' +
+      'O perfil real é definido pelo servidor e não pode ser trocado daqui.'
+    );
+  };
+  try {
+    Object.defineProperty(u, 'perfil', {
+      configurable: false, enumerable: true,
+      get() { return perfilVisivel; },
+      set(v) { if (ehProvedorDeVerdade()) { perfilVisivel = v; return; } recusar('perfil'); },
+    });
+    Object.defineProperty(u, 'org_id', {
+      configurable: false, enumerable: true,
+      get() { return orgVisivel; },
+      set(v) { if (ehProvedorDeVerdade()) { orgVisivel = v; return; } recusar('org_id'); },
+    });
+  } catch (e) {
+    // Blindagem nunca pode impedir o login. Se falhar, o RLS continua sendo
+    // a barreira real — exatamente como era antes desta alteração.
+    console.warn('[Toledo Labs] Blindagem de perfil não pôde ser instalada.', e);
+  }
+}
+
 async function fazerLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const senha = document.getElementById('loginPass').value;
@@ -2919,6 +2970,7 @@ async function fazerLogin() {
     if (ep || !perfil) throw new Error('Usuário não encontrado no sistema. Contate o administrador.');
     if (!perfil.ativo) throw new Error('Usuário inativo. Contate o administrador.');
     usuarioAtual = perfil;
+    _blindarPerfil(usuarioAtual); // trava perfil/org_id contra alteração pelo console
     // Log de login (tela "Logs / Auditoria" do Provedor) — roda em paralelo,
     // de propósito fora do fluxo principal: se essa gravação falhar por
     // qualquer motivo, não pode impedir nem atrasar o login do usuário.
@@ -7017,8 +7069,19 @@ async function _toggleAtivoUsuarioGerenciado(usuarioId, orgId) {
   const ok = await confirmarAcao(ativo ? `Inativar ${u.nome}? A pessoa não conseguirá mais acessar o sistema.` : `Reativar ${u.nome}?`, ativo?'Inativar':'Reativar', ativo);
   if (!ok) return;
   try {
-    const { error } = await sb.from('usuarios').update({ativo: !ativo}).eq('id', usuarioId);
+    // Correção 2026-08-26: quando o RLS recusa a escrita, o PostgREST NÃO
+    // devolve erro — devolve "0 linhas afetadas". O código antigo só olhava
+    // `error`, então anunciava sucesso para uma operação que o banco tinha
+    // bloqueado. Além de mascarar a recusa, isso poderia fazer um
+    // Administrador acreditar que revogou o acesso de alguém que continuou
+    // ativo. Agora conferimos a linha efetivamente alterada.
+    const { data: _alterados, error } = await sb.from('usuarios')
+      .update({ativo: !ativo}).eq('id', usuarioId).select('id');
     if (error) throw error;
+    if (!_alterados || _alterados.length === 0) {
+      showToast('O servidor recusou esta operação: você não tem permissão para alterar este usuário.','error');
+      return;
+    }
     showToast(`${u.nome} ${!ativo?'reativado':'inativado'} com sucesso.`,'success');
     fecharModal();
     // Reabre a origem certa: tela da organização (Provedor) ou o próprio
@@ -7045,10 +7108,17 @@ async function salvarUsuarioOrg() {
 
   try {
     setBtnModalLoading(true);
-    const { error } = await sb.from('usuarios').update({
+    // Correção 2026-08-26: mesma armadilha do _toggleAtivoUsuarioGerenciado —
+    // RLS que recusa devolve 0 linhas, não erro. Ver comentário lá.
+    const { data: _alterados, error } = await sb.from('usuarios').update({
       nome, perfil, sigla_conselho, conselho_classe, especialidade, formacao, uf_registro, cpf,
-    }).eq('id', usuarioId);
+    }).eq('id', usuarioId).select('id');
     if (error) throw error;
+    if (!_alterados || _alterados.length === 0) {
+      setBtnModalLoading(false);
+      showToast('O servidor recusou esta alteração: você não tem permissão para editar este usuário.','error');
+      return;
+    }
     fecharModal();
     showToast('Usuário atualizado com sucesso!', 'success');
     await verUsuarioEquipe(usuarioId);
@@ -18659,7 +18729,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     try {
       const {data:perfil, error} = await sb.from('usuarios').select('*').eq('id',session.user.id).single();
-      if (!error && perfil && perfil.ativo) { usuarioAtual = perfil; await entrarNoApp(); return; }
+      if (!error && perfil && perfil.ativo) { usuarioAtual = perfil; _blindarPerfil(usuarioAtual); await entrarNoApp(); return; }
     } catch(e) { console.warn('Sessão inválida'); }
   }
   showScreen('screenLogin');
