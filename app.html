@@ -20530,8 +20530,18 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   const zbot = _avMM_H(0.925,H);
   const corpoFimY = yCorpo;
   const sigYBase = zbot - _avMM_H(0.115,H);
-  const gapMinimo = _avMM_H(0.028,H);
-  const sigY = Math.min(Math.max(sigYBase, corpoFimY + gapMinimo), zbot - _avMM_H(0.08,H));
+  // 2026-08-29 (mesma correção da ficha de presença e da capa do coletivo,
+  // estendida aqui): gapMinimo era 0.028H (~5,9mm), calibrado quando a
+  // única preocupação era não colar a LINHA de assinatura no parágrafo.
+  // Como a imagem da assinatura é desenhada ACIMA da linha e podia ter até
+  // 22mm, com empresa + curso longos (200 caracteres cada, ambos aceitos)
+  // ela sobrepunha o parágrafo em ~14mm — medido com a função real. Agora
+  // a folga mínima já reserva espaço pra assinatura.
+  const gapMinimo = _avMM_H(0.075,H);
+  // Teto 0.08H -> 0.068H, compensando o gapMinimo maior. Conferido no pior
+  // caso: o bloco do instrutor ainda termina ~4mm acima do código de
+  // validação no rodapé.
+  const sigY = Math.min(Math.max(sigYBase, corpoFimY + gapMinimo), zbot - _avMM_H(0.068,H));
   const lineW = _avMM_W(0.20,W);
   const cxA = cx - _avMM_W(0.235,W), cxI = cx + _avMM_W(0.235,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
@@ -20561,8 +20571,18 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   // para o pior caso real) — deixa >10mm de folga acima da imagem mesmo
   // com mais uma linha de texto do que no teste, sem risco de encostar no
   // parágrafo. Preview gerado e conferido visualmente antes de aplicar.
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaAluno, cxA, sigY, lineW*0.85, 22);
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxI, sigY, lineW*0.85, 22);
+  // 2026-08-29: os 22mm deixam de ser fixos e passam a respeitar a folga
+  // real até o fim do parágrafo, com o MESMO teto de 22mm de hoje — turma
+  // com empresa/curso de tamanho normal (a maioria) não muda em nada. As
+  // duas assinaturas (aluno e instrutor) usam a mesma altura de propósito:
+  // ficam lado a lado, na mesma linha, e alturas diferentes desalinhariam
+  // visualmente a dupla.
+  // corpoFimY já está ~3mm ABAIXO do fim visível do parágrafo (é o cursor
+  // uma linha além da última desenhada), então "-1" aqui resulta em ~3mm
+  // de respiro real acima da imagem.
+  const _avIndAlturaMaxAssinatura = Math.max(4, Math.min(22, sigY - corpoFimY - 1));
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaAluno, cxA, sigY, lineW*0.85, _avIndAlturaMaxAssinatura);
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxI, sigY, lineW*0.85, _avIndAlturaMaxAssinatura);
 
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
@@ -20973,8 +20993,21 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // realmente termina.
   const fatosYVisivel = _avBase(fatosY, _avPT_H(0.019,H));
   const sigYBase = zbot - _avMM_H(0.115,H);
-  const gapMinimo = _avMM_H(0.028,H);
-  const sigY = Math.min(Math.max(sigYBase, fatosYVisivel + gapMinimo), zbot - _avMM_H(0.08,H));
+  // 2026-08-29 (2ª rodada, reequilíbrio): gapMinimo era 0.028H (~5,9mm),
+  // calibrado quando a única preocupação era não colar a LINHA de
+  // assinatura no texto de fatos. Como a imagem da assinatura é desenhada
+  // ACIMA da linha, era esse mesmo valor que determinava o quanto ela podia
+  // ter de altura em turmas com descrição de curso longa — e ~5,9mm dava
+  // uma assinatura visivelmente miúda (relatado com print). Agora a folga
+  // mínima já reserva espaço pra uma assinatura de tamanho decente.
+  const gapMinimo = _avMM_H(0.075,H);
+  // Teto um pouco mais baixo (0.08H -> 0.065H) pra acomodar o gapMinimo
+  // maior — possível porque o bloco de identificação do instrutor logo
+  // abaixo ficou mais compacto nesta mesma rodada (fontes e espaçamentos
+  // reduzidos). Medido no pior caso (descrição longa, que empurra sigY até
+  // este teto): a credencial termina em y=195,4mm e o código de validação
+  // começa em y=200,7mm — 5,2mm de folga.
+  const sigY = Math.min(Math.max(sigYBase, fatosYVisivel + gapMinimo), zbot - _avMM_H(0.065,H));
   const lineW = _avMM_W(0.22,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cx-lineW/2, sigY, cx+lineW/2, sigY);
@@ -20992,23 +21025,34 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // entre sigY e fatosY, com teto de 22mm (igual a hoje): turma com
   // descrição curta/média (a maioria) não muda nada; só encolhe quando a
   // folga real for menor que isso.
-  const _avColAlturaMaxAssinatura = Math.max(2, Math.min(22, sigY - fatosYVisivel - 3));
+  // Com o gapMinimo e o teto acima, a folga real nunca fica abaixo de
+  // ~10mm mesmo na descrição de curso mais longa que o sistema aceita
+  // (limitada em 260 caracteres na origem) — o Math.max é só uma rede de
+  // segurança, não o valor que costuma valer.
+  const _avColAlturaMaxAssinatura = Math.max(4, Math.min(22, sigY - fatosYVisivel - 5));
   desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW*0.85, _avColAlturaMaxAssinatura);
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
-  doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
-  doc.text(pdfSafe(campos.instrutorNome,40), cx, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
+  // 2026-08-29 (2ª rodada, reequilíbrio): 0.024H -> 0.021H. Em 0.024H o
+  // nome do instrutor saía a 14,3pt — maior que a própria descrição do
+  // curso (13,7pt) e desproporcional em relação à assinatura acima dele.
+  doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.021,H)); doc.setTextColor(...BLACK);
+  doc.text(pdfSafe(campos.instrutorNome,40), cx, _avBase(sigY+_avMM_H(0.011,H), _avPT_H(0.021,H)), {align:'center'});
   // Identificação profissional do instrutor — mesmo tratamento dinâmico do
   // certificado individual (ver comentário na função irmã, desenharCapaIndividualAvanteseg).
-  let _yInstrC = sigY + _avMM_H(0.037,H);
+  // 2026-08-29 (2ª rodada): 0.022H -> 0.018H, e o passo de linha
+  // acompanha (0.037H -> 0.033H de offset, 0.026H -> 0.0225H de passo).
+  let _yInstrC = sigY + _avMM_H(0.033,H);
   const _descProfC = [campos.instrutorCargo, campos.instrutorEspec].filter(Boolean).join(' — ');
   if (_descProfC) {
-    doc.setFont('times','italic'); doc.setFontSize(_avPT_H(0.022,H)); doc.setTextColor(...GRAY);
-    doc.text(pdfSafe(_descProfC,60), cx, _avBase(_yInstrC, _avPT_H(0.022,H)), {align:'center'});
-    _yInstrC += _avMM_H(0.026,H);
+    doc.setFont('times','italic'); doc.setFontSize(_avPT_H(0.018,H)); doc.setTextColor(...GRAY);
+    doc.text(pdfSafe(_descProfC,60), cx, _avBase(_yInstrC, _avPT_H(0.018,H)), {align:'center'});
+    _yInstrC += _avMM_H(0.0225,H);
   }
   if (campos.instrutorCredencial) {
-    doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.016,H)); doc.setTextColor(135,135,135);
-    doc.text(pdfSafe(campos.instrutorCredencial,60).toUpperCase(), cx, _avBase(_yInstrC, _avPT_H(0.016,H)), {align:'center'});
+    // 2026-08-29 (2ª rodada): 0.016H -> 0.0145H, acompanhando as duas
+    // linhas acima.
+    doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.0145,H)); doc.setTextColor(135,135,135);
+    doc.text(pdfSafe(campos.instrutorCredencial,60).toUpperCase(), cx, _avBase(_yInstrC, _avPT_H(0.0145,H)), {align:'center'});
   }
 
   // Selo NR — mesmo tratamento do certificado individual (círculo desenhado
@@ -21266,7 +21310,7 @@ function _avFichaGeometriaTabela(doc, W, H, campos) {
   const gridRowH = gridLinhas.map(row => 11 + Math.max(0, Math.max(...row.map(ls=>ls.length)) - 1) * lhGrid);
 
   const y0 = mg + 24 + 1.6 + 9 + alturaTitulo + 8 + (9+3) + (gridRowH[0]+gridRowH[1]+7) + 7;
-  const maxRows = Math.max(1, Math.floor((H-mg-4-54 - y0) / rowH));
+  const maxRows = Math.max(1, Math.floor((H-mg-4-56 - y0) / rowH));
   return { mg, ml, mr, rowH, y0, maxRows, linhasTitulo, lhTitulo, colW, larguraCelula, gridLinhas, gridRowH, lhGrid };
 }
 
@@ -21430,7 +21474,7 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   // acompanha essa nova reserva, e a assinatura ganhou altura máxima
   // própria (ver mais abaixo) — as duas não disputam mais o mesmo espaço.
   if (campos.totais) {
-    const tY = H-mg-4-53;
+    const tY = H-mg-4-55;
     doc.setDrawColor(...GREEN_DARK); doc.setLineWidth(0.4);
     doc.line(ml, tY, mr, tY);
     doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(...GREEN_DARK);
@@ -21454,11 +21498,18 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   // máxima cai para 12mm, o suficiente pra uma assinatura legível com
   // respiro seguro abaixo do resumo; na folha de coleta (sem totais) nada
   // muda — mantém os mesmos 22mm de sempre.
-  const _avFichaAlturaMaxAssinatura = campos.totais ? 12 : 22;
+  // 2026-08-29 (2ª rodada, reequilíbrio): 12 -> 16mm. Os 12mm da 1ª rodada
+  // eliminaram a sobreposição mas deixaram a assinatura visivelmente miúda
+  // ao lado do nome do instrutor (relatado com print). Com a reserva do
+  // rodapé em 56mm e o resumo 2mm mais alto, cabem 16mm com ~4mm de folga
+  // real medida até o texto do resumo.
+  const _avFichaAlturaMaxAssinatura = campos.totais ? 16 : 22;
   desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxS, sigY, lineW*0.85, _avFichaAlturaMaxAssinatura);
-  doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
+  // 2026-08-29 (2ª rodada): 8,5 -> 8pt e 7 -> 6,5pt, mesma razão da capa do
+  // coletivo — a identificação estava pesada demais em relação à assinatura.
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutor,40), cxS, sigY+3.5, {align:'center'});
-  doc.setFont('times','normal'); doc.setFontSize(7); doc.setTextColor(...GRAY);
+  doc.setFont('times','normal'); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
   // 2026-08: campos.instrutorCargo aqui já vem pronto (formação/especialidade
   // + credencial/CPF combinados numa linha única, montados em gerarListaPresenca)
   // — antes vinha sempre undefined, então a ficha nunca mostrava mais do que
