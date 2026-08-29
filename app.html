@@ -63,7 +63,14 @@ html{scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
    campo com fonte < 16px E NAO VOLTAR — os campos do sistema sao 14px.
    Checkbox e radio ficam de fora: nao tem texto, nao disparam o zoom. */
 @media (max-width:767px){
-  input:not([type=checkbox]):not([type=radio]),textarea,select{font-size:16px}
+  /* :not() repetido nos tres e !important de proposito. Especificidade e
+     contada por seletor da lista: sem o :not(), `textarea` e `select`
+     ficam em (0,0,1) e perdem para quase tudo — medido, iam a 12–14px, e
+     o auto-zoom do iOS voltava neles. E 60 dos campos do arquivo tem
+     font-size em style= inline, que so !important vence. */
+  input:not([type=checkbox]):not([type=radio]),
+  textarea:not([type=checkbox]):not([type=radio]),
+  select:not([type=checkbox]):not([type=radio]){font-size:16px!important}
 }
 html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-1);font-size:15px;line-height:1.5}
 .screen{display:none;position:fixed;inset:0;overflow:hidden;flex-direction:column}
@@ -142,9 +149,10 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
    no lugar da setinha nativa do sistema. Continua sendo um <select> de
    verdade; o icone e o chevron sao irmaos com pointer-events:none para nao
    roubarem o clique. ── */
-.ag-filtro{position:relative;display:inline-flex;align-items:center}
+.ag-filtro{position:relative;display:inline-flex;align-items:center;max-width:100%}
 .ag-filtro select{
-  appearance:none;-webkit-appearance:none;
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  max-width:100%;text-overflow:ellipsis;
   padding:9px 32px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);
   font-size:13px;font-weight:600;font-family:inherit;background:var(--surface);
   color:var(--text-1);min-width:210px;cursor:pointer;transition:border-color .15s
@@ -153,6 +161,10 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .ag-filtro select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
 .ag-filtro-ico{position:absolute;left:11px;display:flex;align-items:center;color:var(--text-3);pointer-events:none}
 .ag-filtro-ico svg{width:15px;height:15px}
+/* No celular a grade do Mes continua com 7 colunas: a celula fica com
+   ~40px e a bolinha de 5px + gap consumiam 57% do espaco de texto do chip
+   (sobravam 6,8px — nao cabe um caractere). Abaixo de 768px ela sai. */
+@media (max-width:767px){ .ag-mes-dot{display:none} }
 .ag-filtro-seta{
   position:absolute;right:13px;width:7px;height:7px;pointer-events:none;
   border-right:1.6px solid var(--text-3);border-bottom:1.6px solid var(--text-3);
@@ -13112,8 +13124,13 @@ function _agItemVisual(s) {
       alvoId: s._compId,
       nome: s.titulo,
       detalhe: `${t.label}: ${s.titulo}${s.local ? ' · ' + s.local : ''}`,
-      bg: 'var(--gray-100)',
-      cor: 'var(--navy)',
+      // 2026-08-29 (pedido do Alisson): era pastel `--gray-100`, que dava
+      // 1,07:1 contra o fundo da celula — fundo praticamente invisivel,
+      // sobrando so o fio da borda. Volta a solido. Regra da Agenda:
+      // estados de rotina (Treinamento/Concluido) em pastel; estados que
+      // pedem atencao (Compromisso/Sobreposicao/Conflito) em solido.
+      bg: COMPROMISSO_COR,
+      cor: '#fff',
       borda: COMPROMISSO_COR,
       status: 'Reserva de agenda',
     };
@@ -13136,6 +13153,41 @@ function _agItemVisual(s) {
   };
 }
 
+// Marca _conflito / _sobreposicaoAutorizada nas sessoes de cada dia.
+// Corpo extraido da visao Semana (2026-08-29), sem nenhuma alteracao de
+// regra, para a visao Mes poder usar exatamente a mesma deteccao. Ate
+// entao o Mes nao calculava conflito NENHUM: um choque de agenda so
+// aparecia se a pessoa entrasse na visao Dia daquele dia. Compartilhar em
+// vez de duplicar e deliberado — foi a duplicacao de expressao entre telas
+// que deixou o mobile divergir do desktop (ver patch27).
+// Conflito e sempre entre sessoes do MESMO instrutor, entao funciona igual
+// com a lista filtrada (Mes) ou completa (Semana).
+function _agMarcarConflitos(sessoesPorDia, datas) {
+  (datas || []).forEach(data => {
+    const porInstrutor = {};
+    (sessoesPorDia[data]||[]).forEach(s => { if (s.instrutor_id) (porInstrutor[s.instrutor_id]=porInstrutor[s.instrutor_id]||[]).push(s); });
+    Object.values(porInstrutor).forEach(lista => {
+      lista.forEach(s=>{ s._conflito=false; s._sobreposicaoAutorizada=false; });
+      for (let a=0;a<lista.length;a++) for (let b=a+1;b<lista.length;b++) {
+        const x=lista[a], y=lista[b];
+        const xIni=_agEquipeMinutosDeHora(x.hora_inicio), xFim=_agEquipeMinutosDeHora(x.hora_fim);
+        const yIni=_agEquipeMinutosDeHora(y.hora_inicio), yFim=_agEquipeMinutosDeHora(y.hora_fim);
+        if (xIni==null||xFim==null||yIni==null||yFim==null) continue;
+        if (xIni<yFim && yIni<xFim && (!x.concluida||!y.concluida)) {
+          // Sobreposição autorizada (pedido do Alisson, 2026-08-13 — ver
+          // 05-Decisoes/2026-08-13-turmas-simultaneas-mesmo-instrutor.md):
+          // se qualquer uma das duas sessões foi explicitamente marcada como
+          // conflito_autorizado, não é um conflito de agendamento de verdade
+          // (ex.: mesma empresa, 2 CNPJs, treinamento conjunto) — não pinta
+          // de vermelho como erro, só sinaliza como sobreposição intencional.
+          if (x.conflito_autorizado || y.conflito_autorizado) { x._sobreposicaoAutorizada=true; y._sobreposicaoAutorizada=true; }
+          else { x._conflito=true; y._conflito=true; }
+        }
+      }
+    });
+  });
+}
+
 // Cores do chip de um item da Agenda, em UM lugar so. Antes cada uma das
 // telas repetia esta expressao inteira — e foi assim que as duas telas de
 // celular acabaram fixando color:#fff, fazendo "Treinamento" reprovar
@@ -13147,26 +13199,10 @@ function _agItemVisual(s) {
 function _agChipCores(s, vi) {
   const v = vi || _agItemVisual(s);
   if (s._conflito) return { bg:'var(--red)', cor:'#fff', borda:'var(--red)' };
-  if (s._sobreposicaoAutorizada) return { bg:'var(--blue-l)', cor:'var(--blue-text)', borda:'var(--blue)' };
+  // Solida pelo mesmo motivo do Compromisso: em pastel dava 1,09:1 contra
+  // a celula. Branco sobre --blue = 6,70:1.
+  if (s._sobreposicaoAutorizada) return { bg:'var(--blue)', cor:'#fff', borda:'var(--blue)' };
   return { bg: v.bg, cor: v.cor, borda: v.borda || v.bg };
-}
-
-// Versao pastel de uma cor solida da PALETA_INSTRUTOR, para os chips da
-// visao Mes — que colorem por INSTRUTOR, nao por status (decisao de
-// produto, preservada). Mesma tecnica do mockup A+B: mistura a cor com o
-// branco em vez de preencher solido. Os 6 tons da paleta passam AA nessa
-// forma (4,54:1 a 6,27:1, medido). Entrada nao-hex (o fallback
-// var(--navy-3) do compromisso) cai num par neutro equivalente.
-function _agChipInstrutor(cor) {
-  const m = /^#([0-9a-fA-F]{6})$/.exec(String(cor || '').trim());
-  if (!m) return { bg:'var(--gray-100)', cor:'var(--navy)', borda:'var(--navy-3)' };
-  const n = parseInt(m[1], 16);
-  const mix = (c) => Math.round(0.13 * c + 0.87 * 255);
-  return {
-    bg: `rgb(${mix((n>>16)&255)},${mix((n>>8)&255)},${mix(n&255)})`,
-    cor: cor,
-    borda: cor,
-  };
 }
 
 // Adapta uma linha de `compromissos` para o mesmo formato que as visoes da
@@ -13799,7 +13835,7 @@ async function renderAgendaEquipe() {
       </div>
       <div class="ag-filtro">
         <span class="ag-filtro-ico">${ICONS.user || ''}</span>
-        <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)">
+        <select id="agEquipeFiltroInstrutor" aria-label="Filtrar por instrutor" onchange="_agEquipeFiltrarInstrutor(this.value)">
           <option value="">Todos os instrutores</option>${optsInstrutor}
         </select>
         <span class="ag-filtro-seta"></span>
@@ -14237,29 +14273,7 @@ function _agEquipeRenderSemana() {
   // Mesma regra de conflito da visão Dia (sobreposição real entre sessões
   // do mesmo instrutor, com pelo menos uma ainda não concluída), calculada
   // dia a dia dentro da semana.
-  dias.forEach(data => {
-    const porInstrutor = {};
-    (sessoesPorDia[data]||[]).forEach(s => { if (s.instrutor_id) (porInstrutor[s.instrutor_id]=porInstrutor[s.instrutor_id]||[]).push(s); });
-    Object.values(porInstrutor).forEach(lista => {
-      lista.forEach(s=>{ s._conflito=false; s._sobreposicaoAutorizada=false; });
-      for (let a=0;a<lista.length;a++) for (let b=a+1;b<lista.length;b++) {
-        const x=lista[a], y=lista[b];
-        const xIni=_agEquipeMinutosDeHora(x.hora_inicio), xFim=_agEquipeMinutosDeHora(x.hora_fim);
-        const yIni=_agEquipeMinutosDeHora(y.hora_inicio), yFim=_agEquipeMinutosDeHora(y.hora_fim);
-        if (xIni==null||xFim==null||yIni==null||yFim==null) continue;
-        if (xIni<yFim && yIni<xFim && (!x.concluida||!y.concluida)) {
-          // Sobreposição autorizada (pedido do Alisson, 2026-08-13 — ver
-          // 05-Decisoes/2026-08-13-turmas-simultaneas-mesmo-instrutor.md):
-          // se qualquer uma das duas sessões foi explicitamente marcada como
-          // conflito_autorizado, não é um conflito de agendamento de verdade
-          // (ex.: mesma empresa, 2 CNPJs, treinamento conjunto) — não pinta
-          // de vermelho como erro, só sinaliza como sobreposição intencional.
-          if (x.conflito_autorizado || y.conflito_autorizado) { x._sobreposicaoAutorizada=true; y._sobreposicaoAutorizada=true; }
-          else { x._conflito=true; y._conflito=true; }
-        }
-      }
-    });
-  });
+  _agMarcarConflitos(sessoesPorDia, dias);
 
   const colLargura = 130;
   // 2026-08-12 (pedido do Alisson): coluna de nome alargada de 116->150 +
@@ -14286,7 +14300,7 @@ function _agEquipeRenderSemana() {
   const cabecalho = dias.map(data => {
     const dd = Number(data.slice(8,10));
     const ehHoje = data === hoje;
-    return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="width:${colLargura}px;flex-shrink:0;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7);border:1px solid var(--border)'}">
+    return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7);border:1px solid var(--border)'}">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:${ehHoje?'var(--amber-text)':'var(--text-2)'}">${diasSemanaAbrev[new Date(data+'T12:00:00').getDay()]}</div>
       <div style="font-size:15px;font-weight:800;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dd}</div>
     </div>`;
@@ -14331,7 +14345,7 @@ function _agEquipeRenderSemana() {
       const sessoes = (sessoesPorDia[data]||[]).filter(s=>s.instrutor_id===inst.id).sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
       if (!sessoes.length) {
         return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(inst.nome)} neste dia"
-          style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F0F2F7);display:flex;align-items:center;justify-content:center;${bordaInst}">
+          style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F0F2F7);display:flex;align-items:center;justify-content:center;${bordaInst}">
           <span style="font-size:10px;color:var(--text-3)">Livre</span>
         </div>`;
       }
@@ -14347,14 +14361,18 @@ function _agEquipeRenderSemana() {
       }).join('');
       const extra = sessoes.length>MAX_VISIVEL ? `<div style="font-size:9px;color:var(--text-3);text-align:center">+${sessoes.length-MAX_VISIVEL}</div>` : '';
       return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')"
-        style="width:${colLargura}px;flex-shrink:0;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F0F2F7);overflow:hidden;${bordaInst}">${chips}${extra}</div>`;
+        style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F0F2F7);overflow:hidden;${bordaInst}">${chips}${extra}</div>`;
     }).join('');
     return `<div style="display:flex;gap:6px">${celulas}</div>`;
   }).join('');
 
   const html = `<div style="display:flex;gap:10px">
     <div style="width:${nomeColLargura}px;flex-shrink:0">
-      <div style="height:38px"></div>
+      <!-- 57.5px = a altura real do cabecalho da grade (12 de padding + 2
+           de borda + 15 da linha do dia + 22,5 da linha do numero) + 6 de
+           margem. Era 38px, e por isso cada nome e cada separador da coluna
+           ficava 19,5px acima da linha correspondente da grade. -->
+      <div style="height:57.5px"></div>
       ${nomes}
     </div>
     <div style="overflow-x:auto;flex:1">
@@ -14366,10 +14384,10 @@ function _agEquipeRenderSemana() {
   </div>
   <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
 
   // 2026-08-18 (pedido do Alisson — visão Semana mobile, aprovada por
@@ -14417,7 +14435,7 @@ function _agEquipeRenderSemana() {
           const corInst = s.instrutor_id ? (corDoInstrutorAg[s.instrutor_id]||'#5E6780') : '#5E6780';
           return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
             style="display:flex;align-items:center;gap:7px;padding:6px 8px;border:1px solid ${cc.borda};border-radius:7px;margin-bottom:4px;min-width:0;cursor:pointer;background:${cc.bg}">
-            <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${corInst}${s._conflito?';box-shadow:0 0 0 1.5px rgba(255,255,255,.6) inset':''}"></span>
+            <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${corInst}${cc.cor==='#fff'?';box-shadow:0 0 0 1.5px #fff':''}"></span>
             <span style="font-size:11px;font-weight:700;color:${cc.cor};flex-shrink:0">${horaTxt}</span>
             <span style="font-size:11px;font-weight:600;color:${cc.cor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${escapeHtml(cliente)}</span>
           </div>`;
@@ -14433,10 +14451,10 @@ function _agEquipeRenderSemana() {
     return `${secoes}
     <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
     </div>`;
   })();
 
@@ -14464,7 +14482,7 @@ function _agEquipeRenderSemana() {
 //     clicável pra turma, mais um link "Abrir o dia completo";
 //  3) clicar no resto da célula continua abrindo a visão Dia — nenhuma
 //     mudança nesse caminho, mesmo comportamento de sempre.
-// Sem checagem de conflito aqui (mantido da versão anterior) — ainda é um
+// Conflito passou a ser checado (2026-08-29, ver _agMarcarConflitos) — (mantido da versão anterior) — ainda é um
 // detalhe fino demais pra uma visão de panorama do mês.
 function _agEquipeRenderMes() {
   const el = _getElVisible('agEquipeTimeline');
@@ -14476,7 +14494,6 @@ function _agEquipeRenderMes() {
 
   const sel = window._agEquipeInstrutorSel;
   const instrutores = (window._agEquipeInstrutores||[]).filter(i => !sel || i.id===sel);
-  const PALETA = PALETA_INSTRUTOR;
   const corDoInstrutor = {};
   Object.assign(corDoInstrutor, _mapaCoresInstrutores(window._agEquipeInstrutores));
 
@@ -14506,6 +14523,11 @@ function _agEquipeRenderMes() {
   const mesesCompleto = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   const MAX_VISIVEL = 2;
 
+  // 2026-08-29: o Mes passa a detectar conflito/sobreposicao, com a mesma
+  // funcao da Semana. Ate aqui nao detectava nada — um choque de agenda so
+  // aparecia entrando na visao Dia. E o que torna util colorir por status.
+  _agMarcarConflitos(sessoesPorDia, Object.keys(sessoesPorDia));
+
   const celulas = [];
   for (let i=0;i<primeiroDiaSemana;i++) celulas.push(`<div></div>`);
   for (let dia=1; dia<=totalDias; dia++) {
@@ -14514,22 +14536,21 @@ function _agEquipeRenderMes() {
     const ehHoje = dataISO === window._agEquipeHoje;
     const popoverAberto = window._agEquipeMesPopoverDia === dataISO;
 
-    // Zona 1: chips sempre visíveis (até MAX_VISIVEL), cor por instrutor —
-    // mesmo padrão de dado (horário · cliente) que a Semana já mostra em
-    // cada chip, só que colorido por instrutor em vez de por status
-    // (concluída/conflito), pra manter a legenda de cores que o Mês já usa.
+    // Zona 1: chips sempre visíveis (até MAX_VISIVEL). 2026-08-29 (decisão
+    // do Alisson): a cor passou a identificar o STATUS, igual às visões Dia
+    // e Semana — antes identificava o instrutor, e o Mês era a única das
+    // três falando outra língua. Quem é o instrutor não se perde: vira a
+    // bolinha antes do horário, que a legenda de instrutores (mantida
+    // abaixo) continua explicando.
     const chips = sessoesDia.slice(0,MAX_VISIVEL).map(s => {
       const vi = _agItemVisual(s);
-      // Compromisso mantem a cor propria (navy) em vez da cor do instrutor:
-      // e a unica forma de distinguir tipo de compromisso x treinamento
-      // nesta visao, que ja usa cor para identificar o instrutor.
-      const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || '#92400E');
-      const ci = _agChipInstrutor(cor);
+      const ci = _agChipCores(s, vi);
+      const corInst = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || '#92400E');
       const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
       const cliente = vi.nome;
       const titulo = `${horaTxt} · ${vi.detalhe}`;
       return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
-        style="background:${ci.bg};color:${ci.cor};border:1px solid ${ci.borda};border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
+        style="background:${ci.bg};color:${ci.cor};border:1px solid ${ci.borda};border-radius:4px;padding:2px 5px;font-size:9px;line-height:1.25;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px"><span class="ag-mes-dot" style="width:5px;height:5px;border-radius:50%;background:${corInst};flex-shrink:0${ci.cor==='#fff'?';box-shadow:0 0 0 1px #fff':''}"></span><span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</span></div>`;
     }).join('');
 
     // Zona 2: "+N mais", só quando sobra algum compromisso fora dos
@@ -14539,7 +14560,7 @@ function _agEquipeRenderMes() {
     if (sessoesDia.length > MAX_VISIVEL) {
       const restante = sessoesDia.length - MAX_VISIVEL;
       maisMais = `<div class="ag-mes-maismais" onclick="_agEquipeTogglePopoverMes(event,'${dataISO}')"
-        style="font-size:9px;font-weight:700;cursor:pointer;${popoverAberto?'color:var(--amber-h);text-decoration:underline':'color:var(--text-3)'}">+${restante} mais</div>`;
+        style="font-size:8.5px;line-height:1.2;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;padding:2px 0;${popoverAberto?'color:var(--amber-h);text-decoration:underline':'color:var(--text-3)'}">+${restante} mais</div>`;
     }
 
     // Painel do "+N mais" — position:fixed com coordenadas já calculadas em
@@ -14570,7 +14591,7 @@ function _agEquipeRenderMes() {
 
     // Zona 3: clique em qualquer outro ponto da célula — guard idêntico ao
     // já usado na Semana, ver _agEquipeCelulaMesClique.
-    const corpo = sessoesDia.length ? `<div style="margin-top:4px">${chips}${maisMais}</div>` : '';
+    const corpo = sessoesDia.length ? `<div style="margin-top:3px">${chips}${maisMais}</div>` : '';
     // 2026-08-18 (pedido do Alisson — semanas/dias com altura desigual +
     // grade estourando a largura com nomes de cliente longos, achado num
     // print real em produção): min-height:72px virou height:92px fixa
@@ -14582,16 +14603,27 @@ function _agEquipeRenderMes() {
     // cortando o sábado. O popover (position:fixed) não é afetado pelo
     // overflow:hidden aqui — position:fixed ignora overflow de ancestral.
     celulas.push(`<div onclick="_agEquipeCelulaMesClique(event,'${dataISO}')"
-      style="position:relative;height:104px;min-width:0;border-radius:6px;padding:6px;cursor:pointer;overflow:hidden;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7)'}">
-      <div style="font-size:15px;font-weight:800;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
+      style="position:relative;height:92px;min-width:0;border-radius:6px;padding:6px;cursor:pointer;overflow:hidden;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':sessoesDia.some(s=>s._conflito)?'background:var(--red-l);outline:2px solid var(--red);outline-offset:-2px':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7)'}">
+      <div style="font-size:13px;font-weight:800;line-height:1.2;color:${(ehHoje && !popoverAberto && !sessoesDia.some(s=>s._conflito))?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
       ${corpo}
       ${popoverHtml}
     </div>`);
   }
 
-  const legenda = (!sel && instrutores.length>1) ? `<div style="display:flex;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">${instrutores.map(inst=>`
+  // 2026-08-29: com a cor identificando status, o Mes ganha a mesma faixa
+  // de status das outras visoes. A faixa de instrutores continua logo
+  // abaixo, porque agora e ela que explica a bolinha dentro de cada chip.
+  const legendaStatus = `<div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
+  </div>`;
+
+  const legenda = legendaStatus + ((!sel && instrutores.length>1) ? `<div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">${instrutores.map(inst=>`
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><span style="width:8px;height:8px;border-radius:50%;background:${corDoInstrutor[inst.id]};display:inline-block"></span>${escapeHtml(inst.nome)}</div>
-    `).join('')}</div>` : '';
+    `).join('')}</div>` : '');
 
   // 2026-08-12: espaçamento da grade de 4px->6px (mockup aprovado), mesmo
   // "respiro" já usado entre as colunas da visão Semana.
@@ -14803,7 +14835,9 @@ function _agEquipeRenderTimeline() {
       const widthPct = Math.max(2, ((fim-ini)/totalMin)*100);
       const vi = _agItemVisual(s);
       const cc = _agChipCores(s, vi);
-      const borda = s._conflito ? '2px solid var(--red)' : s._sobreposicaoAutorizada ? '2px solid var(--blue)' : '1px solid ' + cc.borda;
+      // Branco nos dois estados solidos: com o preenchimento solido (patch31)
+      // uma borda da propria cor virou invisivel — azul sobre azul.
+      const borda = s._conflito ? '2px solid #fff' : s._sobreposicaoAutorizada ? '2px solid #fff' : '1px solid ' + cc.borda;
       const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
       const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
       const rotulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''}`;
@@ -14858,10 +14892,10 @@ function _agEquipeRenderTimeline() {
   </div>
   <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
 
   // 2026-08-18 (pedido do Alisson — visão Dia mobile, aprovada por mockup
@@ -14911,10 +14945,10 @@ function _agEquipeRenderTimeline() {
     return `${secoes}
     <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
     </div>`;
   })();
 
@@ -25324,7 +25358,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '144';
+  var APP_BUILD = '148';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
