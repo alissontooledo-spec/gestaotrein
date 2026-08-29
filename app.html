@@ -18,7 +18,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
 <link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- jsPDF, QRCode, DOMPurify, Forge, SheetJS(xlsx) e Quill deixaram de carregar
      aqui (2026-08-29) — ~640 KiB sem nenhum uso na tela de login, que estavam
@@ -44,7 +44,19 @@
 }
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;font-family:'Montserrat',system-ui,sans-serif;background:var(--bg);color:var(--text-1);font-size:15px;line-height:1.5}
+/* 2026-08-29 — barra de rolagem padronizada. O sistema tem 24 areas
+   rolaveis e so 2 tinham estilo proprio; o resto (inclusive o scroll
+   horizontal da grade da Agenda) caia na barra nativa do SO, com setas e
+   trilho claro. Seletor universal = especificidade 0, entao .scrollable e
+   .sidebar-nav, que tem estilo proprio, continuam vencendo. */
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:999px}
+*::-webkit-scrollbar-thumb:hover{background:var(--gray-400)}
+*::-webkit-scrollbar-button{display:none;width:0;height:0}
+*::-webkit-scrollbar-corner{background:transparent}
+html{scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
+html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-1);font-size:15px;line-height:1.5}
 .screen{display:none;position:fixed;inset:0;overflow:hidden;flex-direction:column}
 .screen.active{display:flex}
 
@@ -91,7 +103,7 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .sidebar-logo{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.07)}
 .sidebar-logo-row{display:flex;align-items:center;gap:10px}
 .sidebar-logo-icon{width:28px;height:auto;flex-shrink:0;display:block}
-.sidebar-logo-name{font-size:14px;font-weight:700;color:#fff;letter-spacing:-.2px;line-height:1.3}
+.sidebar-logo-name{font-size:14px;font-weight:800;color:#fff;letter-spacing:-.2px;line-height:1.3}
 .sidebar-tagline{font-size:10px;color:rgba(255,255,255,.45);margin-top:3px;font-weight:500;letter-spacing:.01em}
 .sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}.sidebar-nav::-webkit-scrollbar{width:6px}.sidebar-nav::-webkit-scrollbar-track{background:transparent}.sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:10px}.sidebar-nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3)}.sidebar-nav::-webkit-scrollbar-button{display:none;width:0;height:0}
 .sidebar-section-label{display:flex;align-items:center;gap:7px;font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.45);padding:14px 2px 6px;font-weight:700}
@@ -105,7 +117,7 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .si-icon svg{width:17px;height:17px}
 .sidebar-badge{margin-left:auto;background:rgba(220,38,38,.85);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;line-height:1.6}
 .sidebar-bottom{padding:12px 10px;border-top:1px solid rgba(255,255,255,.07)}
-.sidebar-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;transition:background .15s}
+.sidebar-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-lg);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;transition:background .15s}
 .su-logout{margin-left:auto;flex-shrink:0;border:none;background:transparent;color:rgba(255,255,255,.35);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center}
 .su-logout:hover{color:#fff;background:rgba(255,255,255,.1)}
 .sidebar-collapse{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-md);color:rgba(255,255,255,.4);font-size:11.5px;font-weight:500;cursor:pointer;margin-bottom:6px;transition:background .12s,color .12s}
@@ -183,7 +195,7 @@ body.modo-suporte-ativo .sino-btn{top:calc(16px + var(--suporte-h,34px))}
   .sino-btn{top:11px;right:24px;background:var(--gray-100);color:var(--navy)}
   .sino-badge{border-color:var(--surface)}
 }
-.sino-painel{display:none;position:fixed;top:60px;right:16px;width:320px;max-width:calc(100vw - 32px);background:var(--surface);border-radius:var(--r-lg);box-shadow:0 10px 32px rgba(0,0,0,.2);border:1px solid var(--border);z-index:150;overflow:hidden}
+.sino-painel{display:none;position:fixed;top:60px;right:16px;width:320px;max-width:calc(100vw - 32px);background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-md);border:1px solid var(--border);z-index:150;overflow:hidden}
 body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 @media(min-width:768px){.sino-painel{top:54px;right:24px}}
 
@@ -382,7 +394,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    específica — vive fora de #screenApp, junto com o modal genérico. */
 .cmdk-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:520;align-items:flex-start;justify-content:center;padding:12vh 16px 0}
 .cmdk-overlay.show{display:flex}
-.cmdk-box{background:var(--surface);border-radius:var(--r-xl);box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:560px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden;animation:slideUp .15s ease}
+.cmdk-box{background:var(--surface);border-radius:var(--r-xl);box-shadow:var(--shadow-md);width:100%;max-width:560px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden;animation:slideUp .15s ease}
 .cmdk-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text-3);flex-shrink:0}
 .cmdk-input-row svg{flex-shrink:0}
 .cmdk-input-row input{flex:1;min-width:0;border:none;outline:none;font-size:15px;font-family:inherit;color:var(--text-1);background:transparent}
@@ -1074,7 +1086,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 </style>
 </head>
 <body>
-<div id="offlineBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#DC2626;color:#fff;text-align:center;font-size:13px;font-weight:600;padding:8px 12px;box-shadow:0 2px 6px rgba(0,0,0,.15)">
+<div id="offlineBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#DC2626;color:#fff;text-align:center;font-size:13px;font-weight:600;padding:8px 12px;box-shadow:var(--shadow-md)">
   Sem conexão com a internet.
 </div>
 <div id="updateBanner" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9998;background:var(--navy);color:#fff;border-radius:10px;padding:10px 12px 10px 16px;box-shadow:0 8px 28px rgba(23,32,56,.28);display:none;align-items:center;gap:14px;font-size:13px;max-width:calc(100vw - 32px)">
@@ -1110,7 +1122,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 </div>
 
 <div class="screen" id="screenBloqueado" style="background:var(--surface,#F4F6FA);align-items:center;justify-content:center;padding:24px">
-  <div style="background:#fff;border-radius:16px;border:1px solid #D2D7E1;padding:40px 32px;max-width:480px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.07)">
+  <div style="background:var(--surface);border-radius:var(--r-xl);border:1px solid var(--border);padding:40px 32px;max-width:480px;width:100%;text-align:center;box-shadow:var(--shadow)">
     <div style="width:56px;height:56px;background:#FEF3C7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     </div>
@@ -1927,7 +1939,7 @@ function _sessaoMostrarAviso() {
   if (antigo) antigo.remove();
   const div = document.createElement('div');
   div.id = '_sessaoAviso';
-  div.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:var(--r-lg);padding:14px 20px;box-shadow:0 8px 32px rgba(0,0,0,.28);z-index:9999;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:14px;max-width:360px;width:calc(100% - 32px);border:1px solid rgba(245,158,11,.4)';
+  div.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:var(--r-lg);padding:14px 20px;box-shadow:var(--shadow-md);z-index:9999;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:14px;max-width:360px;width:calc(100% - 32px);border:1px solid rgba(245,158,11,.4)';
   div.innerHTML = '<span style="font-size:22px;flex-shrink:0">⏱</span><div style="flex:1"><div style="font-weight:600;margin-bottom:2px">Sessão expirando</div><div style="font-size:12px;color:rgba(255,255,255,.65)">Você será desconectado em 5 minutos por inatividade.</div></div><button onclick="_sessaoReset()" style="background:var(--amber);color:var(--navy);border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:inherit">Continuar</button>';
   document.body.appendChild(div);
 }
@@ -2109,7 +2121,7 @@ function _suporteMostrarBanner() {
   banner.id = '_suporteBanner';
   // padding-top soma a safe-area (notch/status bar) em vez de ficar embaixo
   // dela; padding geral menor que antes para ficar mais discreta.
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:8000;background:#D97706;color:#fff;font-size:11px;font-weight:600;padding:5px 14px;padding-top:calc(5px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:8000;background:#D97706;color:#fff;font-size:11px;font-weight:600;padding:5px 14px;padding-top:calc(5px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:var(--shadow-md)';
   banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:13px;flex-shrink:0"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M15.5 8.5a4.5 4.5 0 0 1-5.9 5.9L4 20l-.7-.7 5.6-5.6a4.5 4.5 0 0 1 5.9-5.9l-2.6 2.6 2.1 2.1z"/></svg></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">MODO SUPORTE — ' + _suporteOrgNome + '</span></div><button onclick="encerrarModoSuporte(false)" style="background:rgba(0,0,0,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:5px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">✕ Encerrar suporte</button>';
   document.body.appendChild(banner);
 
@@ -2995,7 +3007,7 @@ function _comboBuscavelHtml(id, placeholder, opcoes, valorInicial, desativado=fa
       oninput="_comboBuscavelFiltrar('${id}')" onclick="_comboBuscavelAbrir('${id}')" onblur="_comboBuscavelBlur('${id}')" onkeydown="if(event.key==='Escape')this.blur()"
       style="display:${temValor?'none':'block'};width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
     <input type="hidden" id="${id}" value="${valorInicial||''}">
-    <div id="${id}_lista" style="display:none;position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:0 4px 14px rgba(0,0,0,.12)"></div>
+    <div id="${id}_lista" style="display:none;position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md)"></div>
   </div>`;
 }
 
@@ -13069,8 +13081,9 @@ function _agItemVisual(s) {
       alvoId: s._compId,
       nome: s.titulo,
       detalhe: `${t.label}: ${s.titulo}${s.local ? ' · ' + s.local : ''}`,
-      bg: COMPROMISSO_COR,
-      cor: '#fff',
+      bg: 'var(--gray-100)',
+      cor: 'var(--navy)',
+      borda: COMPROMISSO_COR,
       status: 'Reserva de agenda',
     };
   }
@@ -13080,9 +13093,48 @@ function _agItemVisual(s) {
     alvoId: s.turma_id,
     nome: s.turmas?.clientes?.nome || 'Cliente não identificado',
     detalhe: `${s.turmas?.clientes?.nome || 'Cliente não identificado'} · ${s.turmas?.catalogo?.nome || ''}${concluida ? ' · concluída' : ''}`,
-    bg: concluida ? 'var(--green)' : 'var(--amber)',
-    cor: concluida ? '#fff' : 'var(--navy)',
+    bg: concluida ? 'var(--green-l)' : 'var(--amber-l)',
+    cor: concluida ? 'var(--green-text)' : 'var(--amber-text)',
+    // --amber-h e nao --amber: contra a celula, --amber da so 1,92:1 de
+    // contorno (praticamente invisivel, e "Agendado" e o estado mais comum
+    // do sistema); --amber-h da 2,84:1. Continua abaixo do ideal de 3:1,
+    // mas e o tom mais escuro da familia ambar que existe na paleta, e a
+    // regra do projeto e nao introduzir cor nova.
+    borda: concluida ? 'var(--green)' : 'var(--amber-h)',
     status: concluida ? 'Concluído' : 'Agendado',
+  };
+}
+
+// Cores do chip de um item da Agenda, em UM lugar so. Antes cada uma das
+// telas repetia esta expressao inteira — e foi assim que as duas telas de
+// celular acabaram fixando color:#fff, fazendo "Treinamento" reprovar
+// contraste (branco sobre ambar, 2,15:1) enquanto o desktop, que usava a
+// cor calculada, passava com 6,58:1. Centralizado, o mesmo status nao tem
+// como ser desenhado de dois jeitos.
+// Conflito continua SOLIDO de proposito (direcao A+B): com o resto em
+// pastel, ele volta a ser a unica coisa que grita na tela.
+function _agChipCores(s, vi) {
+  const v = vi || _agItemVisual(s);
+  if (s._conflito) return { bg:'var(--red)', cor:'#fff', borda:'var(--red)' };
+  if (s._sobreposicaoAutorizada) return { bg:'var(--blue-l)', cor:'var(--blue-text)', borda:'var(--blue)' };
+  return { bg: v.bg, cor: v.cor, borda: v.borda || v.bg };
+}
+
+// Versao pastel de uma cor solida da PALETA_INSTRUTOR, para os chips da
+// visao Mes — que colorem por INSTRUTOR, nao por status (decisao de
+// produto, preservada). Mesma tecnica do mockup A+B: mistura a cor com o
+// branco em vez de preencher solido. Os 6 tons da paleta passam AA nessa
+// forma (4,54:1 a 6,27:1, medido). Entrada nao-hex (o fallback
+// var(--navy-3) do compromisso) cai num par neutro equivalente.
+function _agChipInstrutor(cor) {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(String(cor || '').trim());
+  if (!m) return { bg:'var(--gray-100)', cor:'var(--navy)', borda:'var(--navy-3)' };
+  const n = parseInt(m[1], 16);
+  const mix = (c) => Math.round(0.13 * c + 0.87 * 255);
+  return {
+    bg: `rgb(${mix((n>>16)&255)},${mix((n>>8)&255)},${mix(n&255)})`,
+    cor: cor,
+    borda: cor,
   };
 }
 
@@ -13724,7 +13776,7 @@ async function renderAgendaEquipe() {
       <div style="background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <button onclick="_agEquipeNav(-1)" aria-label="Período anterior" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">‹</button>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center">
-          <span id="agEquipeDataLabel" style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap"></span>
+          <span id="agEquipeDataLabel" style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap"></span>
           <input type="date" id="agEquipeDataInput" value="${window._agEquipeData}" onchange="_agEquipeIrParaData(this.value)"
             style="border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:7px;padding:5px 8px;font-size:12px;font-family:inherit;color-scheme:dark">
           <button onclick="_agEquipeIrParaHoje()" style="border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;border-radius:7px;padding:5px 10px;font-size:12px;font-family:inherit">Hoje</button>
@@ -14202,11 +14254,21 @@ function _agEquipeRenderSemana() {
     const ehHoje = data === hoje;
     return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="width:${colLargura}px;flex-shrink:0;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7);border:1px solid var(--border)'}">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:${ehHoje?'var(--amber-text)':'var(--text-2)'}">${diasSemanaAbrev[new Date(data+'T12:00:00').getDay()]}</div>
-      <div style="font-size:15px;font-weight:700;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dd}</div>
+      <div style="font-size:15px;font-weight:800;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dd}</div>
     </div>`;
   }).join('');
 
-  const alturaCelula = 72;
+  // 2026-08-29: era 72px — exatamente o que 3 chips ocupavam, sem 1px de
+  // folga. Com 4+ compromissos, o aviso "+N mais" precisava de 10px que
+  // nao existiam e era cortado INTEIRO pelo overflow:hidden: a tela mostrava
+  // 3 e nao dava nenhum sinal de que havia mais.
+  // Medido com o `line-height:1.5` que html,body herda (a 1a medicao errou
+  // justamente por nao reproduzir essa heranca): o chip mede 22,25px
+  // (9,5 x 1,5 = 14,25 de linha + 6 de padding + 2 de borda), 25,25 com a
+  // margem. 3 chips + "+N mais" = 89,25px => caixa minima de 102px.
+  // 104 = os 102 necessarios + 2px de folga real, porque ajuste exato foi
+  // exatamente o que criou o bug original.
+  const alturaCelula = 104;
   // Nome em até 2 linhas (-webkit-line-clamp, mesma técnica já usada em
   // outras telas do sistema pra truncar com segurança sem cortar no meio
   // de uma palavra) + bolinha da cor do instrutor antes do nome.
@@ -14242,13 +14304,12 @@ function _agEquipeRenderSemana() {
       const MAX_VISIVEL = 3;
       const chips = sessoes.slice(0,MAX_VISIVEL).map(s => {
         const vi = _agItemVisual(s);
-        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
-        const corTexto = (s._conflito || s._sobreposicaoAutorizada) ? '#fff' : vi.cor;
+        const cc = _agChipCores(s, vi);
         const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
         const cliente = vi.nome;
         const titulo = `${horaTxt} · ${vi.detalhe}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · Sobreposição autorizada':''}`;
         return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
-          style="background:${bg};color:${corTexto};border-radius:4px;padding:3px 5px;font-size:9.5px;font-weight:600;margin-bottom:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
+          style="background:${cc.bg};color:${cc.cor};border:1px solid ${cc.borda};border-radius:4px;padding:3px 5px;font-size:9.5px;font-weight:600;margin-bottom:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
       }).join('');
       const extra = sessoes.length>MAX_VISIVEL ? `<div style="font-size:9px;color:var(--text-3);text-align:center">+${sessoes.length-MAX_VISIVEL}</div>` : '';
       return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')"
@@ -14270,11 +14331,11 @@ function _agEquipeRenderSemana() {
     </div>
   </div>
   <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
 
   // 2026-08-18 (pedido do Alisson — visão Semana mobile, aprovada por
@@ -14315,16 +14376,16 @@ function _agEquipeRenderSemana() {
       } else {
         const itens = sessoesDia.slice(0,MAX_VISIVEL_DIA).map(s => {
           const vi = _agItemVisual(s);
-          const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
+          const cc = _agChipCores(s, vi);
           const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
           const cliente = vi.nome;
           const titulo = `${horaTxt} · ${vi.detalhe}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · Sobreposição autorizada':''}`;
           const corInst = s.instrutor_id ? (corDoInstrutorAg[s.instrutor_id]||'#5E6780') : '#5E6780';
           return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
-            style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;margin-bottom:4px;min-width:0;cursor:pointer;background:${bg}">
-            <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${corInst};box-shadow:0 0 0 1.5px rgba(255,255,255,.5) inset"></span>
-            <span style="font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${horaTxt}</span>
-            <span style="font-size:11px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${escapeHtml(cliente)}</span>
+            style="display:flex;align-items:center;gap:7px;padding:6px 8px;border:1px solid ${cc.borda};border-radius:7px;margin-bottom:4px;min-width:0;cursor:pointer;background:${cc.bg}">
+            <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${corInst}${s._conflito?';box-shadow:0 0 0 1.5px rgba(255,255,255,.6) inset':''}"></span>
+            <span style="font-size:11px;font-weight:700;color:${cc.cor};flex-shrink:0">${horaTxt}</span>
+            <span style="font-size:11px;font-weight:600;color:${cc.cor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${escapeHtml(cliente)}</span>
           </div>`;
         }).join('');
         const extra = sessoesDia.length>MAX_VISIVEL_DIA ? `<div style="font-size:10px;font-weight:700;color:var(--text-3);padding-left:2px;cursor:pointer" onclick="event.stopPropagation();_agEquipeAbrirDia('${data}')">+${sessoesDia.length-MAX_VISIVEL_DIA} mais neste dia</div>` : '';
@@ -14337,11 +14398,11 @@ function _agEquipeRenderSemana() {
     }).join('');
     return `${secoes}
     <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
     </div>`;
   })();
 
@@ -14428,12 +14489,13 @@ function _agEquipeRenderMes() {
       // Compromisso mantem a cor propria (navy) em vez da cor do instrutor:
       // e a unica forma de distinguir tipo de compromisso x treinamento
       // nesta visao, que ja usa cor para identificar o instrutor.
-      const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || 'var(--amber)');
+      const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || '#92400E');
+      const ci = _agChipInstrutor(cor);
       const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
       const cliente = vi.nome;
       const titulo = `${horaTxt} · ${vi.detalhe}`;
       return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
-        style="background:${cor};color:#fff;border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
+        style="background:${ci.bg};color:${ci.cor};border:1px solid ${ci.borda};border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
     }).join('');
 
     // Zona 2: "+N mais", só quando sobra algum compromisso fora dos
@@ -14454,7 +14516,7 @@ function _agEquipeRenderMes() {
       const pos = window._agEquipeMesPopoverPos;
       const itens = sessoesDia.map(s => {
         const vi = _agItemVisual(s);
-        const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || 'var(--amber)');
+        const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || '#92400E');
         const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
         const cliente = vi.nome;
         return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;cursor:pointer">
@@ -14465,7 +14527,7 @@ function _agEquipeRenderMes() {
       }).join('');
       const dow = diasSemanaCompleto[new Date(dataISO+'T12:00:00').getDay()];
       const totalTxt = `${sessoesDia.length} ${sessoesDia.length===1?'agendamento':'agendamentos'}`;
-      popoverHtml = `<div class="ag-mes-popover" style="position:fixed;${pos.top!=null?'top:'+pos.top+'px':'bottom:'+pos.bottom+'px'};left:${pos.left}px;z-index:200;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 14px 32px rgba(0,0,0,.18);padding:10px 12px">
+      popoverHtml = `<div class="ag-mes-popover" style="position:fixed;${pos.top!=null?'top:'+pos.top+'px':'bottom:'+pos.bottom+'px'};left:${pos.left}px;z-index:200;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:10px 12px">
         <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${dow}, ${dia} de ${mesesCompleto[mes-1]} · ${totalTxt}</div>
         ${itens}
         <div onclick="_agEquipeAbrirDia('${dataISO}')" style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:10.5px;color:var(--amber-h);font-weight:700;cursor:pointer">Abrir o dia completo</div>
@@ -14486,8 +14548,8 @@ function _agEquipeRenderMes() {
     // cortando o sábado. O popover (position:fixed) não é afetado pelo
     // overflow:hidden aqui — position:fixed ignora overflow de ancestral.
     celulas.push(`<div onclick="_agEquipeCelulaMesClique(event,'${dataISO}')"
-      style="position:relative;height:92px;min-width:0;border-radius:6px;padding:6px;cursor:pointer;overflow:hidden;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7)'}">
-      <div style="font-size:15px;font-weight:${ehHoje?'700':'600'};color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
+      style="position:relative;height:104px;min-width:0;border-radius:6px;padding:6px;cursor:pointer;overflow:hidden;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7)'}">
+      <div style="font-size:15px;font-weight:800;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
       ${corpo}
       ${popoverHtml}
     </div>`);
@@ -14705,13 +14767,9 @@ function _agEquipeRenderTimeline() {
       const fim = _agEquipeMinutosDeHora(s.hora_fim) ?? (ini+30);
       const leftPct  = Math.max(0, ((ini-min)/totalMin)*100);
       const widthPct = Math.max(2, ((fim-ini)/totalMin)*100);
-      const concluida = !!s.concluida;
-      // 2026-08-09: cor de "concluído" trocada de cinza pra verde (pedido
-      // do Alisson) — mesmo var(--green) já usado no resto do sistema pra
-      // indicar status finalizado/positivo (ex.: badge de turma concluída).
       const vi = _agItemVisual(s);
-      const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
-      const borda = s._conflito ? '2px solid var(--red)' : s._sobreposicaoAutorizada ? '2px solid var(--blue-h)' : 'none';
+      const cc = _agChipCores(s, vi);
+      const borda = s._conflito ? '2px solid var(--red)' : s._sobreposicaoAutorizada ? '2px solid var(--blue)' : '1px solid ' + cc.borda;
       const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
       const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
       const rotulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''}`;
@@ -14730,7 +14788,7 @@ function _agEquipeRenderTimeline() {
       // reticências (overflow:hidden) em vez de vazar pra fora da tarja.
       const textoChip = `${rotulo} · ${vi.nome}${s._conflito?' · CONFLITO':s._sobreposicaoAutorizada?' · autorizada':''}`;
       const barra = `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
-        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:${topoFaixa+10}px;height:34px;background:${bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px;display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 2px rgba(0,0,0,.15)">${escapeHtml(textoChip)}</div>`;
+        style="position:absolute;left:${leftPct}%;width:${widthPct}%;top:${topoFaixa+10}px;height:34px;background:${cc.bg};border:${borda};border-radius:5px;cursor:pointer;min-width:6px;display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:700;color:${cc.cor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:var(--shadow)">${escapeHtml(textoChip)}</div>`;
       return barra;
     }).join('');
     return `<div onclick="_agEquipeCliqueNaLinha(event,'${i.id}')" title="Clique num espaço vazio para agendar uma turma ou reservar um compromisso com ${escapeHtml(i.nome)}"
@@ -14765,11 +14823,11 @@ function _agEquipeRenderTimeline() {
     </div>
   </div>
   <div style="display:flex;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
   </div>`;
 
   // 2026-08-18 (pedido do Alisson — visão Dia mobile, aprovada por mockup
@@ -14793,18 +14851,18 @@ function _agEquipeRenderTimeline() {
       const sessoesInst = (sessoesPorInstrutor[i.id]||[]).slice().sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
       const corpo = sessoesInst.length ? sessoesInst.map(s => {
         const vi = _agItemVisual(s);
-        const bg = s._conflito ? 'var(--red)' : s._sobreposicaoAutorizada ? 'var(--blue)' : vi.bg;
+        const cc = _agChipCores(s, vi);
         const horaTxt = s.hora_inicio?s.hora_inicio.slice(0,5):'?';
         const horaFimTxt = s.hora_fim?s.hora_fim.slice(0,5):'';
         const cliente = vi.nome;
         const statusTxt = s._conflito?'CONFLITO':s._sobreposicaoAutorizada?'Sobreposição autorizada':vi.status;
         const titulo = `${horaTxt}${horaFimTxt?'–'+horaFimTxt:''} · ${vi.detalhe}${s._conflito?' · CONFLITO':''}${s._sobreposicaoAutorizada?' · Sobreposição autorizada':''}`;
         return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
-          style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:5px;min-width:0;cursor:pointer;background:${bg}">
-          <span style="font-size:12px;font-weight:700;color:#fff;width:40px;flex-shrink:0">${horaTxt}</span>
+          style="display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid ${cc.borda};border-radius:7px;margin-bottom:5px;min-width:0;cursor:pointer;background:${cc.bg}">
+          <span style="font-size:12px;font-weight:700;color:${cc.cor};width:40px;flex-shrink:0">${horaTxt}</span>
           <div style="min-width:0;flex:1">
-            <span style="font-size:11.5px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">${escapeHtml(cliente)}</span>
-            <span style="font-size:9px;color:rgba(255,255,255,.85);font-weight:600">${statusTxt}</span>
+            <span style="font-size:11.5px;font-weight:600;color:${cc.cor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">${escapeHtml(cliente)}</span>
+            <span style="font-size:9px;color:${cc.cor};font-weight:600">${statusTxt}</span>
           </div>
         </div>`;
       }).join('') : `<div style="font-size:11px;color:var(--text-3);padding:8px 9px;border-radius:7px;background:var(--gray-50,#F0F2F7);cursor:pointer" onclick="_agEquipeEscolherTipoAgendamento('${i.id}', window._agEquipeData, null)" title="Agendar turma ou reservar compromisso com ${escapeHtml(i.nome)}">Livre o dia todo — toque para agendar</div>`;
@@ -14818,11 +14876,11 @@ function _agEquipeRenderTimeline() {
     }).join('');
     return `${secoes}
     <div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></div>Treinamento</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--navy-3)"></div>Compromisso</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green)"></div>Concluído</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber-h)"></div>Treinamento</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--gray-100);border:1px solid var(--navy-3)"></div>Compromisso</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--green-l);border:1px solid var(--green)"></div>Concluído</div>
       <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--red)"></div>Conflito</div>
-      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue)"></div>Sobreposição autorizada</div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3)"><div style="width:9px;height:9px;border-radius:3px;background:var(--blue-l);border:1px solid var(--blue)"></div>Sobreposição autorizada</div>
     </div>`;
   })();
 
@@ -25232,7 +25290,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '141';
+  var APP_BUILD = '143';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
