@@ -20963,9 +20963,18 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // mesmo raciocínio já usado aqui pra yDesc/descrição, agora estendido pra
   // "fatos" também poder quebrar em 2 linhas sem colar na assinatura.
   const fatosY = fatosFimY;
+  // 2026-08-29 (ajuste fino, achado por verificação numérica extra do
+  // patch10): fatosY é o cursor ANTES do ajuste de linha de base que
+  // _avBase aplica ao desenhar — o texto "Realizado em..." aparece, de
+  // fato, ~3mm mais abaixo do que fatosY sozinho sugere. Pra uma linha
+  // fina isso nunca importou (a folga mínima ainda sobrava); pra altura da
+  // imagem da assinatura (linha abaixo), fazia diferença. Usa a mesma
+  // _avBase que o desenho real usa, então "fatosYVisivel" é onde o texto
+  // realmente termina.
+  const fatosYVisivel = _avBase(fatosY, _avPT_H(0.019,H));
   const sigYBase = zbot - _avMM_H(0.115,H);
   const gapMinimo = _avMM_H(0.028,H);
-  const sigY = Math.min(Math.max(sigYBase, fatosY + gapMinimo), zbot - _avMM_H(0.08,H));
+  const sigY = Math.min(Math.max(sigYBase, fatosYVisivel + gapMinimo), zbot - _avMM_H(0.08,H));
   const lineW = _avMM_W(0.22,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cx-lineW/2, sigY, cx+lineW/2, sigY);
@@ -20973,7 +20982,18 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // individual (ver comentário em desenharCapaIndividualAvanteseg). Caixa
   // validada visualmente (2026-08-06, 2ª rodada) com a mesma medição/preview
   // — ver comentário completo em desenharCapaIndividualAvanteseg.
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW*0.85, 22);
+  // 2026-08-29 (correção de sobreposição relatada com print real): sigY já
+  // garantia gapMinimo (~5,9mm) de folga entre a LINHA de assinatura e o
+  // texto "Realizado em... Carga horária..." (fatosY), mas isso não
+  // garantia nada sobre a IMAGEM da assinatura, desenhada acima da linha e
+  // podendo chegar a 22mm de altura — bem mais que essa folga mínima. Com
+  // descrição de curso longa (fatosY empurrado pra perto de sigY), a
+  // imagem cobria o texto. Agora a altura máxima acompanha a folga real
+  // entre sigY e fatosY, com teto de 22mm (igual a hoje): turma com
+  // descrição curta/média (a maioria) não muda nada; só encolhe quando a
+  // folga real for menor que isso.
+  const _avColAlturaMaxAssinatura = Math.max(2, Math.min(22, sigY - fatosYVisivel - 3));
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW*0.85, _avColAlturaMaxAssinatura);
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutorNome,40), cx, _avBase(sigY+_avMM_H(0.012,H), _avPT_H(0.024,H)), {align:'center'});
@@ -21246,7 +21266,7 @@ function _avFichaGeometriaTabela(doc, W, H, campos) {
   const gridRowH = gridLinhas.map(row => 11 + Math.max(0, Math.max(...row.map(ls=>ls.length)) - 1) * lhGrid);
 
   const y0 = mg + 24 + 1.6 + 9 + alturaTitulo + 8 + (9+3) + (gridRowH[0]+gridRowH[1]+7) + 7;
-  const maxRows = Math.max(1, Math.floor((H-mg-4-38 - y0) / rowH));
+  const maxRows = Math.max(1, Math.floor((H-mg-4-54 - y0) / rowH));
   return { mg, ml, mr, rowH, y0, maxRows, linhasTitulo, lhTitulo, colW, larguraCelula, gridLinhas, gridRowH, lhGrid };
 }
 
@@ -21401,12 +21421,16 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
     y += rowH;
   });
 
-  // ── Totais (2026-08-28) ── faixa entre o fim possível da tabela
-  // (H-mg-4-38, limite usado por _avFichaGeometriaTabela) e a linha de
-  // assinatura (H-mg-4-24): espaço já reservado, antes vazio. Nenhum
-  // elemento existente se desloca.
+  // ── Totais (2026-08-28; ajuste 2026-08-29) ── faixa reservada entre o
+  // fim possível da tabela e a linha de assinatura. Print real do Alisson
+  // mostrou o resumo colando na imagem da assinatura do instrutor — a
+  // faixa de 14mm original (H-mg-4-38 a H-mg-4-24) não sobrava o
+  // suficiente pras duas coisas ao mesmo tempo. A reserva no rodapé
+  // (_avFichaGeometriaTabela) cresceu de 38 para 54mm; o resumo agora
+  // acompanha essa nova reserva, e a assinatura ganhou altura máxima
+  // própria (ver mais abaixo) — as duas não disputam mais o mesmo espaço.
   if (campos.totais) {
-    const tY = H-mg-4-37;
+    const tY = H-mg-4-53;
     doc.setDrawColor(...GREEN_DARK); doc.setLineWidth(0.4);
     doc.line(ml, tY, mr, tY);
     doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(...GREEN_DARK);
@@ -21421,17 +21445,17 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cxS-lineW/2, sigY, cxS+lineW/2, sigY);
   // Imagem da assinatura digitalizada do instrutor (2026-08-06, correção de
-  // causa raiz) — esta função desenhava a linha e o nome, mas nunca chamava
-  // desenharAssinaturaImagemPDF, então a assinatura cadastrada nunca aparecia
-  // na Ficha de Presença da Avanteseg, mesmo com o arquivo corretamente
-  // cadastrado e acessível (mesmo padrão já usado no modelo padrão do sistema
-  // e nas capas de certificado da Avanteseg). Tamanho validado visualmente
-  // (2026-08-06, 2ª rodada, mesmo método de preview/medição das capas) e
-  // igualado a 0,85×lineW por 22mm — mesma caixa das capas, por consistência
-  // visual entre os 3 documentos. Aqui a folga é enorme (a tabela de
-  // participantes termina bem mais de 100mm antes desta faixa), então não há
-  // nenhum risco de colisão.
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxS, sigY, lineW*0.85, 22);
+  // causa raiz original) — ver comentário completo em
+  // desenharCapaIndividualAvanteseg. 2026-08-29 (correção de sobreposição
+  // relatada com print real): com o RESUMO DA TURMA (2026-08-28) ocupando a
+  // faixa acima da linha de assinatura, a altura fixa de 22mm — herdada das
+  // capas, onde sobra folga de verdade — não cabia mais aqui sem cobrir o
+  // texto do resumo. Só no modo "final" (com campos.totais) a altura
+  // máxima cai para 12mm, o suficiente pra uma assinatura legível com
+  // respiro seguro abaixo do resumo; na folha de coleta (sem totais) nada
+  // muda — mantém os mesmos 22mm de sempre.
+  const _avFichaAlturaMaxAssinatura = campos.totais ? 12 : 22;
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxS, sigY, lineW*0.85, _avFichaAlturaMaxAssinatura);
   doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
   doc.text(pdfSafe(campos.instrutor,40), cxS, sigY+3.5, {align:'center'});
   doc.setFont('times','normal'); doc.setFontSize(7); doc.setTextColor(...GRAY);
