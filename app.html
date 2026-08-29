@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://brasilapi.com.br https://api.resend.com; frame-ancestors 'none';">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
@@ -11,6 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GRID">
+<meta name="description" content="GRID — gestão de treinamentos de segurança do trabalho: turmas, certificados, conformidade e agenda de instrutores.">
 <title>GRID — Treinamentos</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
@@ -56,6 +57,14 @@
 *::-webkit-scrollbar-button{display:none;width:0;height:0}
 *::-webkit-scrollbar-corner{background:transparent}
 html{scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
+/* 2026-08-29 — o `maximum-scale=1.0` saiu do viewport (impedia zoom, unica
+   reprovacao de Acessibilidade do PageSpeed). Sem esta regra, a remocao
+   traria de volta o comportamento do iOS de dar zoom ao focar qualquer
+   campo com fonte < 16px E NAO VOLTAR — os campos do sistema sao 14px.
+   Checkbox e radio ficam de fora: nao tem texto, nao disparam o zoom. */
+@media (max-width:767px){
+  input:not([type=checkbox]):not([type=radio]),textarea,select{font-size:16px}
+}
 html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-1);font-size:15px;line-height:1.5}
 .screen{display:none;position:fixed;inset:0;overflow:hidden;flex-direction:column}
 .screen.active{display:flex}
@@ -127,6 +136,28 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .su-avatar{width:30px;height:30px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy);flex-shrink:0}
 .su-name{font-size:12px;font-weight:500;color:#fff;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .su-role{font-size:9.5px;color:var(--amber);font-weight:600}
+
+/* ── Filtro de instrutor da Agenda (2026-08-29) — mesmo desenho do `.sel`
+   do mockup A+B: icone de pessoa, rotulo em peso 600 e chevron desenhado
+   no lugar da setinha nativa do sistema. Continua sendo um <select> de
+   verdade; o icone e o chevron sao irmaos com pointer-events:none para nao
+   roubarem o clique. ── */
+.ag-filtro{position:relative;display:inline-flex;align-items:center}
+.ag-filtro select{
+  appearance:none;-webkit-appearance:none;
+  padding:9px 32px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);
+  font-size:13px;font-weight:600;font-family:inherit;background:var(--surface);
+  color:var(--text-1);min-width:210px;cursor:pointer;transition:border-color .15s
+}
+.ag-filtro select:hover{border-color:var(--border-2)}
+.ag-filtro select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.ag-filtro-ico{position:absolute;left:11px;display:flex;align-items:center;color:var(--text-3);pointer-events:none}
+.ag-filtro-ico svg{width:15px;height:15px}
+.ag-filtro-seta{
+  position:absolute;right:13px;width:7px;height:7px;pointer-events:none;
+  border-right:1.6px solid var(--text-3);border-bottom:1.6px solid var(--text-3);
+  transform:translateY(-2px) rotate(45deg)
+}
 
 /* ── Campo de busca do menu lateral (2026-08-18) — filtro local dos itens
    de navegação, direto no menu (sem modal, sem atalho de teclado) ── */
@@ -13766,10 +13797,13 @@ async function renderAgendaEquipe() {
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div id="agEquipeVisaoSwitchWrap">${_agEquipeHtmlVisaoSwitch()}</div>
       </div>
-      <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)"
-        style="padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);min-width:200px">
-        <option value="">Todos os instrutores</option>${optsInstrutor}
-      </select>
+      <div class="ag-filtro">
+        <span class="ag-filtro-ico">${ICONS.user || ''}</span>
+        <select id="agEquipeFiltroInstrutor" onchange="_agEquipeFiltrarInstrutor(this.value)">
+          <option value="">Todos os instrutores</option>${optsInstrutor}
+        </select>
+        <span class="ag-filtro-seta"></span>
+      </div>
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;box-shadow:var(--shadow)">
@@ -25290,7 +25324,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '143';
+  var APP_BUILD = '144';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
