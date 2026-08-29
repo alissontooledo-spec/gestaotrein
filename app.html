@@ -20,14 +20,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.8/purify.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
-<!-- SheetJS — usado só pelo import "Modelo 1" do SOC (colaboradores), para ler .xlsx no navegador sem servidor -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+<!-- jsPDF, QRCode, DOMPurify, Forge, SheetJS(xlsx) e Quill deixaram de carregar
+     aqui (2026-08-29) — ~640 KiB sem nenhum uso na tela de login, que estavam
+     bloqueando a renderização inicial. Agora carregam sob demanda via
+     _garantirX(), ver bloco antes de sanitizarHtml() mais abaixo. Detalhe em
+     01-Requisitos/2026-08-29-diagnostico-pagespeed.md. -->
 <style>
 :root{
   /* ── Navy Clean v2 — Toledo Labs ── */
@@ -3265,6 +3262,7 @@ async function entrarNoApp() {
     ? location.hash.slice(location.hash.indexOf('?'))
     : null;
   await irPara(paginaInicial);
+  _prefetchLibsPesadasEmSegundoPlano();
 }
 
 // Extrai só o identificador da página do hash da URL, ignorando qualquer
@@ -3723,6 +3721,7 @@ function _decodeEntidadesHtml(str) {
 async function exportarPainelExecutivoPDF() {
   showToast('Gerando PDF executivo...', 'info');
   try {
+    await _garantirJsPDF();
     const hoje = new Date();
     const [
       { data: orgs },
@@ -9335,7 +9334,7 @@ async function desarquivarCatalogo(id) {
   await renderCatalogo();
 }
 
-function abrirModalCatalogo(id=null) {
+async function abrirModalCatalogo(id=null) {
   _modalCurrentId = id;
   const t = id ? _catalogoCache.find(x=>x.id===id) : null;
   const nrsAtuais = (Array.isArray(t?.nrs) ? t.nrs : []).map(n=>String(n).replace(/\D/g,'')).filter(Boolean).join(', ');
@@ -9385,7 +9384,18 @@ function abrirModalCatalogo(id=null) {
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCatalogo()">${t?'Salvar':'Cadastrar'}</button>`);
 
-  // Instancia os editores após o HTML do modal já estar no DOM
+  // Instancia os editores após o HTML do modal já estar no DOM. Precisa do
+  // Quill (o editor) e do DOMPurify (usado por carregarConteudoQuill logo
+  // abaixo, e por sanitizarHtml() em salvarCatalogo()) já carregados. Se a
+  // rede falhar aqui, fecha o modal em vez de deixar os editores quebrados
+  // — sem isso, "Salvar" travaria com erro sem nenhum aviso ao usuário.
+  try {
+    await Promise.all([_garantirQuill(), _garantirDOMPurify()]);
+  } catch (e) {
+    showToast('Não foi possível carregar o editor de texto. Verifique sua conexão e tente novamente.', 'error');
+    fecharModal();
+    return;
+  }
   _quillDescricao = criarEditorRico('edDescricao', 'tbDescricao');
   _quillConteudo  = criarEditorRico('edConteudo', 'tbConteudo');
   carregarConteudoQuill(_quillDescricao, t?.descricao);
@@ -12161,6 +12171,7 @@ async function previewImportacaoSOC(e) {
   const btn = document.getElementById('btnSalvarModal');
   if (btn) btn.disabled = true;
   if (!file) return;
+  try { await _garantirXLSX(); } catch (e2) { /* cai no aviso abaixo */ }
   if (typeof XLSX === 'undefined') {
     preview.innerHTML = '<span style="color:var(--red)">Não foi possível carregar o leitor de planilhas. Recarregue a página e tente de novo.</span>';
     return;
@@ -18398,6 +18409,7 @@ function exportarRelatorioInstrutorCSV(instrutorId) {
 }
 
 async function exportarRelatorioInstrutorPDF(instrutorId) {
+  try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
   if (!planoAtinge('pro')) { modalUpgrade('PDF do instrutor', 'pro'); return; }
   const raw = window._relRaw || {};
   const instrutor = (raw.usuarios || []).find(u => u.id === instrutorId);
@@ -18730,6 +18742,7 @@ function exportarRelatorioCSV() {
 }
 
 async function exportarRelatorioExecutivoPDF() {
+  try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Executivo em PDF', 'pro'); return; }
   showToast('Gerando PDF Executivo...', 'info');
   const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
@@ -19785,6 +19798,7 @@ async function _lerCertificadoDigital() {
   btn.disabled = true; btn.textContent = 'Lendo...';
 
   try {
+    await _garantirForge();
     const buffer  = await file.arrayBuffer();
     const derBuf  = forge.util.createBuffer(new Uint8Array(buffer));
     const asn1    = forge.asn1.fromDer(derBuf);
@@ -20120,7 +20134,7 @@ function _dataUrlToBlob(dataUrl) {
 
 // Gera QR Code como dataURL PNG usando QRCode.js
 function gerarQRCodeDataURL(texto) {
-  return new Promise((resolve) => {
+  return _garantirQRCode().then(() => new Promise((resolve) => {
     const div = document.createElement('div');
     div.style.display = 'none';
     document.body.appendChild(div);
@@ -20141,7 +20155,7 @@ function gerarQRCodeDataURL(texto) {
       document.body.removeChild(div);
       resolve(url);
     }, 300);
-  });
+  }));
 }
 
 // Carrega imagem como dataURL (para assinaturas do Storage)
@@ -20394,6 +20408,77 @@ function _pdfBlocoMultilinha(doc, texto, x, yBase, maxWidth, lineHeight, opts) {
   let y = yBase;
   linhasFinal.forEach(ln => { doc.text(ln, x, y, {align: opts.align || 'left'}); y += lineHeight; });
   return linhasFinal.length * lineHeight;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Carregamento sob demanda de libs externas pesadas (2026-08-29)
+// ══════════════════════════════════════════════════════════════════
+// jsPDF, QRCode, Forge, xlsx e Quill/DOMPurify não têm uso na tela de
+// login — só entram em telas específicas, todas após autenticado. Cada
+// _garantirX() injeta o <script>/<link> na 1ª chamada e guarda a Promise
+// em _libCache (nunca baixa duas vezes na mesma sessão). entrarNoApp()
+// dispara um pré-carregamento em segundo plano (tempo ocioso) para a 1ª
+// chamada real quase nunca ter espera visível — ver
+// _prefetchLibsPesadasEmSegundoPlano() no fim deste bloco.
+const _libCache = {};
+function _carregarScript(src) {
+  if (_libCache[src]) return _libCache[src];
+  _libCache[src] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => { delete _libCache[src]; reject(new Error('Falha ao carregar ' + src)); };
+    document.head.appendChild(s);
+  });
+  return _libCache[src];
+}
+function _carregarCSS(href) {
+  if (_libCache[href]) return _libCache[href];
+  _libCache[href] = new Promise((resolve, reject) => {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = href;
+    l.onload = resolve;
+    l.onerror = () => { delete _libCache[href]; reject(new Error('Falha ao carregar ' + href)); };
+    document.head.appendChild(l);
+  });
+  return _libCache[href];
+}
+// jspdf.umd.min.js define window.jspdf (namespace); cada função que usa PDF
+// já faz `const {jsPDF} = window.jspdf;` internamente, então só garantir que
+// o namespace existe é suficiente.
+async function _garantirJsPDF() {
+  if (!window.jspdf) await _carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+}
+async function _garantirQRCode() {
+  if (!window.QRCode) await _carregarScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+}
+async function _garantirForge() {
+  if (!window.forge) await _carregarScript('https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js');
+}
+async function _garantirXLSX() {
+  if (!window.XLSX) await _carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+}
+async function _garantirQuill() {
+  if (!window.Quill) await Promise.all([
+    _carregarCSS('https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css'),
+    _carregarScript('https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js'),
+  ]);
+}
+async function _garantirDOMPurify() {
+  if (!window.DOMPurify) await _carregarScript('https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.4.8/purify.min.js');
+}
+// Chamado 1x, ao final de entrarNoApp(). Não bloqueia nada — roda em tempo
+// ocioso — só adianta o download. Forge fica de fora de propósito: só é
+// usado no fluxo raro de leitura de certificado digital A1.
+function _prefetchLibsPesadasEmSegundoPlano() {
+  const ocioso = window.requestIdleCallback || ((fn) => setTimeout(fn, 2000));
+  ocioso(() => {
+    _garantirJsPDF().catch(() => {});
+    _garantirDOMPurify().catch(() => {});
+    _garantirQRCode().catch(() => {});
+    _garantirXLSX().catch(() => {});
+    _garantirQuill().catch(() => {});
+  });
 }
 
 // Sanitiza HTML vindo do editor rico (Quill) antes de salvar no banco —
@@ -22704,6 +22789,7 @@ function _desenharApendiceAusentes(doc, W, H, ausentes, cores, titulo) {
 async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts = {}) {
   showLoading('Gerando ficha de presença...');
   try {
+    await _garantirJsPDF();
     if (!sessaoId) throw new Error('Encontro não informado — não é possível gerar a ficha de presença.');
     const {data:t, error} = await sb.from('turmas')
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios!instrutor_id(nome,assinatura_path,conselho_classe,sigla_conselho,uf_registro,especialidade,formacao,cpf)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
@@ -23122,6 +23208,7 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
 async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar = true) {
   showLoading('Gerando certificado...');
   try {
+    await Promise.all([_garantirJsPDF(), _garantirDOMPurify()]);
     const {data:t, error} = await sb.from('turmas')
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
@@ -23655,6 +23742,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
 async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
   showLoading('Gerando certificado coletivo...');
   try {
+    await Promise.all([_garantirJsPDF(), _garantirDOMPurify()]);
     const {data:t, error} = await sb.from('turmas')
       .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
@@ -25011,6 +25099,7 @@ function _buildKpiGrid({tAtivas,tConcluidas,tConcluidasAnt,partUnicos,partUnicos
 }
 
 async function exportarRelatorioComparativoPDF() {
+  try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Comparativo em PDF', 'pro'); return; }
   const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
@@ -25143,7 +25232,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '139';
+  var APP_BUILD = '140';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
