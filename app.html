@@ -725,6 +725,54 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .exec-countbadge{display:inline-flex;background:var(--amber-l);color:var(--amber-text);font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;margin-bottom:12px}
 .exec-prow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);margin-bottom:8px;background:var(--surface);border:1px solid var(--border)}
 .exec-prow:last-child{margin-bottom:0}
+/* ── Busca e filtros da lista de presenças (2026-08-28) ── */
+.exec-buscabox{margin-bottom:12px}
+.exec-busca{position:relative;margin-bottom:8px}
+.exec-busca input{width:100%;height:42px;padding:10px 34px 10px 36px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;color:var(--text-1);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+.exec-busca input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.exec-busca input::-webkit-search-cancel-button{display:none}
+.exec-busca .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);display:flex;pointer-events:none}
+.exec-busca .clr{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:22px;height:22px;border:none;border-radius:50%;background:var(--gray-200);color:var(--gray-600);font-size:11px;font-weight:700;cursor:pointer;align-items:center;justify-content:center;font-family:inherit}
+.exec-chips{display:flex;gap:6px;flex-wrap:wrap}
+.exec-chip{font-size:11.5px;font-weight:700;padding:0 11px;height:32px;border-radius:999px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-3);cursor:pointer;white-space:nowrap;font-family:inherit;transition:all .15s}
+.exec-chip:hover{border-color:var(--border-2)}
+.exec-chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.exec-chip.warnc:not(.on){border-color:var(--amber);color:var(--amber-text);background:var(--amber-l)}
+.exec-chip.redc:not(.on){border-color:#FECACA;color:var(--red-text);background:var(--red-l)}
+/* ── Controle Aprovado/Reprovado (só aparece depois da assinatura) ── */
+.exec-pact{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.exec-seg{display:inline-flex;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;gap:2px}
+.exec-seg button{font-size:11.5px;font-weight:700;padding:0 11px;height:30px;border:none;border-radius:5px;background:none;color:var(--text-3);cursor:pointer;white-space:nowrap;font-family:inherit;transition:all .15s}
+.exec-seg button.on{background:var(--surface);color:var(--navy);box-shadow:var(--shadow)}
+.exec-seg button.on.bad{color:var(--red-text)}
+.exec-obsreprov{font-size:11.5px;color:var(--text-3);font-style:italic;margin-top:3px;line-height:1.4}
+/* ── Etapa ART ── */
+.art-sub{font-size:12px;color:var(--text-2);margin:4px 0 16px;line-height:1.55}
+.art-inp{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:15px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:var(--text-1);background:var(--surface);outline:none;min-height:44px;transition:border-color .15s,box-shadow .15s}
+.art-inp:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.art-cnt{float:right;font-size:11px;font-weight:700;color:var(--text-3);font-family:ui-monospace,monospace}
+.art-hint{font-size:11.5px;color:var(--text-3);margin-top:5px;line-height:1.45}
+.art-hint.bad{color:var(--amber-text);font-weight:600}
+.art-drop{border:1.5px dashed var(--border-2);border-radius:var(--r-lg);padding:20px 16px;text-align:center;background:var(--gray-50)}
+.art-drop .t{font-size:13px;font-weight:600;color:var(--text-1)}
+.art-drop .s{font-size:11.5px;color:var(--text-3);margin-top:3px}
+.art-file{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+.art-file .fi{width:38px;height:44px;border-radius:5px;background:var(--red-l);color:var(--red-text);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.art-file .fn{font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.art-file .fs{font-size:11px;color:var(--text-3);margin-top:1px}
+.art-num{font-size:19px;font-weight:800;color:var(--navy);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;margin-top:3px}
+.art-lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.exec-seg.vazio button{color:var(--text-3)}
+#btnSalvarArtNumero:disabled{opacity:.45;cursor:not-allowed}
+/* A regra responsiva vale SÓ para a linha que tem o controle de avaliação
+   (.exec-prow-aval). A linha comum continua exatamente como sempre foi no
+   mobile — ação inline, sem quebra. */
+@media(max-width:520px){
+  .exec-prow-aval{flex-wrap:wrap}
+  .exec-prow-aval .exec-pact{width:100%;justify-content:flex-end;margin-top:4px}
+  .exec-prow-aval .exec-seg{width:100%}
+  .exec-prow-aval .exec-seg button{flex:1}
+}
 @media(min-width:768px){
   .exec-wizard-wrap{flex-direction:row;gap:32px;align-items:flex-start}
   .exec-stepper{flex-direction:column;width:196px;flex-shrink:0;margin-bottom:0;position:sticky;top:0}
@@ -8086,8 +8134,10 @@ function _htmlListaCatalogo(lista, maxUso, podeMgr) {
     const badgeEl = isArq
       ? `<span class="badge badge-gray">Arquivado</span>`
       : `<span class="badge ${t.ativo?'badge-green':'badge-gray'}">${t.ativo?'Ativo':'Inativo'}</span>`;
-    const tipoBadgeEl = t.tipo_curso === 'inicial' ? `<span class="badge badge-blue" style="font-size:10px">Inicial</span>`
-      : t.tipo_curso === 'reciclagem' ? `<span class="badge badge-amber" style="font-size:10px">Reciclagem</span>` : '';
+    const tipoBadgeEl = (t.tipo_curso === 'inicial' ? `<span class="badge badge-blue" style="font-size:10px">Inicial</span>`
+      : t.tipo_curso === 'reciclagem' ? `<span class="badge badge-amber" style="font-size:10px">Reciclagem</span>` : '')
+      + (t.exige_art ? `<span class="badge badge-navy" style="font-size:10px;margin-left:4px">ART</span>` : '')
+      + (t.exige_avaliacao ? `<span class="badge badge-navy" style="font-size:10px;margin-left:4px">Avaliação</span>` : '');
     return `
     <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s,box-shadow .12s;opacity:${isArq?.6:1}" data-action="verCatalogo" data-id="${t.id}" onmouseover="this.style.background='var(--gray-50)';this.style.boxShadow='inset 0 0 0 1px var(--border-2)'" onmouseout="this.style.background='';this.style.boxShadow=''">
       <div style="width:44px;height:44px;border-radius:var(--r-md);background:${t.carga_horaria?(!isArq&&t.ativo?'rgba(30,42,74,.08)':'var(--gray-100)'):'var(--amber-l)'};color:${t.carga_horaria?(!isArq&&t.ativo?'var(--navy)':'var(--text-3)'):'var(--amber-text)'};font-size:${t.carga_horaria?12:9}px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2" title="${t.carga_horaria?'':'Carga horária não cadastrada'}">${t.carga_horaria?t.carga_horaria+'h':'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>'}</div>
@@ -9163,6 +9213,19 @@ function abrirModalCatalogo(id=null) {
     </div>
     <div class="field"><label>Categoria</label><input type="text" id="mCatCategoria" value="${t?.categoria||''}" placeholder="Opcional"></div>
     <div class="field"><label>NRs relacionadas</label><input type="text" id="mCatNrs" value="${nrsAtuais}" placeholder="Ex: 35, 33"><div style="font-size:11px;color:var(--text-3);margin-top:4px">Números separados por vírgula — usado para sugerir este treinamento aos clientes certos no Painel de Enquadramento SST.</div></div>
+    <div class="field"><label>Exigências do treinamento</label>
+      <div style="display:flex;flex-direction:column;gap:9px;border:1.5px solid var(--border);border-radius:var(--r-md);padding:11px 14px;background:var(--surface)">
+        <label style="display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:var(--text-1);cursor:pointer;margin:0">
+          <input type="checkbox" id="mCatExigeArt" ${t?.exige_art?'checked':''} style="width:16px;height:16px;accent-color:var(--navy);cursor:pointer;flex-shrink:0">
+          Exige ART (Anotação de Responsabilidade Técnica)
+        </label>
+        <label style="display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:var(--text-1);cursor:pointer;margin:0">
+          <input type="checkbox" id="mCatExigeAvaliacao" ${t?.exige_avaliacao?'checked':''} style="width:16px;height:16px;accent-color:var(--navy);cursor:pointer;flex-shrink:0">
+          Tem avaliação (aprovado/reprovado por participante)
+        </label>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Vale para todas as turmas deste curso. Com ART, o instrutor informa o número e anexa o arquivo na execução, e o número passa a constar no certificado. Com avaliação, quem for reprovado não recebe certificado.</div>
+    </div>
     <div class="field"><label>Tipo de curso</label>
       <select id="mCatTipo" onchange="_toggleCampoRelacionado()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         <option value="unico" ${(!t?.tipo_curso||t?.tipo_curso==='unico')?'selected':''}>Único (padrão — sem reciclagem separada)</option>
@@ -9231,6 +9294,10 @@ async function salvarCatalogo() {
     curso_relacionado_id: tipoCurso === 'reciclagem' ? cursoRelacionadoId : null,
     descricao: _quillDescricao.getText().trim() ? sanitizarHtml(_quillDescricao.root.innerHTML) : null,
     conteudo_programatico: sanitizarHtml(_quillConteudo.root.innerHTML),
+    // 2026-08-28 — projeto ART/avaliação. Default false nas duas colunas:
+    // curso já cadastrado que ninguém editar continua exatamente como era.
+    exige_art: !!document.getElementById('mCatExigeArt')?.checked,
+    exige_avaliacao: !!document.getElementById('mCatExigeAvaliacao')?.checked,
   };
   try {
     setBtnModalLoading(true);
@@ -15240,9 +15307,27 @@ async function _enviarEvidencia(reg) {
   const {error:upErr} = await sb.storage.from('evidencias').upload(reg.path, reg.blob, {upsert:false, contentType:reg.contentType});
   if (upErr) throw upErr;
   const {error:dbErr} = await sb.from('evidencias').insert({
-    org_id:reg.orgId, sessao_id:reg.sessaoId, tipo:reg.tipoEvidencia, arquivo_path:reg.path, instrutor_id:reg.instrutorId,
+    org_id:reg.orgId, turma_id:reg.turmaId, sessao_id:reg.sessaoId, tipo:reg.tipoEvidencia, arquivo_path:reg.path, instrutor_id:reg.instrutorId,
   });
   if (dbErr) throw dbErr;
+}
+
+// ---- ART da turma e avaliação (2026-08-28) ----
+// Mesmo contrato dos demais: recebem o registro da fila e refazem a
+// gravação que o caminho online faria. As funções _gravarArt*/_gravarAvaliacao
+// são as MESMAS usadas online — um caminho só, sem duplicação de regra.
+async function _enviarArtNumero(reg) {
+  await _gravarArtNumero(reg.turmaId, reg.numero, reg.foraPadrao);
+}
+
+async function _enviarArtArquivo(reg) {
+  const {error:upErr} = await sb.storage.from('arts').upload(reg.path, reg.blob, {upsert:true, contentType:reg.contentType});
+  if (upErr) throw upErr;
+  await _gravarArtArquivo(reg.turmaId, reg.path, reg.nomeOriginal, reg.tamanho);
+}
+
+async function _enviarAvaliacao(reg) {
+  await _gravarAvaliacao(reg.turmaId, reg.colId, reg.resultado, reg.observacao);
 }
 
 // Reenvia as anotações do instrutor da fila — por sessão (ver salvarAnotacoes).
@@ -15295,6 +15380,9 @@ async function _sincronizarFilaOffline() {
       if (item.tipo === 'assinatura') await _enviarAssinatura(item);
       else if (item.tipo === 'evidencia') await _enviarEvidencia(item);
       else if (item.tipo === 'anotacoes') await _enviarAnotacoes(item);
+      else if (item.tipo === 'art_numero') await _enviarArtNumero(item);
+      else if (item.tipo === 'art_arquivo') await _enviarArtArquivo(item);
+      else if (item.tipo === 'avaliacao') await _enviarAvaliacao(item);
       else if (item.tipo === 'finalizar_sessao') await _enviarFinalizarSessao(item);
       await _filaRemover(item.id);
       ok++;
@@ -15357,6 +15445,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
   showLoading('Carregando execução...');
   try {
     let t, presencas, evidencias, sessaoAtiva, deCache = false;
+    let catFlags = {exige_art:false, exige_avaliacao:false}, artTurma = null, avaliacoes = [];
     window._execSemCacheDoEncontro = false;
     const hoje = dataLocalISO();
 
@@ -15397,7 +15486,21 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
 
       // Guarda um retrato desta turma localmente — permite reabrir a
       // execução totalmente offline depois, mesmo com o app fechado/reaberto.
-      try { await _cacheExecSalvar(turmaId, {t, sessaoAtivaId: sessaoIdAtiva, presencas, evidencias}); } catch(e) {}
+      // 2026-08-28 (projeto ART/avaliação) — consultas separadas e
+      // tolerantes de propósito: NÃO entram no select principal acima,
+      // porque um erro ali (coluna/tabela ainda não migrada) derrubaria a
+      // execução inteira para o caminho offline. Aqui, no pior caso, as
+      // três voltam vazias e a tela fica idêntica à de antes.
+      const [_rCat, _rArt, _rAval] = await Promise.all([
+        sb.from('turmas').select('catalogo(exige_art,exige_avaliacao)').eq('id', turmaId).maybeSingle(),
+        sb.from('turma_art').select('*').eq('turma_id', turmaId).maybeSingle(),
+        sb.from('turma_avaliacoes').select('colaborador_id,resultado,observacao').eq('turma_id', turmaId),
+      ]);
+      catFlags   = _rCat?.data?.catalogo || {exige_art:false, exige_avaliacao:false};
+      artTurma   = _rArt?.data || null;
+      avaliacoes = _rAval?.data || [];
+
+      try { await _cacheExecSalvar(turmaId, {t, sessaoAtivaId: sessaoIdAtiva, presencas, evidencias, catFlags, artTurma, avaliacoes}); } catch(e) {}
 
     } catch(erroRede) {
       const snap = await _cacheExecCarregar(turmaId).catch(()=>null);
@@ -15424,6 +15527,9 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         evidencias = snap.sessaoAtivaId === sessaoAtiva?.id ? (snap.evidencias||[]) : [];
         window._execSemCacheDoEncontro = !!sessaoAtiva && snap.sessaoAtivaId !== sessaoAtiva?.id;
       }
+      catFlags   = snap.catFlags   || {exige_art:false, exige_avaliacao:false};
+      artTurma   = snap.artTurma   || null;
+      avaliacoes = snap.avaliacoes || [];
       deCache = true;
     }
 
@@ -15441,6 +15547,16 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
     window._execClienteId = t.cliente_id;
     window._execParticipantes = t.turma_participantes||[];
     window._execSessaoId = sessaoAtiva?.id || null;
+
+    // 2026-08-28 — estado do projeto ART/avaliação
+    window._execExigeArt      = !!catFlags.exige_art;
+    window._execExigeAvaliacao= !!catFlags.exige_avaliacao;
+    window._execArt           = artTurma;
+    window._execAvaliacoes    = {};
+    (avaliacoes||[]).forEach(a => { window._execAvaliacoes[a.colaborador_id] = a; });
+    window._execFiltroBusca   = '';
+    window._execFiltroChip    = 'todos';
+    window._execSessaoConcluida = !!sessaoAtiva?.concluida;
 
     window._execPresencas = {};
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
@@ -15474,6 +15590,11 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
     // aqui pra abrir a tela já com o trilho e os resumos corretos; depois disso
     // quem mantém tudo em dia é _execAtualizarResumoEtapas() (chamada a cada
     // navegação de etapa e a cada ação que muda presença/evidência).
+    // Etapa ART só existe quando o curso exige (decisão 7 do projeto).
+    // Sem ela o trilho continua com exatamente as 3 etapas de sempre.
+    const _execExigeArtLocal = !!catFlags.exige_art;
+    const _stepFimLocal      = _execExigeArtLocal ? 4 : 3;
+
     const totalPartExec  = (t.turma_participantes||[]).length;
     const assinCountExec = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
     const evidCountExec  = window._execEvidencias.length;
@@ -15511,9 +15632,15 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
             <div class="exec-step-c">2</div>
             <div class="exec-step-txt"><div class="exec-step-l">Evidências</div><div class="exec-step-s" id="execSubEvidencias">${evidCountExec} registrada${evidCountExec===1?'':'s'}</div></div>
           </div>
+          ${_execExigeArtLocal ? `
           <div class="exec-step-line"></div>
           <div class="exec-step" data-step="3" onclick="execIrEtapa(3,this)">
             <div class="exec-step-c">3</div>
+            <div class="exec-step-txt"><div class="exec-step-l">ART</div><div class="exec-step-s" id="execSubArt">${_artResumoTexto(artTurma)}</div></div>
+          </div>` : ''}
+          <div class="exec-step-line"></div>
+          <div class="exec-step" data-step="${_stepFimLocal}" onclick="execIrEtapa(${_stepFimLocal},this)">
+            <div class="exec-step-c">${_stepFimLocal}</div>
             <div class="exec-step-txt"><div class="exec-step-l">Finalizar</div><div class="exec-step-s">Revisão final</div></div>
           </div>
         </div>
@@ -15522,9 +15649,14 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
           <!-- Etapa 1 — Presenças -->
           <div id="abaPresenca" class="exec-panel active" data-step="1">
             <div class="card">
-              <div class="card-title">Quem participou?</div>
-              <div style="font-size:12px;color:var(--text-2);margin:4px 0 12px">Toque em "Assinar" para coletar a assinatura de cada aluno.</div>
+              <div class="card-title">${catFlags.exige_avaliacao ? 'Presença e avaliação' : 'Quem participou?'}</div>
+              <div style="font-size:12px;color:var(--text-2);margin:4px 0 12px">${catFlags.exige_avaliacao ? 'Colete a assinatura e registre o resultado da avaliação de cada aluno.' : 'Toque em "Assinar" para coletar a assinatura de cada aluno.'}</div>
               ${totalPartExec ? `<div class="exec-countbadge" id="execCountBadge">${assinCountExec} de ${totalPartExec} assinaram</div>` : ''}
+              ${(!sessaoAtiva?.concluida && totalPartExec) ? `
+              <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+                <button class="btn btn-outline btn-sm" onclick="baixarFolhaColeta()">Baixar folha de coleta (papel)</button>
+              </div>` : ''}
+              ${_htmlBuscaPresencas(totalPartExec)}
               <div id="listaPresencas">
                 ${_htmlListaPresencas(t.turma_participantes||[])}
               </div>
@@ -15554,12 +15686,21 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
                 <button class="btn btn-outline btn-sm" id="btnEditarAnotacoes" style="display:none" onclick="editarAnotacoes()">✏ Editar</button>
                 <span id="anotacoesSalvas" style="display:none;font-size:13px;color:var(--green);font-weight:500">✓ Salvo</span>
               </div>
-              <div class="exec-footer"><button class="btn btn-navy" onclick="execIrEtapa(3,this)">Próximo: Finalizar →</button></div>
+              <div class="exec-footer"><button class="btn btn-navy" onclick="execIrEtapa(3,this)">Próximo: ${_execExigeArtLocal ? 'ART' : 'Finalizar'} →</button></div>
             </div>
           </div>
 
           <!-- Etapa 3 — Finalizar -->
-          <div id="abaFinalizar" class="exec-panel" data-step="3">
+          ${_execExigeArtLocal ? `
+          <!-- Etapa 3 — ART (só existe quando o curso exige; ver decisão 7) -->
+          <div id="abaArt" class="exec-panel" data-step="3">
+            <div class="card">
+              <div id="painelArt">${_htmlPainelArt()}</div>
+              <div class="exec-footer"><button class="btn btn-navy" onclick="execIrEtapa(4,this)">Próximo: Finalizar →</button></div>
+            </div>
+          </div>` : ''}
+
+          <div id="abaFinalizar" class="exec-panel" data-step="${_stepFimLocal}">
             <div class="card">
               <div class="card-title">Revisar e finalizar</div>
               <div style="font-size:12px;color:var(--text-2);margin:4px 0 14px">Confira o resumo antes de concluir o treinamento.</div>
@@ -15574,10 +15715,20 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
                     ${assinCountExec}
                   </span>
                 </div>
+                ${catFlags.exige_avaliacao ? `
+                <div style="display:flex;justify-content:space-between;padding:12px;background:var(--red-l);border-radius:var(--r-md);border:1px solid #FECACA" id="linhaReprovados">
+                  <span style="font-size:14px;color:var(--red-text)">Reprovados na avaliação</span>
+                  <span style="font-size:14px;font-weight:600;color:var(--red-text)" id="totalReprovados">${Object.values(window._execAvaliacoes||{}).filter(a=>a.resultado==='reprovado').length}</span>
+                </div>` : ''}
                 <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
                   <span style="font-size:14px;color:var(--text-2)">Evidências registradas</span>
                   <span style="font-size:14px;font-weight:600" id="totalEvidencias">${evidCountExec}</span>
                 </div>
+                ${_execExigeArtLocal ? `
+                <div style="display:flex;justify-content:space-between;padding:12px;background:${_artCompleta(artTurma)?'var(--green-l)':'var(--amber-l)'};border-radius:var(--r-md)" id="linhaArtResumo">
+                  <span style="font-size:14px;color:${_artCompleta(artTurma)?'var(--green-text)':'var(--amber-text)'}">ART da turma</span>
+                  <span style="font-size:14px;font-weight:600;color:${_artCompleta(artTurma)?'var(--green-text)':'var(--amber-text)'}">${_artResumoTexto(artTurma)}</span>
+                </div>` : ''}
               </div>
               ${sessaoAtiva?.concluida ? `
               <div style="background:var(--green-l);color:var(--green);border-radius:var(--r-md);padding:12px 14px;font-size:13px;font-weight:600;text-align:center">
@@ -15706,12 +15857,132 @@ function _execAtualizarResumoEtapas() {
   if (totalAssinEl) totalAssinEl.textContent = assinCount;
   const totalEvEl = execEl('totalEvidencias');
   if (totalEvEl) totalEvEl.textContent = evidCount;
+
+  // 2026-08-28 — ART e reprovados
+  const subArt = execEl('execSubArt');
+  if (subArt) subArt.textContent = _artResumoTexto(window._execArt);
+  const totalRep = execEl('totalReprovados');
+  if (totalRep) totalRep.textContent = Object.values(window._execAvaliacoes||{}).filter(a=>a.resultado==='reprovado').length;
+  const linhaArt = execEl('linhaArtResumo');
+  if (linhaArt) {
+    const completa = _artCompleta(window._execArt);
+    linhaArt.style.background = completa ? 'var(--green-l)' : 'var(--amber-l)';
+    linhaArt.querySelectorAll('span').forEach(s => s.style.color = completa ? 'var(--green-text)' : 'var(--amber-text)');
+    const val = linhaArt.querySelectorAll('span')[1];
+    if (val) val.textContent = _artResumoTexto(window._execArt);
+  }
+}
+
+// ---- Busca e filtros da lista de presenças (2026-08-28) ----
+// Aparece a partir de 8 participantes: abaixo disso a lista inteira já cabe
+// na tela e o campo só ocuparia espaço. Filtragem 100% local — funciona
+// offline e não dispara nenhuma consulta.
+const EXEC_MIN_PART_BUSCA = 8;
+
+function _htmlBuscaPresencas(totalPart) {
+  if (!totalPart || totalPart < EXEC_MIN_PART_BUSCA) return '';
+  const termo = window._execFiltroBusca || '';
+  const chip  = window._execFiltroChip || 'todos';
+  const parts = window._execParticipantes || [];
+  const nAssin = parts.filter(p => { const pr = window._execPresencas[p.colaborador_id]; return pr && (pr.assinatura_path || pr.presente); }).length;
+  const nFalta = parts.length - nAssin;
+  const nReprov = Object.values(window._execAvaliacoes||{}).filter(a=>a.resultado==='reprovado').length;
+  const _c = (id, label, extra) => `<button type="button" class="exec-chip${chip===id?' on':''}${extra||''}" onclick="_execFiltrarChip('${id}')">${label}</button>`;
+  return `
+    <div class="exec-buscabox">
+      <div class="exec-busca">
+        <span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+        <input type="search" id="execBuscaPart" value="${escapeHtml(termo)}" placeholder="Buscar participante por nome ou CPF"
+               autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+               oninput="_execFiltrarBusca(this.value)">
+        <button type="button" class="clr" id="execBuscaClear" style="display:${termo?'flex':'none'}" onclick="_execLimparBusca()" aria-label="Limpar busca">✕</button>
+      </div>
+      <div class="exec-chips">
+        ${_c('todos', `Todos · ${parts.length}`)}
+        ${_c('faltam', `Faltam assinar · ${nFalta}`, ' warnc')}
+        ${_c('assinados', `Assinados · ${nAssin}`)}
+        ${window._execExigeAvaliacao ? _c('reprovados', `Reprovados · ${nReprov}`, ' redc') : ''}
+      </div>
+    </div>`;
+}
+
+function _execFiltrarBusca(valor) {
+  window._execFiltroBusca = valor || '';
+  const clr = execEl('execBuscaClear');
+  if (clr) clr.style.display = window._execFiltroBusca ? 'flex' : 'none';
+  _execRedesenharLista();
+}
+
+function _execLimparBusca() {
+  window._execFiltroBusca = '';
+  const inp = execEl('execBuscaPart');
+  if (inp) { inp.value = ''; inp.focus(); }
+  const clr = execEl('execBuscaClear');
+  if (clr) clr.style.display = 'none';
+  _execRedesenharLista();
+}
+
+function _execFiltrarChip(id) {
+  window._execFiltroChip = id;
+  // Redesenha a barra inteira (os chips mudam de estado) e a lista.
+  _execRedesenharBusca();
+  _execRedesenharLista();
+}
+
+function _execLimparFiltros() {
+  window._execFiltroBusca = '';
+  window._execFiltroChip = 'todos';
+  _execRedesenharBusca();
+  _execRedesenharLista();
+}
+
+// Redesenha só a lista, preservando o foco/cursor do campo de busca.
+function _execRedesenharLista() {
+  const lista = execEl('listaPresencas');
+  if (lista && window._execParticipantes) lista.innerHTML = _htmlListaPresencas(window._execParticipantes);
+}
+
+function _execRedesenharBusca() {
+  const cont = _execContainer();
+  cont.querySelectorAll('.exec-buscabox').forEach(el => {
+    el.outerHTML = _htmlBuscaPresencas((window._execParticipantes||[]).length);
+  });
 }
 
 // ---- Lista de presenças ----
 function _htmlListaPresencas(participantes) {
   if (!participantes.length) return `<div class="empty" style="padding:20px"><div class="empty-title">Nenhum participante</div><div class="empty-sub">Adicione participantes à turma primeiro.</div></div>`;
-  return participantes.map(p => {
+
+  // Filtro local (2026-08-28). Sem termo e com o chip "todos", `lista` é
+  // exatamente `participantes` — o comportamento de sempre.
+  const _termo = _normalizarBusca(window._execFiltroBusca || '');
+  const _termoDigitos = (window._execFiltroBusca || '').replace(/\D/g, '');
+  const _chip = window._execFiltroChip || 'todos';
+  const lista = participantes.filter(p => {
+    const col = p.colaboradores || {};
+    const pr  = window._execPresencas[p.colaborador_id];
+    const assinou = !!(pr && (pr.assinatura_path || pr.presente));
+    const av  = (window._execAvaliacoes||{})[p.colaborador_id];
+    if (_chip === 'faltam'     && assinou) return false;
+    if (_chip === 'assinados'  && !assinou) return false;
+    if (_chip === 'reprovados' && av?.resultado !== 'reprovado') return false;
+    if (!_termo) return true;
+    if (_normalizarBusca(col.nome || '').includes(_termo)) return true;
+    // Pelo menos 3 dígitos para acionar a busca por CPF — senão um único
+    // número solto no termo (ex.: "sala 1") casaria com quase todo mundo.
+    if (_termoDigitos.length >= 3 && String(col.cpf || '').replace(/\D/g, '').includes(_termoDigitos)) return true;
+    return false;
+  });
+
+  if (!lista.length) {
+    return `<div class="empty" style="padding:24px 16px">
+      <div class="empty-title">Nenhum participante encontrado</div>
+      <div class="empty-sub">${window._execFiltroBusca ? `Nada corresponde a "${escapeHtml(window._execFiltroBusca)}".` : 'Nenhum participante neste filtro.'}</div>
+      <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="_execLimparFiltros()">Limpar filtros</button>
+    </div>`;
+  }
+
+  return lista.map(p => {
     const col    = p.colaboradores||{};
     const presen = window._execPresencas[p.colaborador_id];
     const assinou= presen && (presen.assinatura_path || presen.presente);
@@ -15720,25 +15991,461 @@ function _htmlListaPresencas(participantes) {
     // Etapas Guiadas, 2026-08-20 — ajuda a achar rápido quem falta numa turma
     // grande, sem precisar de um filtro separado.
     const faltaAssinar = !assinou && !pendente;
+    // 2026-08-28 — avaliação: o controle SÓ existe depois da assinatura
+    // coletada. Numa linha ainda em branco não há o que avaliar, e mostrar
+    // "Reprovado" ali seria ruído + risco de toque errado no celular.
+    const aval = (window._execAvaliacoes||{})[p.colaborador_id];
+    const reprovado = aval?.resultado === 'reprovado';
+    const aprovado  = aval?.resultado === 'aprovado';
+    const semAvaliacao = !aval?.resultado;
+    const podeAvaliar = !!window._execExigeAvaliacao && assinou && !pendente;
+    // Nenhum dos dois botões fica ativo enquanto a avaliação não é
+    // registrada — "vazio" não pode PARECER aprovado, do mesmo jeito que
+    // não CONTA como aprovado na hora de liberar o certificado.
+    const htmlAval = podeAvaliar ? `
+          <div class="exec-seg${semAvaliacao?' vazio':''}" role="group" aria-label="Resultado da avaliação de ${escapeHtml(col.nome||'')}">
+            <button type="button" class="${aprovado?'on':''}" onclick="_avaliarParticipante('${p.colaborador_id}','aprovado')">Aprovado</button>
+            <button type="button" class="${reprovado?'on bad':''}" onclick="_avaliarParticipante('${p.colaborador_id}','reprovado')">Reprovado</button>
+          </div>` : '';
+    const htmlObs = (reprovado && aval?.observacao)
+      ? `<div class="exec-obsreprov">${escapeHtml(aval.observacao)}</div>` : '';
+
     return `
-      <div class="exec-prow"${faltaAssinar ? ' style="border-left:3px solid var(--amber);background:var(--amber-l)"' : ''}>
-        <div class="li-icon" style="background:${pendente?'var(--amber-l)':assinou?'var(--green-l)':'var(--gray-100)'};color:${pendente?'var(--amber-text)':assinou?'var(--green)':'var(--text-3)'};font-size:12px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
+      <div class="exec-prow${podeAvaliar ? ' exec-prow-aval' : ''}"${reprovado ? ' style="border-left:3px solid var(--red);background:#FFF5F5"' : faltaAssinar ? ' style="border-left:3px solid var(--amber);background:var(--amber-l)"' : ''}>
+        <div class="li-icon" style="background:${pendente?'var(--amber-l)':reprovado?'var(--red-l)':assinou?'var(--green-l)':'var(--gray-100)'};color:${pendente?'var(--amber-text)':reprovado?'var(--red-text)':assinou?'var(--green)':'var(--text-3)'};font-size:12px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
           ${pendente?'⏳':assinou?'✓':iniciais(col.nome||'?')}
         </div>
         <div class="li-info">
           <div class="li-title">${escapeHtml(col.nome||'—')}</div>
-          <div class="li-sub">${p.cargo_vinculo||col.cargo||''}${pendente?' · Aguardando conexão':presen&&presen.assinatura_path?' · Assinado':presen&&presen.presente&&!presen.assinatura_path?' · Presente':''}</div>
+          <div class="li-sub"${reprovado?' style="color:var(--red-text)"':''}>${p.cargo_vinculo||col.cargo||''}${pendente?' · Aguardando conexão':presen&&presen.assinatura_path?' · Assinado':presen&&presen.presente&&!presen.assinatura_path?' · Presente':''}${reprovado?' · <b>Reprovado na avaliação</b>':''}${(podeAvaliar && semAvaliacao)?' · <span style="color:var(--amber-text);font-weight:600">avaliação pendente</span>':''}${aprovado?' · Aprovado':''}</div>
+          ${htmlObs}
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
+        <div class="exec-pact">
           ${pendente
             ?`<span class="badge" style="background:var(--amber-l);color:var(--amber-text)" title="Guardado localmente — será enviado quando a internet voltar">⏳ Pendente</span>`
             :assinou
-            ?`<span class="badge badge-green">✓ Assinou</span>`
+            ?(podeAvaliar ? htmlAval : `<span class="badge badge-green">✓ Assinou</span>`)
             :`<button class="btn btn-navy btn-sm" data-action="abrirAssinatura" data-col="${p.colaborador_id}" data-nome="${escapeHtml(col.nome||'')}">Assinar</button>`
           }
         </div>
       </div>`;
   }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// ART DA TURMA E AVALIAÇÃO (2026-08-28)
+// Projeto aprovado em 01-Requisitos/2026-08-28-projeto-art-avaliacao-
+// lista-presenca.md. Nada aqui roda para curso que não exige ART/avaliação.
+// ════════════════════════════════════════════════════════════════
+
+const ART_DIGITOS_PADRAO = 13;
+const ART_MAX_BYTES      = 10 * 1024 * 1024;
+const ART_TIPOS_ACEITOS  = ['application/pdf','image/jpeg','image/jpg','image/png','image/webp','image/heic','image/heif'];
+
+function _artDigitos(v) { return String(v||'').replace(/\D/g,'').slice(0, ART_DIGITOS_PADRAO); }
+
+function _artTemNumero(art) { return !!(art && String(art.numero||'').trim()); }
+function _artTemArquivo(art) { return !!(art && art.arquivo_path); }
+function _artCompleta(art)  { return _artTemNumero(art) && _artTemArquivo(art); }
+
+function _artResumoTexto(art) {
+  if (_artCompleta(art)) return 'completa';
+  if (_artTemNumero(art)) return 'falta o arquivo';
+  if (_artTemArquivo(art)) return 'falta o número';
+  return 'pendente';
+}
+
+// Só o Administrador (ou Provedor) remove a ART. O instrutor registra e
+// substitui — decisão 3 do projeto.
+function _artPodeRemover() {
+  return usuarioAtual?.perfil === 'administrador' || usuarioAtual?.perfil === 'provedor';
+}
+
+function _artNomeArquivoVisivel(art) {
+  if (!art?.arquivo_path) return '';
+  return art.arquivo_nome_original || art.arquivo_path.split('/').pop();
+}
+
+function _artTamanhoVisivel(art) {
+  const b = art?.arquivo_tamanho;
+  if (!b) return '';
+  return b >= 1024*1024 ? `${(b/(1024*1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(b/1024))} KB`;
+}
+
+function _htmlPainelArt() {
+  const art = window._execArt;
+  const temNum = _artTemNumero(art);
+  const temArq = _artTemArquivo(art);
+  const pend   = art && art._pendente;
+
+  const cabecalho = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div class="card-title">Anotação de Responsabilidade Técnica</div>
+      ${_artCompleta(art) ? `<span class="badge badge-green">✓ Registrada</span>`
+        : pend ? `<span class="badge badge-amber">⏳ Aguardando conexão</span>`
+        : `<span class="badge badge-amber">Pendente</span>`}
+    </div>
+    <div class="art-sub">Este treinamento exige ART. O número consta no certificado e o arquivo segue junto no pacote enviado ao cliente. A ART é uma só para a turma inteira.</div>`;
+
+  const blocoNumero = temNum ? `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:14px">
+      <div style="min-width:0">
+        <div class="art-lbl">Número da ART</div>
+        <div class="art-num">${escapeHtml(String(art.numero))}</div>
+        ${art.numero_fora_padrao ? `<div class="art-hint bad" style="margin-top:4px">Confirmado fora do padrão de ${ART_DIGITOS_PADRAO} dígitos.</div>` : ''}
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="_artEditarNumero()">Corrigir número</button>
+    </div>` : `
+    <div class="field" id="artCampoNumero">
+      <label>Número da ART <span style="color:var(--red)">*</span> <span class="art-cnt" id="artContador">0 / ${ART_DIGITOS_PADRAO}</span></label>
+      <input type="text" class="art-inp" id="artNumero" inputmode="numeric" autocomplete="off"
+             placeholder="${'0'.repeat(ART_DIGITOS_PADRAO)}" oninput="_artMascara(this)">
+      <div class="art-hint" id="artHint">Somente números. O padrão é ${ART_DIGITOS_PADRAO} dígitos.</div>
+      <button class="btn btn-navy btn-sm" style="margin-top:10px" id="btnSalvarArtNumero" onclick="salvarArtNumero()" disabled>Salvar número</button>
+    </div>`;
+
+  const blocoArquivo = temArq ? `
+    <div class="art-file" style="margin-bottom:12px">
+      <div class="fi">${(_artNomeArquivoVisivel(art).toLowerCase().endsWith('.pdf')) ? 'PDF' : 'IMG'}</div>
+      <div style="flex:1;min-width:0">
+        <div class="fn">${escapeHtml(_artNomeArquivoVisivel(art))}</div>
+        <div class="fs">${_artTamanhoVisivel(art)}${pend ? ' · aguardando envio' : ''}</div>
+      </div>
+      ${pend ? '' : `<button class="btn btn-outline btn-sm" onclick="abrirArquivoArt()">Abrir</button>`}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" type="button" onclick="this.nextElementSibling.click()">Substituir arquivo</button>
+      <input type="file" accept="application/pdf,image/*" style="display:none" onchange="anexarArquivoArt(this)">
+      ${_artPodeRemover() ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="removerArquivoArt()">Remover arquivo</button>` : ''}
+    </div>` : `
+    <div class="art-drop">
+      <div class="t">Anexar arquivo da ART</div>
+      <div class="s">PDF ou imagem · até ${Math.round(ART_MAX_BYTES/(1024*1024))} MB</div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-navy btn-sm" type="button" onclick="this.nextElementSibling.click()">Escolher arquivo</button>
+        <input type="file" accept="application/pdf,image/*" style="display:none" onchange="anexarArquivoArt(this)">
+        <button class="btn btn-outline btn-sm" type="button" onclick="this.nextElementSibling.click()">Tirar foto</button>
+        <input type="file" accept="image/*" capture="environment" style="display:none" onchange="anexarArquivoArt(this)">
+      </div>
+    </div>`;
+
+  const rodape = `
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-3);line-height:1.55">
+      ${art?.registrada_em ? `Registrada em ${formatarDataHora(art.registrada_em)}. ` : ''}Toda alteração fica no histórico da turma. Sem o <b>número</b>, os certificados não podem ser gerados; sem o <b>arquivo</b>, o pacote não pode ser enviado ao cliente. Finalizar a aula nunca é bloqueado pela ART.
+    </div>`;
+
+  return cabecalho + blocoNumero + `<div style="font-size:13px;font-weight:600;color:var(--text-1);margin:0 0 8px">Arquivo da ART <span style="color:var(--red)">*</span></div>` + blocoArquivo + rodape;
+}
+
+function _execRenderPainelArt() {
+  // Busca no documento inteiro de propósito: o mesmo painel é usado na
+  // etapa ART da execução (dentro de #mainBody/#mobileBody) E na gaveta da
+  // tela de Documentos (dentro do modal genérico, que fica fora deles).
+  document.querySelectorAll('#painelArt').forEach(el => { el.innerHTML = _htmlPainelArt(); });
+  _execAtualizarResumoEtapas();
+}
+
+function _artMascara(input) {
+  input.value = _artDigitos(input.value);
+  const cnt = execEl('artContador');
+  if (cnt) cnt.textContent = `${input.value.length} / ${ART_DIGITOS_PADRAO}`;
+  const btn = execEl('btnSalvarArtNumero');
+  if (btn) btn.disabled = input.value.length === 0;
+  const hint = execEl('artHint');
+  if (hint) {
+    const fora = input.value.length > 0 && input.value.length !== ART_DIGITOS_PADRAO;
+    hint.className = fora ? 'art-hint bad' : 'art-hint';
+    hint.textContent = fora
+      ? `Você digitou ${input.value.length} dígito(s). O padrão da ART é ${ART_DIGITOS_PADRAO} — confira antes de salvar.`
+      : `Somente números. O padrão é ${ART_DIGITOS_PADRAO} dígitos.`;
+  }
+}
+
+function _artEditarNumero() {
+  const art = window._execArt || {};
+  window._execArt = Object.assign({}, art, {numero: null});
+  _execRenderPainelArt();
+  const inp = execEl('artNumero');
+  if (inp) { inp.value = _artDigitos(art.numero); _artMascara(inp); inp.focus(); }
+  // Restaura o valor real caso o usuário saia sem salvar — o estado local
+  // só é considerado alterado depois de uma gravação bem-sucedida.
+  window._execArt = art;
+}
+
+// Gravação do número — mesmo caminho usado online e pela fila offline.
+async function _gravarArtNumero(turmaId, numero, foraPadrao) {
+  const {data:existe} = await sb.from('turma_art').select('id').eq('turma_id', turmaId).maybeSingle();
+  if (existe) {
+    const {data:upd, error} = await sb.from('turma_art')
+      .update({numero, numero_fora_padrao: !!foraPadrao}).eq('id', existe.id).select('id');
+    if (error) throw error;
+    if (!upd || !upd.length) throw new Error('O banco não registrou a alteração da ART (0 registros alterados). Verifique se você está vinculado a esta turma.');
+  } else {
+    const {data:ins, error} = await sb.from('turma_art').insert({
+      org_id: usuarioAtual.org_id, turma_id: turmaId, numero,
+      numero_fora_padrao: !!foraPadrao, registrada_por: usuarioAtual.id,
+    }).select('id');
+    if (error) throw error;
+    if (!ins || !ins.length) throw new Error('O banco não registrou a ART (0 registros criados). Verifique se você está vinculado a esta turma.');
+  }
+}
+
+async function _gravarArtArquivo(turmaId, path, nomeOriginal, tamanho) {
+  const {data:existe} = await sb.from('turma_art').select('id').eq('turma_id', turmaId).maybeSingle();
+  const campos = {arquivo_path: path, arquivo_nome_original: nomeOriginal || null, arquivo_tamanho: tamanho || null};
+  if (existe) {
+    const {data:upd, error} = await sb.from('turma_art').update(campos).eq('id', existe.id).select('id');
+    if (error) throw error;
+    if (!upd || !upd.length) throw new Error('O banco não registrou o arquivo da ART (0 registros alterados).');
+  } else {
+    const {data:ins, error} = await sb.from('turma_art')
+      .insert({org_id: usuarioAtual.org_id, turma_id: turmaId, registrada_por: usuarioAtual.id, ...campos}).select('id');
+    if (error) throw error;
+    if (!ins || !ins.length) throw new Error('O banco não registrou o arquivo da ART (0 registros criados).');
+  }
+}
+
+async function salvarArtNumero() {
+  const inp = execEl('artNumero');
+  if (!inp) return;
+  const numero = _artDigitos(inp.value);
+  if (!numero) { showToast('Informe o número da ART.','error'); return; }
+  const turmaId = window._execTurmaId;
+  if (!turmaId) { showToast('Turma não encontrada — reabra a execução.','error'); return; }
+
+  // Número fora do padrão NÃO bloqueia — o formato varia por CREA e por
+  // estado. Pede confirmação explícita e registra que foi confirmado assim.
+  const foraPadrao = numero.length !== ART_DIGITOS_PADRAO;
+  if (foraPadrao) {
+    const ok = await confirmarAcao(
+      `Você informou ${numero.length} dígito(s) e o padrão da ART é ${ART_DIGITOS_PADRAO}. Confirma este número mesmo assim?`,
+      'Confirmar assim', false);
+    if (!ok) return;
+  }
+
+  const reg = {tipo:'art_numero', turmaId, numero, foraPadrao, criado_em:new Date().toISOString()};
+  try {
+    showLoading('Salvando ART...');
+    if (!navigator.onLine) throw new Error('__offline__');
+    await _gravarArtNumero(turmaId, numero, foraPadrao);
+    window._execArt = Object.assign({}, window._execArt||{}, {numero, numero_fora_padrao:foraPadrao, registrada_em: window._execArt?.registrada_em || new Date().toISOString()});
+    showToast('Número da ART registrado!','success');
+  } catch(e) {
+    if (e.message === '__offline__' || _erroDeRede(e)) {
+      try {
+        await _filaAdicionar(reg);
+        window._execArt = Object.assign({}, window._execArt||{}, {numero, numero_fora_padrao:foraPadrao, _pendente:true});
+        showToast('Sem conexão — número da ART guardado e será enviado quando a internet voltar.','info',6000);
+        _atualizarBadgeFilaOffline();
+      } catch(e2) {
+        hideLoading();
+        showToast('Não foi possível guardar a ART neste dispositivo: '+(e2.message||''),'error');
+        return;
+      }
+    } else {
+      hideLoading();
+      showToast(traduzErroSupabase(e,'Erro ao salvar a ART'),'error');
+      return;
+    }
+  } finally { hideLoading(); }
+  _execRenderPainelArt();
+}
+
+async function anexarArquivoArt(input) {
+  const arquivoOriginal = input.files && input.files[0];
+  if (!arquivoOriginal) return;
+  const turmaId = window._execTurmaId;
+  if (!turmaId) { showToast('Turma não encontrada — reabra a execução.','error'); return; }
+
+  const tipo = (arquivoOriginal.type||'').toLowerCase();
+  if (tipo && !ART_TIPOS_ACEITOS.includes(tipo)) {
+    showToast('Formato não aceito. Envie a ART em PDF ou como imagem.','error');
+    input.value = ''; return;
+  }
+  // Imagem grande passa pela mesma compressão já usada nas evidências; PDF
+  // segue intacto (comprimir um PDF aqui poderia corromper o documento).
+  const file = tipo.startsWith('image/') ? await _comprimirImagemEvidencia(arquivoOriginal, 2200, 0.82) : arquivoOriginal;
+  if (file.size > ART_MAX_BYTES) {
+    showToast(`O arquivo tem ${(file.size/(1024*1024)).toFixed(1)} MB e o limite é ${Math.round(ART_MAX_BYTES/(1024*1024))} MB.`,'error');
+    input.value = ''; return;
+  }
+
+  const ext  = tipo === 'application/pdf' ? 'pdf' : (tipo.split('/')[1] || 'jpg');
+  // Nome SEMPRE gerado pelo sistema — nunca o nome enviado pelo usuário
+  // (evita travessia de caminho e colisão no bucket).
+  const path = `${usuarioAtual.org_id}/${turmaId}/${crypto.randomUUID()}.${ext}`;
+  const nomeOriginal = String(arquivoOriginal.name||'').slice(0,120);
+  const pathAnterior = window._execArt?.arquivo_path || null;
+  const reg = {tipo:'art_arquivo', turmaId, path, blob:file, contentType:file.type||'application/octet-stream',
+               nomeOriginal, tamanho:file.size, criado_em:new Date().toISOString()};
+
+  try {
+    showLoading('Enviando arquivo da ART...');
+    if (!navigator.onLine) throw new Error('__offline__');
+    const {error:upErr} = await sb.storage.from('arts').upload(path, file, {upsert:false, contentType:file.type||'application/octet-stream'});
+    if (upErr) throw upErr;
+    await _gravarArtArquivo(turmaId, path, nomeOriginal, file.size);
+    // Substituição: só apaga o anterior DEPOIS de o novo estar gravado.
+    if (pathAnterior && pathAnterior !== path) {
+      try { await sb.storage.from('arts').remove([pathAnterior]); } catch(e) {}
+    }
+    window._execArt = Object.assign({}, window._execArt||{}, {arquivo_path:path, arquivo_nome_original:nomeOriginal, arquivo_tamanho:file.size});
+    showToast('Arquivo da ART anexado!','success');
+    input.value = '';
+  } catch(e) {
+    if (e.message === '__offline__' || _erroDeRede(e)) {
+      try {
+        await _filaAdicionar(reg);
+        window._execArt = Object.assign({}, window._execArt||{}, {arquivo_path:path, arquivo_nome_original:nomeOriginal, arquivo_tamanho:file.size, _pendente:true});
+        showToast('Sem conexão — arquivo da ART guardado e será enviado quando a internet voltar.','info',6000);
+        _atualizarBadgeFilaOffline();
+        input.value = '';
+      } catch(e2) {
+        showToast('Não foi possível guardar o arquivo neste dispositivo: '+(e2.message||''),'error');
+      }
+    } else {
+      showToast(traduzErroSupabase(e,'Erro ao enviar o arquivo da ART'),'error');
+    }
+  } finally {
+    hideLoading();
+    _execRenderPainelArt();
+  }
+}
+
+async function abrirArquivoArt() {
+  const path = window._execArt?.arquivo_path;
+  if (!path) return;
+  try {
+    const {data, error} = await sb.storage.from('arts').createSignedUrl(path, 300);
+    if (error) throw error;
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener');
+  } catch(e) { showToast(traduzErroSupabase(e,'Não foi possível abrir o arquivo'),'error'); }
+}
+
+async function removerArquivoArt() {
+  if (!_artPodeRemover()) { showToast('Apenas o Administrador pode remover o arquivo da ART. Você pode substituí-lo.','error'); return; }
+  const path = window._execArt?.arquivo_path;
+  if (!path) return;
+  const ok = await confirmarAcao('Remover o arquivo da ART desta turma? Sem ele, o pacote não poderá ser enviado ao cliente.', 'Remover', true);
+  if (!ok) return;
+  try {
+    showLoading('Removendo...');
+    const turmaId = window._execTurmaId;
+    const {data:existe} = await sb.from('turma_art').select('id').eq('turma_id', turmaId).maybeSingle();
+    if (existe) {
+      const {data:upd, error} = await sb.from('turma_art')
+        .update({arquivo_path:null, arquivo_nome_original:null, arquivo_tamanho:null}).eq('id', existe.id).select('id');
+      if (error) throw error;
+      if (!upd || !upd.length) throw new Error('O banco não registrou a remoção (0 registros alterados).');
+    }
+    try { await sb.storage.from('arts').remove([path]); } catch(e) {}
+    window._execArt = Object.assign({}, window._execArt||{}, {arquivo_path:null, arquivo_nome_original:null, arquivo_tamanho:null});
+    showToast('Arquivo da ART removido.','info');
+  } catch(e) {
+    showToast(traduzErroSupabase(e,'Erro ao remover o arquivo'),'error');
+  } finally { hideLoading(); _execRenderPainelArt(); }
+}
+
+// ---- Avaliação (aprovado / reprovado) ----
+async function _gravarAvaliacao(turmaId, colId, resultado, observacao) {
+  const {data:existe} = await sb.from('turma_avaliacoes').select('id')
+    .eq('turma_id', turmaId).eq('colaborador_id', colId).maybeSingle();
+  if (existe) {
+    const {data:upd, error} = await sb.from('turma_avaliacoes')
+      .update({resultado, observacao: observacao || null}).eq('id', existe.id).select('id');
+    if (error) throw error;
+    if (!upd || !upd.length) throw new Error('O banco não registrou a avaliação (0 registros alterados).');
+  } else {
+    const {data:ins, error} = await sb.from('turma_avaliacoes').insert({
+      org_id: usuarioAtual.org_id, turma_id: turmaId, colaborador_id: colId,
+      resultado, observacao: observacao || null, registrado_por: usuarioAtual.id,
+    }).select('id');
+    if (error) throw error;
+    if (!ins || !ins.length) throw new Error('O banco não registrou a avaliação (0 registros criados).');
+  }
+}
+
+function _avaliarParticipante(colId, resultado) {
+  const atual = (window._execAvaliacoes||{})[colId];
+  if (atual?.resultado === resultado) return;   // já está nesse estado
+  const part = (window._execParticipantes||[]).find(p => p.colaborador_id === colId);
+  const nome = part?.colaboradores?.nome || 'este participante';
+  if (resultado === 'reprovado') { _abrirModalReprovacao(colId, nome); return; }
+  // Voltar para aprovado: confirmação leve, sem justificativa.
+  if (atual?.resultado === 'reprovado') {
+    confirmarAcao(`Marcar ${nome} como APROVADO? A reprovação anterior fica registrada no histórico.`, 'Marcar aprovado', false)
+      .then(ok => { if (ok) _persistirAvaliacao(colId, 'aprovado', null); });
+    return;
+  }
+  _persistirAvaliacao(colId, 'aprovado', null);
+}
+
+function _abrirModalReprovacao(colId, nome) {
+  abrirModal(`Reprovar ${nome}`, `
+    <div style="background:var(--red-l);border:1px solid #FECACA;border-radius:var(--r-md);padding:11px 13px;font-size:12.5px;color:var(--red-text);line-height:1.55;margin-bottom:14px">
+      Ao confirmar, <b>${escapeHtml(nome)}</b> não receberá certificado desta turma. A presença dele continua registrada normalmente e ele segue aparecendo na lista de presença.
+    </div>
+    <div class="field" style="margin-bottom:4px">
+      <label>Justificativa <span style="color:var(--red)">*</span></label>
+      <textarea id="mReprovObs" rows="3" placeholder="Ex: não atingiu a nota mínima estabelecida (6,0)."
+        style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
+      <div style="font-size:11.5px;color:var(--text-3);margin-top:5px;line-height:1.45">Mínimo de 10 caracteres. Fica no histórico da turma e <b>não é impressa</b> em nenhum documento enviado ao cliente.</div>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-red" id="btnSalvarModal" onclick="_confirmarReprovacao('${colId}')">Confirmar reprovação</button>`);
+}
+
+async function _confirmarReprovacao(colId) {
+  const ta = document.getElementById('mReprovObs');
+  const obs = (ta?.value || '').trim();
+  if (obs.length < 10) { showToast('Descreva o motivo da reprovação (mínimo de 10 caracteres).','error'); return; }
+  setBtnModalLoading(true);
+  const ok = await _persistirAvaliacao(colId, 'reprovado', obs);
+  if (ok) fecharModal(); else setBtnModalLoading(false);
+}
+
+async function _persistirAvaliacao(colId, resultado, observacao) {
+  const turmaId = window._execTurmaId;
+  if (!turmaId) { showToast('Turma não encontrada — reabra a execução.','error'); return false; }
+  const reg = {tipo:'avaliacao', turmaId, colId, resultado, observacao, criado_em:new Date().toISOString()};
+  try {
+    if (!navigator.onLine) throw new Error('__offline__');
+    await _gravarAvaliacao(turmaId, colId, resultado, observacao);
+    window._execAvaliacoes[colId] = {colaborador_id:colId, resultado, observacao};
+    showToast(resultado === 'reprovado' ? 'Reprovação registrada.' : 'Participante marcado como aprovado.', resultado === 'reprovado' ? 'info' : 'success');
+  } catch(e) {
+    if (e.message === '__offline__' || _erroDeRede(e)) {
+      try {
+        await _filaAdicionar(reg);
+        window._execAvaliacoes[colId] = {colaborador_id:colId, resultado, observacao, _pendente:true};
+        showToast('Sem conexão — avaliação guardada e será enviada quando a internet voltar.','info',6000);
+        _atualizarBadgeFilaOffline();
+      } catch(e2) {
+        showToast('Não foi possível guardar a avaliação neste dispositivo: '+(e2.message||''),'error');
+        return false;
+      }
+    } else {
+      showToast(traduzErroSupabase(e,'Erro ao registrar a avaliação'),'error');
+      return false;
+    }
+  }
+  _execRedesenharBusca();
+  _execRedesenharLista();
+  _execAtualizarResumoEtapas();
+  return true;
+}
+
+// Folha de coleta em papel — TODOS os inscritos, com linha para assinar.
+// É exatamente o PDF que a lista de presença sempre foi; ele continua
+// existindo como material de apoio (plano B quando o tablet falha), e não
+// é gravado como documento oficial da turma. O documento oficial é a lista
+// final, gerada depois da conclusão, só com quem assinou.
+async function baixarFolhaColeta() {
+  const turmaId  = window._execTurmaId;
+  const sessaoId = window._execSessaoId;
+  if (!turmaId || !sessaoId) { showToast('Aula não encontrada — reabra a execução.','error'); return; }
+  if (!navigator.onLine) { showToast('A folha de coleta precisa de conexão para ser gerada (busca as assinaturas e os dados do treinamento).','error',6000); return; }
+  await gerarListaPresenca(turmaId, sessaoId, true, {modo:'coleta'});
 }
 
 // ---- Assinatura digital ----
@@ -15949,6 +16656,10 @@ async function adicionarEvidencia(input, tipo) {
 
     const {data:ev, error:dbErr} = await sb.from('evidencias').insert({
       org_id:       usuarioAtual.org_id,
+      // 2026-08-28 (bug colateral 3): o vínculo com a turma nunca era
+      // gravado, mas a exclusão em cascata de uma turma apaga evidências
+      // por turma_id — evidência nova ficava órfã no Storage para sempre.
+      turma_id:     turmaId,
       sessao_id:    sessaoId,
       tipo,
       arquivo_path: path,
@@ -16089,6 +16800,16 @@ async function finalizarTurma(turmaId) {
     const okSemAssin = await confirmarAcao('Nenhum participante assinou ainda. Deseja finalizar mesmo assim?', 'Finalizar assim mesmo', true);
     if (!okSemAssin) return;
   }
+  // 2026-08-28 (decisão 3 do projeto): a ART NUNCA bloqueia a finalização
+  // da aula — só avisa. O bloqueio de verdade é na geração do certificado
+  // (falta o número) e no envio do pacote (falta o arquivo), e o instrutor
+  // pode voltar depois na turma para completar.
+  if (window._execExigeArt && !_artCompleta(window._execArt)) {
+    const okSemArt = await confirmarAcao(
+      `A ART desta turma está ${_artResumoTexto(window._execArt)}. Você pode finalizar a aula normalmente — mas os certificados só poderão ser gerados depois que o número for informado, e o pacote só poderá ser enviado com o arquivo anexado. Finalizar assim mesmo?`,
+      'Finalizar assim mesmo', false);
+    if (!okSemArt) return;
+  }
   const okFinalizar = await confirmarAcao('Confirma a finalização desta etapa do treinamento?', 'Finalizar', false);
   if (!okFinalizar) return;
 
@@ -16169,8 +16890,20 @@ async function _atualizarConformidadeTurma(turmaId, sessoesTurma) {
       if (!p.presente || !sessaoIds.includes(p.sessao_id)) return;
       (presentesPorColaborador[p.colaborador_id] ||= new Set()).add(p.sessao_id);
     });
+    // 2026-08-28 (projeto ART/avaliação): quem foi REPROVADO na avaliação
+    // não pode ser gravado como "em dia" na Conformidade — ele participou,
+    // mas não está capacitado. Sem isto, o reprovado apareceria
+    // regularizado pelo período de validade inteiro do curso. Tolerante à
+    // ausência da tabela (pré-migration): mantém o comportamento anterior.
+    let _reprovadosConf = new Set();
+    try {
+      const {data:_avalConf} = await sb.from('turma_avaliacoes')
+        .select('colaborador_id,resultado').eq('turma_id', turmaId);
+      _reprovadosConf = new Set((_avalConf||[]).filter(a=>a.resultado==='reprovado').map(a=>a.colaborador_id));
+    } catch(e) {}
     const partsElegiveis = parts.filter(p =>
-      sessaoIds.length > 0 && (presentesPorColaborador[p.colaborador_id]?.size||0) === sessaoIds.length);
+      sessaoIds.length > 0 && (presentesPorColaborador[p.colaborador_id]?.size||0) === sessaoIds.length
+      && !_reprovadosConf.has(p.colaborador_id));
     if (!partsElegiveis.length) return;
 
     const datas = (sessoesTurma||[]).map(s => s.data).filter(Boolean).sort();
@@ -19964,6 +20697,11 @@ function desenharVersoIndividualAvanteseg(doc, campos, W, H) {
   const camposEsq = [['Empresa', campos.empresa], ['Aluno', campos.nome]];
   camposEsq.push(['Realizado em', periodoValor], ['Válido até', campos.validadeTexto]);
   const camposDir = [['CPF', campos.cpf || 'não informado'], ['CNPJ', campos.cnpjEmpresa||'-'], ['CH', campos.ch]];
+  // 2026-08-28: a coluna da esquerda tem 4 campos e a da direita tinha 3 —
+  // este 4º campo ocupa exatamente a folga que já existia. A caixa do
+  // conteúdo programático começa em max(coluna esq, coluna dir) + folga,
+  // então ela NÃO se move nem um milímetro.
+  if (campos.art) camposDir.push(['Número da ART', campos.art]);
   // Larguras disponíveis de cada coluna, com uma folga antes da coluna
   // vizinha começar — é o que faltava pra limitar a quebra de linha acima.
   const colDirX = cx+_avMM_W(0.05,W);
@@ -20286,6 +21024,21 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
 // chamador (gerarCertificadoColetivo) chama esta função uma vez por página,
 // cada vez com a fatia de `participantesPagina` correspondente (mesma
 // capacidade de ~20 linhas/página já usada hoje no resto do sistema).
+// 2026-08-28 (bug colateral 4): a capacidade por página do verso coletivo
+// era um "14" digitado à mão no chamador, sem nenhuma ligação com a
+// geometria real do desenho — exatamente a mesma classe de problema já
+// corrigida na ficha de presença com _avFichaGeometriaTabela. Agora sai
+// daqui, da mesma conta que o desenho usa. Confere com o valor anterior:
+// para A4 paisagem (H=210) devolve 14, então nenhum documento existente
+// muda de paginação.
+function _avVersoColetivoMaxParticipantes(H) {
+  const colTop  = _avMM_H(0.112, H) + _avMM_H(0.040, H);   // barra de acento + respiro
+  const y3Ini   = colTop + _avMM_H(0.045, H) + 2.6 + 2.8;  // rótulo + cabeçalho + fio
+  const limite  = _avMM_H(0.86, H);                        // fim do divisor vertical
+  const alturaLinha = 9.2;                                 // nome (4.0) + CPF (5.2)
+  return Math.max(1, Math.floor((limite - y3Ini) / alturaLinha));
+}
+
 function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas) {
   const GREEN_DARK=[31,101,71], GREEN_BRIGHT=[0,130,70], GOLD_RIBBON=[240,177,37], BLACK=[30,30,30], GRAY=[95,95,95];
   const ml = _avMM_W(0.055,W), mr = _avMM_W(0.945,W), top = _avMM_H(0.04,H);
@@ -20347,6 +21100,8 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
     y += 3.2;
     const camposList = [['Empresa', campos.empresa], ['Realizado em', campos.periodoTexto],
       ['Carga horária', campos.ch], ['Válido até', campos.validadeTexto], ['Instrutor', campos.instrutorNome]];
+    // 2026-08-28: ART logo depois do Instrutor, quando a turma tem uma.
+    if (campos.art) camposList.push(['Número da ART', campos.art]);
     camposList.forEach(([label,value]) => {
       doc.setFont('helvetica','bold'); doc.setFontSize(7.3); doc.setTextColor(140,158,148);
       doc.text(label.toUpperCase(), c1x0, y); y += 3.8;
@@ -20397,7 +21152,9 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
   doc.setDrawColor(...GREEN_BRIGHT); doc.setLineWidth(0.45); doc.line(c3x0, y3, mr, y3);
   y3 += 2.8;
   doc.setFont('times','normal');
-  (campos.participantesPagina||[]).forEach(p => {
+  // Guarda (2026-08-28): mesmo que o chamador mande mais do que cabe, a
+  // coluna nunca transborda em silêncio por cima do rodapé de validação.
+  (campos.participantesPagina||[]).slice(0, _avVersoColetivoMaxParticipantes(H)).forEach(p => {
     doc.setFontSize(8.7); doc.setTextColor(...BLACK);
     doc.text(String(p.n), c3x0, y3);
     doc.text(pdfSafe(p.nome,42), c3x0+4, y3);
@@ -20643,6 +21400,20 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
     // presencas_reaproveitamento_historico), só não aparece mais no PDF.
     y += rowH;
   });
+
+  // ── Totais (2026-08-28) ── faixa entre o fim possível da tabela
+  // (H-mg-4-38, limite usado por _avFichaGeometriaTabela) e a linha de
+  // assinatura (H-mg-4-24): espaço já reservado, antes vazio. Nenhum
+  // elemento existente se desloca.
+  if (campos.totais) {
+    const tY = H-mg-4-37;
+    doc.setDrawColor(...GREEN_DARK); doc.setLineWidth(0.4);
+    doc.line(ml, tY, mr, tY);
+    doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(...GREEN_DARK);
+    doc.text('RESUMO DA TURMA', ml, tY+4);
+    doc.setFont('times','normal'); doc.setFontSize(8); doc.setTextColor(...BLACK);
+    doc.text(`${campos.totais.inscritos} inscrito(s)   ·   ${campos.totais.assinados} presente(s) com assinatura   ·   ${campos.totais.ausentes} sem assinatura`, ml, tY+9);
+  }
 
   // assinatura do instrutor + rodapé sólido (mesmo peso visual do modelo padrão)
   const sigY = H-mg-4-24;
@@ -20974,6 +21745,30 @@ async function _participantesElegiveisCertificado(turmaId) {
   const sessaoIds = (sessoesTurma||[]).map(s=>s.id);
   if (!sessaoIds.length) return new Set();
   const {data:presencas} = await sb.from('presencas').select('colaborador_id,sessao_id,presente').eq('turma_id', turmaId);
+
+  // 2026-08-28 (projeto ART/avaliação) — a regra de presença acima NÃO
+  // mudou nem foi afrouxada. O que entra aqui são apenas motivos NOVOS de
+  // EXCLUSÃO, nunca de inclusão:
+  //   1. reprovado na avaliação;
+  //   2. curso que exige avaliação e o participante ainda não foi avaliado
+  //      (vazio ≠ aprovado — sem isso, esquecer de lançar a nota viraria
+  //      aprovação silenciosa);
+  //   3. participante que não consta mais como matriculado na turma
+  //      (brecha pré-existente: `presencas` de alguém removido da turma
+  //      ainda tornava a pessoa elegível na geração individual).
+  // Todas as consultas abaixo são tolerantes: se a migration ainda não
+  // tiver sido aplicada, `data` vem nulo e o comportamento é idêntico ao
+  // de antes.
+  const [rMatric, rAval, rTurma] = await Promise.all([
+    sb.from('turma_participantes').select('colaborador_id').eq('turma_id', turmaId),
+    sb.from('turma_avaliacoes').select('colaborador_id,resultado').eq('turma_id', turmaId),
+    sb.from('turmas').select('catalogo(exige_avaliacao)').eq('id', turmaId).maybeSingle(),
+  ]);
+  const idsMatriculados = new Set((rMatric?.data||[]).map(m=>m.colaborador_id));
+  const reprovados      = new Set((rAval?.data||[]).filter(a=>a.resultado==='reprovado').map(a=>a.colaborador_id));
+  const avaliados       = new Set((rAval?.data||[]).map(a=>a.colaborador_id));
+  const exigeAvaliacao  = !!rTurma?.data?.catalogo?.exige_avaliacao;
+
   const porColaborador = {};
   (presencas||[]).forEach(p => {
     if (!p.presente || !p.colaborador_id) return;
@@ -20982,9 +21777,37 @@ async function _participantesElegiveisCertificado(turmaId) {
   });
   const elegiveis = new Set();
   Object.entries(porColaborador).forEach(([colId, presentesEm]) => {
-    if (presentesEm.size === sessaoIds.length) elegiveis.add(colId);
+    if (presentesEm.size !== sessaoIds.length) return;
+    if (idsMatriculados.size > 0 && !idsMatriculados.has(colId)) return;
+    if (reprovados.has(colId)) return;
+    if (exigeAvaliacao && !avaliados.has(colId)) return;
+    elegiveis.add(colId);
   });
   return elegiveis;
+}
+
+// Motivo pelo qual um participante NÃO está elegível — usado só para
+// explicar na tela (a decisão de elegibilidade continua sendo da função
+// acima, e a tranca de verdade é o trigger no banco).
+// Retorna: 'ok' | 'presenca' | 'reprovado' | 'sem_avaliacao' | 'nao_matriculado'
+async function _motivoNaoElegivel(turmaId) {
+  const out = {reprovados:new Set(), semAvaliacao:new Set(), exigeAvaliacao:false, observacoes:{}};
+  try {
+    const [rAval, rTurma] = await Promise.all([
+      sb.from('turma_avaliacoes').select('colaborador_id,resultado,observacao').eq('turma_id', turmaId),
+      sb.from('turmas').select('catalogo(exige_avaliacao)').eq('id', turmaId).maybeSingle(),
+    ]);
+    (rAval?.data||[]).forEach(a => {
+      if (a.resultado === 'reprovado') out.reprovados.add(a.colaborador_id);
+      if (a.observacao) out.observacoes[a.colaborador_id] = a.observacao;
+    });
+    out.exigeAvaliacao = !!rTurma?.data?.catalogo?.exige_avaliacao;
+    if (out.exigeAvaliacao) {
+      const avaliados = new Set((rAval?.data||[]).map(a=>a.colaborador_id));
+      out.avaliados = avaliados;
+    }
+  } catch(e) { /* pré-migration — devolve tudo vazio, tela igual à de antes */ }
+  return out;
 }
 
 // ============================================================
@@ -21175,7 +21998,73 @@ function fmtPeriodoRealizacaoPDF(sessoesTurma) {
 // ficha específica, tanto para puxar a data/instrutor certos quanto para
 // filtrar só as presenças assinadas naquele dia (antes buscava por
 // turma_id, o que misturava presenças de dias diferentes no mesmo registro).
-async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
+// 2026-08-28 — lê a ART da turma para os documentos. Consulta separada e
+// tolerante: se a migration ainda não tiver sido aplicada, devolve
+// {exige:false, numero:'', arquivo:null} e todo o resto do PDF sai
+// exatamente como saía antes.
+async function _artDaTurmaParaPdf(turmaId) {
+  const out = {exige:false, numero:'', arquivo:null, nomeArquivo:''};
+  try {
+    const {data:cat} = await sb.from('turmas').select('catalogo(exige_art)').eq('id', turmaId).maybeSingle();
+    out.exige = !!cat?.catalogo?.exige_art;
+  } catch(e) {}
+  try {
+    const {data:art} = await sb.from('turma_art')
+      .select('numero,arquivo_path,arquivo_nome_original').eq('turma_id', turmaId).maybeSingle();
+    out.numero      = String(art?.numero || '').trim();
+    out.arquivo     = art?.arquivo_path || null;
+    out.nomeArquivo = art?.arquivo_nome_original || '';
+  } catch(e) {}
+  return out;
+}
+
+// Desenha o apêndice nominal de quem não assinou. Só é chamado quando o
+// usuário marca a opção explicitamente (desligada por padrão — decisão 5).
+function _desenharApendiceAusentes(doc, W, H, ausentes, cores, titulo) {
+  if (!ausentes || !ausentes.length) return;
+  const mg = 14;
+  doc.addPage('a4','portrait');
+  doc.setFillColor(...cores.fundoCabecalho); doc.rect(mg, mg, W-mg*2, 16, 'F');
+  doc.setFontSize(10); doc.setTextColor(...cores.textoCabecalho); doc.setFont('helvetica','bold');
+  doc.text(pdfSafe(titulo, 70), mg+4, mg+10);
+  let y = mg + 24;
+  doc.setFontSize(8); doc.setTextColor(100,116,139); doc.setFont('helvetica','normal');
+  doc.text('Participantes inscritos na turma que nao registraram assinatura neste encontro.', mg+2, y);
+  y += 8;
+  doc.setFillColor(...cores.fundoCabecalho); doc.rect(mg, y, W-mg*2, 7, 'F');
+  doc.setFontSize(7.5); doc.setTextColor(...cores.textoCabecalho); doc.setFont('helvetica','bold');
+  doc.text('No', mg+3, y+5); doc.text('Participante', mg+12, y+5); doc.text('CPF', mg+110, y+5);
+  y += 7;
+  ausentes.forEach((p, i) => {
+    if (y + 8 > H - mg - 14) {
+      doc.addPage('a4','portrait'); y = mg;
+      doc.setFillColor(...cores.fundoCabecalho); doc.rect(mg, y, W-mg*2, 7, 'F');
+      doc.setFontSize(7.5); doc.setTextColor(...cores.textoCabecalho); doc.setFont('helvetica','bold');
+      doc.text('No', mg+3, y+5); doc.text('Participante', mg+12, y+5); doc.text('CPF', mg+110, y+5);
+      y += 7;
+    }
+    doc.setFillColor(i%2===0?244:255, i%2===0?246:255, i%2===0?250:255);
+    doc.rect(mg, y, W-mg*2, 8, 'F');
+    doc.setDrawColor(226,232,240); doc.setLineWidth(0.2); doc.rect(mg, y, W-mg*2, 8, 'S');
+    doc.setFontSize(8); doc.setTextColor(30,42,74); doc.setFont('helvetica','normal');
+    doc.text(String(i+1).padStart(2,'0'), mg+3, y+5.5);
+    doc.text(pdfSafe(p.colaboradores?.nome || '-', 46), mg+12, y+5.5);
+    doc.text(pdfSafe(p.colaboradores?.cpf || '-', 20), mg+110, y+5.5);
+    y += 8;
+  });
+}
+
+// opts:
+//   modo: 'final'   -> documento oficial da turma: SOMENTE quem assinou,
+//                      com rodapé de totais. É o padrão (os dois pontos que
+//                      chamam esta função hoje só são alcançáveis com a
+//                      turma já concluída).
+//   modo: 'coleta'  -> folha para colher assinatura: TODOS os inscritos,
+//                      exatamente como o PDF sempre foi. Não é gravada como
+//                      documento oficial da turma.
+//   apendiceAusentes: acrescenta uma página nominal com quem não assinou
+//                      (desligado por padrão — decisão 5 do projeto).
+async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts = {}) {
   showLoading('Gerando ficha de presença...');
   try {
     if (!sessaoId) throw new Error('Encontro não informado — não é possível gerar a ficha de presença.');
@@ -21188,6 +22077,33 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
     const sessoesOrdenadas = (t.sessoes||[]).slice().sort((a,b)=>a.data>b.data?1:-1);
     const indiceEncontro = sessoesOrdenadas.findIndex(s => s.id === sessaoId);
     if (indiceEncontro === -1) throw new Error('Este encontro não foi encontrado nesta turma.');
+
+    // ── 2026-08-28: modo do documento ──────────────────────────────
+    // A consulta de presenças passou a ser feita UMA vez aqui (antes cada
+    // um dos dois caminhos de desenho fazia a sua, com a mesma query) —
+    // os totais precisam dela antes de qualquer desenho.
+    const {data:_presencasSessao} = await sb.from('presencas').select('*').eq('sessao_id', sessaoId);
+    const presMapGeral = {};
+    (_presencasSessao||[]).forEach(pr => { presMapGeral[pr.colaborador_id] = pr; });
+
+    const _sessaoDoDoc = sessoesOrdenadas[indiceEncontro];
+    const modoLista = opts.modo || ((_sessaoDoDoc?.concluida || t.status === 'concluida') ? 'final' : 'coleta');
+    const apendiceAusentes = !!opts.apendiceAusentes;
+
+    const inscritosTodos = t.turma_participantes || [];
+    const _assinouNoDoc  = (colId) => !!presMapGeral[colId]?.assinatura_path;
+    const ausentesDoc    = inscritosTodos.filter(p => !_assinouNoDoc(p.colaborador_id));
+    const participantesDoc = modoLista === 'final'
+      ? inscritosTodos.filter(p => _assinouNoDoc(p.colaborador_id))
+      : inscritosTodos;
+    const totaisLista = {
+      inscritos: inscritosTodos.length,
+      assinados: inscritosTodos.length - ausentesDoc.length,
+      ausentes:  ausentesDoc.length,
+    };
+    if (modoLista === 'final' && participantesDoc.length === 0) {
+      throw new Error('Nenhum participante desta aula tem assinatura registrada — a lista de presença final ficaria vazia. Colete as assinaturas (ou use o reaproveitamento de assinatura) antes de gerar.');
+    }
 
     const _isAvanteseg = (t.organizacoes?.id === AVANTESEG_ORG_ID || ORGS_TESTE_MODELO_AVANTESEG.includes(t.organizacoes?.id)) && t.organizacoes?.cert_modelo_base_id === 'avanteseg';
     const {jsPDF} = window.jspdf;
@@ -21243,11 +22159,12 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
       // ficha Avanteseg sempre saía em branco mesmo quando o aluno assinou.
       // Mesma fonte usada pelo modelo padrão do sistema — tabela `presencas`
       // filtrada pelo encontro certo (sessao_id), bucket Storage "assinaturas".
-      const {data:presencasAv} = await sb.from('presencas').select('*').eq('sessao_id', sessaoId);
-      const presMapAv = {};
-      (presencasAv||[]).forEach(pr => { presMapAv[pr.colaborador_id] = pr; });
+      // 2026-08-28: a consulta desta lista agora é a mesma feita uma única
+      // vez no início da função (presMapGeral) — mesma query, mesmo filtro
+      // por sessao_id, sem consulta duplicada.
+      const presMapAv = presMapGeral;
       const participantesAv = [];
-      for (const p of (t.turma_participantes||[])) {
+      for (const p of participantesDoc) {
         const pr = presMapAv[p.colaborador_id];
         // Guarda também w/h da imagem (2026-08) — sem isso a assinatura era
         // esticada pra caber na célula da tabela ignorando a proporção
@@ -21317,6 +22234,9 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
           .map((p,i) => ({ n: (pgf-1)*AV_FICHA_MAX_ROWS + i + 1, nome: p.nome, cpf: p.cpf, assinatura: p.assinatura, reaproveitada: p.reaproveitada }));
         desenharFichaPresencaAvanteseg(doc, {
           ..._camposBaseFicha,
+          // 2026-08-28: rodapé de totais, só no modo "final" e só na última
+          // página. Preserva o registro dos inscritos sem listar nomes.
+          totais: (modoLista === 'final' && pgf === totalPaginasFicha) ? totaisLista : null,
           encontroIdx: indiceEncontro+1,
           encontroTotal: sessoesOrdenadas.length,
           participantes: fatiaP,
@@ -21421,12 +22341,12 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
     cols.forEach(c=>doc.text(c.t, c.x, y+5));
     y += 7;
 
-    const participantes = t.turma_participantes||[];
-    // Filtrado por sessao_id — antes buscava por turma_id inteira, o que
-    // misturava (e sobrescrevia) a presença de dias diferentes no mesmo mapa.
-    const {data:presencas} = await sb.from('presencas').select('*').eq('sessao_id', sessaoId);
-    const presMap = {};
-    (presencas||[]).forEach(p=>{ presMap[p.colaborador_id]=p; });
+    // 2026-08-28: no modo "final" entram somente os participantes com
+    // assinatura registrada; no modo "coleta" entram todos os inscritos,
+    // exatamente como sempre foi. O mapa de presenças vem da consulta única
+    // do início da função (mesma query por sessao_id de antes).
+    const participantes = participantesDoc;
+    const presMap = presMapGeral;
 
     for (let i=0;i<participantes.length;i++) {
       const p = participantes[i];
@@ -21460,7 +22380,10 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
 
       doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','normal');
       doc.text(String(i+1).padStart(2,'0'), mg+3, y+9);
-      doc.text((col.nome||'').slice(0,36), mg+10, y+9);
+      // 2026-08-28 (bug colateral 1): o nome era desenhado cru, sem
+      // pdfSafe — ao contrário do CPF logo abaixo. Nome com acento saía
+      // corrompido nesta coluna do modelo padrão.
+      doc.text(pdfSafe(col.nome||'', 36), mg+10, y+9);
       doc.text(pdfSafe(col.cpf||'-'), mg+72, y+9);
 
       if (pr?.assinatura_path) {
@@ -21479,6 +22402,20 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
         // só no banco (presencas.reaproveitada_por/em + histórico).
       }
       y += rowH;
+    }
+
+    // ── Totais (2026-08-28, só no modo "final") ──
+    // Faixa própria entre o fim possível da tabela (H-mg-42) e o bloco de
+    // assinatura (H-mg-24): espaço que já era reservado e ficava vazio.
+    // Nenhum elemento existente muda de posição.
+    if (modoLista === 'final') {
+      const ty = H-mg-40;
+      doc.setDrawColor(...NAVY); doc.setLineWidth(0.5);
+      doc.line(mg, ty, W-mg, ty);
+      doc.setFontSize(7); doc.setTextColor(...TEXT3); doc.setFont('helvetica','bold');
+      doc.text('RESUMO DA TURMA', mg+2, ty+4.5);
+      doc.setFontSize(8); doc.setTextColor(...TEXT1); doc.setFont('helvetica','normal');
+      doc.text(`${totaisLista.inscritos} inscrito(s)   |   ${totaisLista.assinados} presente(s) com assinatura   |   ${totaisLista.ausentes} sem assinatura`, mg+2, ty+9.5);
     }
 
     // ── Rodapé ──
@@ -21507,16 +22444,35 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true) {
     doc.text(protocolo, W-mg-4, fy+8, {align:'right'});
     }
 
+    // ── Apêndice nominal de ausentes (2026-08-28) ──
+    // Desligado por padrão: nomear quem faltou num documento que circula
+    // dentro da empresa tem peso de RH/LGPD. Só sai quando marcado.
+    if (modoLista === 'final' && apendiceAusentes && ausentesDoc.length) {
+      _desenharApendiceAusentes(doc, W, H, ausentesDoc,
+        _isAvanteseg ? {fundoCabecalho:[31,101,71], textoCabecalho:[255,255,255]}
+                     : {fundoCabecalho:NAVY,        textoCabecalho:[255,255,255]},
+        'INSCRITOS SEM ASSINATURA');
+    }
+
     const nomeT = pdfSafe(t.catalogo?.nome||'Treinamento');
     // 2026-08-16, a pedido do Alisson: o download automatico no dispositivo
     // so acontece quando baixarAoGerar for true (padrao — preserva o botao
     // manual "Baixar PDF" de sempre). gerarTudoEnviarEmail chama esta funcao
     // com baixarAoGerar=false, pois so deve enviar por e-mail, sem baixar.
-    if (baixarAoGerar) doc.save(`ficha-presenca-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
+    const _prefixoArq = modoLista === 'coleta' ? 'folha-coleta' : 'lista-presenca';
+    if (baixarAoGerar) doc.save(`${_prefixoArq}-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
+
+    // A folha de coleta é material de apoio — NÃO é o documento oficial da
+    // turma e por isso não é gravada em `documentos` (senão apareceria como
+    // "lista gerada" antes de existir qualquer assinatura).
+    if (modoLista === 'coleta') {
+      showToast('Folha de coleta gerada — use para colher assinaturas no papel. Ela não substitui a lista de presença final.','info',6000);
+    } else {
     const codigo = crypto.randomUUID();
     const salvou = await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
-    if (salvou.ok) showToast(`Ficha de presença de ${dataAula} gerada!`,'success');
+    if (salvou.ok) showToast(`Lista de presença de ${dataAula} gerada — ${totaisLista.assinados} de ${totaisLista.inscritos} com assinatura.`,'success');
     else showToast(`O PDF foi ${baixarAoGerar?'baixado':'gerado'}, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — a lista pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
+    }
   } catch(e) {
     console.error(e);
     showToast(traduzErroSupabase(e,'Erro ao gerar PDF'),'error');
@@ -21547,7 +22503,24 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
     }
     const elegiveis = await _participantesElegiveisCertificado(turmaId);
     if (!elegiveis.has(colaboradorId)) {
+      // 2026-08-28: a mensagem passou a explicar QUAL é o motivo, porque
+      // agora existe mais de um. A regra de presença não mudou.
+      const _mot = await _motivoNaoElegivel(turmaId);
+      if (_mot.reprovados.has(colaboradorId)) {
+        throw new Error('Este participante foi reprovado na avaliação — o certificado não pode ser emitido.');
+      }
+      if (_mot.exigeAvaliacao && _mot.avaliados && !_mot.avaliados.has(colaboradorId)) {
+        throw new Error('A avaliação deste participante ainda não foi registrada. Registre o resultado (aprovado ou reprovado) antes de gerar o certificado.');
+      }
       throw new Error('Este participante não tem presença confirmada em todos os encontros da turma — não é possível gerar o certificado.');
+    }
+
+    // ART obrigatória quando o curso exige (decisão 3): sem o NÚMERO, o
+    // certificado não é gerado — ele precisa constar no documento. O banco
+    // repete esta checagem no trigger trg_bloquear_emissao_certificado.
+    const _artCert = await _artDaTurmaParaPdf(turmaId);
+    if (_artCert.exige && !_artCert.numero) {
+      throw new Error('Este treinamento exige ART. Informe o número da ART da turma antes de gerar o certificado (etapa ART na execução, ou o card da ART na tela de Documentos).');
     }
 
     const {data:col} = await sb.from('colaboradores').select('*').eq('id',colaboradorId).eq('org_id',usuarioAtual.org_id).single();
@@ -21802,6 +22775,9 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
         ch: `${ch}h`,
         periodoTexto: `Conclusão: ${fmtPeriodoRealizacaoPDF(t.sessoes)}`,
         validadeTexto: fmtVal,
+        // 2026-08-28: 4º campo da coluna de dados do verso. Só aparece
+        // quando a turma tem ART — nenhum certificado existente muda.
+        art: _artCert.numero || '',
         itensConteudo: cpBlocos && cpBlocos.length ? cpBlocos.map(b=>s(b.texto,140)) : [],
         codigoShort,
         qrDataUrl: qrData,
@@ -21871,11 +22847,16 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
     p_y1 += Math.min(p_lT.length,2)*7 + 4;
 
     // Campos empresa / CNPJ / instrutor
-    [
+    const _camposCol1Ind = [
       {l:'Empresa',   v:s(t.clientes?.nome||'nao informada',28)},
       {l:'CNPJ',      v:s(t.clientes?.cnpj||'nao informado')},
       {l:'Instrutor', v:s(instrutor,28)},
-    ].forEach(c => {
+    ];
+    // 2026-08-28: neste modelo o instrutor ESTÁ no verso, então a ART entra
+    // logo abaixo dele, como pedido. Sobram ~52mm na coluna depois disso —
+    // nada é comprimido e o card do participante continua cabendo.
+    if (_artCert.numero) _camposCol1Ind.push({l:'Numero da ART', v:s(_artCert.numero,20)});
+    _camposCol1Ind.forEach(c => {
       doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
       doc.text(c.l.toUpperCase(), p_c1x, p_y1); p_y1+=3.5;
       doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
@@ -21926,7 +22907,13 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
     }
 
     // Assinatura — sempre na base da col2, nunca sobrepõe o CP
-    const p_sigY = p_bot - 12;
+    // 2026-08-28 (bug colateral 2): era p_bot-12, o que punha a 3ª linha
+    // (formação/especialidade, em p_sigY+15) DENTRO da faixa de validação
+    // desenhada depois em p_bot — a linha existia mas era pintada por cima
+    // e sumia sempre que o instrutor tinha formação cadastrada. Subindo
+    // 5mm as três linhas ficam acima da faixa. Continua bem abaixo do
+    // limite do conteúdo programático (p_cpMaxY = p_bot-22).
+    const p_sigY = p_bot - 17;
     doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
     doc.line(p_c2x + p_c2w*0.08, p_sigY, p_c2x + p_c2w*0.92, p_sigY);
     desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, p_c2x+p_c2w/2, p_sigY, 24, 7);
@@ -22045,7 +23032,13 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
     }
     const elegiveisColetivo = await _participantesElegiveisCertificado(turmaId);
     if (!elegiveisColetivo.size) {
-      throw new Error('Nenhum participante tem presença confirmada em todos os encontros desta turma — não é possível gerar o certificado coletivo.');
+      throw new Error('Nenhum participante desta turma está elegível ao certificado. Confira se há presença confirmada em todos os encontros e, se o curso tiver avaliação, se os resultados foram registrados.');
+    }
+
+    // ART obrigatória quando o curso exige (mesma regra do individual).
+    const _artCert = await _artDaTurmaParaPdf(turmaId);
+    if (_artCert.exige && !_artCert.numero) {
+      throw new Error('Este treinamento exige ART. Informe o número da ART da turma antes de gerar o certificado coletivo.');
     }
 
     const sessoesOrdenadas = (t.sessoes||[]).slice().sort((a,b)=>a.data>b.data?1:-1);
@@ -22268,7 +23261,7 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
       // 2026-08-06, junto com o aumento de fonte do verso — linha por
       // participante cresceu de 7,6mm para 9,2mm; ver comentário completo
       // na própria desenharVersoColetivoAvanteseg, no módulo Avanteseg).
-      const AV_PART_POR_PAGINA = 14;
+      const AV_PART_POR_PAGINA = _avVersoColetivoMaxParticipantes(H);
       const totalPaginasAv = Math.max(1, Math.ceil(participantes.length / AV_PART_POR_PAGINA));
       const emitidoTextoAv = `Emitido em ${fmtDataExtensoPDF(dataLocalISO())}`;
       const cpBlocosAv = cpBlocos && cpBlocos.length ? cpBlocos.map(b=>s(b.texto,140)) : [];
@@ -22288,6 +23281,9 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
           periodoTexto: fmtPeriodoRealizacaoPDF(t.sessoes),
           validadeTexto: fmtVal,
           instrutorNome: s(instrutor, 40),
+          // 2026-08-28 — campo novo logo após Instrutor. A coluna 1 termina
+          // ~69mm acima do limite, então nada se move.
+          art: _artCert.numero || '',
           itensConteudo: cpBlocosAv,
           participantesPagina: fatiaPart,
           totalParticipantes: participantes.length,
@@ -22349,14 +23345,17 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
     p_lTCol.slice(0,2).forEach((l,i) => doc.text(l, p_c1x, p_y1+i*7));
     p_y1 += Math.min(p_lTCol.length,2)*7 + 4;
 
-    [
+    const _camposCol1Col = [
       {l:'Empresa',      v:s(nomeEmp,28)},
       {l:'CNPJ',         v:s(t.clientes?.cnpj||'nao informado')},
       {l:'Realizado em', v:fmtPeriodoRealizacaoPDF(t.sessoes)},
       {l:'Carga horaria',v:`${ch} hora${ch!==1?'s':''}`},
       {l:'Validade',     v:s(fmtVal)},
       {l:'Instrutor',    v:s(instrutor,28)},
-    ].forEach(c => {
+    ];
+    // 2026-08-28 — ART logo abaixo do Instrutor (ver verso individual).
+    if (_artCert.numero) _camposCol1Col.push({l:'Numero da ART', v:s(_artCert.numero,20)});
+    _camposCol1Col.forEach(c => {
       doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
       doc.text(c.l.toUpperCase(), p_c1x, p_y1); p_y1+=3.5;
       doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
@@ -22364,7 +23363,8 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
     });
 
     // Assinatura — base da col1
-    const p_sigYc = p_bot - 12;
+    // 2026-08-28 (bug colateral 2) — mesma correção do verso individual.
+    const p_sigYc = p_bot - 17;
     doc.setDrawColor(...LGRAY); doc.setLineWidth(0.3);
     doc.line(p_c1x + p_c1w*0.08, p_sigYc, p_c1x + p_c1w*0.92, p_sigYc);
     desenharAssinaturaImagemPDF(doc, imgAssinaturaInstrutor, p_c1x+p_c1w/2, p_sigYc, 26, 9);
@@ -22576,6 +23576,24 @@ async function renderDocumentosTurma(turmaId) {
     // os demais aparecem marcados como "presença incompleta", não "pendente"
     // (não é que falte gerar, é que não podem receber certificado).
     const elegiveisDoc  = await _participantesElegiveisCertificado(turmaId);
+    // 2026-08-28 — ART e avaliação. Consultas tolerantes: antes da
+    // migration tudo vem vazio e a tela fica idêntica à de hoje.
+    const _artDoc      = await _artDaTurmaParaPdf(turmaId);
+    const _motivosDoc  = await _motivoNaoElegivel(turmaId);
+    let _artRegistro   = null;
+    try {
+      const {data:_ar} = await sb.from('turma_art')
+        .select('id,numero,numero_fora_padrao,arquivo_path,arquivo_nome_original,arquivo_tamanho,registrada_por,registrada_em,atualizada_em,envio_liberado_sem_arquivo_em,envio_liberado_sem_arquivo_motivo')
+        .eq('turma_id', turmaId).maybeSingle();
+      _artRegistro = _ar || null;
+    } catch(e) {}
+    // O painel da ART é o mesmo componente da execução — reaproveitado aqui
+    // para que o Administrador possa completar a ART depois de a turma ter
+    // sido finalizada (pedido explícito na aprovação do projeto).
+    window._execTurmaId  = turmaId;
+    window._execArt      = _artRegistro;
+    window._execExigeArt = !!_artDoc.exige;
+    const _artLiberado   = !!_artRegistro?.envio_liberado_sem_arquivo_em;
     // Base real para "está tudo gerado?" — corrige o bug de 2026-08-20: antes
     // comparava contra o total de MATRICULADOS (totalInd), então uma turma
     // com qualquer ausente nunca fechava, mesmo com tudo que era possível já
@@ -22649,6 +23667,23 @@ async function renderDocumentosTurma(turmaId) {
       : !todosDocsGerados ? 'falta gerar documentos e certificados'
       : 'falta enviar ao cliente';
     const degRing = Math.round(etapasConcluidas/3*360);
+    // Aviso: a ART mudou DEPOIS de certificados já terem sido gerados —
+    // os PDFs existentes ainda mostram o número antigo.
+    let htmlArtDesatualizadaChip = '';
+    if (_artDoc.exige && _artRegistro?.atualizada_em) {
+      const _mudouEm = new Date(_artRegistro.atualizada_em).getTime();
+      const _certsAntigos = (docs||[]).filter(x =>
+        String(x.tipo||'').startsWith('certificado') && !x.revogado_em &&
+        x.gerado_em && new Date(x.gerado_em).getTime() < _mudouEm - 1000);
+      if (_certsAntigos.length) {
+        htmlArtDesatualizadaChip = `
+          <div class="doc-chip warn" onclick="_abrirDrawerDocumento('individuais')">
+            <span>⚠ ${_certsAntigos.length} certificado(s) gerado(s) antes da última alteração da ART</span>
+            <span class="sub">Os PDFs existentes ainda mostram o número anterior — gere de novo para atualizar</span>
+          </div>`;
+      }
+    }
+
     const htmlStatusRow = `
       <div class="doc-status-row">
         <div class="doc-stat">
@@ -22656,6 +23691,7 @@ async function renderDocumentosTurma(turmaId) {
           <div class="tx"><b>${etapasConcluidas} de 3 etapas concluídas</b> · ${statusMsg}</div>
         </div>
         ${htmlReapChip}
+        ${htmlArtDesatualizadaChip}
         ${htmlSocChip}
       </div>`;
 
@@ -22673,22 +23709,48 @@ async function renderDocumentosTurma(turmaId) {
           const jaGerado = docsMap['certificado_individual'+p.colaborador_id+''];
           const status = !elegivel ? '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg> presença incompleta' : (jaGerado ? '✓ gerado' : 'pendente');
           const corStatus = !elegivel ? 'var(--amber-text)' : (jaGerado ? 'var(--green)' : 'var(--text-3)');
+          // 2026-08-28: os motivos de bloqueio passam a ser distintos na
+          // tela — "presença incompleta" (âmbar, já existia) não é a mesma
+          // coisa que "reprovado na avaliação" (vermelho) nem que
+          // "avaliação não registrada".
+          const _reprov  = _motivosDoc.reprovados.has(p.colaborador_id);
+          const _semAval = !!(_motivosDoc.exigeAvaliacao && _motivosDoc.avaliados && !_motivosDoc.avaliados.has(p.colaborador_id) && !_reprov);
+          const statusFinal    = _reprov ? 'reprovado na avaliação' : _semAval ? 'avaliação não registrada' : status;
+          const corStatusFinal = _reprov ? 'var(--red-text)' : _semAval ? 'var(--amber-text)' : corStatus;
+          const obsReprov = _reprov && _motivosDoc.observacoes[p.colaborador_id]
+            ? `<div style="font-size:10.5px;color:var(--text-3);font-style:italic;margin-top:1px">${escapeHtml(_motivosDoc.observacoes[p.colaborador_id])}</div>` : '';
+          // Certificado já emitido para quem depois foi reprovado: precisa
+          // ser REVOGADO, senão continua valendo na validação pública.
+          const btnRevogar = (_reprov && jaGerado && !jaGerado.revogado_em)
+            ? `<button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="revogarCertificado('${turmaId}','${p.colaborador_id}')">Revogar</button>` : '';
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--gray-100)">
               <div style="width:26px;height:26px;border-radius:50%;background:var(--blue-l);color:var(--blue);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(col.nome||'?')}</div>
-              <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${escapeHtml(col.nome||'-')}</div>
-              <span style="font-size:11px;color:${corStatus};margin-right:4px">${status}</span>
+              <div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text-1)">${escapeHtml(col.nome||'-')}</div>${obsReprov}</div>
+              <span style="font-size:11px;color:${corStatusFinal};margin-right:4px">${statusFinal}${jaGerado?.revogado_em ? ' · revogado' : ''}</span>
+              ${btnRevogar}
               ${elegivel ? `<button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarCertificadoIndividual('${turmaId}','${p.colaborador_id}').then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('individuais')))">${jaGerado?'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M20 11a8 8 0 1 0-.7 4.5"/><path d="M20 5v6h-6"/></svg>':'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>'} PDF</button>` : ''}
             </div>`;
         }).join('');
 
+    // 2026-08-28 (decisão 5): a lista final traz somente quem assinou, com
+    // o rodapé de totais. O apêndice NOMINAL de quem não assinou existe,
+    // mas fica desligado por padrão — nomear quem faltou num documento que
+    // circula dentro da empresa tem peso de RH/LGPD.
+    const htmlOpcaoApendice = totalListas === 0 ? '' : `
+      <label style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--text-2);line-height:1.5;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" ${window._listaApendiceAusentes?'checked':''} onchange="window._listaApendiceAusentes = this.checked"
+               style="width:15px;height:15px;accent-color:var(--navy);margin-top:1px;flex-shrink:0;cursor:pointer">
+        <span>Incluir apêndice com os <b>nomes de quem não assinou</b><br><span style="font-size:11px;color:var(--text-3)">Desligado por padrão. O rodapé com os totais (inscritos / presentes / ausentes) sai sempre, sem nomes.</span></span>
+      </label>`;
+
     const htmlListasSub = totalListas === 0
       ? `<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum encontro agendado.</div>`
-      : sessoesOrdenadas.map(sess => {
+      : htmlOpcaoApendice + sessoesOrdenadas.map(sess => {
           const jaGerado = !!docsMap['lista_presenca'+''+sess.id];
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--gray-100)">
               <div style="flex:1;min-width:0;font-size:12px;color:var(--text-1)">${formatarData(sess.data)}</div>
               <span style="font-size:11px;color:${jaGerado?'var(--green)':'var(--text-3)'};margin-right:4px">${jaGerado?'✓ gerada':'pendente'}</span>
-              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarListaPresenca('${turmaId}','${sess.id}').then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('lista')))">${jaGerado?'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M20 11a8 8 0 1 0-.7 4.5"/><path d="M20 5v6h-6"/></svg>':'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>'} PDF</button>
+              <button class="btn ${jaGerado?'btn-outline':'btn-navy'} btn-sm" onclick="gerarListaPresenca('${turmaId}','${sess.id}',true,{apendiceAusentes:!!window._listaApendiceAusentes}).then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('lista')))">${jaGerado?'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M20 11a8 8 0 1 0-.7 4.5"/><path d="M20 5v6h-6"/></svg>':'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>'} PDF</button>
             </div>`;
         }).join('');
 
@@ -22696,8 +23758,11 @@ async function renderDocumentosTurma(turmaId) {
       <div style="font-size:13px;color:var(--text-2);margin-bottom:14px;line-height:1.5">Para a empresa · ${elegiveisDoc.size} elegível(is) de ${totalInd} participante(s).</div>
       <button class="btn ${temColetivo?'btn-outline':'btn-navy'}" style="width:100%" onclick="gerarCertificadoColetivo('${turmaId}').then(()=>renderDocumentosTurma('${turmaId}').then(()=>_abrirDrawerDocumento('coletivo')))">${temColetivo?'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M20 11a8 8 0 1 0-.7 4.5"/><path d="M20 5v6h-6"/></svg> Refazer certificado coletivo':'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg> Gerar certificado coletivo'}</button>`;
 
+    const htmlArtDrawer = `<div id="painelArt">${_htmlPainelArt()}</div>`;
+
     window._docsDrawerCache = {
       turmaId,
+      art:         {titulo: 'ART da turma', corpo: htmlArtDrawer},
       lista:       {titulo: `Lista de Presença · ${listasGeradas}/${totalListas}`, corpo: htmlListasSub},
       coletivo:    {titulo: 'Certificado Coletivo', corpo: htmlColetivoDrawer},
       individuais: {titulo: `Certificados Individuais · ${geradosInd}/${totalIndElegivel}`, corpo: htmlIndividuaisSub},
@@ -22710,6 +23775,17 @@ async function renderDocumentosTurma(turmaId) {
         <span class="badge ${badgeClasse}">${badgeTxt}</span>
         <div class="arrow">›</div>
       </div>`;
+
+    // Card da ART — só existe quando o curso exige (decisão 7).
+    const _artIcone = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
+    const htmlCardArt = !_artDoc.exige ? '' : _docCard(
+      'art', _artIcone, 'ART da turma',
+      _artCompleta(_artRegistro) ? `Nº ${_artRegistro.numero}` :
+      _artTemNumero(_artRegistro) ? `Nº ${_artRegistro.numero} · falta o arquivo` :
+      _artTemArquivo(_artRegistro) ? 'Arquivo anexado · falta o número' : 'Número e arquivo pendentes',
+      _artCompleta(_artRegistro) ? '✓' : 'Pendente',
+      _artCompleta(_artRegistro) ? 'badge-green' : 'badge-amber',
+      _artCompleta(_artRegistro) ? 'done' : 'parcial');
 
     const htmlCardLista = totalListas === 0
       ? _docCard('lista','<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg>','Lista de Presença','Nenhum encontro agendado','—','badge-gray','')
@@ -22724,6 +23800,7 @@ async function renderDocumentosTurma(turmaId) {
     const htmlDocCards = `
       <div class="doc-section-label">Documentos</div>
       <div class="doc-cards">
+        ${htmlCardArt}
         ${htmlCardLista}
         ${htmlCardColetivo}
         ${htmlCardIndividuais}
@@ -22760,13 +23837,27 @@ async function renderDocumentosTurma(turmaId) {
             <div class="doc-check-item ${todosDocsGerados?'ok':'pend'}"><span class="ck">${todosDocsGerados?'✓':'○'}</span><span class="lb">Documentos: ${geradosDocs}/${totalDocs} gerados</span></div>
             <div class="doc-check-item ${envio?'ok':'pend'}"><span class="ck">${envio?'✓':'○'}</span><span class="lb">${envio?'Enviado ao cliente':'Ainda não enviado ao cliente'}</span></div>
           </div>`;
+        // 2026-08-28 (decisão 3): sem o ARQUIVO da ART o pacote não sai.
+        // O Administrador pode liberar explicitamente, e a liberação fica
+        // registrada no histórico da turma.
+        const _bloqueiaEnvioArt = _artDoc.exige && !_artDoc.arquivo && !_artLiberado;
+        const _podeLiberarArt = usuarioAtual?.perfil === 'administrador' || usuarioAtual?.perfil === 'provedor';
         const btnLabel = envio ? '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg> Regenerar e reenviar documentos' : '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg> Gerar tudo e enviar por e-mail';
         const ultimoEnvio = envio ? `<div style="font-size:11px;color:var(--green);margin-top:8px;text-align:center">✓ Último envio: ${formatarDataHora(envio.enviado_em)}</div>` : '';
         // Recuperação manual: só aparece quando ainda não há registro de envio —
         // cobre o caso do e-mail ter sido entregue mas o status não ter sido
         // salvo (ver marcarEnvioComoConcluido). Some assim que envio existir.
         const marcarManual = !envio ? `<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;font-size:11px;color:var(--text-3)" onclick="marcarEnvioComoConcluido('${turmaId}','${(emailCliente||'').replace(/'/g,"")}')">Já enviei esse e-mail e o status não atualizou? Marcar como enviado</button>` : '';
-        htmlEnvioConteudo = destHtml + `<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail('${turmaId}')">${btnLabel}</button>` + ultimoEnvio + marcarManual;
+        htmlEnvioConteudo = _bloqueiaEnvioArt
+          ? destHtml + `
+            <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:12px 14px;font-size:12.5px;color:var(--amber-text);line-height:1.55">
+              <b>Arquivo da ART pendente</b><br>Este treinamento exige ART e o arquivo ainda não foi anexado. Ele precisa seguir no pacote junto com os certificados e a lista de presença.
+            </div>
+            <button class="btn btn-navy" style="width:100%;margin-top:10px" onclick="_abrirDrawerDocumento('art')">Anexar o arquivo da ART</button>
+            ${_podeLiberarArt ? `<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="liberarEnvioSemArt('${turmaId}')">Liberar envio sem o arquivo da ART</button>` : ''}`
+          : destHtml
+            + (_artLiberado ? `<div style="font-size:11.5px;color:var(--amber-text);background:var(--amber-l);border-radius:var(--r-md);padding:8px 12px;margin-bottom:10px">Envio liberado sem o arquivo da ART por decisão do Administrador${_artRegistro?.envio_liberado_sem_arquivo_em?` em ${formatarDataHora(_artRegistro.envio_liberado_sem_arquivo_em)}`:''} — registrado no histórico.</div>` : '')
+            + `<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail('${turmaId}')">${btnLabel}</button>` + ultimoEnvio + marcarManual;
       }
     }
 
@@ -22838,6 +23929,13 @@ async function gerarTudoEnviarEmail(turmaId) {
     if (!_turmaTodosEncontrosConcluidos(t)) {
       const concl = (t.sessoes||[]).filter(s=>s.concluida).length;
       throw new Error(`Ainda faltam ${(t.sessoes||[]).length-concl} de ${(t.sessoes||[]).length} encontro(s) desta turma para concluir. Os documentos só podem ser gerados e enviados depois de todos os encontros finalizados.`);
+    }
+
+    // 2026-08-28 — ART: sem o NÚMERO nenhum certificado pode ser gerado,
+    // então nem começa. O arquivo é checado depois, na hora do envio.
+    const _artFluxo = await _artDaTurmaParaPdf(turmaId);
+    if (_artFluxo.exige && !_artFluxo.numero) {
+      throw new Error('Este treinamento exige ART. Informe o número da ART da turma antes de gerar e enviar os documentos — ele precisa constar no certificado.');
     }
 
     const participantes = t.turma_participantes || [];
@@ -22947,6 +24045,86 @@ async function marcarEnvioComoConcluido(turmaId, emailDestino) {
   } finally { hideLoading(); }
 }
 
+// 2026-08-28 — liberação explícita do Administrador para enviar o pacote
+// sem o arquivo da ART. Fica gravada em turma_art (e o trigger de histórico
+// registra a ação), justamente para não ser uma decisão invisível.
+async function liberarEnvioSemArt(turmaId) {
+  if (!(usuarioAtual?.perfil === 'administrador' || usuarioAtual?.perfil === 'provedor')) {
+    showToast('Apenas o Administrador pode liberar o envio sem o arquivo da ART.','error'); return;
+  }
+  abrirModal('Liberar envio sem a ART', `
+    <div style="background:var(--amber-l);border:1px solid #FDE68A;border-radius:var(--r-md);padding:11px 13px;font-size:12.5px;color:var(--amber-text);line-height:1.55;margin-bottom:14px">
+      O pacote será enviado ao cliente <b>sem o arquivo da ART</b>. A liberação fica registrada no histórico da turma, com o seu nome e o motivo.
+    </div>
+    <div class="field" style="margin-bottom:4px">
+      <label>Motivo <span style="color:var(--red)">*</span></label>
+      <textarea id="mArtLiberacaoMotivo" rows="3" placeholder="Ex: ART será enviada diretamente pelo responsável técnico."
+        style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
+      <div style="font-size:11.5px;color:var(--text-3);margin-top:5px">Mínimo de 10 caracteres.</div>
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="_confirmarLiberacaoArt('${turmaId}')">Liberar envio</button>`);
+}
+
+async function _confirmarLiberacaoArt(turmaId) {
+  const motivo = (document.getElementById('mArtLiberacaoMotivo')?.value || '').trim();
+  if (motivo.length < 10) { showToast('Descreva o motivo da liberação (mínimo de 10 caracteres).','error'); return; }
+  setBtnModalLoading(true);
+  try {
+    const campos = {
+      envio_liberado_sem_arquivo_por: usuarioAtual.id,
+      envio_liberado_sem_arquivo_em: new Date().toISOString(),
+      envio_liberado_sem_arquivo_motivo: motivo,
+    };
+    const {data:existe} = await sb.from('turma_art').select('id').eq('turma_id', turmaId).maybeSingle();
+    if (existe) {
+      const {data:upd, error} = await sb.from('turma_art').update(campos).eq('id', existe.id).select('id');
+      if (error) throw error;
+      if (!upd || !upd.length) throw new Error('O banco não registrou a liberação (0 registros alterados).');
+    } else {
+      const {data:ins, error} = await sb.from('turma_art')
+        .insert({org_id: usuarioAtual.org_id, turma_id: turmaId, registrada_por: usuarioAtual.id, ...campos}).select('id');
+      if (error) throw error;
+      if (!ins || !ins.length) throw new Error('O banco não registrou a liberação (0 registros criados).');
+    }
+    fecharModal();
+    showToast('Envio liberado sem o arquivo da ART — registrado no histórico.','info');
+    await renderDocumentosTurma(turmaId);
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(traduzErroSupabase(e,'Erro ao liberar o envio'),'error');
+  }
+}
+
+// Revogar um certificado já emitido (participante marcado como reprovado
+// depois da geração). Revoga em vez de apagar: o rastro fica, e o PDF sai
+// do Storage para não poder mais ser baixado nem reenviado pelo sistema.
+async function revogarCertificado(turmaId, colaboradorId) {
+  const ok = await confirmarAcao(
+    'Revogar o certificado já emitido deste participante? O PDF deixa de ficar disponível no sistema e não vai mais no pacote enviado ao cliente. Atenção: se o e-mail já foi enviado, revogar aqui NÃO recolhe o anexo que o cliente recebeu.',
+    'Revogar certificado', true);
+  if (!ok) return;
+  try {
+    showLoading('Revogando...');
+    const {data:doc} = await sb.from('documentos').select('id,arquivo_path')
+      .eq('turma_id', turmaId).eq('tipo','certificado_individual').eq('colaborador_id', colaboradorId).limit(1);
+    const alvo = (doc||[])[0];
+    if (!alvo) { showToast('Certificado não encontrado.','error'); return; }
+    const {data:upd, error} = await sb.from('documentos').update({
+      revogado_em: new Date().toISOString(),
+      revogado_por: usuarioAtual.id,
+      motivo_revogacao: 'Participante reprovado na avaliação da turma.',
+    }).eq('id', alvo.id).select('id');
+    if (error) throw error;
+    if (!upd || !upd.length) throw new Error('O banco não registrou a revogação (0 registros alterados).');
+    if (alvo.arquivo_path) { try { await sb.storage.from('documentos').remove([alvo.arquivo_path]); } catch(e) {} }
+    showToast('Certificado revogado.','info');
+    await renderDocumentosTurma(turmaId);
+  } catch(e) {
+    showToast(traduzErroSupabase(e,'Erro ao revogar o certificado'),'error');
+  } finally { hideLoading(); }
+}
+
 async function enviarDocumentosPorEmail(turmaId) {
   if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return; }
   // confirm() nao funciona em WebView/mobile — usar modal customizado
@@ -22975,8 +24153,22 @@ async function enviarDocumentosPorEmail(turmaId) {
       .eq('id', turmaId).single();
     if (error) throw error;
 
-    const {data:docs} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
+    const {data:docsTodos} = await sb.from('documentos').select('*').eq('turma_id', turmaId);
+    // 2026-08-28: documento revogado nunca vai no pacote.
+    const docs = (docsTodos||[]).filter(x => !x.revogado_em);
     if (!docs || docs.length === 0) throw new Error('Nenhum documento gerado. Gere os documentos antes de enviar.');
+
+    // ART: sem o arquivo, o pacote não sai — a não ser que o Administrador
+    // tenha liberado explicitamente (liberação registrada em turma_art).
+    const _artEnvio = await _artDaTurmaParaPdf(turmaId);
+    let _artLiberadoEnvio = false;
+    try {
+      const {data:_ar} = await sb.from('turma_art').select('envio_liberado_sem_arquivo_em').eq('turma_id', turmaId).maybeSingle();
+      _artLiberadoEnvio = !!_ar?.envio_liberado_sem_arquivo_em;
+    } catch(e) {}
+    if (_artEnvio.exige && !_artEnvio.arquivo && !_artLiberadoEnvio) {
+      throw new Error('Este treinamento exige ART e o arquivo ainda não foi anexado. Anexe o arquivo da ART na tela de Documentos (ou peça ao Administrador para liberar o envio sem ele) antes de enviar o pacote.');
+    }
 
     // Baixar cada PDF do Storage e converter para base64 no browser
     const arquivos = [];
@@ -22994,6 +24186,31 @@ async function enviarDocumentosPorEmail(turmaId) {
         conteudo_b64:   base64,
         colaborador_id: doc.colaborador_id || null,
       });
+    }
+
+    // Arquivo da ART entra no pacote como mais um anexo da turma (decisão
+    // 6: não vai ao SOCGED, que é organizado por funcionário — vai no
+    // e-mail ao cliente, que é por turma).
+    if (_artEnvio.arquivo) {
+      try {
+        const {data:blobArt, error:dlArt} = await sb.storage.from('arts').download(_artEnvio.arquivo);
+        if (!dlArt && blobArt) {
+          const b64Art = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(blobArt);
+          });
+          const _extArt = (_artEnvio.arquivo.split('.').pop() || 'pdf').toLowerCase();
+          arquivos.push({
+            tipo: 'art',
+            nome: `ART-${(_artEnvio.numero||'turma').replace(/[^0-9A-Za-z-]/g,'')}.${_extArt}`,
+            conteudo_b64: b64Art,
+            colaborador_id: null,
+          });
+        } else {
+          console.warn('Não foi possível baixar o arquivo da ART:', _artEnvio.arquivo);
+        }
+      } catch(e) { console.warn('Falha ao anexar a ART ao pacote:', e?.message||e); }
     }
 
     if (arquivos.length === 0) throw new Error('Não foi possível baixar nenhum documento do Storage.');
@@ -23102,7 +24319,7 @@ async function gerarTodosCertificados(turmaId) {
     await new Promise(r => setTimeout(r, 500));
   }
   if (pulados > 0) {
-    showToast(`${gerados} certificado(s) gerado(s). ${pulados} participante(s) não têm presença em todos os encontros e não receberam certificado.`, gerados>0?'info':'error', 7000);
+    showToast(`${gerados} certificado(s) gerado(s). ${pulados} participante(s) não receberam certificado — por presença incompleta, reprovação na avaliação ou avaliação ainda não registrada. O motivo de cada um aparece na lista abaixo.`, gerados>0?'info':'error', 8000);
   }
   return {gerados, pulados};
 }
@@ -23289,7 +24506,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '136';
+  var APP_BUILD = '137';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
