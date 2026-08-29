@@ -20514,7 +20514,11 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   // passava de 300; o splitTextToSize logo abaixo (largura real) é quem
   // decide onde quebrar linha, o corte por caractere é só rede de segurança.
   const linhasCorpo = doc.splitTextToSize(pdfSafe(corpo,600), maxW*0.92);
-  const lhCorpo = _avMM_H(0.044,H);
+  // 2026-08-29 (3ª rodada, mesmo ajuste do coletivo): 0.044H -> 0.034H.
+  // Eram 9,24mm de entrelinha para uma fonte de 16,7pt — 1,57x, solto
+  // demais para texto corrido. O espaço recuperado é o que permite a
+  // assinatura do instrutor manter o tamanho em empresa/curso longos.
+  const lhCorpo = _avMM_H(0.034,H);
   let yCorpo = _avMM_H(0.53,H);
   linhasCorpo.forEach(ln => { doc.text(ln, cx, _avBase(yCorpo, _avPT_H(0.028,H)), {align:'center'}); yCorpo += lhCorpo; });
 
@@ -20537,11 +20541,26 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   // 22mm, com empresa + curso longos (200 caracteres cada, ambos aceitos)
   // ela sobrepunha o parágrafo em ~14mm — medido com a função real. Agora
   // a folga mínima já reserva espaço pra assinatura.
-  const gapMinimo = _avMM_H(0.075,H);
-  // Teto 0.08H -> 0.068H, compensando o gapMinimo maior. Conferido no pior
-  // caso: o bloco do instrutor ainda termina ~4mm acima do código de
-  // validação no rodapé.
-  const sigY = Math.min(Math.max(sigYBase, corpoFimY + gapMinimo), zbot - _avMM_H(0.068,H));
+  // ── 2026-08-29 (3ª rodada) ────────────────────────────────────────
+  // Mesma mudança de abordagem do coletivo: a assinatura deixa de ser a
+  // variável de ajuste (encolhia quando faltava espaço, e por ser quase
+  // quadrada encolhia em largura junto) e passa a ser medida fixa do
+  // layout; quem se ajusta é a posição da linha. O espaço veio da
+  // entrelinha do parágrafo, apertada acima.
+  const ALTURA_ASSINATURA = 22;
+  // corpoFimY já está ~3mm ABAIXO do fim visível do parágrafo (é o cursor
+  // uma linha além da última desenhada), então 2mm aqui resultam em ~5mm
+  // de respiro real acima da imagem.
+  const RESPIRO_ACIMA = 2;
+  const sigYIdeal = corpoFimY + RESPIRO_ACIMA + ALTURA_ASSINATURA + 1;
+  // Teto mais alto que o do coletivo (0.064H contra 0.055H) porque o bloco
+  // de identificação do instrutor DESTE documento não foi compactado: aqui
+  // o nome do aluno e o do instrutor ficam lado a lado, na mesma linha e no
+  // mesmo tamanho, e reduzir só um desalinharia a dupla. Conferido: a
+  // credencial ainda termina ~3mm acima do código de validação.
+  const sigYMax = zbot - _avMM_H(0.064,H);
+  const sigY = Math.min(Math.max(sigYBase, sigYIdeal), sigYMax);
+  const _avIndAlturaAssinatura = Math.max(6, Math.min(ALTURA_ASSINATURA, sigY - corpoFimY - RESPIRO_ACIMA - 1));
   const lineW = _avMM_W(0.20,W);
   const cxA = cx - _avMM_W(0.235,W), cxI = cx + _avMM_W(0.235,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
@@ -20580,9 +20599,8 @@ function desenharCapaIndividualAvanteseg(doc, bgDataUrl, campos, W, H) {
   // corpoFimY já está ~3mm ABAIXO do fim visível do parágrafo (é o cursor
   // uma linha além da última desenhada), então "-1" aqui resulta em ~3mm
   // de respiro real acima da imagem.
-  const _avIndAlturaMaxAssinatura = Math.max(4, Math.min(22, sigY - corpoFimY - 1));
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaAluno, cxA, sigY, lineW*0.85, _avIndAlturaMaxAssinatura);
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxI, sigY, lineW*0.85, _avIndAlturaMaxAssinatura);
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaAluno, cxA, sigY, lineW*0.85, _avIndAlturaAssinatura);
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cxI, sigY, lineW*0.85, _avIndAlturaAssinatura);
 
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   doc.setFont('helvetica','normal'); doc.setFontSize(_avPT_H(0.024,H)); doc.setTextColor(...BLACK);
@@ -20893,7 +20911,12 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // — cada doc.text() com um único estilo, exatamente a técnica já usada
   // (com sucesso, nunca reportado bug) em todo o resto do app, inclusive no
   // certificado coletivo padrão (não-Avanteseg, função irmã logo abaixo).
-  const lhFrase = _avMM_H(0.042,H);
+  // 2026-08-29 (3ª rodada): 0.042H -> 0.036H. Eram 8,82mm de entrelinha
+  // para uma fonte de 15,5pt — 1,62x, muito solto para texto corrido
+  // (1,3-1,4x é o normal). O espaço recuperado aqui e na descrição é o que
+  // permite a assinatura do instrutor ter o tamanho cheio mesmo em curso
+  // com descrição longa, em vez de ser espremida. Nada de texto muda.
+  const lhFrase = _avMM_H(0.036,H);
   let yFrase = fraseY0;
   doc.setFont('times','normal'); doc.setFontSize(fraseSize); doc.setTextColor(...BLACK);
   doc.text('A AVANTESeg certifica que a empresa', cx, yFrase, {align:'center'});
@@ -20940,7 +20963,9 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // (reportado no print como "espaçamento excessivo"). Removido; a descrição
   // agora começa logo depois do título do curso, com respiro fixo pequeno.
   let yDesc = yCurso + _avMM_H(0.015,H);
-  const lhDesc = _avMM_H(0.036,H);
+  // 2026-08-29 (3ª rodada): 0.036H -> 0.030H (7,56mm -> 6,30mm para fonte
+  // de 13,7pt, ou seja 1,57x -> 1,31x). Mesmo motivo do lhFrase acima.
+  const lhDesc = _avMM_H(0.030,H);
   linhasDesc.forEach(ln => { doc.text(ln, cx, _avBase(yDesc, _avPT_H(0.023,H)), {align:'center'}); yDesc += lhDesc; });
 
   // times bold (era helvetica bold) — era a única linha em fonte sans na
@@ -20957,7 +20982,7 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   const linhasFatos = doc.splitTextToSize(pdfSafe(fatos,300), maxW*0.92);
   const linhasFatosFinal = linhasFatos.length > 2 ? linhasFatos.slice(0,2) : linhasFatos;
   const lhFatos = _avMM_H(0.024,H);
-  let yFatosCursor = yDesc+_avMM_H(0.020,H);
+  let yFatosCursor = yDesc+_avMM_H(0.016,H);
   linhasFatosFinal.forEach(ln => { doc.text(ln, cx, _avBase(yFatosCursor, _avPT_H(0.019,H)), {align:'center'}); yFatosCursor += lhFatos; });
   const fatosFimY = yFatosCursor - lhFatos;
 
@@ -21000,14 +21025,31 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // ter de altura em turmas com descrição de curso longa — e ~5,9mm dava
   // uma assinatura visivelmente miúda (relatado com print). Agora a folga
   // mínima já reserva espaço pra uma assinatura de tamanho decente.
-  const gapMinimo = _avMM_H(0.075,H);
-  // Teto um pouco mais baixo (0.08H -> 0.065H) pra acomodar o gapMinimo
-  // maior — possível porque o bloco de identificação do instrutor logo
-  // abaixo ficou mais compacto nesta mesma rodada (fontes e espaçamentos
-  // reduzidos). Medido no pior caso (descrição longa, que empurra sigY até
-  // este teto): a credencial termina em y=195,4mm e o código de validação
-  // começa em y=200,7mm — 5,2mm de folga.
-  const sigY = Math.min(Math.max(sigYBase, fatosYVisivel + gapMinimo), zbot - _avMM_H(0.065,H));
+  // ── 2026-08-29 (3ª rodada) ────────────────────────────────────────
+  // As duas rodadas anteriores trataram a assinatura como a variável de
+  // ajuste: quando faltava espaço, ela encolhia. Errado — a assinatura
+  // quase quadrada da Avanteseg (940x788) encolhe em LARGURA junto com a
+  // altura, e caía para 19% da largura da linha. Agora ela é uma medida
+  // FIXA do layout (os 22mm que o Alisson validou visualmente em
+  // 2026-08-06, depois de 2 rodadas de teste), e quem se ajusta é a
+  // posição da linha de assinatura. O espaço para isso veio da entrelinha
+  // do corpo, apertada acima — não de encolher nada.
+  const ALTURA_ASSINATURA = 22;
+  const RESPIRO_ACIMA = 5;
+  // Onde a linha precisa estar para caber a assinatura inteira acima dela
+  // (o helper desenha a imagem em lineY - h - 1).
+  const sigYIdeal = fatosYVisivel + RESPIRO_ACIMA + ALTURA_ASSINATURA + 1;
+  // Teto: abaixo disso o bloco nome/formação/credencial encostaria no
+  // código de validação do rodapé. Medido no pior caso (descrição longa,
+  // que leva sigY até este teto): 3,80mm de folga acima da assinatura e
+  // 4,64mm entre a credencial e o código — o bloco fica centrado na faixa
+  // disponível em vez de encostado num dos lados.
+  const sigYMax = zbot - _avMM_H(0.055,H);
+  const sigY = Math.min(Math.max(sigYBase, sigYIdeal), sigYMax);
+  // Só encolhe se o teto impedir de alcançar o ideal — com a entrelinha
+  // atual isso não acontece em nenhuma descrição que o sistema aceita
+  // (limitada a 260 caracteres na origem); fica como rede de segurança.
+  const _avColAlturaAssinatura = Math.max(6, Math.min(ALTURA_ASSINATURA, sigY - fatosYVisivel - RESPIRO_ACIMA - 1));
   const lineW = _avMM_W(0.22,W);
   doc.setDrawColor(0,0,0); doc.setLineWidth(0.25);
   doc.line(cx-lineW/2, sigY, cx+lineW/2, sigY);
@@ -21029,8 +21071,7 @@ function desenharCapaColetivoAvanteseg(doc, bgDataUrl, campos, W, H) {
   // ~10mm mesmo na descrição de curso mais longa que o sistema aceita
   // (limitada em 260 caracteres na origem) — o Math.max é só uma rede de
   // segurança, não o valor que costuma valer.
-  const _avColAlturaMaxAssinatura = Math.max(4, Math.min(22, sigY - fatosYVisivel - 5));
-  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW*0.85, _avColAlturaMaxAssinatura);
+  desenharAssinaturaImagemPDF(doc, campos.imgAssinaturaInstrutor, cx, sigY, lineW*0.85, _avColAlturaAssinatura);
   // Negrito removido (2026-08, a pedido do Alisson, pra avaliar o resultado).
   // 2026-08-29 (2ª rodada, reequilíbrio): 0.024H -> 0.021H. Em 0.024H o
   // nome do instrutor saía a 14,3pt — maior que a própria descrição do
@@ -21291,7 +21332,11 @@ function desenharVersoColetivoAvanteseg(doc, campos, W, H, pagina, totalPaginas)
 function _avFichaGeometriaTabela(doc, W, H, campos) {
   const mg = _avMM_W(0.057, W);
   const ml = mg+4, mr = W-mg-4;
-  const rowH = 18;
+  // 2026-08-29 (3ª rodada, a pedido do Alisson): 18 -> 14mm. A lista
+  // ficava longa demais para o conteúdo de cada linha. A margem interna da
+  // célula de assinatura foi reduzida junto (ver padY/cellH mais abaixo)
+  // para a assinatura do aluno não encolher na mesma proporção.
+  const rowH = 14;
 
   doc.setFont('helvetica','bold'); doc.setFontSize(13);
   const linhasTitulo = doc.splitTextToSize(pdfSafe(String(campos.curso||'').toUpperCase(), 200), mr-ml);
@@ -21406,7 +21451,15 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
   doc.text('Nº', colN, y+4.6);
   doc.text('PARTICIPANTE', colNome, y+4.6);
   doc.text('CPF', colCpf, y+4.6);
-  doc.text('ASSINATURA', colSig, y+4.6);
+  // 2026-08-29 (achado ao investigar o relato do Alisson de que a
+  // assinatura "fica fora do campo"): a assinatura do aluno é centralizada
+  // na coluna (centro em x=166,3mm) mas este rótulo era desenhado alinhado
+  // à esquerda, começando em x=140,6mm — 25,7mm de desalinhamento entre o
+  // rótulo e o conteúdo que ele nomeia. A assinatura em si já estava
+  // centrada e contida na célula (conferido matematicamente); o que estava
+  // fora de lugar era o cabeçalho. Centralizado sobre o mesmo eixo do
+  // conteúdo, como é praxe em coluna centralizada.
+  doc.text('ASSINATURA', (colSig + (mr-2))/2, y+4.6, {align:'center'});
   y += 7;
 
   const { rowH, maxRows } = _geoFicha;
@@ -21432,8 +21485,12 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
         // estourava, mas encostando na borda do quadro, um traço de
         // assinatura mais grosso na ponta PARECE cortado a olho nu, mesmo
         // sem estar. Com padX/padY sempre sobra um respiro visível.
+        // 2026-08-29: cellH era rowH-4-padY (= rowH-6). Com a linha
+        // passando de 18 para 14mm isso deixaria só 8mm de assinatura.
+        // Margem interna vertical reduzida para 4mm no total, então a
+        // assinatura sai de 12mm para 10mm enquanto a linha encurta 4mm.
         const padX = 2, padY = 2;
-        const cellW = (mr-2)-colSig-padX, cellH = rowH-4-padY;
+        const cellW = (mr-2)-colSig-padX, cellH = rowH-4;
         const ratio = (p.assinatura.w||1) / (p.assinatura.h||1);
         let iw = cellW, ih = cellW/ratio;
         if (ih > cellH) { ih = cellH; iw = cellH*ratio; }
