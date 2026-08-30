@@ -19537,7 +19537,8 @@ async function exportarRelatorioExecutivoPDF() {
   try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Executivo em PDF', 'pro'); return; }
   showToast('Gerando PDF Executivo...', 'info');
-  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
+  const raw = window._relRaw || {};
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll, usuarios: usrAll, clientes: cliAll, pendencias: pendAll } = raw;
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
 
   const meses     = window._relPeriodo || 6;
@@ -19545,16 +19546,25 @@ async function exportarRelatorioExecutivoPDF() {
   const { jsPDF } = window.jspdf;
 
   const W = 297, H = 210;
-  const NAVY  = [30,42,74], AMBER = [245,158,11], WHITE = [255,255,255];
+  const NAVY  = [30,42,74], AMBER = [245,158,11], AMBERD = [180,83,9], WHITE = [255,255,255];
   const GREEN = [5,150,105], RED = [220,38,38], PURPLE = [124,58,237];
   const T2 = [71,85,105], T3 = [148,163,184], BORD = [220,228,240], GRAY = [244,246,250];
-  const s = v => pdfSafe(v);
+  const GREENBG = [236,253,245], AMBERBG = [255,251,235], REDBG = [254,242,242];
+  // CORREÇÃO (redesenho 2026-08-30): o wrapper `s` anterior era `v => pdfSafe(v)`
+  // e descartava o 2º parâmetro de pdfSafe(valor, maxLen) — nomes de cliente
+  // eram cortados por CONTAGEM DE CARACTERES (400) em vez de largura real, o
+  // que invadia o espaço vizinho (barra/percentual). `s` agora repassa o
+  // maxLen; a proteção real contra sobreposição é `celulaTexto()` abaixo, que
+  // usa `_pdfAjustarFonteLinhaUnica` (largura real), já existente no sistema
+  // desde a correção de 2026-08-12 nos certificados. Ver
+  // 01-Requisitos/relatorio-executivo-mensal-redesign.md.
+  const s = (v, maxLen) => pdfSafe(v, maxLen);
 
   const hoje = new Date();
   const hojeStr = hoje.toLocaleDateString('pt-BR');
   const periodoLabel = meses === 1 ? 'Este mes' : `Ultimos ${meses} meses`;
 
-  // ── Cálculos ──
+  // ── Cálculos de período ──
   const corteAnt   = new Date(hoje.getFullYear(), hoje.getMonth() - meses * 2 + 1, 1);
   const corteAtual = new Date(hoje.getFullYear(), hoje.getMonth() - meses + 1, 1);
   const tAnt       = tAll.filter(t => { const d = new Date(t.created_at); return d >= corteAnt && d < corteAtual; });
@@ -19566,24 +19576,43 @@ async function exportarRelatorioExecutivoPDF() {
   const turmaIds     = new Set(tFilt.map(t => t.id));
   const partFilt     = partAll.filter(p => turmaIds.has(p.turma_id));
   const partUnicos   = new Set(partFilt.map(p => p.colaborador_id)).size;
-  const horasTotal   = tFilt.filter(t => t.status === 'concluida').reduce((s,t) => s + (t.catalogo?.carga_horaria||0), 0);
+  const horasTotal   = tFilt.filter(t => t.status === 'concluida').reduce((acc,t) => acc + (t.catalogo?.carga_horaria||0), 0);
   const mediaPart    = tFilt.length > 0 ? Math.round(partFilt.length / tFilt.length) : 0;
   const taxaConc     = tFilt.length > 0 ? Math.round((tConcluidas / tFilt.length) * 100) : 0;
-  const sessoesReal  = sFilt.filter(s => s.concluida).length;
+  // sesAll/sFilt já vêm filtrados concluida=true na busca (renderRelatorios) —
+  // contagem direta é o total de sessões concluídas no período.
+  const sessoesReal  = sFilt.length;
+  const cliIdsFilt   = new Set(tFilt.map(t => t.cliente_id).filter(Boolean));
+  const clientesAtendidos = cliIdsFilt.size;
 
   const tConclAnt    = tAnt.filter(t => t.status === 'concluida').length;
   const turmaIdsAnt  = new Set(tAnt.map(t => t.id));
   const partAnt      = new Set(partAll.filter(p => turmaIdsAnt.has(p.turma_id)).map(p => p.colaborador_id)).size;
-  const horasAnt     = tAnt.filter(t => t.status === 'concluida').reduce((s,t) => s + (t.catalogo?.carga_horaria||0), 0);
+  const horasAnt     = tAnt.filter(t => t.status === 'concluida').reduce((acc,t) => acc + (t.catalogo?.carga_horaria||0), 0);
+  const cliAntIds    = new Set(tAnt.map(t => t.cliente_id).filter(Boolean));
+  const taxaConcAnt  = tAnt.length ? Math.round((tConclAnt/tAnt.length)*100) : 0;
 
+  // Delta padronizado: {pct, up} ou null sem base de comparação. As 4
+  // métricas-manchete SEMPRE tentam mostrar (achado do redesenho: no
+  // relatório antigo só 3 de 9 indicadores tinham essa referência).
   const _delta = (cur, ant) => {
-    if (ant === 0) return '';
-    const d = cur - ant;
-    const pct = Math.round((d / ant) * 100);
-    return d >= 0 ? `+${pct}%` : `${pct}%`;
+    if (!ant) return null;
+    const d = cur - ant, pct = Math.round((d / ant) * 100);
+    return { pct, up: d >= 0 };
   };
+  const dPessoas = _delta(partUnicos, partAnt);
+  const dHoras   = _delta(horasTotal, horasAnt);
+  const dTaxa    = _delta(taxaConc, taxaConcAnt);
+  const dCli     = _delta(clientesAtendidos, cliAntIds.size);
 
-  // Rankings top 5 clientes
+  // ── Pontos de atenção (achado do redesenho: hoje ficam de fora do PDF) ──
+  const pendTurmas   = pendAll || [];
+  const pendEmpresas = new Set(pendTurmas.map(p => p.turma?.cliente_id).filter(Boolean)).size;
+  const conf = window._relConfData || null;
+  const confVencidos = conf ? conf.vencidos : null;
+  const confVencendo = conf ? conf.proximos.filter(x => x.diffDias <= JANELA_CONFORMIDADE_DIAS && x.status !== 'vencido').length : null;
+
+  // ── Ranking de clientes (top 6, com conformidade e tendência) ──
   const cliMap = {};
   tFilt.forEach(t => {
     if (!t.cliente_id) return;
@@ -19598,226 +19627,318 @@ async function exportarRelatorioExecutivoPDF() {
     if (!cliMapAnt[t.cliente_id]) cliMapAnt[t.cliente_id] = { turmas: 0 };
     cliMapAnt[t.cliente_id].turmas++;
   });
-  const rankCli = Object.entries(cliMap).map(([id,v]) => ({id,...v, ant: cliMapAnt[id]?.turmas||0})).sort((a,b) => b.turmas - a.turmas).slice(0,5);
+  const oportPorEmpresa = conf ? (conf.oportunidadesPorEmpresa || []) : [];
+  const rankCli = Object.entries(cliMap).map(([id,v]) => {
+    const ant = cliMapAnt[id]?.turmas || 0;
+    const oport = oportPorEmpresa.find(o => o.nome === v.nome) || null;
+    return { id, ...v, delta: _delta(v.turmas, ant), oport };
+  }).sort((a,b) => b.turmas - a.turmas).slice(0,6);
 
-  // Dados gráfico mensal
+  // ── Desempenho por instrutor (achado do redesenho: ausente do PDF) ──
+  const instrutores = (usrAll||[]).filter(u => u.perfil === 'instrutor');
+  const porInstrutor = instrutores.map(u => {
+    const sess = sFilt.filter(sx => sx.instrutor_id === u.id && turmaIds.has(sx.turma_id));
+    const idsTurmasDele = new Set(sess.map(sx => sx.turma_id));
+    const turmasDele = tFilt.filter(t => idsTurmasDele.has(t.id));
+    const horas = turmasDele.filter(t => t.status==='concluida').reduce((acc,t) => acc + (t.catalogo?.carga_horaria||0), 0);
+    const clientes = new Set(turmasDele.map(t => t.cliente_id).filter(Boolean)).size;
+    const concluidas = turmasDele.filter(t => t.status==='concluida').length;
+    const taxaConclusaoInst = turmasDele.length ? Math.round((concluidas/turmasDele.length)*100) : 0;
+    return { nome: u.nome, turmas: turmasDele.length, sessoes: sess.length, horas, clientes, taxaConclusaoInst };
+  }).filter(i => i.turmas > 0).sort((a,b) => b.sessoes - a.sessoes).slice(0,8);
+
+  // Dados do gráfico mensal (2 séries, escalas independentes)
   const mesesLabel = [];
   for (let i = meses-1; i >= 0; i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    mesesLabel.push({ label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').replace('jan','jan').toUpperCase().slice(0,3), ano: d.getFullYear(), mes: d.getMonth()+1 });
+    mesesLabel.push({ label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase().slice(0,3), ano: d.getFullYear(), mes: d.getMonth()+1 });
   }
-  const dadosTurmas  = mesesLabel.map(m => tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; }).length);
-  const dadosSessoes = mesesLabel.map(m => sesAll.filter(s => { const d = new Date(s.data||''); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; }).length);
-  const dadosPart    = mesesLabel.map(m => { const ids = new Set(tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; }).map(t=>t.id)); return new Set(partAll.filter(p=>ids.has(p.turma_id)).map(p=>p.colaborador_id)).size; });
+  const dadosPessoas = mesesLabel.map(m => {
+    const ids = new Set(tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; }).map(t=>t.id));
+    return new Set(partAll.filter(p=>ids.has(p.turma_id)).map(p=>p.colaborador_id)).size;
+  });
+  const dadosConcluidas = mesesLabel.map(m => tAll.filter(t => t.status==='concluida' && new Date(t.created_at).getFullYear()===m.ano && new Date(t.created_at).getMonth()+1===m.mes).length);
+
+  // Cursos mais ministrados (por horas, turmas concluídas no período)
+  const catMap = {};
+  tFilt.filter(t => t.status==='concluida').forEach(t => {
+    const nome = t.catalogo?.nome || '—';
+    catMap[nome] = (catMap[nome]||0) + (t.catalogo?.carga_horaria||0);
+  });
+  const topCursos = Object.entries(catMap).map(([nome,horas]) => ({nome,horas})).sort((a,b)=>b.horas-a.horas).slice(0,5);
 
   const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-  // ══════════════════════════════════════════
-  // PÁGINA 1 — CAPA + RESUMO EXECUTIVO
-  // ══════════════════════════════════════════
-
-  // Header navy
-  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 40, 'F');
-  doc.setFillColor(...AMBER); doc.rect(0, 40, W, 2.5, 'F');
-  desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 10, 48, 15, undefined, imgLogoOrg);
-  doc.setFontSize(13); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-  doc.text('RELATORIO EXECUTIVO DE TREINAMENTOS', W-14, 20, {align:'right'});
-  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
-  doc.text(`${s(periodoLabel)}  |  Gerado em ${hojeStr}`, W-14, 29, {align:'right'});
   const orgNome = pdfSafe(usuarioAtual?.orgNome || '');
-  if (orgNome) { doc.setFontSize(7); doc.setTextColor(...AMBER); doc.text(orgNome, W-14, 37, {align:'right'}); }
+  const TOTAL_PAGINAS = 4;
 
-  // Seção título KPIs
-  doc.setFontSize(7.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text('RESUMO EXECUTIVO', 14, 52);
+  // ── Helpers de layout reutilizados nas 4 páginas ──
+  function cabecalho(titulo, subtitulo) {
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 28, 'F');
+    doc.setFillColor(...AMBER); doc.rect(0, 28, W, 2, 'F');
+    desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 6, 40, 13, undefined, imgLogoOrg);
+    doc.setFontSize(11.5); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
+    doc.text(s(titulo), W-14, 12, {align:'right'});
+    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
+    doc.text(s(subtitulo), W-14, 18, {align:'right'});
+    if (orgNome) { doc.setFontSize(7); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold'); doc.text(orgNome, W-14, 24, {align:'right'}); }
+  }
+  function rodape(pagina) {
+    doc.setFillColor(...NAVY); doc.rect(0, H-9, W, 9, 'F');
+    doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
+    doc.text(orgNome ? `${orgNome}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-3.5, {align:'center'});
+    doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text(`${pagina} / ${TOTAL_PAGINAS}`, W-14, H-3.5, {align:'right'});
+  }
+  function secaoTitulo(texto, y) {
+    doc.setFillColor(...AMBER); doc.circle(15.2, y-1.3, 1, 'F');
+    doc.setFontSize(8); doc.setTextColor(...AMBERD); doc.setFont('helvetica','bold');
+    const txt = s(texto).toUpperCase();
+    doc.text(txt, 18, y);
+    const tw = doc.getTextWidth(txt);
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.3);
+    doc.line(18+tw+3, y-1, W-14, y-1);
+  }
+  // Célula de texto de tamanho livre em 1 linha, por LARGURA REAL — nunca por
+  // contagem de caracteres. Corrige na raiz o bug do Ranking de Clientes
+  // (ver comentário no início da função) usando o helper já existente no
+  // sistema (_pdfAjustarFonteLinhaUnica), em vez de inventar mecanismo novo.
+  function celulaTexto(texto, x, y, maxWidth, fontSize, negrito, cor) {
+    doc.setFont('helvetica', negrito ? 'bold' : 'normal');
+    _pdfAjustarFonteLinhaUnica(doc, s(texto), maxWidth, fontSize, 6);
+    doc.setTextColor(...cor);
+    doc.text(s(texto), x, y);
+  }
 
-  // 9 KPIs em 3 colunas × 3 linhas
-  const kpis9 = [
-    { icon:'#', l:'Turmas em andamento', v: tAtivas,     c: NAVY,   d: '' },
-    { icon:'✓', l:'Turmas concluidas',   v: tConcluidas, c: GREEN,  d: _delta(tConcluidas, tConclAnt) },
-    { icon:'×', l:'Canceladas',          v: tCanceladas, c: [148,163,184], d: '' },
-    { icon:'▶', l:'Sessoes realizadas',  v: sessoesReal, c: [99,102,241], d: '' },
-    { icon:'◉', l:'Pessoas treinadas',   v: partUnicos,  c: AMBER,  d: _delta(partUnicos, partAnt) },
-    { icon:'⊞', l:'Horas ministradas',   v: horasTotal,  c: PURPLE, d: _delta(horasTotal, horasAnt) },
-    { icon:'%', l:'Taxa de conclusao',   v: `${taxaConc}%`, c: GREEN, d: '' },
-    { icon:'~', l:'Media participantes', v: mediaPart,   c: NAVY,   d: '' },
-    { icon:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>', l:'Total turmas periodo',v: tFilt.length,c: T2,     d: '' },
+  // ══════════════════════════════════════════
+  // PÁGINA 1 — PANORAMA DO MÊS
+  // ══════════════════════════════════════════
+  cabecalho('RELATORIO EXECUTIVO DE TREINAMENTOS', `${periodoLabel}  |  Gerado em ${hojeStr}`);
+  secaoTitulo('Panorama do mes', 38);
+
+  // 4 métricas-manchete — sempre com delta, cor de estado (verde/âmbar)
+  const headline = [
+    { l:'Pessoas treinadas', v: partUnicos, unidade:'', delta: dPessoas },
+    { l:'Horas ministradas', v: horasTotal, unidade:'h', delta: dHoras },
+    { l:'Taxa de conclusao', v: taxaConc, unidade:'%', delta: dTaxa },
+    { l:'Clientes atendidos', v: clientesAtendidos, unidade:'', delta: dCli },
   ];
-
-  const cols3 = 3, rows3 = 3;
-  const kw3 = (W - 28 - (cols3-1)*4) / cols3;
-  const kh3 = 22;
-  const kStartY = 56;
-
-  kpis9.forEach((k, i) => {
-    const col = i % cols3;
-    const row = Math.floor(i / cols3);
-    const kx  = 14 + col * (kw3 + 4);
-    const ky  = kStartY + row * (kh3 + 4);
-    doc.setFillColor(...GRAY); doc.rect(kx, ky, kw3, kh3, 'F');
-    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(kx, ky, kw3, kh3, 'S');
-    doc.setDrawColor(...k.c); doc.setLineWidth(1.8); doc.line(kx, ky, kx, ky+kh3);
-    doc.setFontSize(13); doc.setTextColor(...k.c); doc.setFont('helvetica','bold');
-    doc.text(String(k.v), kx+kw3/2, ky+11, {align:'center'});
-    doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(s(k.l), kx+kw3/2, ky+16.5, {align:'center'});
-    if (k.d) {
-      const up = k.d.startsWith('+');
-      doc.setFontSize(6.5); doc.setTextColor(...(up?GREEN:RED)); doc.setFont('helvetica','bold');
-      doc.text(k.d, kx+kw3/2, ky+20.5, {align:'center'});
+  const hCols = 4, hGap = 6;
+  const hW = (W - 28 - (hCols-1)*hGap) / hCols, hH = 24, hY = 42;
+  headline.forEach((k, i) => {
+    const kx = 14 + i*(hW+hGap);
+    const atencao = !!(k.delta && !k.delta.up);
+    doc.setFillColor(...(atencao ? AMBERBG : GREENBG));
+    doc.rect(kx, hY, hW, hH, 'F');
+    doc.setDrawColor(...(atencao ? [253,227,167] : [167,243,208])); doc.setLineWidth(0.25);
+    doc.rect(kx, hY, hW, hH, 'S');
+    doc.setFontSize(17); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(`${k.v}${k.unidade}`, kx+6, hY+13);
+    doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+    doc.text(s(k.l), kx+6, hY+19);
+    if (k.delta) {
+      doc.setFontSize(7.5); doc.setTextColor(...(k.delta.up?GREEN:RED)); doc.setFont('helvetica','bold');
+      doc.text(`${k.delta.up?'+':''}${k.delta.pct}%`, kx+hW-4, hY+8, {align:'right'});
     }
   });
 
-  // Rodapé página 1
-  doc.setFillColor(...NAVY); doc.rect(0, H-9, W, 9, 'F');
-  doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text(orgNome ? `${orgNome}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-3.5, {align:'center'});
-  doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-  doc.text('1 / 3', W-14, H-3.5, {align:'right'});
-
-  // ══════════════════════════════════════════
-  // PÁGINA 2 — EVOLUÇÃO MENSAL (gráfico)
-  // ══════════════════════════════════════════
-  doc.addPage();
-  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 28, 'F');
-  doc.setFillColor(...AMBER); doc.rect(0, 28, W, 2, 'F');
-  doc.setFontSize(11); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-  doc.text('EVOLUCAO MENSAL', 14, 18);
-  doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
-  doc.text(`${s(periodoLabel)}  |  Ultimos ${meses} meses`, 14, 25);
-
-  // Legenda
-  const legendas = [
-    {label:'Turmas',   color: NAVY},
-    {label:'Sessoes',  color: [99,102,241]},
-    {label:'Pessoas',  color: AMBER},
+  // Detalhamento operacional — faixa fina, peso visual secundário
+  const opY = hY + hH + 5;
+  const opItens = [
+    ['Em andamento', tAtivas], ['Concluidas', tConcluidas], ['Agendadas', tAgendadas],
+    ['Canceladas', tCanceladas], ['Sessoes realizadas', sessoesReal], ['Media participantes', mediaPart],
   ];
-  let legX = W - 14;
-  legendas.slice().reverse().forEach(lg => {
-    doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-    const tw = doc.getTextWidth(lg.label);
-    doc.text(lg.label, legX - tw, 18);
-    doc.setFillColor(...lg.color); doc.rect(legX - tw - 6, 13.5, 5, 5, 'F');
-    legX -= tw + 14;
+  const opW = (W-28)/opItens.length;
+  doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(14, opY, W-28, 14, 'S');
+  opItens.forEach((item, i) => {
+    const ox = 14 + i*opW;
+    if (i>0) { doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.line(ox, opY, ox, opY+14); }
+    doc.setFontSize(10.5); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+    doc.text(String(item[1]), ox+4, opY+7);
+    doc.setFontSize(5.8); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text(s(item[0]).toUpperCase(), ox+4, opY+11.5);
   });
 
-  // Gráfico de barras agrupadas — 3 séries por mês
-  const seriesDados = [dadosTurmas, dadosSessoes, dadosPart];
-  const seriesColors = [NAVY, [99,102,241], AMBER];
-  const chartX = 14, chartY = 36, chartW = W-28, chartH = 120;
-  const n = mesesLabel.length;
-  const slotW = chartW / n;
-  const barW  = Math.max((slotW - 8) / 3, 3);
-  const maxVal = Math.max(...seriesDados.flat(), 1);
-
-  // Eixo Y linhas guia
-  [0,25,50,75,100].forEach(pct => {
-    const y = chartY + chartH - Math.round(chartH * pct / 100);
-    doc.setDrawColor(...BORD); doc.setLineWidth(0.15);
-    doc.line(chartX, y, chartX+chartW, y);
-    const vLabel = Math.round(maxVal * pct / 100);
-    doc.setFontSize(5.5); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-    doc.text(String(vLabel), chartX-2, y+1.5, {align:'right'});
+  // Pontos de atenção (novo — não existia em nenhuma versão anterior do PDF)
+  secaoTitulo('Pontos de atencao', opY + 24);
+  const atY = opY + 28;
+  const atItens = [
+    { n: pendTurmas.length ? `${pendTurmas.length} turma${pendTurmas.length!==1?'s':''} - ${pendEmpresas} empresa${pendEmpresas!==1?'s':''}` : 'Tudo em dia',
+      t: 'Documentos pendentes', cor: pendTurmas.length ? RED : GREEN, bg: pendTurmas.length ? REDBG : GREENBG },
+    { n: conf ? `${confVencidos} vencido${confVencidos!==1?'s':''} - ${confVencendo} em ${JANELA_CONFORMIDADE_DIAS}d` : 'Sem dados no plano',
+      t: 'Conformidade / reciclagens', cor: (conf && (confVencidos||confVencendo)) ? AMBERD : GREEN, bg: (conf && (confVencidos||confVencendo)) ? AMBERBG : GREENBG },
+    { n: tCanceladas ? `${tCanceladas} no periodo` : 'Nenhum cancelamento',
+      t: 'Cancelamentos', cor: tCanceladas ? AMBERD : GREEN, bg: tCanceladas ? AMBERBG : GREENBG },
+  ];
+  const atW = (W-28-2*8)/3;
+  atItens.forEach((a, i) => {
+    const ax = 14 + i*(atW+8);
+    doc.setFillColor(...a.bg); doc.rect(ax, atY, atW, 18, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(ax, atY, atW, 18, 'S');
+    celulaTexto(a.n, ax+5, atY+8, atW-10, 9.5, true, NAVY);
+    doc.setFontSize(7); doc.setTextColor(...a.cor); doc.setFont('helvetica','bold');
+    doc.text(s(a.t).toUpperCase(), ax+5, atY+14);
   });
 
-  // Barras
-  seriesDados.forEach((serie, si) => {
-    serie.forEach((v, mi) => {
-      const barH2 = v > 0 ? Math.max(Math.round(chartH * (v/maxVal)), 3) : 0;
-      const bx = chartX + mi*slotW + si*(barW+1) + 2;
-      const by = chartY + chartH - barH2;
-      doc.setFillColor(...seriesColors[si]);
-      if (barH2 > 0) doc.rect(bx, by, barW, barH2, 'F');
-      if (v > 0 && barW >= 5) {
-        doc.setFontSize(5); doc.setTextColor(...seriesColors[si]); doc.setFont('helvetica','bold');
-        doc.text(String(v), bx+barW/2, by-1.5, {align:'center'});
-      }
-    });
-  });
-
-  // Labels meses eixo X
-  mesesLabel.forEach((m, mi) => {
-    const lx = chartX + mi*slotW + slotW/2;
-    doc.setFontSize(6.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-    doc.text(m.label, lx, chartY+chartH+6, {align:'center'});
-  });
-
-  // Rodapé p2
-  doc.setFillColor(...NAVY); doc.rect(0, H-9, W, 9, 'F');
-  doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text(orgNome ? `${orgNome}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-3.5, {align:'center'});
-  doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-  doc.text('2 / 3', W-14, H-3.5, {align:'right'});
+  rodape(1);
 
   // ══════════════════════════════════════════
-  // PÁGINA 3 — RANKING TOP 5 CLIENTES
+  // PÁGINA 2 — EVOLUÇÃO + CURSOS
   // ══════════════════════════════════════════
   doc.addPage();
-  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 28, 'F');
-  doc.setFillColor(...AMBER); doc.rect(0, 28, W, 2, 'F');
-  doc.setFontSize(11); doc.setTextColor(...WHITE); doc.setFont('helvetica','bold');
-  doc.text('RANKING DE CLIENTES — TOP 5', 14, 18);
-  doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...T3);
-  doc.text(`Por volume de treinamentos no periodo`, 14, 25);
+  cabecalho('EVOLUCAO E CURSOS', periodoLabel);
+  secaoTitulo('Evolucao mensal - escalas independentes', 38);
 
-  if (rankCli.length === 0) {
-    doc.setFontSize(10); doc.setTextColor(...T3);
+  function graficoBarras(titulo, dados, cor, gx, gy, gw, gh) {
+    doc.setFontSize(8); doc.setTextColor(...T2); doc.setFont('helvetica','bold');
+    doc.text(s(titulo), gx, gy);
+    const n = dados.length;
+    const barGap = 3;
+    const barW = Math.max((gw - (n-1)*barGap) / n, 4);
+    const maxVal = Math.max(...dados, 1);
+    const baseY = gy + 6 + (gh-14);
+    dados.forEach((v, i) => {
+      const bh = v>0 ? Math.max(Math.round((gh-14) * (v/maxVal)), 2) : 0;
+      const bx = gx + i*(barW+barGap);
+      const by = baseY - bh;
+      doc.setFillColor(...cor);
+      if (bh>0) doc.rect(bx, by, barW, bh, 'F');
+      doc.setFontSize(6.5); doc.setTextColor(...cor); doc.setFont('helvetica','bold');
+      doc.text(String(v), bx+barW/2, by-1.5, {align:'center'});
+      doc.setFontSize(6); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+      doc.text(mesesLabel[i].label, bx+barW/2, baseY+5, {align:'center'});
+    });
+  }
+  const chartY = 46, chartH = 84, chartGap = 10;
+  const chartW = (W - 28 - chartGap) / 2;
+  graficoBarras('Pessoas treinadas', dadosPessoas, AMBER, 14, chartY, chartW, chartH);
+  graficoBarras('Turmas concluidas', dadosConcluidas, NAVY, 14+chartW+chartGap, chartY, chartW, chartH);
+
+  const curTituloY = chartY + chartH + 14;
+  secaoTitulo('Cursos mais ministrados', curTituloY);
+  const curY = curTituloY + 8;
+  if (!topCursos.length) {
+    doc.setFontSize(9); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Nenhum curso concluido no periodo.', 14, curY+4);
+  } else {
+    topCursos.forEach((c, i) => {
+      const cy = curY + i*7;
+      celulaTexto(c.nome, 14, cy, 200, 9, false, NAVY);
+      doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
+      doc.text(`${c.horas}h`, W-14, cy, {align:'right'});
+      doc.setDrawColor(...BORD); doc.setLineWidth(0.15); doc.line(14, cy+2.5, W-14, cy+2.5);
+    });
+  }
+  rodape(2);
+
+  // ══════════════════════════════════════════
+  // PÁGINA 3 — DESEMPENHO POR CLIENTE
+  // ══════════════════════════════════════════
+  doc.addPage();
+  cabecalho('DESEMPENHO POR CLIENTE', 'Ordenado por atencao necessaria, depois por volume');
+  secaoTitulo('Ranking de clientes', 38);
+
+  const colsCli = [
+    {t:'Cliente', x:14}, {t:'Turmas', x:99}, {t:'Pessoas', x:127},
+    {t:'Horas', x:155}, {t:'Tendencia', x:183}, {t:'Conformidade', x:213},
+  ];
+  let ty = 46;
+  doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','bold');
+  colsCli.forEach(c => doc.text(s(c.t).toUpperCase(), c.x, ty));
+  doc.setDrawColor(...BORD); doc.setLineWidth(0.4); doc.line(14, ty+2, W-14, ty+2);
+  ty += 9;
+
+  if (!rankCli.length) {
+    doc.setFontSize(10); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
     doc.text('Nenhum dado disponivel no periodo selecionado.', W/2, H/2, {align:'center'});
   } else {
-    const maxTurmas = rankCli[0].turmas || 1;
-    let ry = 38;
-    const rowH = 26;
-
-    rankCli.forEach((cli, i) => {
-      // Card
-      doc.setFillColor(...(i===0?[30,42,74,15]:[244,246,250]));
-      doc.setFillColor(i===0?235:244, i===0?238:246, i===0?248:250);
-      doc.rect(14, ry, W-28, rowH-2, 'F');
-      doc.setDrawColor(...(i===0?AMBER:BORD)); doc.setLineWidth(i===0?0.7:0.2);
-      doc.rect(14, ry, W-28, rowH-2, 'S');
-      // Posição badge
-      doc.setFillColor(...(i===0?AMBER:NAVY));
-      doc.circle(22, ry+(rowH-2)/2, 5, 'F');
-      doc.setFontSize(8); doc.setTextColor(...(i===0?NAVY:WHITE)); doc.setFont('helvetica','bold');
-      doc.text(String(i+1), 22, ry+(rowH-2)/2+2.5, {align:'center'});
-      // Nome cliente
-      doc.setFontSize(9); doc.setTextColor(...NAVY); doc.setFont('helvetica','bold');
-      doc.text(s(cli.nome, 55), 30, ry+8);
-      // Métricas
-      const mets = [`${cli.turmas} turma${cli.turmas!==1?'s':''}`, `${cli.pessoas} participante${cli.pessoas!==1?'s':''}`, `${cli.horas}h`];
-      doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
-      doc.text(mets.join('  ·  '), 30, ry+14);
-      // Delta vs período anterior
-      if (cli.ant > 0) {
-        const d = cli.turmas - cli.ant;
-        const up = d >= 0;
-        doc.setFontSize(7); doc.setTextColor(...(up?GREEN:RED)); doc.setFont('helvetica','bold');
-        doc.text(`${up?'▲+':'▼'}${d} vs periodo anterior`, 30, ry+20);
+    rankCli.forEach(cli => {
+      const emAtencao = !!((cli.delta && !cli.delta.up) || (cli.oport && cli.oport.vencidos > 0));
+      if (emAtencao) { doc.setFillColor(...AMBER); doc.rect(12, ty-6, 1.2, 9, 'F'); }
+      celulaTexto(cli.nome, 14, ty, 82, 9.5, true, NAVY);
+      doc.setFontSize(9.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+      doc.text(String(cli.turmas), 99, ty);
+      doc.text(String(cli.pessoas), 127, ty);
+      doc.text(`${cli.horas}h`, 155, ty);
+      if (cli.delta) {
+        doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...(cli.delta.up?GREEN:RED));
+        doc.text(`${cli.delta.up?'+':''}${cli.delta.pct}%`, 183, ty);
+      } else {
+        doc.setFontSize(9); doc.setTextColor(...T3); doc.setFont('helvetica','normal'); doc.text('-', 183, ty);
       }
-      // Barra proporcional
-      const barPct = Math.round((cli.turmas/maxTurmas)*100);
-      const barMaxW = W-28-10-55;
-      const bx2 = 14+55+10;
-      doc.setFillColor(...BORD); doc.rect(bx2, ry+7, barMaxW, 6, 'F');
-      doc.setFillColor(...(i===0?AMBER:NAVY));
-      doc.rect(bx2, ry+7, Math.round(barMaxW*barPct/100), 6, 'F');
-      doc.setFontSize(6.5); doc.setTextColor(...T2); doc.setFont('helvetica','bold');
-      doc.text(`${barPct}%`, bx2+barMaxW+3, ry+12);
+      if (cli.oport) {
+        const bad = cli.oport.vencidos > 0;
+        doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(...(bad?RED:AMBERD));
+        doc.text(s(bad ? `${cli.oport.vencidos} vencido${cli.oport.vencidos!==1?'s':''}` : `${cli.oport.pendentes} vencendo`, 40), 213, ty);
+      } else {
+        doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(...GREEN);
+        doc.text('Em dia', 213, ty);
+      }
+      doc.setDrawColor(...BORD); doc.setLineWidth(0.15); doc.line(14, ty+4, W-14, ty+4);
+      ty += 11;
+    });
+  }
+  rodape(3);
 
-      ry += rowH;
+  // ══════════════════════════════════════════
+  // PÁGINA 4 — DESEMPENHO POR INSTRUTOR (novo)
+  // ══════════════════════════════════════════
+  doc.addPage();
+  cabecalho('DESEMPENHO POR INSTRUTOR', 'Sessoes, horas e conclusao no periodo');
+  secaoTitulo('Instrutores', 38);
+
+  const colsInst = [
+    {t:'Instrutor', x:14}, {t:'Turmas', x:94}, {t:'Sessoes concl.', x:120},
+    {t:'Horas', x:160}, {t:'Taxa conclusao', x:186}, {t:'Clientes atend.', x:226},
+  ];
+  let iy = 46;
+  doc.setFontSize(6.5); doc.setTextColor(...T3); doc.setFont('helvetica','bold');
+  colsInst.forEach(c => doc.text(s(c.t).toUpperCase(), c.x, iy));
+  doc.setDrawColor(...BORD); doc.setLineWidth(0.4); doc.line(14, iy+2, W-14, iy+2);
+  iy += 9;
+
+  if (!porInstrutor.length) {
+    doc.setFontSize(10); doc.setTextColor(...T3); doc.setFont('helvetica','normal');
+    doc.text('Nenhum instrutor com atividade no periodo.', W/2, 90, {align:'center'});
+  } else {
+    porInstrutor.forEach(inst => {
+      const emAtencao = inst.taxaConclusaoInst < 70;
+      if (emAtencao) { doc.setFillColor(...AMBER); doc.rect(12, iy-6, 1.2, 9, 'F'); }
+      celulaTexto(inst.nome, 14, iy, 76, 9.5, true, NAVY);
+      doc.setFontSize(9.5); doc.setTextColor(...T2); doc.setFont('helvetica','normal');
+      doc.text(String(inst.turmas), 94, iy);
+      doc.text(String(inst.sessoes), 120, iy);
+      doc.text(`${inst.horas}h`, 160, iy);
+      doc.setFont('helvetica','bold'); doc.setTextColor(...(inst.taxaConclusaoInst<70?AMBERD:GREEN));
+      doc.text(`${inst.taxaConclusaoInst}%`, 186, iy);
+      doc.setFont('helvetica','normal'); doc.setTextColor(...T2);
+      doc.text(String(inst.clientes), 226, iy);
+      doc.setDrawColor(...BORD); doc.setLineWidth(0.15); doc.line(14, iy+4, W-14, iy+4);
+      iy += 11;
     });
   }
 
-  // Rodapé p3
-  doc.setFillColor(...NAVY); doc.rect(0, H-9, W, 9, 'F');
-  doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica','bold');
-  doc.text(orgNome ? `${orgNome}  |  toledolabs.com.br` : 'toledolabs.com.br', W/2, H-3.5, {align:'center'});
-  doc.setTextColor(...T3); doc.setFont('helvetica','normal');
-  doc.text('3 / 3', W-14, H-3.5, {align:'right'});
+  // Ranking — sessões concluídas (mesma métrica/cor já usadas no card da tela)
+  if (porInstrutor.length) {
+    const rankY = Math.min(iy + 10, H - 50);
+    secaoTitulo('Ranking - sessoes concluidas', rankY);
+    const rankTop = porInstrutor.slice(0, 5);
+    const maxSess = Math.max(...rankTop.map(i=>i.sessoes), 1);
+    let ry2 = rankY + 9;
+    rankTop.forEach(inst => {
+      celulaTexto(inst.nome, 14, ry2+2.5, 70, 8, true, NAVY);
+      const trackX = 88, trackW = W-14-trackX-14;
+      doc.setFillColor(...BORD); doc.rect(trackX, ry2-1.5, trackW, 4, 'F');
+      doc.setFillColor(...GREEN); doc.rect(trackX, ry2-1.5, Math.max(Math.round(trackW*(inst.sessoes/maxSess)),1), 4, 'F');
+      doc.setFontSize(8); doc.setTextColor(...GREEN); doc.setFont('helvetica','bold');
+      doc.text(String(inst.sessoes), W-14, ry2+2, {align:'right'});
+      ry2 += 7;
+    });
+  }
 
+  rodape(4);
   doc.save(`relatorio-executivo-${new Date().toISOString().slice(0,10)}.pdf`);
-  showToast('PDF Executivo gerado — 3 páginas!', 'success');
+  showToast('PDF Executivo gerado — 4 páginas!', 'success');
 }
 
 
@@ -26024,7 +26145,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '153';
+  var APP_BUILD = '154';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
