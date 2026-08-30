@@ -1074,6 +1074,13 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turma-kanban-body{background:var(--gray-50);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-md) var(--r-md);padding:8px 6px;display:flex;flex-direction:column;gap:8px;max-height:560px;overflow-y:auto}
 .turma-kanban-body .turma-card{padding:9px 10px}
 .turma-kanban-empty{font-size:11px;color:var(--text-3);text-align:center;padding:16px 4px}
+/* 2026-08-30 (correção de desempenho, build 153): botão que revela o resto da
+   coluna. Sem ele o quadro montava as 89 turmas de uma vez — 94 cards, 504
+   SVGs inline depois do dual-DOM, ~13x mais elementos do que a tela que abria
+   na build 148. Ver 06-Changelog/2026-08-30-correcao-desempenho-turmas.md. */
+.turma-mais{display:block;width:100%;background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-sm);padding:7px 8px;font-size:10.5px;font-weight:700;font-family:inherit;color:var(--text-3);cursor:pointer;transition:border-color .15s,color .15s}
+.turma-mais:hover{border-color:var(--navy);color:var(--navy)}
+.turma-lista-mais{margin-top:8px;padding:10px}
 @media(max-width:767px){.turma-kanban{grid-template-columns:repeat(5,minmax(200px,1fr))}.turma-kanban-body{max-height:420px}}
 .turmas-empty-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-3);gap:8px}
 @media(max-width:767px){
@@ -9935,6 +9942,7 @@ async function renderTurmas(abaInicial) {
   // para a COLUNA do Kanban (ver TURMA_KANBAN_COLS).
   window._turmasSoPendencia = false;
   window._turmasPainelAberto = false;
+  _turmasResetarPaginacao();
   _turmasLigarAtalhoBusca();
   setConteudo(`
     <div class="turmas-filtros">
@@ -9988,7 +9996,7 @@ function buscarTurmas(valor) {
   // custava 12. Com o atraso, custa 2.
   _turmasAtualizarBarra();
   clearTimeout(window._turmasBuscaTimer);
-  window._turmasBuscaTimer = setTimeout(_turmasRedesenhar, 180);
+  window._turmasBuscaTimer = setTimeout(function(){ _turmasResetarPaginacao(); _turmasRedesenhar(); }, 180);
 }
 
 function _turmaTabHtml(status, label, count, abaAtiva) {
@@ -9999,6 +10007,7 @@ function _turmaTabHtml(status, label, count, abaAtiva) {
 
 function trocarAbaTurmas(status) {
   window._turmasAbaAtual = status;
+  _turmasResetarPaginacao();
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
   document.querySelectorAll('.turmas-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll(`.turmas-tab`).forEach(t=>{ if(t.textContent.trim().startsWith(status==='todas'?'Todas':status==='em_andamento'?'Em and':status==='agendada'?'Agend':status==='concluida'?'Conc':'Cancel')) t.classList.add('active'); });
@@ -10283,6 +10292,14 @@ function _turmasListaOrdenar(filtrada) {
   });
 }
 
+// Recorta a lista já filtrada e ordenada no limite de exibição. Fica separado
+// para a ordenação continuar valendo sobre o conjunto INTEIRO — ordenar por
+// cliente e depois cortar em 40 é diferente (e correto); cortar antes e
+// ordenar depois mostraria as 40 primeiras por data, reordenadas.
+function _turmasListaPaginar(filtrada) {
+  return window._turmasListaExpandida ? filtrada : filtrada.slice(0, TURMA_LISTA_LIMITE);
+}
+
 function _turmasListaRedesenhar() {
   _turmasRedesenhar();
 }
@@ -10378,7 +10395,7 @@ function _htmlTurmasLista(lista, status, podeCriar) {
         <div style="font-size:32px;margin-bottom:4px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></div>
         <div style="font-size:14px;font-weight:500;color:var(--text-2)">${busca ? 'Nenhuma turma encontrada para '+'"'+escapeHtml(busca)+'"' : 'Nenhuma turma '+(ehTodas?'cadastrada':rotuloStatus)}</div>
       </div>`
-    : filtrada.map(t => {
+    : _turmasListaPaginar(filtrada).map(t => {
         const st = t.status;
         const ref = _turmaDataRef(t);
         const dataFmt = ref ? `${ref.slice(8,10)}/${ref.slice(5,7)}` : '—';
@@ -10412,7 +10429,11 @@ function _htmlTurmasLista(lista, status, podeCriar) {
         </div>`;
       }).join('');
 
-  return `${filtrada.length===0?'':headHtml}${linhasHtml}`;
+  const restantesLista = window._turmasListaExpandida ? 0 : Math.max(0, filtrada.length - TURMA_LISTA_LIMITE);
+  const maisHtml = restantesLista>0
+    ? `<button type="button" class="turma-mais turma-lista-mais" onclick="_turmasListaExpandir()">Mostrar as ${restantesLista} turmas restantes</button>`
+    : '';
+  return `${filtrada.length===0?'':headHtml}${linhasHtml}${maisHtml}`;
 }
 
 // Visão Kanban (2026-08-30, mockup aprovado pelo Alisson — ver
@@ -10443,10 +10464,16 @@ function _htmlTurmasKanban(lista) {
   // "Hoje" naturalmente zera Concluída e Cancelada — sem essa distinção o
   // operador acha que o sistema perdeu dados.
   const temFiltro = _turmasFiltrosAtivos().length > 0;
+  const expandido = window._turmasKanbanExpandido || {};
   const colsHtml = TURMA_KANBAN_COLS.map(c => {
     const filtrada = _turmaFiltrarLista(lista, c.status);
+    // O contador do cabeçalho continua mostrando o TOTAL da etapa; só a
+    // montagem dos cards é que para no limite.
+    const mostrar = expandido[c.status] ? filtrada : filtrada.slice(0, TURMA_KANBAN_LIMITE);
+    const restantes = filtrada.length - mostrar.length;
     const cardsHtml = filtrada.length
-      ? filtrada.map(t=>_htmlTurmaCard(t)).join('')
+      ? mostrar.map(t=>_htmlTurmaCard(t)).join('') +
+        (restantes>0 ? `<button type="button" class="turma-mais" onclick="_turmasKanbanExpandir('${c.status}')">+ ${restantes} mais</button>` : '')
       : `<div class="turma-kanban-empty">${temFiltro?'Nenhuma turma neste filtro':'Nenhuma turma'}</div>`;
     return `<div class="turma-kanban-col">
       <div class="turma-kanban-head" style="background:${c.bg};color:${c.ink};border-bottom-color:${c.linha}">
@@ -10489,6 +10516,20 @@ function _turmasRenderVisao(lista, status, podeCriar) {
 //   Em andamento  -> coluna do Kanban / menu Status da Lista (já existia)
 //   Pendências    -> botão de atalho na barra (era o único acionável)
 //   Concluído %   -> saiu; é média cumulativa histórica, pertence a Relatórios
+
+// Quantos itens cada visão monta antes de oferecer "+N mais" (2026-08-30,
+// build 153). Motivo medido: sem limite o Kanban renderizava as 89 turmas de
+// uma vez — 94 chamadas de _htmlTurmaCard, 2.410 elementos e 252 SVGs inline,
+// tudo DOBRADO porque setConteudo escreve nos dois bodies do dual-DOM. Dava
+// 4.820 elementos e 504 SVGs por abertura da tela, contra 360 elementos e 40
+// SVGs da build 148. O JavaScript nunca foi o gargalo (1,5 ms); o custo é o
+// navegador construir e desenhar esse DOM.
+//
+// O mockup aprovado já mostrava "+ 42 mais" nas colunas — eu troquei por
+// rolagem infinita na implementação e foi essa troca que criou o problema.
+// Isto aqui é voltar ao que estava aprovado.
+const TURMA_KANBAN_LIMITE = 10;
+const TURMA_LISTA_LIMITE  = 40;
 
 const TURMA_PERIODO_ROTULO = {
   hoje:'Hoje', semana:'Esta semana', este_mes:'Este mês',
@@ -10647,6 +10688,26 @@ function _turmasRedesenhar() {
   _setElBoth('turmasCorpoEl', _turmasPainelHtml() + _turmasResumoHtml() + _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
 }
 
+// Qualquer mudança de filtro volta as visões ao estado compacto: depois de
+// filtrar, o conjunto é outro e "mostrar os 42 restantes" não quer mais dizer
+// a mesma coisa. Chamada explicitamente por quem mexe em filtro — nunca dentro
+// de _turmasRedesenhar, senão o próprio clique em "+N mais" se desfaria.
+function _turmasResetarPaginacao() {
+  window._turmasKanbanExpandido = {};
+  window._turmasListaExpandida = false;
+}
+
+function _turmasKanbanExpandir(status) {
+  window._turmasKanbanExpandido = window._turmasKanbanExpandido || {};
+  window._turmasKanbanExpandido[status] = true;
+  _turmasRedesenhar();
+}
+
+function _turmasListaExpandir() {
+  window._turmasListaExpandida = true;
+  _turmasRedesenhar();
+}
+
 function _turmasTogglePainel() {
   window._turmasPainelAberto = !window._turmasPainelAberto;
   window._turmasListaMenuAberto = false;
@@ -10655,6 +10716,7 @@ function _turmasTogglePainel() {
 
 function _turmasTogglePendencia() {
   window._turmasSoPendencia = !window._turmasSoPendencia;
+  _turmasResetarPaginacao();
   _turmasRedesenhar();
 }
 
@@ -10666,6 +10728,7 @@ function _turmasSetFiltro(campo, valor) {
     window._turmasPeriodoFiltro = valor||'todos';
     if (valor !== 'personalizado') { window._turmasPeriodoDe = ''; window._turmasPeriodoAte = ''; }
   }
+  _turmasResetarPaginacao();
   _turmasRedesenhar();
 }
 
@@ -10683,6 +10746,7 @@ function _turmasLimparFiltro(k) {
   else if (k === 'periodo') { window._turmasPeriodoFiltro = 'todos'; window._turmasPeriodoDe = ''; window._turmasPeriodoAte = ''; }
   else if (k === 'pendencia') window._turmasSoPendencia = false;
   else if (k === 'status') window._turmasAbaAtual = 'todas';
+  _turmasResetarPaginacao();
   _turmasRedesenhar();
 }
 
@@ -10697,6 +10761,7 @@ function _turmasLimparTudo() {
   window._turmasSoPendencia = false;
   window._turmasAbaAtual = 'todas';
   document.querySelectorAll('#turmasBuscaInput').forEach(el => { el.value = ''; });
+  _turmasResetarPaginacao();
   _turmasRedesenhar();
 }
 
@@ -10717,11 +10782,21 @@ function _turmasLigarAtalhoBusca() {
   if (window._turmasAtalhoLigado) return;
   window._turmasAtalhoLigado = true;
   document.addEventListener('keydown', function(ev) {
+    // A checagem de tecla vem ANTES de qualquer acesso ao DOM, de propósito.
+    // A versão anterior chamava _getElVisible() logo na primeira linha — e
+    // _getElVisible lê `offsetParent`, que força o navegador a recalcular o
+    // layout de forma síncrona. Como este listener é de documento e nunca é
+    // removido, isso significava um reflow forçado a CADA tecla digitada em
+    // QUALQUER tela do sistema, para sempre, depois de visitar Turmas uma
+    // única vez. Com a guarda abaixo, 99% das teclas saem daqui sem tocar no
+    // DOM. (Defeito meu, introduzido na build 151 e corrigido na 152.)
+    if (ev.key !== '/' && ev.key !== 'Escape') return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
     const inp = _getElVisible('turmasBuscaInput');
     if (!inp) return;
     const alvo = ev.target;
     const digitando = alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.tagName === 'SELECT' || alvo.isContentEditable);
-    if (ev.key === '/' && !digitando && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+    if (ev.key === '/' && !digitando) {
       ev.preventDefault();
       inp.focus();
       inp.select();
@@ -10742,6 +10817,7 @@ function _turmasAlternarVisao(visao) {
   if (visao === 'cards') visao = 'lista';
   window._turmasVisao = visao;
   window._turmasListaMenuAberto = false;
+  _turmasResetarPaginacao();
   try { localStorage.setItem(_turmasVisaoKey(), visao); } catch(e) {}
   _turmasAtualizarBotoesVisao();
   _turmasRedesenhar();
@@ -25948,7 +26024,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '151';
+  var APP_BUILD = '153';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
