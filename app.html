@@ -968,6 +968,27 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turmas-section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .turmas-section-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .turmas-section-line{flex:1;height:1px;background:var(--border)}
+
+/* ===== Turmas — visão Kanban (2026-08-30, mockup aprovado pelo Alisson) =====
+   Reaproveita 100% o _htmlTurmaCard já usado pela visão Cards — o card
+   dentro do Kanban é intencionalmente idêntico, zero marcação nova. A
+   única peça nova é o cabeçalho de coluna, que usa as MESMAS variáveis
+   --*-l/--*-text já usadas pelos badges (.badge-* acima) — nenhuma cor
+   nova entra no sistema. Azul cobre a coluna "Pendências" porque é a
+   única cor do sistema ainda não usada por nenhum status real de Turma
+   (âmbar já é "Em andamento") — ver decisão em
+   01-Requisitos/2026-08-30-proposta-turmas-kanban-reorganizacao.md. */
+.turma-kanban-wrap{overflow-x:auto;padding-bottom:4px}
+.turma-kanban{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px;min-width:1180px}
+.turma-kanban-col{display:flex;flex-direction:column;min-width:0}
+.turma-kanban-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:var(--r-md) var(--r-md) 0 0;border-bottom:2px solid transparent}
+.turma-kanban-head .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.turma-kanban-head .name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-kanban-head .count{margin-left:auto;background:rgba(255,255,255,.6);border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;flex-shrink:0}
+.turma-kanban-body{background:var(--gray-50);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-md) var(--r-md);padding:8px 6px;display:flex;flex-direction:column;gap:8px;max-height:560px;overflow-y:auto}
+.turma-kanban-body .turma-card{padding:9px 10px}
+.turma-kanban-empty{font-size:11px;color:var(--text-3);text-align:center;padding:16px 4px}
+@media(max-width:767px){.turma-kanban{grid-template-columns:repeat(5,minmax(200px,1fr))}.turma-kanban-body{max-height:420px}}
 .turmas-empty-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-3);gap:8px}
 @media(max-width:767px){
   .turmas-grid{grid-template-columns:minmax(0,1fr)}
@@ -9830,6 +9851,7 @@ async function renderTurmas(abaInicial) {
       <div class="turmas-viewtoggle">
         <button type="button" id="turmasBtnCards" onclick="_turmasAlternarVisao('cards')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg> Cards</button>
         <button type="button" id="turmasBtnLista" onclick="_turmasAlternarVisao('lista')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg> Lista</button>
+        <button type="button" id="turmasBtnKanban" onclick="_turmasAlternarVisao('kanban')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/></svg> Kanban</button>
       </div>
     </div>
     <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
@@ -10148,10 +10170,54 @@ function _htmlTurmasLista(lista, status, podeCriar) {
   </div>${linhasHtml}`;
 }
 
-// Escolhe Cards ou Lista conforme a preferência atual (window._turmasVisao)
-// — único ponto que os 3 lugares que redesenham #turmasGridEl chamam
-// (renderTurmas, buscarTurmas, trocarAbaTurmas), pra nunca desalinhar.
+// Visão Kanban (2026-08-30, mockup aprovado pelo Alisson — ver
+// 01-Requisitos/2026-08-30-proposta-turmas-kanban-reorganizacao.md). As 5
+// etapas do fluxo aparecem lado a lado, sempre, independente da aba de
+// status ativa (por isso _turmasRenderVisao ignora `status` neste modo).
+// "Pendências" é um recorte que atravessa qualquer status — igual à aba
+// que já existe hoje — então uma turma pendente aparece TANTO na coluna
+// Pendências QUANTO na coluna do seu status real, de propósito (mesmo
+// comportamento de irParaTurmasComPendencia/_turmaFiltrarLista já usado
+// pela aba Pendências).
+const TURMA_KANBAN_COLS = [
+  {status:'agendada',     label:'Agendada',     bg:'var(--gray-100)', ink:'var(--gray-600)', linha:'var(--gray-500)'},
+  {status:'pendencia',    label:'Pendências',   bg:'var(--blue-l)',   ink:'var(--blue-text)', linha:'var(--blue)'},
+  {status:'em_andamento', label:'Em andamento', bg:'var(--amber-l)',  ink:'var(--amber-text)', linha:'var(--amber)'},
+  {status:'concluida',    label:'Concluída',    bg:'var(--green-l)',  ink:'var(--green-text)', linha:'var(--green)'},
+  {status:'cancelada',    label:'Cancelada',    bg:'var(--red-l)',    ink:'var(--red-text)', linha:'var(--red)'},
+];
+
+// Card dentro da coluna é o MESMO _htmlTurmaCard da visão Cards, sem
+// nenhuma alteração — pedido explícito do Alisson (2026-08-30): o card já
+// aprovado não pode virar um padrão novo, só a organização em colunas é
+// nova. Cada coluna rola por conta própria (.turma-kanban-body) em vez de
+// truncar com "+N mais" — mais fiel a como um Kanban de verdade se
+// comporta, e o mockup estático não podia testar isso.
+function _htmlTurmasKanban(lista) {
+  const kpiHtml = _turmasKpiHtml(lista);
+  const colsHtml = TURMA_KANBAN_COLS.map(c => {
+    const filtrada = _turmaFiltrarLista(lista, c.status);
+    const cardsHtml = filtrada.length
+      ? filtrada.map(t=>_htmlTurmaCard(t)).join('')
+      : `<div class="turma-kanban-empty">Nenhuma turma</div>`;
+    return `<div class="turma-kanban-col">
+      <div class="turma-kanban-head" style="background:${c.bg};color:${c.ink};border-bottom-color:${c.linha}">
+        <span class="dot" style="background:${c.linha}"></span>
+        <span class="name">${c.label}</span>
+        <span class="count">${filtrada.length}</span>
+      </div>
+      <div class="turma-kanban-body">${cardsHtml}</div>
+    </div>`;
+  }).join('');
+  return `${kpiHtml}<div class="turma-kanban-wrap"><div class="turma-kanban">${colsHtml}</div></div>`;
+}
+
+// Escolhe Cards, Lista ou Kanban conforme a preferência atual
+// (window._turmasVisao) — único ponto que os 3 lugares que redesenham
+// #turmasGridEl chamam (renderTurmas, buscarTurmas, trocarAbaTurmas), pra
+// nunca desalinhar.
 function _turmasRenderVisao(lista, status, podeCriar) {
+  if (window._turmasVisao === 'kanban') return _htmlTurmasKanban(lista);
   return (window._turmasVisao==='lista') ? _htmlTurmasLista(lista, status, podeCriar) : _htmlTurmasGrid(lista, status, podeCriar);
 }
 
@@ -10167,7 +10233,7 @@ function _turmasAlternarVisao(visao) {
 
 function _turmasAtualizarBotoesVisao() {
   const visao = window._turmasVisao || 'cards';
-  [['turmasBtnCards','cards'],['turmasBtnLista','lista']].forEach(([id,val]) => {
+  [['turmasBtnCards','cards'],['turmasBtnLista','lista'],['turmasBtnKanban','kanban']].forEach(([id,val]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
     const ativo = visao === val;
@@ -10175,6 +10241,12 @@ function _turmasAtualizarBotoesVisao() {
     btn.style.color = ativo ? 'var(--navy)' : 'var(--text-3)';
     btn.style.boxShadow = ativo ? 'var(--shadow)' : 'none';
   });
+  // Kanban já mostra as 5 etapas lado a lado — a aba de status (Todas/
+  // Agendada/.../Pendências) não tem efeito nessa visão, então some pra
+  // não parecer clicável à toa. querySelectorAll (não getElementById)
+  // porque a tela é dual-DOM: a mesma id existe na cópia desktop e na
+  // mobile (ver setConteudo/_setElBoth), então as duas precisam mudar.
+  document.querySelectorAll('#turmasTabsEl').forEach(el => { el.style.display = visao==='kanban' ? 'none' : ''; });
 }
 
 function _turmasFiltrarInstrutor(valor) {
@@ -25358,7 +25430,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '148';
+  var APP_BUILD = '149';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
