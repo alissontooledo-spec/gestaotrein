@@ -894,19 +894,56 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    Textos longos truncam com reticências (ellipsis) em vez de alargar a
    coluna, que é a única forma de garantir alinhamento independente do
    tamanho do conteúdo. */
-.turma-linha-lista{display:grid;grid-template-columns:8px minmax(0,1.5fr) minmax(0,1.1fr) 92px minmax(0,1fr) 18px 56px 92px;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:6px;font-size:12.5px;cursor:pointer}
-.turma-linha-lista .tl-dot{width:7px;height:7px;border-radius:50%}
+/* 2026-08-30 (pedido do Alisson): a Lista ganhou cabeçalho de coluna
+   clicável, que assumiu o papel das abas de status (removidas). As 6
+   colunas são exatamente as pedidas — Curso | Cliente | Instrutor | Data |
+   Aulas | Status — por isso a bolinha de status que abria a linha saiu: o
+   badge da coluna Status já carrega essa informação, e manter as duas era
+   o mesmo sinal desenhado duas vezes (mesma lição de 2026-08-29, registrada
+   no diagnóstico da proposta). A grade do cabeçalho e a da linha são
+   declaradas juntas, num seletor só, justamente pra nunca dessincronizar —
+   se uma mudar sem a outra, as colunas desalinham. */
+.turma-lista-head,.turma-linha-lista{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) minmax(0,1fr) 96px 78px 112px;align-items:center;gap:10px;padding:9px 12px}
+.turma-lista-head{background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-sm) var(--r-sm) 0 0;position:sticky;top:0;z-index:6;padding-top:8px;padding-bottom:8px}
+.turma-lista-head .th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;background:none;border:none;padding:0;margin:0;font-family:inherit;cursor:pointer;min-width:0}
+.turma-lista-head .th:hover{color:var(--navy)}
+.turma-lista-head .th.on{color:var(--navy)}
+.turma-lista-head .th .ar{font-size:8px;flex-shrink:0}
+.turma-lista-head .th:not(.on) .ar{opacity:.45}
+.turma-lista-head .thend{justify-content:flex-end}
+.turma-lista-head .thwrap{position:relative;display:flex;justify-content:flex-end;min-width:0}
+.turma-lista-statusmenu{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:4px;z-index:30;min-width:196px;text-align:left}
+.turma-lista-statusmenu button{display:flex;width:100%;align-items:center;gap:8px;background:none;border:none;padding:7px 9px;border-radius:6px;font-size:11.5px;font-family:inherit;font-weight:500;color:var(--text-2);cursor:pointer;text-align:left;text-transform:none;letter-spacing:0}
+.turma-lista-statusmenu button:hover{background:var(--gray-100)}
+.turma-lista-statusmenu button.on{background:var(--gray-100);color:var(--navy);font-weight:700}
+.turma-lista-statusmenu .dt{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.turma-lista-statusmenu .qt{margin-left:auto;font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
+.turma-lista-statusmenu .sep{height:1px;background:var(--border);margin:4px 2px}
+.turma-linha-lista{background:var(--surface);border:1px solid var(--border);border-top:none;font-size:12.5px;cursor:pointer}
+.turma-linha-lista:last-child{border-radius:0 0 var(--r-sm) var(--r-sm)}
+.turma-linha-lista:hover{background:var(--gray-50)}
 .turma-linha-lista .tl-curso{font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-linha-lista .tl-cliente{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .turma-linha-lista .tl-data,.turma-linha-lista .tl-inst{color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.turma-linha-lista .tl-pend{font-size:12px;text-align:center}
-.turma-linha-lista .tl-bar{width:46px;height:4px;background:var(--gray-100);border-radius:3px;overflow:hidden;justify-self:end}
-.turma-linha-lista .tl-bar .f{display:block;height:100%;background:var(--green)}
-.turma-linha-lista .tl-badge{font-size:9px;font-weight:700;padding:3px 8px;border-radius:999px;text-align:center;white-space:nowrap;justify-self:end}
+.turma-linha-lista .tl-inst{display:flex;align-items:center;gap:5px}
+.turma-linha-lista .tl-inst .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.turma-linha-lista .tl-aulas{font-size:11px;color:var(--text-2);display:flex;flex-direction:column;gap:3px;min-width:0}
+.turma-linha-lista .tl-aulas .bar{height:3px;width:54px;background:var(--gray-100);border-radius:2px;overflow:hidden}
+.turma-linha-lista .tl-aulas .bar i{display:block;height:100%;background:var(--green)}
+.turma-linha-lista .tl-status{display:flex;align-items:center;gap:5px;justify-content:flex-end;min-width:0}
+.turma-linha-lista .tl-pend{font-size:12px;flex-shrink:0;line-height:1}
+.turma-linha-lista .tl-badge{font-size:9px;font-weight:700;padding:3px 8px;border-radius:999px;text-align:center;white-space:nowrap}
+/* Mobile: cabeçalho de tabela não funciona em 390px — a linha volta a se
+   comportar como um cartão empilhado (mesmo fallback que já existia), e o
+   cabeçalho some. Ordenação/filtro continuam acessíveis, porque quem
+   ordena é o estado em window._turmasListaSort, não o clique no <th>. */
 @media(max-width:680px){
-  .turma-linha-lista{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+  .turma-lista-head{display:none}
+  .turma-linha-lista{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;border-top:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:6px}
   .turma-linha-lista .tl-curso{flex:1 1 100%}
-  .turma-linha-lista .tl-pend{width:auto}
+  .turma-linha-lista .tl-status{justify-content:flex-start}
+  .turma-linha-lista .tl-aulas{flex-direction:row;align-items:center;gap:6px}
+  .turma-linha-lista .tl-aulas .bar{width:40px;flex-shrink:0}
 }
 .turma-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;display:flex;flex-direction:column;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
 .turma-card:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
@@ -9813,7 +9850,11 @@ async function renderTurmas(abaInicial) {
   // (ver CATALOGO_PENDENCIAS_TURMA/_turmaPendencias/irParaTurmasComPendencia),
   // só ganhou uma aba clicável direto na tela além do atalho do Início.
   const nPend = _turmasCache.filter(t=>_turmaPendencias(t).length>0).length;
-  const abaAtiva = abaInicial || (nAn>0?'em_andamento':nAg>0?'agendada':'concluida');
+  // 2026-08-30: sem abas na tela, a Lista abre mostrando TODAS as turmas —
+  // o operador restringe pelo menu da coluna Status. abaInicial continua
+  // respeitado porque a Início navega pra cá já filtrado (ex.: clicar em
+  // "5 pendências" abre a Lista só com as pendentes).
+  const abaAtiva = abaInicial || 'todas';
   window._turmasAbaAtual = abaAtiva;
   window._turmasBuscaAtual = '';
   window._turmasInstrutorFiltro = '';
@@ -9824,7 +9865,14 @@ async function renderTurmas(abaInicial) {
   // relatórios recentes (_relRecentesKey). Padrão é Cards — o visual de
   // sempre, ninguém é forçado a mudar de hábito; quem trocar pra Lista
   // continua vendo Lista da próxima vez que abrir esta tela.
-  window._turmasVisao = localStorage.getItem(_turmasVisaoKey()) || 'cards';
+  // 2026-08-30: 'cards' foi desativada. Quem tinha 'cards' salvo no
+  // localStorage de rodadas anteriores cai em 'lista' sem erro nenhum —
+  // só 'kanban' sobrevive como alternativa.
+  window._turmasVisao = (localStorage.getItem(_turmasVisaoKey())==='kanban') ? 'kanban' : 'lista';
+  // Ordenação da Lista pelo cabeçalho de coluna. Padrão é data crescente,
+  // que é a mesma ordem cronológica que a tela já usava antes.
+  window._turmasListaSort = {campo:'data', dir:'asc'};
+  window._turmasListaMenuAberto = false;
   setConteudo(`
     <div class="turmas-filtros">
       <div class="turmas-busca">
@@ -9849,20 +9897,24 @@ async function renderTurmas(abaInicial) {
         <input type="date" id="turmasPeriodoAte" onchange="_turmasFiltrarPeriodoCustom(this)">
       </div>
       <div class="turmas-viewtoggle">
-        <button type="button" id="turmasBtnCards" onclick="_turmasAlternarVisao('cards')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg> Cards</button>
+        <!-- 2026-08-30 (pedido do Alisson): visão "Cards" DESATIVADA, não
+             removida. O botão saiu da barra e _turmasAlternarVisao recusa
+             o valor 'cards', mas _htmlTurmasGrid continua inteira no
+             arquivo — reativar é devolver este botão. -->
         <button type="button" id="turmasBtnLista" onclick="_turmasAlternarVisao('lista')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg> Lista</button>
         <button type="button" id="turmasBtnKanban" onclick="_turmasAlternarVisao('kanban')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/></svg> Kanban</button>
       </div>
     </div>
-    <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
-      <div class="turmas-tabs" id="turmasTabsEl">
-        ${_turmaTabHtml('todas','Todas',_turmasCache.length,abaAtiva)}
-        ${_turmaTabHtml('em_andamento','Em andamento',nAn,abaAtiva)}
-        ${_turmaTabHtml('agendada','Agendadas',nAg,abaAtiva)}
-        ${_turmaTabHtml('concluida','Concluídas',nCo,abaAtiva)}
-        ${_turmaTabHtml('cancelada','Canceladas',nCa,abaAtiva)}
-        ${_turmaTabHtml('pendencia','Pendências',nPend,abaAtiva)}
-      </div>
+    <!-- 2026-08-30 (pedido do Alisson): as 6 abas de status (Todas/Em
+         andamento/Agendadas/Concluídas/Canceladas/Pendências) saíram da
+         tela. Quem filtra por status agora é o menu da coluna "Status" no
+         cabeçalho da Lista (_turmasListaMenuStatusHtml), que mostra os
+         mesmos 6 recortes COM as mesmas contagens que as abas exibiam —
+         nenhuma informação foi perdida, mudou o lugar. O estado continua
+         sendo o mesmo window._turmasAbaAtual de antes, e trocarAbaTurmas()
+         continua existindo intacta, porque a Início chama ela de fora
+         (irParaTurmasComPendencia / irParaTurmasFiltradas). -->
+    <div class="turmas-toolbar-mobile" style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:16px;flex-wrap:wrap;gap:8px;min-width:0">
       ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.clip} Nova turma</button>`:''}
     </div>
     <div id="turmasGridEl">${_turmasRenderVisao(_turmasCache, abaAtiva, podeCriar)}</div>`);
@@ -10110,13 +10162,118 @@ function _htmlTurmasGrid(lista, status, podeCriar) {
   return `${kpiHtml}${gruposHtml}`;
 }
 
+// ============================================================
+// LISTA — ordenação e filtro pelo cabeçalho de coluna (2026-08-30)
+// ------------------------------------------------------------
+// Pedido do Alisson: o cabeçalho (Curso | Cliente | Instrutor | Data |
+// Aulas | Status) passa a ser clicável e assume o papel que as abas de
+// status faziam. Cinco colunas ordenam; a de Status abre um menu que
+// FILTRA (e também ordena), porque é ela que substitui as abas.
+//
+// Decisão importante: a ordenação NÃO foi colocada dentro de
+// _turmaFiltrarLista, que é compartilhada com Cards e Kanban. Ela é
+// aplicada depois, só na Lista — assim o Kanban continua com a ordem
+// cronológica dele intacta, sem depender de qual coluna o operador clicou
+// na outra visão.
+const TURMA_LISTA_ORDEM_STATUS = {agendada:1, em_andamento:2, concluida:3, cancelada:4};
+
+function _turmaListaValor(t, campo) {
+  switch (campo) {
+    case 'curso':     return (t.catalogo?.nome||'').toLowerCase();
+    case 'cliente':   return (t.clientes?.nome||'').toLowerCase();
+    case 'instrutor': return _turmaInstrutoresNomes(t).join(', ').toLowerCase();
+    case 'data':      return _turmaDataRef(t)||'';
+    case 'aulas':     return (t.sessoes||[]).length;
+    case 'status':    return TURMA_LISTA_ORDEM_STATUS[t.status]||9;
+    default:          return '';
+  }
+}
+
+// Ordena uma lista JÁ filtrada. Empate cai sempre na data de referência,
+// pra a ordem não ficar aleatória entre turmas com o mesmo cliente/curso.
+function _turmasListaOrdenar(filtrada) {
+  const s = window._turmasListaSort;
+  if (!s || !s.campo) return filtrada;
+  const dir = s.dir === 'desc' ? -1 : 1;
+  return filtrada.slice().sort((a,b) => {
+    const va = _turmaListaValor(a, s.campo), vb = _turmaListaValor(b, s.campo);
+    let r;
+    if (typeof va === 'number' && typeof vb === 'number') r = va - vb;
+    else r = String(va).localeCompare(String(vb), 'pt-BR');
+    if (r !== 0) return r * dir;
+    return (_turmaDataRef(a)||'').localeCompare(_turmaDataRef(b)||'');
+  });
+}
+
+function _turmasListaRedesenhar() {
+  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  _setElBoth('turmasGridEl', _turmasRenderVisao(_turmasCache, window._turmasAbaAtual, podeCriar));
+}
+
+// Clique num cabeçalho: 1º clique ordena crescente, o seguinte inverte.
+function _turmasListaSortToggle(campo) {
+  const s = window._turmasListaSort || {};
+  window._turmasListaSort = (s.campo === campo)
+    ? {campo, dir: s.dir === 'asc' ? 'desc' : 'asc'}
+    : {campo, dir: 'asc'};
+  window._turmasListaMenuAberto = false;
+  _turmasListaRedesenhar();
+}
+
+// O menu da coluna Status precisa sobreviver ao redesenho (a tela toda é
+// reescrita a cada clique via _setElBoth), por isso o aberto/fechado vive
+// numa variável de window e não no DOM.
+function _turmasListaMenuStatus(ev) {
+  if (ev) ev.stopPropagation();
+  window._turmasListaMenuAberto = !window._turmasListaMenuAberto;
+  _turmasListaRedesenhar();
+}
+
+// Filtrar por status = exatamente o que a aba fazia. Delegado pra
+// trocarAbaTurmas() de propósito: é a MESMA função que a Início já chama
+// de fora (irParaTurmasComPendencia/irParaTurmasFiltradas), então os dois
+// caminhos continuam com um comportamento só.
+function _turmasListaFiltrarStatus(status, ev) {
+  if (ev) ev.stopPropagation();
+  window._turmasListaMenuAberto = false;
+  trocarAbaTurmas(status);
+}
+
+function _turmaListaThHtml(campo, label, classeExtra) {
+  const s = window._turmasListaSort || {};
+  const on = s.campo === campo;
+  const seta = on ? (s.dir === 'asc' ? '&#9650;' : '&#9660;') : '&#8597;';
+  return `<button type="button" class="th${on?' on':''}${classeExtra?' '+classeExtra:''}" onclick="_turmasListaSortToggle('${campo}')" title="Ordenar por ${label.toLowerCase()}">${label}<span class="ar">${seta}</span></button>`;
+}
+
+// Menu do Status: os mesmos 6 recortes das abas antigas, com as mesmas
+// contagens, calculadas sobre a lista completa (não sobre a já filtrada).
+function _turmasListaMenuStatusHtml(lista, statusAtivo) {
+  if (!window._turmasListaMenuAberto) return '';
+  const opcoes = [
+    {v:'todas',        rotulo:'Todas as turmas', cor:'#414B63',                       n:lista.length},
+    {v:'agendada',     rotulo:'Agendada',        cor:TURMA_STATUS_DOT.agendada,       n:lista.filter(t=>t.status==='agendada').length},
+    {v:'em_andamento', rotulo:'Em andamento',    cor:TURMA_STATUS_DOT.em_andamento,   n:lista.filter(t=>t.status==='em_andamento').length},
+    {v:'concluida',    rotulo:'Concluída',       cor:TURMA_STATUS_DOT.concluida,      n:lista.filter(t=>t.status==='concluida').length},
+    {v:'cancelada',    rotulo:'Cancelada',       cor:TURMA_STATUS_DOT.cancelada,      n:lista.filter(t=>t.status==='cancelada').length},
+    {v:'pendencia',    rotulo:'Com pendência',   cor:TURMA_STATUS_DOT.pendencia,      n:lista.filter(t=>_turmaPendencias(t).length>0).length},
+  ];
+  const s = window._turmasListaSort || {};
+  return `<div class="turma-lista-statusmenu" onclick="event.stopPropagation()">
+    ${opcoes.map(o=>`<button type="button" class="${o.v===statusAtivo?'on':''}" onclick="_turmasListaFiltrarStatus('${o.v}', event)"><span class="dt" style="background:${o.cor}"></span>${o.rotulo}<span class="qt">${o.n}</span></button>`).join('')}
+    <div class="sep"></div>
+    <button type="button" class="${s.campo==='status'?'on':''}" onclick="_turmasListaSortToggle('status')">Ordenar pela etapa do fluxo</button>
+  </div>`;
+}
+
 // Visão em lista compacta (1 linha por turma) — Proposta B aprovada,
-// 2026-08-14. Reaproveita o mesmo data-action="verTurma" que os cards já
-// usam (ver case 'verTurma' no delegador de cliques), então abre a turma
-// pelo mesmo handler de clique já testado — nenhuma navegação nova.
+// 2026-08-14; cabeçalho de coluna clicável acrescentado em 2026-08-30.
+// Reaproveita o mesmo data-action="verTurma" que os cards já usam (ver
+// case 'verTurma' no delegador de cliques), então abre a turma pelo mesmo
+// handler de clique já testado — nenhuma navegação nova.
 function _htmlTurmasLista(lista, status, podeCriar) {
   const ehTodas = status === 'todas';
-  const filtrada = _turmaFiltrarLista(lista, status);
+  const filtrada = _turmasListaOrdenar(_turmaFiltrarLista(lista, status));
   const busca = window._turmasBuscaAtual||'';
   const dotColorSecao = ehTodas ? '#414B63' : (TURMA_STATUS_DOT[status]||'#5E6780');
   const rotuloStatus = ehTodas ? 'no total' : (TURMA_STATUS_LABEL[status]?.toLowerCase()||'');
@@ -10130,6 +10287,18 @@ function _htmlTurmasLista(lista, status, podeCriar) {
   // ativos (mesmo critério que já valia quando viviam no Cards).
   const kpiHtml = _turmasKpiHtml(lista);
 
+  const headHtml = `<div class="turma-lista-head">
+    ${_turmaListaThHtml('curso','Curso')}
+    ${_turmaListaThHtml('cliente','Cliente')}
+    ${_turmaListaThHtml('instrutor','Instrutor')}
+    ${_turmaListaThHtml('data','Data')}
+    ${_turmaListaThHtml('aulas','Aulas')}
+    <span class="thwrap">
+      <button type="button" class="th thend${(!ehTodas||window._turmasListaSort?.campo==='status')?' on':''}" onclick="_turmasListaMenuStatus(event)" title="Filtrar ou ordenar por status">Status<span class="ar">&#9662;</span></button>
+      ${_turmasListaMenuStatusHtml(lista, status)}
+    </span>
+  </div>`;
+
   const linhasHtml = filtrada.length===0
     ? `<div class="turmas-empty-tab">
         <div style="font-size:32px;margin-bottom:4px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></div>
@@ -10142,24 +10311,30 @@ function _htmlTurmasLista(lista, status, podeCriar) {
         const sessaoRef = (t.sessoes||[]).find(s=>s.data===ref) || (t.sessoes||[])[0];
         const horaTxt = sessaoRef?.hora_inicio ? sessaoRef.hora_inicio.slice(0,5) : '';
         const nomesInstrutores = _turmaInstrutoresNomes(t);
+        const instId = (t.sessoes||[]).find(s=>s.instrutor_id)?.instrutor_id;
         const totalSes = (t.sessoes||[]).length;
         const concSes = (t.sessoes||[]).filter(s=>s.concluida).length;
         const pct = totalSes>0 ? Math.round((concSes/totalSes)*100) : 0;
         const pend = _turmaPendencias(t);
-        // 2026-08-14 (pedido do Alisson — "Posição do curso, Empresa, Data,
-        // Instrutor" com boa hierarquia): Data e Instrutor ganham coluna
-        // própria (antes vinham concatenados num único "tl-meta"), cada um
-        // com seu ícone pra facilitar a identificação, igual ao pedido
-        // pros cards.
+        // 2026-08-30: os ícones de calendário/pessoa saíram das células —
+        // o cabeçalho da coluna já diz o que cada valor é, e o ícone
+        // repetido em 89 linhas era ruído. A bolinha do instrutor entrou
+        // no lugar, com a MESMA cor estável por pessoa já usada no card e
+        // no Kanban (_corInstrutorTurma), pra a identificação por cor
+        // valer nas três visões. "Aulas" virou texto ("1 de 2") + a barra
+        // fina que já existia: o texto diz quantas, a barra diz o quanto —
+        // antes só a barra existia, então isto é informação a mais, não a
+        // menos.
         return `<div class="turma-linha-lista" data-action="verTurma" data-id="${t.id}">
-          <span class="tl-dot" style="background:${TURMA_STATUS_DOT[st]||'#5E6780'}"></span>
           <span class="tl-curso">${escapeHtml(t.catalogo?.nome||'—')}</span>
           <span class="tl-cliente">${escapeHtml(t.clientes?.nome||'—')}</span>
-          <span class="tl-data"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg> ${dataFmt}${horaTxt?' · '+horaTxt:''}</span>
-          <span class="tl-inst">${nomesInstrutores.length?'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M20 21v-2a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v2"/><circle cx="12" cy="7" r="4"/></svg> '+escapeHtml(nomesInstrutores.join(', ')):'<span style="opacity:.4">—</span>'}</span>
-          <span class="tl-pend" title="${pend.length?escapeHtml(pend.map(p=>p.label).join(', ')):''}">${pend.length?'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>':''}</span>
-          <span class="tl-bar">${concSes>0?`<span class="f" style="width:${pct}%"></span>`:''}</span>
-          <span class="tl-badge" style="background:${BADGE_BG[st]||'var(--gray-100)'};color:${BADGE_TXT[st]||'var(--text-2)'}">${TURMA_STATUS_LABEL[st]||st}</span>
+          <span class="tl-inst">${nomesInstrutores.length?`<span class="dot" style="background:${_corInstrutorTurma(instId)}"></span><span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(nomesInstrutores.join(', '))}</span>`:'<span style="opacity:.4">—</span>'}</span>
+          <span class="tl-data">${dataFmt}${horaTxt?' · '+horaTxt:''}</span>
+          <span class="tl-aulas">${totalSes>0?`<span>${concSes} de ${totalSes}</span><span class="bar"><i style="width:${pct}%"></i></span>`:'<span style="opacity:.4">—</span>'}</span>
+          <span class="tl-status">
+            <span class="tl-pend" title="${pend.length?escapeHtml(pend.map(p=>p.label).join(', ')):''}">${pend.length?'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>':''}</span>
+            <span class="tl-badge" style="background:${BADGE_BG[st]||'var(--gray-100)'};color:${BADGE_TXT[st]||'var(--text-2)'}">${TURMA_STATUS_LABEL[st]||st}</span>
+          </span>
         </div>`;
       }).join('');
 
@@ -10167,7 +10342,7 @@ function _htmlTurmasLista(lista, status, podeCriar) {
     <div class="turmas-section-dot" style="background:${dotColorSecao}"></div>
     <span style="font-size:12px;font-weight:500;color:var(--text-3);white-space:nowrap">${sectionLabel}</span>
     <div class="turmas-section-line"></div>
-  </div>${linhasHtml}`;
+  </div>${filtrada.length===0?'':headHtml}${linhasHtml}`;
 }
 
 // Visão Kanban (2026-08-30, mockup aprovado pelo Alisson — ver
@@ -10218,13 +10393,23 @@ function _htmlTurmasKanban(lista) {
 // nunca desalinhar.
 function _turmasRenderVisao(lista, status, podeCriar) {
   if (window._turmasVisao === 'kanban') return _htmlTurmasKanban(lista);
-  return (window._turmasVisao==='lista') ? _htmlTurmasLista(lista, status, podeCriar) : _htmlTurmasGrid(lista, status, podeCriar);
+  // 'cards' está desativada desde 2026-08-30 e nenhum botão da tela
+  // consegue mais selecionar esse valor — a chamada fica aqui só pra
+  // _htmlTurmasGrid não virar código órfão, e pra reativar a visão bastar
+  // devolver o botão na barra.
+  if (window._turmasVisao === 'cards') return _htmlTurmasGrid(lista, status, podeCriar);
+  return _htmlTurmasLista(lista, status, podeCriar);
 }
 
 function _turmasVisaoKey() { return `tl_turmas_visao_${usuarioAtual?.id || 'x'}`; }
 
 function _turmasAlternarVisao(visao) {
+  // 2026-08-30: 'cards' desativada — se algo tentar selecionar (link
+  // antigo, localStorage de outra máquina), cai em 'lista' em vez de
+  // renderizar uma visão que não está mais disponível na barra.
+  if (visao === 'cards') visao = 'lista';
   window._turmasVisao = visao;
+  window._turmasListaMenuAberto = false;
   try { localStorage.setItem(_turmasVisaoKey(), visao); } catch(e) {}
   _turmasAtualizarBotoesVisao();
   const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
@@ -10233,7 +10418,7 @@ function _turmasAlternarVisao(visao) {
 
 function _turmasAtualizarBotoesVisao() {
   const visao = window._turmasVisao || 'cards';
-  [['turmasBtnCards','cards'],['turmasBtnLista','lista'],['turmasBtnKanban','kanban']].forEach(([id,val]) => {
+  [['turmasBtnLista','lista'],['turmasBtnKanban','kanban']].forEach(([id,val]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
     const ativo = visao === val;
@@ -10241,12 +10426,9 @@ function _turmasAtualizarBotoesVisao() {
     btn.style.color = ativo ? 'var(--navy)' : 'var(--text-3)';
     btn.style.boxShadow = ativo ? 'var(--shadow)' : 'none';
   });
-  // Kanban já mostra as 5 etapas lado a lado — a aba de status (Todas/
-  // Agendada/.../Pendências) não tem efeito nessa visão, então some pra
-  // não parecer clicável à toa. querySelectorAll (não getElementById)
-  // porque a tela é dual-DOM: a mesma id existe na cópia desktop e na
-  // mobile (ver setConteudo/_setElBoth), então as duas precisam mudar.
-  document.querySelectorAll('#turmasTabsEl').forEach(el => { el.style.display = visao==='kanban' ? 'none' : ''; });
+  // (As abas de status foram removidas da tela em 2026-08-30 — não existe
+  // mais #turmasTabsEl pra esconder aqui. Quem filtra por status na Lista
+  // é o menu da coluna Status; o Kanban mostra as 5 etapas lado a lado.)
 }
 
 function _turmasFiltrarInstrutor(valor) {
@@ -25430,7 +25612,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '149';
+  var APP_BUILD = '150';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
