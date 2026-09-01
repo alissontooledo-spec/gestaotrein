@@ -16669,6 +16669,18 @@ async function _enviarFinalizarSessao(reg) {
   if (todasConcluidas) {
     const {error:errTurma} = await sb.from('turmas').update({status:'concluida'}).eq('id', reg.turmaId);
     if (errTurma) throw errTurma;
+    // Ajuste 1 (2026-09-01): grava a carga horária confirmada pelo
+    // instrutor. Best-effort de propósito, igual à conformidade logo
+    // abaixo — nunca desfaz nem bloqueia a finalização (já concluída
+    // acima) se falhar, inclusive se a coluna ainda não existir neste
+    // banco (migration PASSO-27 pendente de execução pelo Alisson).
+    if (reg.cargaHorariaReal) {
+      try {
+        const {data:_chGravada, error:errCh} = await sb.from('turmas')
+          .update({carga_horaria_real: reg.cargaHorariaReal}).eq('id', reg.turmaId).select('id');
+        if (errCh || !_chGravada?.length) console.warn('Carga horária real não gravada:', errCh?.message || '0 linhas afetadas');
+      } catch(e) { console.warn('Carga horária real: falha ao gravar', e.message); }
+    }
     try { await _atualizarConformidadeTurma(reg.turmaId, todasSessoes); } catch(e) {}
   }
   return todasConcluidas;
@@ -16960,9 +16972,10 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
               <div class="card-title">${catFlags.exige_avaliacao ? 'Presença e avaliação' : 'Quem participou?'}</div>
               <div style="font-size:12px;color:var(--text-2);margin:4px 0 12px">${catFlags.exige_avaliacao ? 'Colete a assinatura e registre o resultado da avaliação de cada aluno.' : 'Toque em "Assinar" para coletar a assinatura de cada aluno.'}</div>
               ${totalPartExec ? `<div class="exec-countbadge" id="execCountBadge">${assinCountExec} de ${totalPartExec} assinaram</div>` : ''}
-              ${(!sessaoAtiva?.concluida && totalPartExec) ? `
-              <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-                <button class="btn btn-outline btn-sm" onclick="baixarFolhaColeta()">Baixar folha de coleta (papel)</button>
+              ${!sessaoAtiva?.concluida ? `
+              <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                <button class="btn btn-amber btn-sm" onclick="abrirCadastroRapidoColabExec()">+ Novo colaborador</button>
+                ${totalPartExec ? `<button class="btn btn-outline btn-sm" onclick="baixarFolhaColeta()">Baixar folha de coleta (papel)</button>` : ''}
               </div>` : ''}
               ${_htmlBuscaPresencas(totalPartExec)}
               <div id="listaPresencas">
@@ -17038,6 +17051,12 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
                   <span style="font-size:14px;font-weight:600;color:${_artCompleta(artTurma)?'var(--green-text)':'var(--amber-text)'}">${_artResumoTexto(artTurma)}</span>
                 </div>` : ''}
               </div>
+              ${(!sessaoAtiva?.concluida && (t.sessoes||[]).filter(s=>s.id!==sessaoAtiva?.id).every(s=>s.concluida)) ? `
+              <div style="border:1.5px dashed var(--amber);background:var(--amber-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px">
+                <label for="execCargaHorariaReal" style="display:block;font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Carga horária do treinamento</label>
+                <input type="number" id="execCargaHorariaReal" min="0.5" step="0.5" value="${t.carga_horaria_real ?? t.catalogo?.carga_horaria ?? ''}" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;font-weight:700;color:var(--text-1)">
+                <div style="font-size:11px;color:var(--text-2);margin-top:6px">Preenchida com a carga padrão do curso (${t.catalogo?.carga_horaria||0}h). Confirme ou ajuste para o que foi efetivamente ministrado nesta turma — este valor passa a valer no certificado.</div>
+              </div>` : ''}
               ${sessaoAtiva?.concluida ? `
               <div style="background:var(--green-l);color:var(--green);border-radius:var(--r-md);padding:12px 14px;font-size:13px;font-weight:600;text-align:center">
                 ✓ Este encontro já foi finalizado${sessaoAtiva?.data?' em '+formatarData(sessaoAtiva.data):''}. Você está revisando os dados registrados.
@@ -17756,6 +17775,67 @@ async function baixarFolhaColeta() {
   await gerarListaPresenca(turmaId, sessaoId, true, {modo:'coleta'});
 }
 
+// ---- Ajuste 2 (2026-09-01): novo colaborador direto na etapa Presenca ----
+// Reaproveita a mesma logica do cadastro rapido ja usado pelo
+// Administrador/Comercial em "Ver turma" (abrirCadastroRapidoColab /
+// salvarCadastroRapido) — aqui adaptada para nao recarregar a tela inteira
+// (verTurma), so a lista de presenca em memoria, preservando assinaturas e
+// evidencias ja coletadas nesta sessao.
+//
+// So-online de proposito (decisao registrada em 01-Requisitos/ajustes-
+// fluxo-instrutor-carga-horaria-novo-colaborador.md, secao 3.3): a execucao
+// do instrutor e offline-first, mas cadastrar um colaborador novo e ja
+// coletar a assinatura dele offline exigiria reconciliar depois um ID
+// temporario com o ID real do banco em todos os itens da fila que
+// dependessem dele — risco maior que o ganho para o objetivo deste ajuste.
+function abrirCadastroRapidoColabExec() {
+  if (!navigator.onLine) {
+    showToast('Cadastrar um novo colaborador exige conexão. Tente novamente quando a internet voltar.', 'error', 6000);
+    return;
+  }
+  abrirModal('Novo colaborador', `
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Cadastro rápido — vinculado automaticamente à empresa desta turma e adicionado direto à lista de presença.</div>
+    <div class="field"><label>Nome completo *</label>
+      <input type="text" id="mExecCRNome" placeholder="Nome completo"></div>
+    <div class="field"><label>CPF *</label>
+      <input type="text" id="mExecCRCpf" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCadastroRapidoExec()">Cadastrar e adicionar</button>`);
+}
+
+async function salvarCadastroRapidoExec() {
+  const nome = document.getElementById('mExecCRNome')?.value.trim();
+  if (!nome) { showToast('Nome é obrigatório','error'); return; }
+  const cpf  = document.getElementById('mExecCRCpf')?.value.trim() || '';
+  // CPF obrigatorio neste fluxo (pedido do Alisson, 2026-09-01) — diferente
+  // do cadastro rapido do Administrador, onde continua opcional.
+  if (cpf.replace(/\D/g,'').length !== 11) { showToast('CPF é obrigatório (11 dígitos).','error'); return; }
+  const turmaId   = window._execTurmaId;
+  const clienteId = window._execClienteId;
+  if (!turmaId) { showToast('Turma não encontrada — reabra a execução.','error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const {data:col, error} = await sb.from('colaboradores')
+      .insert({nome, cpf, cliente_id: clienteId||null, org_id: usuarioAtual.org_id}).select().single();
+    if (error) throw error;
+    const {data:cli} = clienteId ? await sb.from('clientes').select('nome').eq('id',clienteId).single() : {data:null};
+    const {data:novoParticipante, error:e2} = await sb.from('turma_participantes').insert({
+      turma_id: turmaId, colaborador_id: col.id, org_id: usuarioAtual.org_id,
+      empresa_vinculo: cli?.nome || null
+    }).select('*, colaboradores(*)').single();
+    if (e2) throw e2;
+    window._execParticipantes = [...(window._execParticipantes||[]), novoParticipante || {colaborador_id:col.id, turma_id:turmaId, colaboradores:col}];
+    fecharModal();
+    showToast(`${nome} cadastrado e adicionado à lista!`,'success');
+    _execRedesenharBusca();
+    _execRedesenharLista();
+    _execAtualizarResumoEtapas();
+  } catch(e) {
+    setBtnModalLoading(false);
+    showToast(e.code==='23505' ? 'CPF já cadastrado no sistema' : (e.message||'Erro ao cadastrar'), 'error');
+  }
+}
+
 // ---- Assinatura digital ----
 function abrirAssinatura(colId, nomeCol) {
   window._assinaturaColId = colId;
@@ -18118,12 +18198,25 @@ async function finalizarTurma(turmaId) {
       'Finalizar assim mesmo', false);
     if (!okSemArt) return;
   }
+  // Ajuste 1 (2026-09-01): o campo de carga horária real só existe na tela
+  // quando este encontro fecha a turma (ver abrirExecucao) — se existir,
+  // exige um valor válido antes de deixar finalizar.
+  const _cargaEl = execEl('execCargaHorariaReal');
+  let cargaHorariaReal = null;
+  if (_cargaEl) {
+    cargaHorariaReal = parseFloat(_cargaEl.value);
+    if (!cargaHorariaReal || cargaHorariaReal <= 0) {
+      showToast('Informe a carga horária do treinamento antes de finalizar.','error');
+      return;
+    }
+  }
+
   const okFinalizar = await confirmarAcao('Confirma a finalização desta etapa do treinamento?', 'Finalizar', false);
   if (!okFinalizar) return;
 
   const sessaoId = window._execSessaoId;
   if (!sessaoId) { showToast('Aula não encontrada.','error'); return; }
-  const reg = {tipo:'finalizar_sessao', turmaId, sessaoId, criado_em:new Date().toISOString()};
+  const reg = {tipo:'finalizar_sessao', turmaId, sessaoId, cargaHorariaReal, criado_em:new Date().toISOString()};
 
   try {
     showLoading('Finalizando...');
@@ -23855,7 +23948,7 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
         curso: pdfSafe(t.catalogo?.nome||'Treinamento', 200),
         data: dataAula,
         instrutor,
-        ch: `${t.catalogo?.carga_horaria||'-'}h`,
+        ch: `${t.carga_horaria_real ?? t.catalogo?.carga_horaria ?? '-'}h`,
         local,
         empresa: t.clientes?.nome||'não informada',
         cnpjCliente: t.clientes?.cnpj||'-',
@@ -24187,7 +24280,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
     // sempre junto da credencial (ou sozinho, se não houver credencial).
     const instCpfTxt = instCpf ? `CPF ${instCpf}` : '';
     const instCredencialCpf = [instCredencial, instCpfTxt].filter(Boolean).join(' · ');
-    const ch        = t.catalogo?.carga_horaria || 0;
+    const ch        = t.carga_horaria_real ?? t.catalogo?.carga_horaria ?? 0;
     const nomeT     = t.catalogo?.nome || 'Treinamento';
     const valMeses  = t.catalogo?.validade_meses || 12;
     const cpBlocos  = extrairBlocosConteudo(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
@@ -24701,7 +24794,7 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
     // 100% dos encontros — quem faltou em algum dia não é considerado
     // concluinte e fica de fora da lista impressa no documento.
     const participantes = (t.turma_participantes || []).filter(p => elegiveisColetivo.has(p.colaborador_id));
-    const ch            = t.catalogo?.carga_horaria || 0;
+    const ch            = t.carga_horaria_real ?? t.catalogo?.carga_horaria ?? 0;
     const nomeT         = t.catalogo?.nome || 'Treinamento';
     const valMeses      = t.catalogo?.validade_meses || 12;
     const cpBlocos      = extrairBlocosConteudo(t.catalogo?.conteudo_programatico || t.catalogo?.descricao || '');
@@ -26145,7 +26238,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '154';
+  var APP_BUILD = '155';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
