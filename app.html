@@ -8320,10 +8320,11 @@ async function salvarColab() {
 // ============================================================
 async function renderCatalogo() {
   const oi = usuarioAtual.org_id;
-  const [{data, error}, {data: turmasAll}, {data: partAll}] = await Promise.all([
+  const [{data, error}, {data: turmasAll}, {data: partAll}, {data: docsAll}] = await Promise.all([
     sb.from('catalogo').select('*').eq('org_id', oi).order('nome'),
     sb.from('turmas').select('catalogo_id, status, id').eq('org_id', oi),
     sb.from('turma_participantes').select('turma_id, colaborador_id'),
+    sb.from('documentos').select('turma_id,tipo,colaborador_id,revogado_em').eq('org_id', oi),
   ]);
   if (error) throw error;
 
@@ -8337,13 +8338,17 @@ async function renderCatalogo() {
     usoMap[t.catalogo_id].total++;
     if (t.status === 'em_andamento') usoMap[t.catalogo_id].ativas++;
   });
-  // Contar pessoas únicas por catálogo
-  (partAll || []).forEach(p => {
-    const turma = (turmasAll || []).find(t => t.id === p.turma_id);
-    if (turma?.catalogo_id && usoMap[turma.catalogo_id]) {
-      usoMap[turma.catalogo_id].pessoas++;
-    }
+  // Pessoas treinadas por treinamento — certificado individual emitido e
+  // não revogado, contado sem repetir a mesma pessoa (correção 2026-09-02;
+  // antes somava matrícula, inclusive de turma cancelada/agendada).
+  const _certCat = _certPorTurmaMap(docsAll);
+  const _pesPorCat = {};
+  (turmasAll || []).forEach(t => {
+    if (!t.catalogo_id || !_certCat[t.id]) return;
+    (_pesPorCat[t.catalogo_id] ||= new Set());
+    _certCat[t.id].forEach(c => _pesPorCat[t.catalogo_id].add(c));
   });
+  Object.keys(usoMap).forEach(cid => { usoMap[cid].pessoas = _pesPorCat[cid]?.size || 0; });
   window._catalogoUsoMap = usoMap;
 
   const total     = _catalogoCache.length;
@@ -16130,6 +16135,21 @@ async function renderHistorico() {
     (td||[]).forEach(t=>{ turmasMap[t.id]=t; });
   }
 
+  // Certificados individuais dessas turmas — base de "Alunos treinados"
+  // (correção 2026-09-02; antes o card somava MATRÍCULA). Consulta própria,
+  // não embutida no select de turmas, para a tela não depender de resolução
+  // de relacionamento e continuar abrindo mesmo se esta consulta falhar.
+  let _certHistPorTurma = {};
+  if (turmaIds.length) {
+    try {
+      const {data:_docsHist} = await sb
+        .from('documentos')
+        .select('turma_id,tipo,colaborador_id,revogado_em')
+        .in('turma_id', turmaIds);
+      _certHistPorTurma = _certPorTurmaMap(_docsHist);
+    } catch(e) { _certHistPorTurma = {}; }
+  }
+
   // Agrupar sessões por turma (apenas turmas concluídas)
   const grupos = {};
   (sessoes||[]).forEach(s=>{
@@ -16146,7 +16166,10 @@ async function renderHistorico() {
 
   window._historicoLista = lista;
   const totalTurmas   = lista.length;
-  const totalAlunos   = lista.reduce((acc,g)=>(acc+(g.turma.turma_participantes?.length||0)),0);
+  // Alunos treinados = pessoas DISTINTAS com certificado individual emitido
+  // e não revogado nessas turmas — não matrícula, e sem contar a mesma
+  // pessoa duas vezes se ela fez mais de um treinamento (correção 2026-09-02).
+  const totalAlunos   = _pessoasTreinadas(lista.map(g => g.turma), _certHistPorTurma);
   const totalHoras    = lista.reduce((acc,g)=>{
     const ch = g.turma.catalogo?.carga_horaria||0;
     return acc + ch; // carga_horaria ja e o total do treinamento
@@ -18361,6 +18384,7 @@ async function renderRelatorios() {
     {data:documentosRaw},
     {data:enviosRaw},
     {data:presencasRaw},
+    {data:sessoesTodasRaw},
     confData,
   ] = await Promise.all([
     sb.from('turmas')
@@ -18370,13 +18394,18 @@ async function renderRelatorios() {
     sb.from('sessoes').select('id,turma_id,data,instrutor_id,concluida,usuarios!instrutor_id(id,nome)').eq('concluida', true),
     sb.from('usuarios').select('id,nome,perfil').eq('org_id', oi).eq('ativo', true),
     sb.from('turma_participantes').select('turma_id,colaborador_id'),
-    sb.from('documentos').select('turma_id,tipo,colaborador_id').eq('org_id', oi),
+    sb.from('documentos').select('turma_id,tipo,colaborador_id,emitido_em,revogado_em').eq('org_id', oi),
     sb.from('envios_email').select('turma_id,status').eq('org_id', oi),
     // Presença por encontro — necessária pra saber quem é ELEGÍVEL a
     // certificado (presença em 100% dos encontros da turma, mesma regra de
     // _participantesElegiveisCertificado), usada abaixo em `pendencias` pra
     // não tratar aluno ausente como "documento pendente" (correção 2026-08-20).
     sb.from('presencas').select('turma_id,colaborador_id,sessao_id,presente'),
+    // Encontros COMPLETOS (inclusive não concluídos e cancelados, e com
+    // horário) — base dos indicadores de instrutor, que se medem por
+    // encontro, não por turma. A consulta `sessoes` acima continua existindo
+    // com `concluida=true` porque as outras telas dependem desse recorte.
+    sb.from('sessoes').select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,concluida,cancelada').eq('org_id', oi),
     // Indicadores de conformidade/reciclagem só fazem sentido no plano Pro (mesma
     // regra da tela Conformidade) — busca só quando o plano já dá acesso, para
     // não gastar consulta à toa em quem ainda não tem a feature.
@@ -18389,8 +18418,16 @@ async function renderRelatorios() {
   window._relRaw = {
     turmas: turmasRaw||[],
     clientes: clientesRaw||[],
+    // Base ÚNICA de "pessoas treinadas" em todas as telas e PDFs de
+    // relatório: certificado individual emitido e não revogado, por turma.
+    // Matrícula (`participantes`, abaixo) ficou só para média por turma.
+    certPorTurma: _certPorTurmaMap(documentosRaw),
     // sessoes não tem org_id — isolar via turma_id pertencente às turmas já filtradas por org acima
     sessoes: sessoesOrg,
+    // Encontros completos + presenças: fonte oficial da atuação do instrutor
+    // (ver _metricasInstrutor). `sessoes` acima segue sendo só as concluídas.
+    sessoesTodas: (sessoesTodasRaw||[]).filter(s=>turmaIdsOrg.has(s.turma_id)),
+    presencas: (presencasRaw||[]).filter(p=>turmaIdsOrg.has(p.turma_id)),
     usuarios: usuariosRaw||[],
     participantes: (participantesRaw||[]).filter(p=>turmaIdsOrg.has(p.turma_id)),
     // ── Documentos pendentes — visão da organização inteira, não só de um
@@ -18458,6 +18495,139 @@ async function renderRelatorios() {
   _renderRelatorioView();
 }
 
+// ── Regra ÚNICA de "pessoas treinadas" (correção 2026-09-02) ──────────────
+// Pessoa treinada = colaborador com CERTIFICADO INDIVIDUAL emitido e não
+// revogado. NUNCA matrícula (`turma_participantes`), que conta quem foi
+// apenas vinculado à turma — inclusive de turma agendada, em andamento ou
+// cancelada, e inclusive de quem faltou ou foi reprovado. É a mesma régua
+// do Relatório Executivo Mensal (Edge Function `relatorio-agendado`), para
+// as duas superfícies nunca mais divergirem.
+// Ver KB: 01-Requisitos/2026-09-02-relatorio-mensal-anexo-e-pessoas-treinadas.md
+function _certPorTurmaMap(documentos) {
+  const mapa = {};
+  (documentos || []).forEach(d => {
+    if (d.tipo !== 'certificado_individual' || d.revogado_em || !d.colaborador_id) return;
+    (mapa[d.turma_id] ||= new Set()).add(d.colaborador_id);
+  });
+  return mapa;
+}
+/** Pessoas distintas com certificado individual válido em QUALQUER das turmas dadas. */
+function _pessoasTreinadas(turmas, certPorTurma) {
+  const s = new Set();
+  (turmas || []).forEach(t => {
+    const c = certPorTurma && certPorTurma[t.id];
+    if (c) c.forEach(x => s.add(x));
+  });
+  return s.size;
+}
+/** Certificados individuais válidos emitidos para UMA turma. */
+function _pessoasTreinadasTurma(turmaId, certPorTurma) {
+  const c = certPorTurma && certPorTurma[turmaId];
+  return c ? c.size : 0;
+}
+
+// ── Atuação do instrutor: a unidade é o ENCONTRO, nunca a turma ──────────
+// Ver KB: 05-Decisoes/2026-09-02-fontes-oficiais-indicadores-instrutor.md
+// Uma CIPA de 20h em 5 dias com 5 instrutores tem 5 dias e 20h no total —
+// não 5 turmas e 100h, que era o que saía quando cada indicador do instrutor
+// era derivado da turma inteira. Nada aqui lê `documentos`: certificado mede
+// aluno, nunca atuação de instrutor.
+
+/** CH oficial da turma: a real informada pelo instrutor, senão a do catálogo. */
+function _chTurma(t) {
+  return Number(t?.carga_horaria_real ?? t?.catalogo?.carga_horaria ?? 0) || 0;
+}
+
+/** Duração real de um encontro, em horas decimais — null quando falta horário. */
+function _durSessao(s) {
+  if (!s?.hora_inicio || !s?.hora_fim) return null;
+  const [hi, mi] = String(s.hora_inicio).split(':').map(Number);
+  const [hf, mf] = String(s.hora_fim).split(':').map(Number);
+  if (![hi, mi, hf, mf].every(n => Number.isFinite(n))) return null;
+  const min = (hf * 60 + mf) - (hi * 60 + mi);
+  return min > 0 ? min / 60 : null;
+}
+
+/**
+ * Encontro entregue: não cancelado E (concluído OU a turma já foi concluída).
+ * O "ou" existe porque uma turma pode ser marcada concluída sem que cada
+ * encontro tenha o flag atualizado (já anotado no Histórico do instrutor) —
+ * sem essa tolerância as horas dos instrutores ficariam abaixo do total da
+ * organização sem motivo real.
+ */
+function _sessaoEntregue(s, turma) {
+  if (!s || s.cancelada === true) return false;
+  return s.concluida === true || turma?.status === 'concluida';
+}
+
+/**
+ * Rateia a CH da turma entre os encontros ENTREGUES, proporcionalmente à
+ * duração real de cada um (encontro sem horário entra com a duração média
+ * dos demais). É o que garante a invariante que torna o número auditável:
+ *   Σ horas dos instrutores == horas entregues da organização
+ *                              − horas de encontros sem instrutor definido
+ */
+function _horasPorSessaoDaTurma(turma, sessoesDaTurma) {
+  const horas = {};
+  const entregues = (sessoesDaTurma || []).filter(s => _sessaoEntregue(s, turma));
+  if (!entregues.length) return horas;
+  const ch = _chTurma(turma);
+  const conhecidas = entregues.map(_durSessao).filter(d => d !== null);
+  const media = conhecidas.length ? conhecidas.reduce((a, b) => a + b, 0) / conhecidas.length : 1;
+  const pesos = entregues.map(s => _durSessao(s) ?? media);
+  const soma = pesos.reduce((a, b) => a + b, 0) || entregues.length;
+  entregues.forEach((s, i) => { horas[s.id] = ch * (pesos[i] / soma); });
+  return horas;
+}
+
+/**
+ * Indicadores de um instrutor dentro do conjunto de turmas dado.
+ * `dias` e `horas` SOMAM entre instrutores; `turmas`, `alunos` e `clientes`
+ * NÃO somam (a mesma turma e o mesmo aluno aparecem em vários instrutores) —
+ * por isso nenhuma tela monta linha de total com essas colunas.
+ */
+function _metricasInstrutor(instrutorId, turmas, sessoesTodas, presencas) {
+  const porId = {};
+  (turmas || []).forEach(t => { porId[t.id] = t; });
+  const porTurma = {};
+  (sessoesTodas || []).forEach(s => { if (porId[s.turma_id]) (porTurma[s.turma_id] ||= []).push(s); });
+
+  let horas = 0, dias = 0, atribuidos = 0;
+  const turmaIds = new Set(), sessaoIds = new Set();
+  Object.keys(porTurma).forEach(tid => {
+    const t = porTurma[tid], turma = porId[tid];
+    const mapaHoras = _horasPorSessaoDaTurma(turma, t);
+    t.forEach(s => {
+      if (s.instrutor_id !== instrutorId || s.cancelada === true) return;
+      atribuidos++;
+      turmaIds.add(tid);
+      if (_sessaoEntregue(s, turma)) {
+        dias++;
+        sessaoIds.add(s.id);
+        horas += mapaHoras[s.id] || 0;
+      }
+    });
+  });
+
+  // Alunos atendidos = presença confirmada NOS ENCONTROS DELE. Não é
+  // matrícula da turma nem certificado — o aluno que assistiu ao dia 1 e
+  // faltou no dia 3 foi atendido por quem deu o dia 1, mesmo sem se formar.
+  const alunos = new Set();
+  (presencas || []).forEach(p => {
+    if (p.presente === true && sessaoIds.has(p.sessao_id)) alunos.add(p.colaborador_id);
+  });
+
+  const clientes = new Set();
+  turmaIds.forEach(tid => { const c = porId[tid]?.cliente_id; if (c) clientes.add(c); });
+
+  return {
+    dias, horas: Math.round(horas), turmas: turmaIds.size, alunos: alunos.size,
+    clientes: clientes.size, encontrosAtribuidos: atribuidos,
+    aproveitamento: atribuidos ? Math.round((dias / atribuidos) * 100) : 0,
+    turmaIds,
+  };
+}
+
 function _relFiltrarPorPeriodo(turmas, sessoes, meses) {
   const hoje  = new Date();
   const corte = new Date(hoje.getFullYear(), hoje.getMonth() - meses + 1, 1);
@@ -18475,7 +18645,7 @@ function _relFiltrarPorPeriodo(turmas, sessoes, meses) {
 
 function _renderRelatorioView() {
   setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
-  const { turmas: tAll, clientes: cliAll, sessoes: sesAll, usuarios: usrAll, participantes: partAll } = window._relRaw;
+  const { turmas: tAll, clientes: cliAll, sessoes: sesAll, usuarios: usrAll, participantes: partAll, certPorTurma } = window._relRaw;
   const meses = window._relPeriodo || 6;
 
   const { tFilt, sFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
@@ -18497,10 +18667,12 @@ function _renderRelatorioView() {
   const cliAtivos   = cliAll.filter(c => c.ativo).length;
   const totalTurmas = tFilt.length;
 
-  // Participantes únicos no período
+  // Pessoas treinadas no período — certificado individual emitido, não
+  // matrícula (correção 2026-09-02). `partFilt` continua existindo só para
+  // a média de participantes por turma, que é outra métrica.
   const turmaIdsFilt = new Set(tFilt.map(t => t.id));
   const partFilt     = partAll.filter(p => turmaIdsFilt.has(p.turma_id));
-  const partUnicos   = new Set(partFilt.map(p => p.colaborador_id)).size;
+  const partUnicos   = _pessoasTreinadas(tFilt, certPorTurma);
 
   // Horas totais (turmas concluídas no período)
   const horasTotal = tFilt
@@ -18510,8 +18682,7 @@ function _renderRelatorioView() {
   // Período anterior (para comparativo)
   const tAnt = tAll.filter(t => new Date(t.created_at) >= corteAnt && new Date(t.created_at) < corteAtual);
   const turmaIdsAnt = new Set(tAnt.map(t => t.id));
-  const partFiltAnt = partAll.filter(p => turmaIdsAnt.has(p.turma_id));
-  const partUnicosAnt = new Set(partFiltAnt.map(p => p.colaborador_id)).size;
+  const partUnicosAnt = _pessoasTreinadas(tAnt, certPorTurma);
   const horasTotalAnt = tAnt.filter(t => t.status === 'concluida').reduce((sum, t) => sum + (t.catalogo?.carga_horaria || 0), 0);
 
   // ── Gráfico: evolução nos últimos N meses ──
@@ -18528,8 +18699,8 @@ function _renderRelatorioView() {
   const dadosTurmas   = mesesLabel.map(m => tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear() === m.ano && d.getMonth() + 1 === m.mes; }).length);
   const dadosSessoes  = mesesLabel.map(m => sesAll.filter(s => { const d = new Date(s.data || ''); return d.getFullYear() === m.ano && d.getMonth() + 1 === m.mes; }).length);
   const dadosPart     = mesesLabel.map(m => {
-    const tIds = new Set(tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear() === m.ano && d.getMonth() + 1 === m.mes; }).map(t => t.id));
-    return new Set(partAll.filter(p => tIds.has(p.turma_id)).map(p => p.colaborador_id)).size;
+    const tDoMes = tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear() === m.ano && d.getMonth() + 1 === m.mes; });
+    return _pessoasTreinadas(tDoMes, certPorTurma);
   });
 
   window._relDados = { turmas: dadosTurmas, sessoes: dadosSessoes, participantes: dadosPart };
@@ -18539,11 +18710,14 @@ function _renderRelatorioView() {
   const cliMap = {};
   tFilt.forEach(t => {
     if (!t.cliente_id) return;
-    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome || '—', turmas: 0, horas: 0, pessoas: 0 };
+    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome || '—', turmas: 0, horas: 0, pessoas: 0, _pes: new Set() };
     cliMap[t.cliente_id].turmas++;
-    cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria || 0);
-    cliMap[t.cliente_id].pessoas += partAll.filter(p => p.turma_id === t.id).length;
+    // Horas só de turma concluída (o KPI de cima já fazia assim; aqui somava
+    // também agendada/cancelada — horas que nunca foram entregues).
+    if (t.status === 'concluida') cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria || 0);
+    (certPorTurma?.[t.id] || []).forEach(c => cliMap[t.cliente_id]._pes.add(c));
   });
+  Object.values(cliMap).forEach(v => { v.pessoas = v._pes.size; });
   const rankCli = Object.entries(cliMap).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.turmas - a.turmas).slice(0, 5);
 
   const catMap = {};
@@ -18836,7 +19010,7 @@ function relToggle(btn, metric, label, color) {
 
 function relVerCliente(clienteId) {
   setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatório Cliente</div>`);
-  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw;
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll, certPorTurma } = window._relRaw;
   const meses = window._relPeriodo || 6;
   const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
 
@@ -18845,8 +19019,8 @@ function relVerCliente(clienteId) {
 
   const nomeCliente = turmasCliente[0]?.clientes?.nome || 'Cliente';
   _relRecentesAdd('cliente', clienteId, nomeCliente);
-  const totalPessoas = new Set(partAll.filter(p => turmasCliente.some(t => t.id === p.turma_id)).map(p => p.colaborador_id)).size;
-  const totalHoras   = turmasCliente.reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+  const totalPessoas = _pessoasTreinadas(turmasCliente, certPorTurma);
+  const totalHoras   = turmasCliente.filter(t => t.status === 'concluida').reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
   const concluidas   = turmasCliente.filter(t => t.status === 'concluida').length;
   const emAndamento  = turmasCliente.filter(t => t.status === 'em_andamento').length;
 
@@ -18854,11 +19028,11 @@ function relVerCliente(clienteId) {
   const statusColor = { agendada: '#F59E0B', em_andamento: '#1E2A4A', concluida: '#059669', cancelada: '#5E6780' };
 
   const linhasTabela = turmasCliente.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(t => {
-    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    const nPart = _pessoasTreinadasTurma(t.id, certPorTurma);
     const data  = t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '-';
     const sc = statusColor[t.status] || '#5E6780';
     const nomeTrein = t.catalogo?.nome || '-';
-    const partStr   = nPart + ' pessoa' + (nPart !== 1 ? 's' : '');
+    const partStr   = nPart + ' certificado' + (nPart !== 1 ? 's' : '');
     const chStr     = (t.catalogo?.carga_horaria || 0) + 'h';
     const stLbl     = statusLabel[t.status] || t.status;
     return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border)">'
@@ -19097,20 +19271,18 @@ function _renderRelatorioInstrutoresLista() {
   const raw = window._relRaw || {};
   const { tFilt } = _relFiltrarPeriodoV2(raw.turmas || [], raw.sessoes || []);
   const instrutores = (raw.usuarios || []).filter(u => u.perfil === 'instrutor');
+  // Dias e horas do próprio instrutor — não a turma inteira. Ordenado por
+  // dias ministrados, que é o que mede a atuação dele.
   const porInstrutor = instrutores.map(u => {
-    const sess = (raw.sessoes || []).filter(s => s.instrutor_id === u.id && tFilt.some(t => t.id === s.turma_id));
-    const turmaIds = new Set(sess.map(s => s.turma_id));
-    const turmasDele = tFilt.filter(t => turmaIds.has(t.id));
-    const horas = turmasDele.filter(t => t.status === 'concluida').reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
-    const clientes = new Set(turmasDele.map(t => t.cliente_id).filter(Boolean)).size;
-    return { id: u.id, nome: u.nome, turmas: turmasDele.length, horas, clientes };
-  }).sort((a, b) => b.turmas - a.turmas);
+    const m = _metricasInstrutor(u.id, tFilt, raw.sessoesTodas || [], raw.presencas || []);
+    return { id: u.id, nome: u.nome, ...m };
+  }).sort((a, b) => b.dias - a.dias);
 
   const lista = porInstrutor.map(i => `
     <button class="rel2-cli-btn" onclick="relVerInstrutor('${i.id}')">
       <div style="flex:1;min-width:0">
         <div class="rel2-cli-name">${escapeHtml(i.nome)}</div>
-        <div class="rel2-cli-meta">${i.turmas} treinamento${i.turmas !== 1 ? 's' : ''} · ${i.horas}h · ${i.clientes} cliente${i.clientes !== 1 ? 's' : ''}</div>
+        <div class="rel2-cli-meta">${i.dias} dia${i.dias !== 1 ? 's' : ''} ministrado${i.dias !== 1 ? 's' : ''} · ${i.horas}h · ${i.turmas} turma${i.turmas !== 1 ? 's' : ''} · ${i.clientes} cliente${i.clientes !== 1 ? 's' : ''}</div>
       </div>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
     </button>`).join('');
@@ -19160,12 +19332,18 @@ function _renderRelatorioInstrutorDetalhe() {
   if (filtro.clienteId) turmasInstrutor = turmasInstrutor.filter(t => t.cliente_id === filtro.clienteId);
   if (filtro.situacoes) turmasInstrutor = turmasInstrutor.filter(t => filtro.situacoes.includes(t.status));
 
-  const totalTreinamentos = turmasInstrutor.length;
-  const horas = turmasInstrutor.filter(t => t.status === 'concluida').reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+  // Indicadores por ENCONTRO. "Turmas em que atuou" continua existindo, mas
+  // como contexto — a manchete é dia ministrado, que é o trabalho dele.
+  // "Aproveitamento" trocou de base: era conclusão da TURMA (que ele não
+  // controla sozinho num curso de vários dias com vários instrutores), agora
+  // é encontro entregue ÷ encontro atribuído a ele.
+  const mInst = _metricasInstrutor(instrutorId, turmasInstrutor, raw.sessoesTodas || [], raw.presencas || []);
+  const totalTreinamentos = mInst.turmas;
+  const horas = mInst.horas;
   const concluidas = turmasInstrutor.filter(t => t.status === 'concluida').length;
   const canceladasN = turmasInstrutor.filter(t => t.status === 'cancelada').length;
-  const taxaConclusao = totalTreinamentos ? Math.round((concluidas / totalTreinamentos) * 100) : 0;
-  const clientesUnicos = new Set(turmasInstrutor.map(t => t.cliente_id).filter(Boolean)).size;
+  const taxaConclusao = mInst.aproveitamento;
+  const clientesUnicos = mInst.clientes;
 
   const clientesDoInstrutor = [...new Map(
     tFilt.filter(t => turmaIdsInstrutor.has(t.id)).filter(t => t.cliente_id).map(t => [t.cliente_id, t.clientes?.nome || '—'])
@@ -19182,13 +19360,15 @@ function _renderRelatorioInstrutorDetalhe() {
   _paginaRelInstrutor = paginaAtual;
 
   const timelineHtml = pagItens.map(t => {
-    const nPart = (raw.participantes || []).filter(p => p.turma_id === t.id).length;
+    // O que ELE fez nesta turma: seus dias, suas horas, os alunos que ele
+    // atendeu — não a carga horária inteira nem a matrícula da turma.
+    const mt = _metricasInstrutor(instrutorId, [t], raw.sessoesTodas || [], raw.presencas || []);
     const sc = statusColor[t.status] || '#5E6780';
     return `<div class="rel2-row" style="cursor:pointer" data-action="verTurma" data-id="${t.id}">
-      <div class="rel2-badge" style="background:${sc}18;color:${sc};font-size:9px">${t.catalogo?.carga_horaria || 0}h</div>
+      <div class="rel2-badge" style="background:${sc}18;color:${sc};font-size:9px">${mt.horas}h</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.catalogo?.nome || 'Treinamento')}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHtml(t.clientes?.nome || '—')} · ${formatarData(t.created_at)} · ${nPart} participante${nPart !== 1 ? 's' : ''}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${escapeHtml(t.clientes?.nome || '—')} · ${formatarData(t.created_at)} · ${mt.dias} dia${mt.dias !== 1 ? 's' : ''} · ${mt.alunos} aluno${mt.alunos !== 1 ? 's' : ''} atendido${mt.alunos !== 1 ? 's' : ''} <span style="color:var(--text-3)">(turma: ${t.catalogo?.carga_horaria || 0}h)</span></div>
       </div>
       <span style="background:${sc}18;border:1px solid ${sc}40;color:${sc};font-size:9.5px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap">${statusLabel[t.status] || t.status}</span>
     </div>`;
@@ -19252,9 +19432,11 @@ function _renderRelatorioInstrutorDetalhe() {
           </div>
         </div>
         <div class="rel2-kpis">
-          <div class="rel2-kpi"><div class="rel2-kpi-val">${totalTreinamentos}</div><div class="rel2-kpi-lbl">Treinamentos</div></div>
+          <div class="rel2-kpi"><div class="rel2-kpi-val">${mInst.dias}</div><div class="rel2-kpi-lbl">Dias ministrados</div></div>
           <div class="rel2-kpi"><div class="rel2-kpi-val">${horas}h</div><div class="rel2-kpi-lbl">Horas ministradas</div></div>
-          <div class="rel2-kpi"><div class="rel2-kpi-val" style="color:var(--green)">${taxaConclusao}%</div><div class="rel2-kpi-lbl">Conclusão</div></div>
+          <div class="rel2-kpi"><div class="rel2-kpi-val">${mInst.alunos}</div><div class="rel2-kpi-lbl">Alunos atendidos</div></div>
+          <div class="rel2-kpi"><div class="rel2-kpi-val">${totalTreinamentos}</div><div class="rel2-kpi-lbl">Turmas em que atuou</div></div>
+          <div class="rel2-kpi"><div class="rel2-kpi-val" style="color:var(--green)">${taxaConclusao}%</div><div class="rel2-kpi-lbl">Encontros concluídos</div></div>
           <div class="rel2-kpi"><div class="rel2-kpi-val">${clientesUnicos}</div><div class="rel2-kpi-lbl">Clientes</div></div>
         </div>
         <div class="rel2-card">
@@ -19330,10 +19512,11 @@ async function exportarRelatorioInstrutorPDF(instrutorId) {
     ? `${window._relPeriodoCustom.inicio} a ${window._relPeriodoCustom.fim}`
     : (meses === 1 ? 'Este mes' : `Ultimos ${meses} meses`);
 
-  const totalTreinamentos = turmas.length;
-  const horas = turmas.filter(t => t.status === 'concluida').reduce((a, t) => a + (t.catalogo?.carga_horaria || 0), 0);
-  const concluidas = turmas.filter(t => t.status === 'concluida').length;
-  const taxaConc = totalTreinamentos ? Math.round((concluidas / totalTreinamentos) * 100) : 0;
+  // Mesma régua da tela: encontro, não turma (ver _metricasInstrutor).
+  const mPdf = _metricasInstrutor(instrutorId, turmas, raw.sessoesTodas || [], raw.presencas || []);
+  const totalTreinamentos = mPdf.turmas;
+  const horas = mPdf.horas;
+  const taxaConc = mPdf.aproveitamento;
   const clientesUnicos = clientesEnvolvidos.size;
 
   const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
@@ -19350,12 +19533,14 @@ async function exportarRelatorioInstrutorPDF(instrutorId) {
   doc.text(`${s(periodoLabel)}  |  Gerado em ${hojeStr}`, W - 14, 34, { align: 'right' });
 
   const kpis = [
-    { l: 'Treinamentos', v: totalTreinamentos, c: NAVY },
+    { l: 'Dias ministrados', v: mPdf.dias, c: NAVY },
     { l: 'Horas ministradas', v: `${horas}h`, c: [124, 58, 237] },
-    { l: 'Taxa de conclusao', v: `${taxaConc}%`, c: GREEN },
+    { l: 'Alunos atendidos', v: mPdf.alunos, c: GREEN },
+    { l: 'Turmas em que atuou', v: totalTreinamentos, c: NAVY },
+    { l: 'Encontros concluidos', v: `${taxaConc}%`, c: GREEN },
     { l: 'Clientes atendidos', v: clientesUnicos, c: AMBER },
   ];
-  const kw = (W - 28 - 3 * 4) / 4, kh = 24, ky0 = 50;
+  const kw = (W - 28 - (kpis.length - 1) * 4) / kpis.length, kh = 24, ky0 = 50;
   kpis.forEach((k, i) => {
     const kx = 14 + i * (kw + 4);
     doc.setFillColor(...GRAY); doc.rect(kx, ky0, kw, kh, 'F');
@@ -19369,8 +19554,8 @@ async function exportarRelatorioInstrutorPDF(instrutorId) {
 
   doc.setFontSize(8); doc.setTextColor(...AMBER); doc.setFont('helvetica', 'bold');
   doc.text('TREINAMENTOS NO PERIODO', 14, 86);
-  const colX = [14, 100, 160, 205, 235, 260];
-  const heads = ['Treinamento', 'Cliente', 'Data', 'CH', 'Participantes', 'Status'];
+  const colX = [14, 96, 152, 192, 210, 232, 258];
+  const heads = ['Treinamento', 'Cliente', 'Data', 'Dias', 'Horas', 'Alunos', 'Status'];
   doc.setFontSize(7); doc.setTextColor(...T2);
   heads.forEach((h, i) => doc.text(h, colX[i], 92));
   doc.setDrawColor(...BORD); doc.line(14, 94, W - 14, 94);
@@ -19387,15 +19572,17 @@ async function exportarRelatorioInstrutorPDF(instrutorId) {
       doc.setFontSize(9); doc.setTextColor(...WHITE); doc.setFont('helvetica', 'bold');
       doc.text(`RELATORIO DO INSTRUTOR — ${s(instrutor.nome)} (continuacao)`, 14, 10);
     }
-    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    // Dias/horas/alunos DELE nesta turma — não a CH nem a matrícula da turma.
+    const mt = _metricasInstrutor(instrutorId, [t], raw.sessoesTodas || [], raw.presencas || []);
     doc.setFontSize(7.5); doc.setTextColor(...NAVY); doc.setFont('helvetica', 'normal');
-    doc.text(s(t.catalogo?.nome || '-', 42), colX[0], ty);
-    doc.text(s(t.clientes?.nome || '-', 32), colX[1], ty);
+    doc.text(s(t.catalogo?.nome || '-', 40), colX[0], ty);
+    doc.text(s(t.clientes?.nome || '-', 30), colX[1], ty);
     doc.text(t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '-', colX[2], ty);
-    doc.text(`${t.catalogo?.carga_horaria || 0}h`, colX[3], ty);
-    doc.text(String(nPart), colX[4], ty);
+    doc.text(String(mt.dias), colX[3], ty);
+    doc.text(`${mt.horas}h`, colX[4], ty);
+    doc.text(String(mt.alunos), colX[5], ty);
     doc.setTextColor(...(statusColorPdf[t.status] || T2)); doc.setFont('helvetica', 'bold');
-    doc.text(statusLabelPdf[t.status] || t.status || '-', colX[5], ty);
+    doc.text(statusLabelPdf[t.status] || t.status || '-', colX[6], ty);
     ty += 7;
     if (i < ordenadas.length - 1) { doc.setDrawColor(...BORD); doc.setLineWidth(0.1); doc.line(14, ty - 4.5, W - 14, ty - 4.5); }
   });
@@ -19455,19 +19642,20 @@ function relVerTreinamento(catalogoId) {
   _relRecentesAdd('treinamento', catalogoId, nome);
 
   const partAll = raw.participantes || [];
-  const totalPessoas = new Set(partAll.filter(p => turmas.some(t => t.id === p.turma_id)).map(p => p.colaborador_id)).size;
-  const totalHoras = turmas.reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
+  const certPorTurma = raw.certPorTurma || {};
+  const totalPessoas = _pessoasTreinadas(turmas, certPorTurma);
+  const totalHoras = turmas.filter(t => t.status === 'concluida').reduce((s, t) => s + (t.catalogo?.carga_horaria || 0), 0);
   const concluidas = turmas.filter(t => t.status === 'concluida').length;
 
   const statusLabel = { agendada: 'Agendada', em_andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' };
   const statusColor = { agendada: '#F59E0B', em_andamento: '#1E2A4A', concluida: '#059669', cancelada: '#5E6780' };
   const linhas = turmas.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(t => {
-    const nPart = partAll.filter(p => p.turma_id === t.id).length;
+    const nPart = _pessoasTreinadasTurma(t.id, certPorTurma);
     const sc = statusColor[t.status] || '#5E6780';
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border)">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.clientes?.nome || '—')}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${formatarData(t.created_at)} · ${nPart} pessoa${nPart !== 1 ? 's' : ''}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${formatarData(t.created_at)} · ${nPart} certificado${nPart !== 1 ? 's' : ''}</div>
       </div>
       <span style="background:${sc}18;border:1px solid ${sc}40;color:${sc};font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px">${statusLabel[t.status] || t.status}</span>
     </div>`;
@@ -19499,19 +19687,21 @@ function _renderRelatorioClientesLista() {
   const meses = window._relPeriodo || 6;
   const { tFilt } = _relFiltrarPorPeriodo(raw.turmas || [], raw.sessoes || [], meses);
   const partAll = raw.participantes || [];
+  const certPorTurma = raw.certPorTurma || {};
   const cliMap = {};
   tFilt.forEach(t => {
     if (!t.cliente_id) return;
-    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome || '—', turmas: 0, horas: 0, pessoas: 0 };
+    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome || '—', turmas: 0, horas: 0, pessoas: 0, _pes: new Set() };
     cliMap[t.cliente_id].turmas++;
-    cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria || 0);
-    cliMap[t.cliente_id].pessoas += partAll.filter(p => p.turma_id === t.id).length;
+    if (t.status === 'concluida') cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria || 0);
+    (certPorTurma?.[t.id] || []).forEach(c => cliMap[t.cliente_id]._pes.add(c));
   });
+  Object.values(cliMap).forEach(v => { v.pessoas = v._pes.size; });
   const lista = Object.entries(cliMap).sort((a, b) => b[1].turmas - a[1].turmas).map(([id, v]) => `
     <button class="rel2-cli-btn" onclick="relVerCliente('${id}')">
       <div style="flex:1;min-width:0">
         <div class="rel2-cli-name">${escapeHtml(v.nome)}</div>
-        <div class="rel2-cli-meta">${v.turmas} turma${v.turmas !== 1 ? 's' : ''} · ${v.pessoas} participante${v.pessoas !== 1 ? 's' : ''} · ${v.horas}h</div>
+        <div class="rel2-cli-meta">${v.turmas} turma${v.turmas !== 1 ? 's' : ''} · ${v.pessoas} pessoa${v.pessoas !== 1 ? 's' : ''} treinada${v.pessoas !== 1 ? 's' : ''} · ${v.horas}h</div>
       </div>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
     </button>`).join('');
@@ -19599,12 +19789,12 @@ function _relAbrirInstrutorDaAgenda(instrutorId) {
 }
 
 function exportarRelatorioCSV() {
-  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll, certPorTurma } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
   const meses = window._relPeriodo || 6;
   const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
 
-  const header = ['Protocolo','Treinamento','Cliente','Status','Data criação','Carga horária','Participantes'];
+  const header = ['Protocolo','Treinamento','Cliente','Status','Data criação','Carga horária','Participantes','Certificados emitidos'];
   const rows = tFilt.map(t => {
     const nPart = partAll.filter(p => p.turma_id === t.id).length;
     return [
@@ -19615,6 +19805,7 @@ function exportarRelatorioCSV() {
       t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '',
       t.catalogo?.carga_horaria || 0,
       nPart,
+      _pessoasTreinadasTurma(t.id, certPorTurma),
     ];
   });
   const csv = [header, ...rows].map(r => r.join(',')).join('\n');
@@ -19631,7 +19822,7 @@ async function exportarRelatorioExecutivoPDF() {
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Executivo em PDF', 'pro'); return; }
   showToast('Gerando PDF Executivo...', 'info');
   const raw = window._relRaw || {};
-  const { turmas: tAll, participantes: partAll, sessoes: sesAll, usuarios: usrAll, clientes: cliAll, pendencias: pendAll } = raw;
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll, usuarios: usrAll, clientes: cliAll, pendencias: pendAll, certPorTurma } = raw;
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
 
   const meses     = window._relPeriodo || 6;
@@ -19667,8 +19858,8 @@ async function exportarRelatorioExecutivoPDF() {
   const tAgendadas   = tFilt.filter(t => t.status === 'agendada').length;
   const tCanceladas  = tFilt.filter(t => t.status === 'cancelada').length;
   const turmaIds     = new Set(tFilt.map(t => t.id));
-  const partFilt     = partAll.filter(p => turmaIds.has(p.turma_id));
-  const partUnicos   = new Set(partFilt.map(p => p.colaborador_id)).size;
+  const partFilt     = partAll.filter(p => turmaIds.has(p.turma_id)); // só para média por turma
+  const partUnicos   = _pessoasTreinadas(tFilt, certPorTurma);
   const horasTotal   = tFilt.filter(t => t.status === 'concluida').reduce((acc,t) => acc + (t.catalogo?.carga_horaria||0), 0);
   const mediaPart    = tFilt.length > 0 ? Math.round(partFilt.length / tFilt.length) : 0;
   const taxaConc     = tFilt.length > 0 ? Math.round((tConcluidas / tFilt.length) * 100) : 0;
@@ -19680,7 +19871,7 @@ async function exportarRelatorioExecutivoPDF() {
 
   const tConclAnt    = tAnt.filter(t => t.status === 'concluida').length;
   const turmaIdsAnt  = new Set(tAnt.map(t => t.id));
-  const partAnt      = new Set(partAll.filter(p => turmaIdsAnt.has(p.turma_id)).map(p => p.colaborador_id)).size;
+  const partAnt      = _pessoasTreinadas(tAnt, certPorTurma);
   const horasAnt     = tAnt.filter(t => t.status === 'concluida').reduce((acc,t) => acc + (t.catalogo?.carga_horaria||0), 0);
   const cliAntIds    = new Set(tAnt.map(t => t.cliente_id).filter(Boolean));
   const taxaConcAnt  = tAnt.length ? Math.round((tConclAnt/tAnt.length)*100) : 0;
@@ -19709,11 +19900,12 @@ async function exportarRelatorioExecutivoPDF() {
   const cliMap = {};
   tFilt.forEach(t => {
     if (!t.cliente_id) return;
-    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome||'—', turmas: 0, horas: 0, pessoas: 0 };
+    if (!cliMap[t.cliente_id]) cliMap[t.cliente_id] = { nome: t.clientes?.nome||'—', turmas: 0, horas: 0, pessoas: 0, _pes: new Set() };
     cliMap[t.cliente_id].turmas++;
-    cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria||0);
-    cliMap[t.cliente_id].pessoas += partAll.filter(p => p.turma_id === t.id).length;
+    if (t.status === 'concluida') cliMap[t.cliente_id].horas += (t.catalogo?.carga_horaria||0);
+    (certPorTurma?.[t.id] || []).forEach(c => cliMap[t.cliente_id]._pes.add(c));
   });
+  Object.values(cliMap).forEach(v => { v.pessoas = v._pes.size; });
   const cliMapAnt = {};
   tAnt.forEach(t => {
     if (!t.cliente_id) return;
@@ -19747,8 +19939,8 @@ async function exportarRelatorioExecutivoPDF() {
     mesesLabel.push({ label: d.toLocaleDateString('pt-BR',{month:'short'}).replace('.','').toUpperCase().slice(0,3), ano: d.getFullYear(), mes: d.getMonth()+1 });
   }
   const dadosPessoas = mesesLabel.map(m => {
-    const ids = new Set(tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; }).map(t=>t.id));
-    return new Set(partAll.filter(p=>ids.has(p.turma_id)).map(p=>p.colaborador_id)).size;
+    const tDoMes = tAll.filter(t => { const d = new Date(t.created_at); return d.getFullYear()===m.ano && d.getMonth()+1===m.mes; });
+    return _pessoasTreinadas(tDoMes, certPorTurma);
   });
   const dadosConcluidas = mesesLabel.map(m => tAll.filter(t => t.status==='concluida' && new Date(t.created_at).getFullYear()===m.ano && new Date(t.created_at).getMonth()+1===m.mes).length);
 
@@ -26107,7 +26299,7 @@ function _buildKpiGrid({tAtivas,tConcluidas,tConcluidasAnt,partUnicos,partUnicos
 async function exportarRelatorioComparativoPDF() {
   try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Comparativo em PDF', 'pro'); return; }
-  const { turmas: tAll, participantes: partAll, sessoes: sesAll } = window._relRaw || {};
+  const { turmas: tAll, participantes: partAll, sessoes: sesAll, certPorTurma } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
   const meses = window._relPeriodo || 6;
   const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
@@ -26154,8 +26346,8 @@ async function exportarRelatorioComparativoPDF() {
   // KPIs side-by-side
   const _turmasC = tFilt.filter(t=>t.status==='concluida').length;
   const _turmasA = tAnt.filter(t=>t.status==='concluida').length;
-  const _partC   = new Set(partAll.filter(p=>new Set(tFilt.map(t=>t.id)).has(p.turma_id)).map(p=>p.colaborador_id)).size;
-  const _partA   = new Set(partAll.filter(p=>new Set(tAnt.map(t=>t.id)).has(p.turma_id)).map(p=>p.colaborador_id)).size;
+  const _partC   = _pessoasTreinadas(tFilt, certPorTurma);
+  const _partA   = _pessoasTreinadas(tAnt, certPorTurma);
   const _hC      = tFilt.filter(t=>t.status==='concluida').reduce((s,t)=>s+(t.catalogo?.carga_horaria||0),0);
   const _hA      = tAnt.filter(t=>t.status==='concluida').reduce((s,t)=>s+(t.catalogo?.carga_horaria||0),0);
 
