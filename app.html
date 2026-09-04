@@ -1153,7 +1153,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
    (âmbar já é "Em andamento") — ver decisão em
    01-Requisitos/2026-08-30-proposta-turmas-kanban-reorganizacao.md. */
 .turma-kanban-wrap{overflow-x:auto;padding-bottom:4px}
-.turma-kanban{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px;min-width:1180px}
+.turma-kanban{display:grid;grid-template-columns:repeat(var(--kb-cols,4),minmax(220px,1fr));gap:10px;min-width:calc(var(--kb-cols,4) * 230px)}
 .turma-kanban-col{display:flex;flex-direction:column;min-width:0}
 .turma-kanban-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:var(--r-md) var(--r-md) 0 0;border-bottom:2px solid transparent}
 .turma-kanban-head .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
@@ -1169,7 +1169,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turma-mais{display:block;width:100%;background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-sm);padding:7px 8px;font-size:10.5px;font-weight:700;font-family:inherit;color:var(--text-3);cursor:pointer;transition:border-color .15s,color .15s}
 .turma-mais:hover{border-color:var(--navy);color:var(--navy)}
 .turma-lista-mais{margin-top:8px;padding:10px}
-@media(max-width:767px){.turma-kanban{grid-template-columns:repeat(5,minmax(200px,1fr))}.turma-kanban-body{max-height:420px}}
+@media(max-width:767px){.turma-kanban{grid-template-columns:repeat(var(--kb-cols,4),minmax(200px,1fr));min-width:calc(var(--kb-cols,4) * 210px)}.turma-kanban-body{max-height:420px}}
 .turmas-empty-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-3);gap:8px}
 @media(max-width:767px){
   .turmas-grid{grid-template-columns:minmax(0,1fr)}
@@ -8451,7 +8451,12 @@ async function renderCatalogo() {
 
   const podeMgr = ['administrador'].includes(usuarioAtual.perfil);
 
-  _catalogoListaFiltrada = _catalogoCache;
+  // 2026-09-04: a tela abria listando _catalogoCache INTEIRO — arquivados
+  // incluidos — enquanto o select ja mostrava "Todos os ativos". Quem abria via
+  // curso arquivado como se estivesse ativo, e a lista so ficava certa depois de
+  // mexer em algum filtro (que e quem chama filtrarCatalogo). A abertura tem que
+  // partir do mesmo padrao do select: sem arquivados.
+  _catalogoListaFiltrada = _catalogoCache.filter(t => !t.arquivado);
   _catalogoMaxUsoAtual = maxUso;
   _catalogoPodeMgrAtual = podeMgr;
   _paginaCatalogo = 1;
@@ -10613,7 +10618,7 @@ function _htmlTurmasKanban(lista) {
       <div class="turma-kanban-body">${cardsHtml}</div>
     </div>`;
   }).join('');
-  return `<div class="turma-kanban-wrap"><div class="turma-kanban">${colsHtml}</div></div>`;
+  return `<div class="turma-kanban-wrap"><div class="turma-kanban" style="--kb-cols:${TURMA_KANBAN_COLS.length}">${colsHtml}</div></div>`;
 }
 
 // Escolhe Cards, Lista ou Kanban conforme a preferência atual
@@ -26727,7 +26732,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '158';
+  var APP_BUILD = '159';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
