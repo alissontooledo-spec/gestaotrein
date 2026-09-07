@@ -21,6 +21,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- 2026-09-04: os modulos do nucleo comecavam a baixar so DEPOIS da consulta
+     de contrato — rede ociosa durante todo o login. Com modulepreload eles
+     baixam em paralelo com o HTML e a autenticacao, e quando _iniciarPlataforma
+     roda, ja estao no cache. Nao executa nada: so busca. Para quem nao tem
+     modulo, sao 3 arquivos pequenos que o navegador descarta. -->
+<link rel="modulepreload" href="./nucleo/plataforma.js">
+<link rel="modulepreload" href="./nucleo/navegacao.js">
+<link rel="modulepreload" href="./nucleo/dados.js">
+<link rel="modulepreload" href="./nucleo/ui.js">
+<link rel="modulepreload" href="./nucleo/sessao.js">
+<link rel="modulepreload" href="./nucleo/icones.js">
+<link rel="modulepreload" href="./nucleo/estagios.js">
+<link rel="preload" as="style" href="./nucleo/design-system-aditivo.css">
 <!-- jsPDF, QRCode, DOMPurify, Forge, SheetJS(xlsx) e Quill deixaram de carregar
      aqui (2026-08-29) — ~640 KiB sem nenhum uso na tela de login, que estavam
      bloqueando a renderização inicial. Agora carregam sob demanda via
@@ -37,9 +50,9 @@
   --warn:#D97706;--warn-l:#FEF3C7;--warn-text:#92400E;
   --gray-50:#F0F2F7;--gray-100:#E8EBF2;--gray-200:#D2D7E1;--gray-300:#BFC5D2;--gray-400:#8B93A8;--gray-500:#5E6780;--gray-600:#454E66;
   --text-1:#1E2A4A;--text-2:#414B63;--text-3:#5E6780;
-  --surface:#FFFFFF;--bg:#E9EAEF;--border:#D2D7E1;--border-2:#BFC5D2;
+  --surface:#FFFFFF;--bg:#F3F5FA;--border:#E3E7F0;--border-2:#CDD4E2;
   --r-sm:6px;--r-md:8px;--r-lg:12px;--r-xl:16px;--r-2xl:20px;
-  --shadow:0 1px 2px rgba(23,32,56,.05),0 3px 10px rgba(23,32,56,.09);
+  --shadow:0 1px 2px rgba(23,32,56,.04),0 2px 6px rgba(23,32,56,.06);
   --shadow-md:0 2px 4px rgba(23,32,56,.06),0 12px 30px rgba(23,32,56,.14);
   --nav-h:64px;--sidebar-w:228px;--header-h:58px
 }
@@ -116,7 +129,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,
    linha em telas estreitas) e aplicada via --suporte-h. */
 body.modo-suporte-ativo .screen{top:var(--suporte-h,34px)}
 body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
-.sidebar-logo{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.07)}
+.sidebar-logo{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.05)}
 .sidebar-logo-row{display:flex;align-items:center;gap:10px}
 .sidebar-logo-icon{width:28px;height:auto;flex-shrink:0;display:block}
 .sidebar-logo-name{font-size:14px;font-weight:800;color:#fff;letter-spacing:-.2px;line-height:1.3}
@@ -124,9 +137,9 @@ body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
 .sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}.sidebar-nav::-webkit-scrollbar{width:6px}.sidebar-nav::-webkit-scrollbar-track{background:transparent}.sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:10px}.sidebar-nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3)}.sidebar-nav::-webkit-scrollbar-button{display:none;width:0;height:0}
 .sidebar-section-label{display:flex;align-items:center;gap:7px;font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.45);padding:14px 2px 6px;font-weight:700}
 .sidebar-section-label::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
-.sidebar-item{position:relative;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 12px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;transition:background .12s,color .12s;margin-bottom:2px}
-.sidebar-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.9)}
-.sidebar-item.active{background:rgba(245,158,11,.14);color:var(--amber);font-weight:600}
+.sidebar-item{position:relative;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 12px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.72);font-size:13px;font-weight:500;transition:background .12s,color .12s;margin-bottom:2px}
+.sidebar-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.92)}
+.sidebar-item.active{background:rgba(255,255,255,.07);color:#fff;font-weight:600}
 .sidebar-item.active::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--amber)}
 .si-badge{margin-left:auto;background:var(--amber);color:var(--navy);font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;line-height:1.6;flex-shrink:0}
 .si-icon{font-size:17px;width:20px;text-align:center;flex-shrink:0;display:flex;align-items:center;justify-content:center}
@@ -535,6 +548,55 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
 /* ── Home v2 (Alternativa 1, 2026-08-15) + cabeçalhos de seção ponto+linha.
    Medidas idênticas ao padrão aprovado em Turmas (.turmas-kpi / mockups). ── */
+/* ══ Lista "Requer atenção" ════════════════════════════════════════════════
+   MORA AQUI, e nao em nucleo/design-system-aditivo.css, de proposito: aquele
+   arquivo so e baixado quando a organizacao tem modulo contratado
+   (ver _iniciarPlataforma), e a tela Inicio usa este componente mesmo sem CRM
+   nenhum. Estava no aditivo desde o h36 — teria ido para producao com o CRM
+   desligado e os alertas do Inicio sairiam sem estilo. ══════════════════ */
+/* ── Lista "Requer atenção" (05/09, h36) ───────────────────────────────────
+   Substitui o alerta de caixa tinta que existia inline em três telas. O que
+   estava errado ali não era contraste — o texto media 6,66:1 — era hierarquia:
+   fundo, borda, ícone, texto e botão tinham TODOS a mesma cor, então nada se
+   destacava de nada, e quatro caixas empilhadas viravam uma mancha só.
+
+   Agora a cor aparece uma vez por linha, num filete de 3px, e o resto é
+   neutro. O número sai do meio da frase e vira a primeira coisa da linha —
+   ele é o dado, a frase é só o contexto.
+
+   A ordem é por gravidade (ver _alertaLista em app.html): com o grave sempre
+   no topo, a POSIÇÃO já diz o que é urgente, e o filete não precisa gritar. */
+.ds-alertas{margin-bottom:14px}
+.ds-alerta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 14px 10px 12px;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;margin-bottom:5px}
+.ds-alerta:last-child{margin-bottom:0}
+.ds-alerta.clicavel{cursor:pointer;transition:border-color .12s,background .12s}
+.ds-alerta.clicavel:hover{border-color:var(--border-2);background:var(--gray-50)}
+/* align-self:stretch faz o filete acompanhar a altura da linha — inclusive
+   quando o texto quebra em duas linhas no celular. */
+.ds-alerta .fil{width:3px;align-self:stretch;min-height:20px;border-radius:3px;
+  flex-shrink:0;background:var(--amber)}
+.ds-alerta.grave .fil{background:var(--red)}
+.ds-alerta .num{font-size:19px;font-weight:800;letter-spacing:-.7px;
+  /* 38px cabe tres digitos: e o que mantem os numeros numa coluna de verdade.
+     Medido — com 22px, "12" empurrava a frase 3px para a direita e o alinhamento
+     que justifica esta opcao se desfazia justamente quando o numero cresce. */
+  font-variant-numeric:tabular-nums;min-width:38px;text-align:right;
+  line-height:1.15;flex-shrink:0;color:var(--text-1)}
+.ds-alerta .tx{flex:1;min-width:150px;font-size:12.5px;line-height:1.45;color:var(--text-2)}
+.ds-alerta .tx b{font-weight:700;color:var(--text-1)}
+.ds-alerta .ac{display:inline-flex;align-items:center;gap:2px;font-size:11.5px;
+  font-weight:600;color:var(--text-2);white-space:nowrap;
+  background:transparent;border:0;padding:0;font-family:inherit;cursor:pointer}
+.ds-alerta .ac svg{width:13px;height:13px;color:var(--text-3);flex-shrink:0}
+/* Bloco proprio embaixo do texto — os chips de pendencia da tela Turmas.
+   Ocupa a linha inteira; por isso a linha vira coluna quando ele existe. */
+.ds-alerta.com-bloco{align-items:flex-start;flex-wrap:nowrap}
+.ds-alerta .corpo{flex:1;min-width:0}
+.ds-alerta .corpo .abaixo{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.ds-alerta .sub{font-size:11.5px;color:var(--text-3);margin-top:2px}
+
 .gh-sec{display:flex;align-items:center;gap:8px;margin:16px 0 10px}
 .gh-sec .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0}
 .gh-sec .dot.red{background:var(--red)}
@@ -942,18 +1004,21 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 :root{--atencao:#B45309;--atencao-l:#FEF3C7;--atencao-text:#92400E}
 
 /* ── faixa de pendencias ── */
-.turmas-faixa-pend{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:var(--r-md);background:var(--atencao-l);border:1px solid rgba(180,83,9,.28);margin:0 0 12px;flex-wrap:wrap}
-.turmas-faixa-pend .tfx-ic{color:var(--atencao);flex-shrink:0;font-size:21px;line-height:0;padding-top:2px}
-.turmas-faixa-pend .tfx-tx{flex:1;min-width:200px}
-.turmas-faixa-pend .t1{font-size:13.5px;font-weight:700;color:var(--atencao-text);line-height:1.4}
-.turmas-faixa-pend .t2{font-size:12px;color:var(--atencao-text);opacity:.85;margin-top:2px}
-.turmas-faixa-pend .tfx-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
-.turmas-faixa-pend .tfx-chip{font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid rgba(180,83,9,.35);background:rgba(255,255,255,.6);color:var(--atencao-text);cursor:pointer;white-space:nowrap}
-.turmas-faixa-pend .tfx-chip:hover{background:#fff}
-.turmas-faixa-pend .tfx-chip.on{background:var(--atencao-text);border-color:var(--atencao-text);color:#fff}
-.turmas-faixa-pend .tfx-chip .n{opacity:.7;font-weight:800;margin-left:4px}
-.turmas-faixa-pend .tfx-chip.on .n{opacity:.85}
-.turmas-faixa-pend .tfx-sair{margin-left:auto;flex-shrink:0}
+/* ── Chips de pendência da tela Turmas ─────────────────────────────────────
+   Desde o h40 eles vivem dentro do bloco `abaixo` do `.ds-alerta`. Antes eram
+   filhos do contêiner tinto que deixou de existir — e como TODO este CSS
+   estava pendurado nele, ao remover o contêiner os chips voltaram a ser botão
+   cru do navegador: fundo cinza, borda preta, fonte do sistema. Foi
+   exatamente o que quebrou a tela no h40.
+
+   A regra que fica: CSS pendurado num contêiner morre junto com o contêiner.
+   Componente que anda sozinho precisa de seletor que ande sozinho. */
+.tfx-chip{font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--border-2);background:var(--surface);color:var(--text-2);cursor:pointer;white-space:nowrap}
+.tfx-chip:hover{background:var(--gray-50);border-color:var(--text-3)}
+.tfx-chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.tfx-chip .n{opacity:.65;font-weight:800;margin-left:5px}
+.tfx-chip.on .n{opacity:.85}
+.tfx-sair{flex-shrink:0}
 .ds-btn-sair{font-family:inherit;font-size:12px;font-weight:600;padding:7px 12px;border-radius:var(--r-md);background:#fff;border:1px solid rgba(180,83,9,.35);color:var(--atencao-text);cursor:pointer;white-space:nowrap}
 .ds-btn-sair:hover{border-color:var(--atencao-text)}
 
@@ -982,6 +1047,27 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .turma-tabela .tt-semhora{color:var(--atencao-text);font-weight:600;margin-left:4px;font-size:11.5px}
 .turma-tabela .tt-semdata{color:var(--atencao-text);font-weight:600}
 .turma-card-semdata{color:var(--atencao-text)!important;font-weight:600}
+@keyframes tlBrilho{0%{background-position:100% 50%}100%{background-position:0 50%}}
+/* ── Menu em blocos de modulo (2026-09-04, mockup aprovado) ─────────────
+   So entra em cena quando a organizacao tem modulo alem do Treinamentos.
+   Com um modulo so, um cabecalho de bloco nao organiza nada — o menu
+   classico continua identico, e e por isso que producao nao muda. */
+.mod-head{display:flex;align-items:center;gap:9px;padding:9px 12px;margin:10px 10px 3px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.52);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;user-select:none}
+.mod-head:hover{background:rgba(255,255,255,.06)}
+.mod-bloco.aberto .mod-head{color:rgba(255,255,255,.62)}
+.mod-head .mh-ic{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.mod-head .mh-ic svg{width:15px;height:15px}
+.mod-head .cnt{background:var(--amber);color:var(--navy);font-size:10px;font-weight:700;border-radius:999px;padding:1px 6px;margin-left:auto}
+.mod-head .seta{margin-left:auto;display:inline-flex;color:rgba(255,255,255,.4);transition:transform .15s}
+.mod-head .seta svg{width:13px;height:13px}
+.mod-bloco.aberto .mod-head .seta{transform:rotate(90deg)}
+.mod-bloco .mod-itens{display:none;padding:0 10px}
+.mod-bloco.aberto .mod-itens{display:block}
+/* Menu recolhido: o cabecalho vira so o icone e os itens continuam visiveis —
+   senao o modo mini esconderia telas inteiras atras de um bloco fechado. */
+body.sidebar-mini .mod-head{justify-content:center;padding:9px 0;margin:8px 6px 2px;font-size:0;letter-spacing:0}
+body.sidebar-mini .mod-head .seta,body.sidebar-mini .mod-head .cnt{display:none}
+body.sidebar-mini .mod-bloco .mod-itens{display:block}
 /* contexto do encontro na tela de execucao (2026-09-04) */
 .exec-contexto{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 18px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 16px;margin-bottom:16px}
 .exec-ctx-i.wide{grid-column:1/-1}
@@ -1019,7 +1105,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
   .turma-tabela .tt-aulas,.turma-tabela .tt-selos{justify-content:flex-start}
   .turma-tabela .tt-selos{margin-top:6px}
   .turma-tabela-rodape{border:none;padding:4px 2px 10px}
-  .turmas-faixa-pend .tfx-sair{margin-left:0;width:100%}
+  .tfx-sair{width:100%}
 }
 /* Mobile: cabeçalho de tabela não funciona em 390px — a linha volta a se
    comportar como um cartão empilhado (mesmo fallback que já existia), e o
@@ -1331,6 +1417,7 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 </style>
 </head>
 <body>
+
 <div id="offlineBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#DC2626;color:#fff;text-align:center;font-size:13px;font-weight:600;padding:8px 12px;box-shadow:var(--shadow-md)">
   Sem conexão com a internet.
 </div>
@@ -1490,8 +1577,8 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 // Validado com node --check antes de cada entrega.
 // ============================================================
 
-const SUPABASE_URL = 'https://cldbqcpnzitwqvgqbipz.supabase.co'; 
-const SUPABASE_KEY = 'sb_publishable_uuOYchKEtJXdYPI0pKmM_A_mtp-ihMT'; 
+const SUPABASE_URL = 'https://cldbqcpnzitwqvgqbipz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_uuOYchKEtJXdYPI0pKmM_A_mtp-ihMT';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================================
@@ -1709,7 +1796,7 @@ function _htmlDeltaKpi(atual, anterior, opts) {
 // sino de notificações fixo (mesmo texto, mesma ação, um só lugar pra
 // manter).
 function _btnAcao(label, onclick) {
-  return `<button onclick="event.stopPropagation();${onclick}" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">${label}</button>`;
+  return `<button onclick="event.stopPropagation();${onclick}" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);background:var(--gray-100);border:1px solid var(--border);color:var(--navy);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">${label}</button>`;
 }
 
 // Calcula a Central de Alertas do Provedor — fonte única de verdade,
@@ -1894,9 +1981,9 @@ function _renderPainelSino() {
     <div style="max-height:360px;overflow-y:auto">
       ${alertas.length ? alertas.map(a => `
         <div onclick="_fecharSino();verOrgProvedor('${a.orgId}')" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap">
-          <span style="font-size:13px">${a.tipo==='critico'?'🔴':'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>'}</span>
+          <span style="font-size:13px">${a.tipo==='critico'?`<span style="color:var(--red);display:inline-flex"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg></span>`:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>'}</span>
           <span style="font-size:12.5px;color:var(--text-1);flex:1;min-width:140px">${a.texto}</span>
-          ${a.acaoHtml ? a.acaoHtml.replace(/rgba\(255,255,255,\.55\)/g, 'var(--gray-100)') : ''}
+          ${a.acaoHtml || ''}
           ${_htmlBtnDispensar(a)}
         </div>`).join('')
         : '<div style="padding:24px 14px;text-align:center;font-size:12.5px;color:var(--text-3)">Nenhum alerta no momento</div>'}
@@ -2104,23 +2191,35 @@ function _filtrarMenuLateral(termo) {
   const t = _normalizarBusca(termo);
   const clearBtn = document.getElementById('menuFiltroClear');
   if (clearBtn) clearBtn.style.display = t ? 'flex' : 'none';
+  const nav = document.getElementById('sidebarNav');
+  if (!nav) return;
 
-  let secaoAtual = null;
-  let secaoTemVisivel = false;
-  document.querySelectorAll('#sidebarNav > *').forEach(el => {
-    if (el.classList.contains('sidebar-section-label')) {
-      if (secaoAtual) secaoAtual.style.display = secaoTemVisivel ? '' : 'none';
-      secaoAtual = el;
-      secaoTemVisivel = false;
-      return;
-    }
-    if (el.classList.contains('sidebar-item')) {
-      const visivel = !t || _normalizarBusca(el.dataset.label).includes(t);
-      el.style.display = visivel ? '' : 'none';
-      if (visivel) secaoTemVisivel = true;
-    }
+  nav.querySelectorAll('.sidebar-item').forEach(el => {
+    el.style.display = (!t || _normalizarBusca(el.dataset.label || '').includes(t)) ? '' : 'none';
   });
-  if (secaoAtual) secaoAtual.style.display = secaoTemVisivel ? '' : 'none';
+
+  // Blocos de modulo: enquanto se filtra eles ficam ABERTOS — senao o
+  // resultado da busca ficaria escondido dentro de um bloco fechado — e somem
+  // quando nada sobra dentro. Ao limpar a busca, voltam ao estado do usuario.
+  nav.querySelectorAll('.mod-bloco').forEach(b => {
+    const temVisivel = [...b.querySelectorAll('.sidebar-item')].some(el => el.style.display !== 'none');
+    b.style.display = temVisivel ? '' : 'none';
+    b.classList.toggle('aberto', t ? true : b.dataset.aberto === '1');
+  });
+
+  // Rotulos de secao do menu classico: somem junto com a secao inteira.
+  let secao = null, secaoTemVisivel = false;
+  [...nav.children].forEach(el => {
+    if (el.classList.contains('sidebar-section-label')) {
+      if (secao) secao.style.display = secaoTemVisivel ? '' : 'none';
+      secao = el; secaoTemVisivel = false; return;
+    }
+    if (el.querySelector && el.querySelector('.sidebar-item')) {
+      if ([...el.querySelectorAll('.sidebar-item')].some(x => x.style.display !== 'none')) secaoTemVisivel = true;
+    }
+    if (el.classList.contains('sidebar-item') && el.style.display !== 'none') secaoTemVisivel = true;
+  });
+  if (secao) secao.style.display = secaoTemVisivel ? '' : 'none';
 }
 
 function _limparFiltroMenu() {
@@ -2989,6 +3088,22 @@ function showToast(msg, tipo='info', dur=3500) {
   requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
   setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300);},dur);
 }
+// Enquanto a primeira tela nao chega, o conteudo mostra a FORMA do que vem —
+// nao um retangulo cinza. A diferenca nao e estetica: area vazia parece
+// sistema quebrado, esqueleto parece sistema carregando.
+function esqueletoConteudo() {
+  const barra = (l, alt) => `<div style="height:${alt||14}px;width:${l};border-radius:7px;background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-50) 37%,var(--gray-100) 63%);background-size:400% 100%;animation:tlBrilho 1.3s ease infinite;margin-bottom:10px"></div>`;
+  return `<div style="padding:4px 0">
+    ${barra('180px', 22)}${barra('320px')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0">
+      ${[1,2,3,4].map(() => `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">${barra('60%',10)}${barra('40%',20)}</div>`).join('')}
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+      ${[1,2,3,4,5].map(() => barra(['92%','78%','85%','70%','88%'][Math.floor(Math.random()*5)])).join('')}
+    </div>
+  </div>`;
+}
+
 function showLoading(msg='Carregando...') {
   document.getElementById('loadingText').textContent = msg;
   document.getElementById('loading-overlay').classList.add('show');
@@ -3153,31 +3268,56 @@ function renderErro(msg) {
 // ÍCONES
 // ============================================================
 const ICONS = {
-  home:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  home:    `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>`,
   building:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>`,
   user:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-  users:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>`,
-  clip:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>`,
+  users:   `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>`,
   cal:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
-  chart:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  chart:   `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18"/><path d="M6 21V11M11 21V5M16 21v-7M21 21v-4"/></svg>`,
   book:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>`,
-  team:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
-  shield:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`,
+  /* Estava com o MESMO path do escudo — copia/cola antiga. Equipe e
+     Conformidade apareciam com o icone identico no menu. */
+  team:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="9" cy="7" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20M17.5 14A3.5 3.5 0 0 1 21 17.5V19"/></svg>',
+  shield:  `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
   dots:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>`,
   logout:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
-  back:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>`,
-  plus:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  back:    `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>`,
+  plus:    `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>`,
   userplus:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>`,
   upload:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
   filesheet:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
-  search:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  search:  `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>`,
   support: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 00-10 10v3a2 2 0 002 2h1a1 1 0 001-1v-4a1 1 0 00-1-1H4a8 8 0 0116 0h-1a1 1 0 00-1 1v4a1 1 0 001 1h1a2 2 0 002-2v-3A10 10 0 0012 2z"/><path d="M8 20a2 2 0 002 2h4a2 2 0 002-2v-1H8z"/></svg>`,
   mail:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>`,
-  phone:   `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>`,
+  phone:   `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M22 16.9v2.1a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 3.2 2 2 0 0 1 4 1h2.1a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L7.5 8.6a16 16 0 0 0 6 6l1-1a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>`,
   pin:     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
   target:  `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
   edit:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
-  clock:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>`,
+  clock:   `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 1.9"/></svg>`,
+  /* ── Vindos de nucleo/icones.js (06/09, h44) ──────────────────────────
+     O app nao tinha estes desenhos, e uma tabela trocava o icone pedido
+     pelo mais parecido daqui: chat virava ENVELOPE, funnel virava tres
+     circulos, activity virava RELOGIO, trend e building viravam barras.
+     O modulo sempre pediu o icone certo; quem trocava era a casca.
+     Um conceito, um desenho, no sistema inteiro. */
+  trend:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M22 7 13.5 15.5l-4-4L2 19"/><path d="M16 7h6v6"/></svg>',
+  trenddown:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M22 17 13.5 8.5l-4 4L2 5"/><path d="M16 17h6v-6"/></svg>',
+  funnel:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 4.5h18l-7 8.2V20l-4 1.5v-8.8L3 4.5z"/></svg>',
+  chat:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 3.6 11 8.5 8.5 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z"/></svg>',
+  activity:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 12h4l2.5-7 5 14L17 12h4"/></svg>',
+  cap:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.5V16c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4.5"/></svg>',
+  doc:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></svg>',
+  /* ── 'clip' queria dizer duas coisas (06/09, h45) ────────────────────
+     Aqui era PRANCHETA (turma, protocolo); no nucleo era CLIPE de papel
+     (anexo, usado em Conversas). Mesmo nome, dois objetos: um modulo que
+     pedisse anexo receberia prancheta. Agora sao dois nomes. */
+  clipboard:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>',
+  clip:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M21.4 11.1 12.3 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.1a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.1a1.8 1.8 0 0 1-2.6-2.6l8.5-8.4"/></svg>',
+  /* Empresa do CRM e Cliente sao os dois 'uma empresa', e apareciam com o
+     MESMO desenho no mesmo menu. Predio com janelas para a conta do CRM,
+     bloco simples para quem ja e cliente. */
+  company:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16M14 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3"/></svg>',
 };
 
 // Botão de ação secundária com ícone em "badge" circular antes do texto
@@ -3504,8 +3644,40 @@ async function entrarNoApp() {
     // Edge Function soc-integracao (ver migration-soc-integracao-webservice.sql).
     usuarioAtual.orgSocIntegracaoAtiva = !!org?.soc_integracao_ativa;
   }
+  marcaTempo('organizacao lida');
   showScreen('screenApp');
+
+  // ── Ordem de pintura (2026-09-04, correcao de carregamento) ─────────────
+  // ANTES: `await _iniciarPlataforma()` vinha aqui, ANTES de configurarNavegacao().
+  // Resultado: a tela aparecia com a barra lateral VAZIA — sem menu e sem
+  // conteudo — durante toda a consulta de modulos MAIS o download e a
+  // compilacao de 8 modulos ES e uma folha de estilo. Era o intervalo do print
+  // que o Alisson mandou, e a culpa era da ordem, nao da rede.
+  //
+  // AGORA: o menu pinta imediatamente, usando a lista de modulos guardada da
+  // ultima sessao (acerta em 100% dos casos a partir do segundo login, porque
+  // contrato de modulo muda uma vez por ano, nao por minuto). Os modulos
+  // carregam DEPOIS, em segundo plano, e o menu se completa sozinho quando
+  // eles chegam. Nenhum estado intermediario vazio.
+  _modulosAtivos = _modulosEmCache();
+  _injetarMenuDosModulos({ soCache: true });
   configurarNavegacao();
+
+  // Em segundo plano: confere o contrato de verdade e carrega os modulos.
+  // Sem await — a tela ja esta utilizavel.
+  // A promessa fica guardada em _plataformaCarregando: quem abrir uma rota de
+  // modulo antes de ela terminar espera aqui, em vez de receber "em breve".
+  _plataformaCarregando = _iniciarPlataforma().then(() => {
+    marcaTempo('modulos carregados');
+    _injetarMenuDosModulos();
+    configurarNavegacao();
+    marcarNavAtivo(paginaAtual);
+    // Se a tela aberta agora e de modulo e ficou no "em breve" (link profundo
+    // aberto antes de o modulo chegar), redesenha com a tela de verdade.
+    if (_GRID && paginaAtual && !TITULOS_NATIVOS.has(paginaAtual)) {
+      _GRID.abrir(paginaAtual, window._paramsRotaAtual || {});
+    }
+  });
   _sessaoIniciar(); // iniciar monitoramento de inatividade
   // Lê hash da URL para restaurar a página ao fazer login ou recarregar —
   // usa _hashPagina() (ignora querystring) pra reconhecer links profundos
@@ -3514,11 +3686,25 @@ async function entrarNoApp() {
   // que roda, então a querystring original é guardada aqui antes disso,
   // pra renderConformidade() poder restaurar empresa/colaborador depois.
   const paginaHash = _hashPagina();
-  const paginaInicial = (paginaHash && TITULOS[paginaHash] && _perfilTemAcesso(paginaHash)) ? paginaHash : 'home';
+  // Uma rota de modulo pode nao estar em TITULOS ainda (as ocultas nunca
+  // estarao: ficha do lead, configuracao do funil). Reconhecemos pelo prefixo
+  // do modulo contratado, e quem valida o acesso de verdade e o irPara, depois
+  // de a plataforma carregar.
+  const _pareceRotaDeModulo = (pg) => _modulosAtivos.some(m => pg === m || pg.startsWith(m + '-'));
+  const paginaInicial = (paginaHash && (TITULOS[paginaHash] || _pareceRotaDeModulo(paginaHash))
+                         && (_perfilTemAcesso(paginaHash) || _pareceRotaDeModulo(paginaHash)))
+    ? paginaHash : 'home';
   window._hashInicialQuery = (paginaInicial === paginaHash && location.hash.includes('?'))
     ? location.hash.slice(location.hash.indexOf('?'))
     : null;
-  await irPara(paginaInicial);
+  marcaTempo('menu pintado');
+  // Link profundo colado na barra de enderecos: "#crm-lead?id=<uuid>" abre a
+  // ficha daquele lead, e nao a tela generica sem lead selecionado.
+  const _qIni = window._hashInicialQuery ? new URLSearchParams(window._hashInicialQuery.slice(1)) : null;
+  const _idIni = _qIni ? _qIni.get('id') : null;
+  await irPara(paginaInicial, _idIni ? { id: _idIni } : {});
+  marcaTempo('tela util');
+  _relatorioCarregamento();
   _prefetchLibsPesadasEmSegundoPlano();
 }
 
@@ -3548,13 +3734,13 @@ async function fazerLogout() {
 // ============================================================
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'logs',l:'Logs / Auditoria',icon:'filesheet'},{id:'conta',l:'Minha conta',icon:'user'}],
-  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clipboard'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   // 2026-08: adicionado 'relatorios' — já estava referenciado em
   // NAV_BOTTOM.comercial (atalho do rodapé mobile) mas não existia aqui,
   // então o item nunca aparecia de verdade e o Comercial não conseguia
   // acessar Relatórios nem digitando a URL (_perfilTemAcesso bloqueava).
   // Achado durante a validação de perfis antes do go-live da Avanteseg.
-  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clip'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Análise'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'clipboard'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'building'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Análise'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clock'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 // 2026-08-09: rodapé mobile reduzido a 5 itens essenciais (Administrador
@@ -3577,11 +3763,381 @@ const NAV_BOTTOM = {
 // uma tela (ex.: Instrutor não tem "Turmas") não consegue chegar nela nem
 // digitando o hash na URL, nem com o botão Voltar do navegador, nem
 // clicando em "Voltar" dentro de uma tela de detalhe.
+// ══════════════════════════════════════════════════════════════════════════
+// PONTE COM A PLATAFORMA MODULAR (2026-09-04)
+// ------------------------------------------------------------------------
+// O CRM nao vive neste arquivo: ele mora em modulos/crm/, carregado sob
+// demanda. Estas funcoes sao TODA a ligacao — o resto do app segue sem saber
+// que existe modulo. Se a consulta falhar, `_GRID` fica nulo e o app se
+// comporta exatamente como antes: falha fechada, nao falha aberta.
+let _GRID = null;
+let _plataformaCarregando = null;   // promessa de _iniciarPlataforma (ver irPara)
+/* As telas que o proprio app.html desenha. Serve para saber se a pagina atual
+   e de modulo sem perguntar ao modulo — que pode ainda nao ter carregado. */
+const TITULOS_NATIVOS = new Set(['home','orgs','financeiro','adocao','logs','clientes',
+  'colaboradores','catalogo','conformidade','turmas','agendaequipe','equipe','agenda',
+  'historico','relatorios','conta']);
+let _modulosAtivos = [];
+
+// A lista de modulos contratados muda raramente (uma venda, uma renovacao).
+// Guardar por usuario permite pintar o menu certo no primeiro quadro, em vez
+// de esperar a rede para descobrir algo que ja sabiamos. A trava de verdade
+// continua sendo a RLS no banco: se o cache mentir, o modulo aparece no menu e
+// nao devolve dado nenhum — falha visivel, nao falha silenciosa de seguranca.
+function _chaveCacheModulos() { return 'tl_modulos_' + (usuarioAtual?.id || 'x'); }
+function _modulosEmCache() {
+  try { return JSON.parse(localStorage.getItem(_chaveCacheModulos()) || '[]'); } catch(e) { return []; }
+}
+function _guardarModulosEmCache(ids) {
+  try { localStorage.setItem(_chaveCacheModulos(), JSON.stringify(ids || [])); } catch(e) {}
+}
+
+async function _carregarModulosDaOrg() {
+  if (!usuarioAtual.org_id) { console.info('[modulos] sem org_id (provedor)'); return []; }
+  try {
+    const { data, error } = await sb.from('organizacoes_modulos')
+      .select('modulo').eq('org_id', usuarioAtual.org_id).eq('ativo', true);
+    if (error) throw error;
+    const ids = (data || []).map(m => m.modulo);
+    _guardarModulosEmCache(ids);
+    console.info('[modulos] contratados:', ids);
+    return ids;
+  } catch (e) {
+    // Organizacao sem a tabela (banco antigo) ou consulta barrada: segue sem
+    // modulo nenhum. Treinamentos continua inteiro — ele nao passa por aqui.
+    console.warn('[modulos] nao foi possivel ler organizacoes_modulos:', e?.message || e);
+    return [];
+  }
+}
+
+async function _iniciarPlataforma() {
+  _modulosAtivos = await _carregarModulosDaOrg();
+  if (!_modulosAtivos.includes('crm')) return;
+  try {
+    // O CSS dos componentes dos modulos (ui.js) e o tamanho dos icones vivem
+    // no aditivo do design system. Sem ele, `.ico` fica sem width/height e um
+    // SVG ocupa a tela inteira — foi o que aconteceu no h10. Carregado uma vez
+    // so, e so quando ha modulo: quem nao tem CRM nao baixa nada.
+    if (!document.getElementById('cssDesignSystemAditivo')) {
+      const l = document.createElement('link');
+      l.id = 'cssDesignSystemAditivo';
+      l.rel = 'stylesheet';
+      l.href = './nucleo/design-system-aditivo.css?v=' + APP_BUILD;
+      document.head.appendChild(l);
+    }
+    const nucleo = await import('./nucleo/plataforma.js?v=' + APP_BUILD);
+
+    // A PONTE. O modulo nao conhece o app: quando ele precisa de modal, aviso
+    // ou confirmacao, pede por aqui. E o que permite a mesma tela rodar dentro
+    // do app e no demo.html sem uma linha diferente — e o que impede o modulo
+    // de chamar abrirModal() direto e ficar preso a este arquivo.
+    nucleo.GRID.definirPonte({
+      abrirModal: (titulo, corpo, rodape) => abrirModal(titulo, corpo, rodape),
+      fecharModal,
+      avisar: (msg, tipo) => showToast(msg, tipo === 'error' ? 'error' : 'success'),
+      confirmar: (msg) => confirmarAcao(msg, 'Confirmar', true),
+      /* A lista "Requer atencao" vive na casca porque a tela Inicio precisa
+         dela sem modulo nenhum. Passar pela ponte evita a segunda copia: o
+         modulo pede, nao reimplementa. */
+      alertas: (itens) => _alertaLista(itens),
+      botoes: (rotulo, id) => `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+        <button class="btn btn-navy" id="${id}">${rotulo}</button>`,
+      aoConfirmar: (id, fn) => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.onclick = async () => { b.disabled = true; try { await fn(); } finally { b.disabled = false; } };
+      }
+    });
+    nucleo.GRID.aoNavegar((rota, params) => irPara(rota, params));
+    // ── BUG CORRIGIDO EM 04/09 (h16) ────────────────────────────────────
+    // Antes, dados.js e sessao.js eram importados aqui com `?v=` na URL:
+    //     import('./nucleo/dados.js?v=h15')
+    // enquanto as TELAS importam sem query:
+    //     import '../../nucleo/dados.js'
+    // Para o navegador, URLs diferentes sao MODULOS DIFERENTES. Havia duas
+    // copias de dados.js em memoria: eu configurava uma (origem 'banco', com o
+    // cliente do Supabase) e as telas liam a outra, nunca configurada, em modo
+    // exemplo e com o conjunto vazio.
+    // Sintoma: funil sem nenhum lead com 2.060 no banco, e "Cannot read
+    // properties of null (reading 'id')" ao salvar — funilPadrao() devolve null
+    // fora do modo banco.
+    // Correcao: pegar as instancias DE DENTRO da plataforma, que importa por
+    // caminho relativo — o mesmo caminho das telas. Uma instancia so, sempre.
+    const dados  = nucleo.GRID.dados;
+    const sessao = nucleo.GRID.sessao;
+    sessao.iniciar({
+      usuario: { id: usuarioAtual.id, nome: usuarioAtual.nome, perfil: usuarioAtual.perfil,
+                 org_id: usuarioAtual.org_id, org: usuarioAtual.orgNome },
+      modulos: _modulosAtivos
+    });
+    // WhatsApp ainda nao tem tabela: conversas e numeros seguem em demonstracao
+    // mesmo com o banco ligado (ver SO_EXEMPLO em nucleo/dados.js).
+    // Sem `?v=` pelo mesmo motivo acima: as telas de conversa importam este
+    // arquivo por caminho relativo, e duas copias seriam dois conjuntos de dados.
+    const { EXEMPLO } = await import('./modulos/crm/exemplo.js');
+    dados.iniciar({ sb, origem: 'banco', exemplo: EXEMPLO });
+    console.info('[modulos] nucleo carregado');
+
+    // As etapas vem do banco, mas a falta delas NAO pode derrubar o modulo:
+    // nucleo/estagios.js ja traz a lista padrao, e o CRM abre com ela. Antes
+    // esta linha estava dentro do try geral, entao um erro aqui apagava o menu
+    // inteiro — falha desproporcional ao problema.
+    try { await dados.carregarEtapas(); console.info('[modulos] etapas do banco'); }
+    catch (e) { console.warn('[modulos] etapas: usando a lista padrao —', e?.message || e); }
+
+    const carregados = await nucleo.GRID.carregarModulos(_modulosAtivos.filter(m => m !== 'treinamentos'), APP_BUILD);
+    console.info('[modulos] carregados:', carregados.map(m => m.id));
+    // Onde o modulo desenha: navegacao._destino() ja usa window.setConteudo
+    // quando ele existe, que e o caso aqui — e o mesmo caminho de todas as
+    // telas do app, com o DOM duplo tratado num lugar so.
+    _GRID = nucleo.GRID;
+    _ligarAcoesDeModulo();
+  } catch (e) {
+    console.error('[modulos] CRM nao carregou:', e);
+    _GRID = null;              // sem modulo, o app segue como sempre foi
+  }
+}
+
+// ── Acoes das telas de modulo ────────────────────────────────────────────
+// As telas dos modulos so declaram `data-acao="nome:valor"`. Estes dois
+// ouvintes sao a unica ligacao entre esse contrato e o app; quem traduz acao
+// em comportamento e a plataforma (navegacao.tratarAcao), nao este arquivo.
+// Delegados no document e registrados uma vez so — as telas sao redesenhadas
+// inteiras a cada acao, entao ouvinte preso a elemento morreria no primeiro
+// redesenho.
+let _acoesLigadas = false;
+function _ligarAcoesDeModulo() {
+  if (_acoesLigadas) return;
+  _acoesLigadas = true;
+
+  const dentroDeModulo = (el) => el.closest('#mainBody, #mobileBody');
+
+  document.addEventListener('click', async (ev) => {
+    if (!_GRID) return;
+    const el = ev.target.closest('[data-acao]');
+    if (!el || !dentroDeModulo(el) || el.tagName === 'SELECT' || el.tagName === 'INPUT') return;
+    const acao = el.dataset.acao;
+    if (!acao) return;
+    ev.preventDefault();
+    const tratou = await _GRID.tratarAcao(acao);
+    // Acao declarada e sem tratador: avisa em vez de nao fazer nada. Um clique
+    // que nao responde e pior do que um "ainda nao existe".
+    if (!tratou) showToast('Esta ação ainda não está pronta: ' + acao, 'error');
+  });
+
+  document.addEventListener('change', async (ev) => {
+    if (!_GRID) return;
+    const el = ev.target.closest('[data-acao]');
+    if (!el || !dentroDeModulo(el)) return;
+    if (el.tagName !== 'SELECT' && el.type !== 'search') return;
+    // O campo de busca ja foi tratado pelo ouvinte de digitacao abaixo; deixar
+    // o `change` disparar de novo ao sair do campo redesenharia a tela a toa.
+    if (el.type === 'search') return;
+    const acao = el.dataset.acao;
+    if (acao) await _GRID.tratarAcao(acao + ':' + el.value);
+  });
+
+  // ── Busca enquanto digita ──────────────────────────────────────────────
+  // A busca so respondia ao evento `change`, que num input[type=search] so
+  // dispara com Enter ou ao sair do campo. Quem digitava "ceramica" e olhava
+  // a tela via a lista inteira parada e concluia que a busca nao funcionava.
+  // Agora responde a digitacao, com uma pausa de 250ms para nao redesenhar a
+  // tela a cada tecla.
+  //
+  // Devolver o foco depois do redesenho NAO e problema daqui: `acao()` dispara
+  // `redesenhar()` sem esperar, entao neste ponto o DOM novo ainda nao entrou.
+  // Quem devolve e `redesenhar()` em nucleo/navegacao.js, que e o unico lugar
+  // que sabe a hora certa.
+  let _tBusca = null;
+  document.addEventListener('input', (ev) => {
+    if (!_GRID) return;
+    const el = ev.target.closest('[data-acao]');
+    if (!el || !dentroDeModulo(el) || el.type !== 'search') return;
+    const acao = el.dataset.acao;
+    if (!acao) return;
+    clearTimeout(_tBusca);
+    /* Le o campo na HORA DE DISPARAR, nao na hora da tecla: entre uma coisa e
+       outra o redesenho pode ter trocado o elemento, e o que vale e o que esta
+       escrito na tela agora. */
+    const id = el.id, valorDaTecla = el.value;
+    _tBusca = setTimeout(() => {
+      const atual = id
+        ? [...document.querySelectorAll('[id="' + CSS.escape(id) + '"]')]
+            .find((c) => c.getBoundingClientRect().width > 0)
+        : null;
+      _GRID.tratarAcao(acao + ':' + (atual ? atual.value : valorDaTecla));
+    }, 250);
+  });
+}
+
+// Itens de menu do CRM, injetados em NAV so quando o modulo esta ativo E o
+// perfil tem direito. Vem do proprio manifesto do modulo (modulo.js) — este
+// arquivo nao mantem uma segunda lista para desatualizar.
+// Itens de menu conhecidos SEM carregar o modulo. Existe para o primeiro
+// quadro: o manifesto de verdade vem no modulo, mas esperar o download dele
+// para desenhar um menu e o que criava a tela vazia. Quando o modulo chega,
+// _injetarMenuDosModulos roda de novo com a lista real e o menu se corrige —
+// na pratica sao identicos, e por isso o menu nao "pula".
+const MENU_MODULO_PREVIO = {
+  crm: [
+    { id:'crm',            rotulo:'Painel comercial', icone:'trend',    perfis:['administrador','comercial'] },
+    { id:'crm-conversas',  rotulo:'Conversas',        icone:'chat',     perfis:['administrador','comercial'] },
+    { id:'crm-funil',      rotulo:'Funil de vendas',  icone:'funnel',   perfis:['administrador','comercial'] },
+    { id:'crm-contatos',   rotulo:'Contatos',         icone:'user',     perfis:['administrador','comercial'] },
+    { id:'crm-atividades', rotulo:'Atividades',       icone:'activity', perfis:['administrador','comercial'] },
+    { id:'crm-numeros',    rotulo:'WhatsApp',         icone:'phone',    perfis:['administrador'] }
+  ]
+};
+
+function _injetarMenuDosModulos({ soCache = false } = {}) {
+  const perfil = usuarioAtual.perfil;
+  let itens;
+  if (soCache) {
+    itens = _modulosAtivos.flatMap(id => (MENU_MODULO_PREVIO[id] || [])
+      .filter(i => !i.perfis || i.perfis.includes(perfil))
+      .map(i => ({ ...i, modulo: id })));
+  } else {
+    if (!_GRID) { console.info('[modulos] nenhum modulo ativo — menu padrao'); return; }
+    itens = _GRID.itensDeMenu(perfil);
+    console.info('[modulos] itens de menu para', perfil, ':', itens.map(i => i.id));
+  }
+  if (!itens.length) return;
+  // Redesenho: tira o que a passada anterior colocou, para nao duplicar item.
+  const navLimpar = NAV[perfil];
+  if (navLimpar) {
+    const ids = new Set(itens.map(i => i.id));
+    for (let k = navLimpar.length - 1; k >= 0; k--) {
+      if (ids.has(navLimpar[k].id) || navLimpar[k].sec === 'CRM') navLimpar.splice(k, 1);
+    }
+  }
+  const nav = NAV[perfil];
+  if (!nav) return;
+  const iConta = nav.findIndex(i => i.sec === 'Conta');
+  const bloco = [{ sec: 'CRM' }, ...itens.map(i => ({ id: i.id, l: i.rotulo, icon: i.icone }))];
+  if (iConta >= 0) nav.splice(iConta, 0, ...bloco); else nav.push(...bloco);
+  itens.forEach(i => { TITULOS[i.id] = i.rotulo; });
+}
+
 function _perfilTemAcesso(pagina) {
   if (pagina === 'home') return true;
   const perfil = usuarioAtual?.perfil;
   const itens = NAV[perfil] || [];
-  return itens.some(i => i.id === pagina);
+  if (itens.some(i => i.id === pagina)) return true;
+  // ── BUG CORRIGIDO EM 05/09 (h17) ──────────────────────────────────────
+  // NAV so conhece as telas do Treinamentos. Toda rota de modulo caia aqui
+  // como "sem acesso" e irPara() a trocava por 'home' — por isso clicar no
+  // cartao de um lead (data-acao="ir:crm-lead:<id>") ia para a tela inicial.
+  // Os itens VISIVEIS do modulo sao injetados em NAV por
+  // _injetarMenuDosModulos, entao o menu funcionava; as rotas OCULTAS
+  // (ficha do lead) nunca entram no menu e continuavam caindo em 'home'.
+  // Quem sabe se a rota existe e quem pode abri-la e o manifesto do modulo.
+  try {
+    const r = _GRID?.navegacao?.rota?.(pagina);
+    if (r) return !r.item.perfis || r.item.perfis.includes(perfil);
+  } catch (e) { /* sem modulo carregado: segue a regra de NAV acima */ }
+  return false;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MENU LATERAL — clássico ou em blocos de módulo (2026-09-04)
+// ------------------------------------------------------------------------
+// Duas formas, e a escolha é automática:
+//   • organização SEM módulo além do Treinamentos → menu clássico, idêntico
+//     ao que está em produção. Com um módulo só, um cabeçalho de bloco não
+//     organiza nada — só acrescenta um clique.
+//   • organização COM módulo (hoje, CRM) → menu em blocos, como no mockup
+//     aprovado: Início solto no topo, um bloco por módulo que abre e fecha,
+//     e Configurações no rodapé.
+// Isso é o que permite entregar a navegação nova sem mexer na aparência de
+// quem só tem Treinamentos — inclusive o cliente que está em produção.
+// ------------------------------------------------------------------------
+// Quais itens vão para "Configurações". O resto do menu antigo (Turmas,
+// Clientes, Catálogo…) é o módulo de Treinamentos, ainda que ele não seja um
+// módulo de verdade no código — é a leitura correta do ponto de vista de quem
+// usa, e é o que o mockup mostra.
+const MENU_CONFIG_IDS = ['equipe', 'conta'];
+
+// Os nomes de icone dos modulos (nucleo/icones.js) nao sao os do app (ICONS).
+// Este mapa e a traducao — pequeno de proposito: icone novo sem traducao cai
+// no de grafico em vez de sumir da tela.
+/* ICONE_MODULO_APP foi removida no h44: era a tabela que traduzia o nome do
+   icone do modulo para o mais parecido que o app tinha. Agora o app tem o
+   desenho certo e usa o nome que o modulo declarou, sem intermediario. */
+
+// O ICONS do app nao tem chevron; desenhar aqui evita reaproveitar a seta de
+// "voltar" girada, que fica torta em tamanho pequeno.
+const SETA_BLOCO = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+
+function _itemMenuHtml(i) {
+  return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}" data-label="${i.l}"><span class="si-icon">${ICONS[i.icon]||''}</span><span class="si-label">${i.l}</span></div>`;
+}
+
+function _blocoMenuHtml(id, nome, icone, itens, aberto) {
+  return `<div class="mod-bloco${aberto?' aberto':''}" data-mod="${id}" data-aberto="${aberto?'1':'0'}">
+    <div class="mod-head" onclick="_toggleBlocoMenu('${id}')" title="${nome}">
+      <span class="mh-ic">${ICONS[icone]||''}</span>${nome}
+      <span class="seta">${SETA_BLOCO}</span>
+    </div>
+    <div class="mod-itens">${itens.map(_itemMenuHtml).join('')}</div>
+  </div>`;
+}
+
+function _toggleBlocoMenu(id) {
+  document.querySelectorAll(`.mod-bloco[data-mod="${id}"]`).forEach(b => {
+    const abrir = !b.classList.contains('aberto');
+    b.classList.toggle('aberto', abrir);
+    b.dataset.aberto = abrir ? '1' : '0';
+  });
+  try { localStorage.setItem('tl_menu_bloco_' + id, document.querySelector(`.mod-bloco[data-mod="${id}"]`)?.dataset.aberto || '1'); } catch(e) {}
+}
+
+function _blocoAberto(id, padrao) {
+  try { const v = localStorage.getItem('tl_menu_bloco_' + id); return v === null ? padrao : v === '1'; } catch(e) { return padrao; }
+}
+
+// Nome de exibicao do bloco antes do modulo carregar. Depois que ele chega,
+// o nome vem do proprio manifesto.
+const NOME_MODULO_PREVIO = { crm: 'CRM' };
+
+function _htmlMenuLateral(itens) {
+  const perfilAtual = usuarioAtual.perfil;
+  const idsDeModulo = {};                       // id do item → id do módulo
+  const nomes = {};
+  if (_GRID) {
+    for (const item of _GRID.itensDeMenu(perfilAtual)) idsDeModulo[item.id] = item.modulo;
+    for (const m of _GRID.modulos()) nomes[m.id] = { nome: m.nome, icone: m.icone };
+  } else {
+    // Primeiro quadro: os modulos ainda estao baixando. O menu ja e o
+    // definitivo — ele nao vai mudar quando eles chegarem.
+    for (const id of _modulosAtivos) {
+      for (const i of (MENU_MODULO_PREVIO[id] || [])) if (!i.perfis || i.perfis.includes(perfilAtual)) idsDeModulo[i.id] = id;
+      nomes[id] = { nome: NOME_MODULO_PREVIO[id] || id.toUpperCase(), icone: 'chart' };
+    }
+  }
+  const temModulo = Object.keys(idsDeModulo).length > 0;
+
+  // Sem módulo: exatamente o menu de sempre, sem uma linha de diferença.
+  if (!temModulo) {
+    return itens.map(i => i.sec
+      ? `<div class="sidebar-section-label">${i.sec}</div>`
+      : _itemMenuHtml(i)).join('');
+  }
+
+  const soItens = itens.filter(i => i.id);
+  const inicio  = soItens.filter(i => i.id === 'home');
+  const config  = soItens.filter(i => MENU_CONFIG_IDS.includes(i.id));
+  const base    = soItens.filter(i => i.id !== 'home' && !MENU_CONFIG_IDS.includes(i.id) && !idsDeModulo[i.id]);
+
+  const blocos = [];
+  if (base.length) blocos.push(_blocoMenuHtml('treinamentos', 'Treinamentos', 'cap', base, _blocoAberto('treinamentos', true)));
+  for (const modId of Object.keys(nomes)) {
+    const seus = soItens.filter(i => idsDeModulo[i.id] === modId);
+    if (seus.length) blocos.push(_blocoMenuHtml(modId, nomes[modId].nome, nomes[modId].icone, seus, _blocoAberto(modId, true)));
+  }
+
+  return `<div style="padding:0 10px">${inicio.map(_itemMenuHtml).join('')}</div>
+    ${blocos.join('')}
+    ${config.length ? `<div class="sidebar-section-label">Configurações</div><div style="padding:0 10px">${config.map(_itemMenuHtml).join('')}</div>` : ''}`;
 }
 
 function configurarNavegacao() {
@@ -3589,10 +4145,7 @@ function configurarNavegacao() {
   const itens  = NAV[perfil] || [];
   const bottom = NAV_BOTTOM[perfil] || [];
 
-  document.getElementById('sidebarNav').innerHTML = itens.map(i=>{
-    if (i.sec) return `<div class="sidebar-section-label">${i.sec}</div>`;
-    return `<div class="sidebar-item" id="si-${i.id}" data-nav="${i.id}" data-label="${i.l}"><span class="si-icon">${ICONS[i.icon]||''}</span><span class="si-label">${i.l}</span><span class="si-badge" id="sib-${i.id}" style="display:none"></span></div>`;
-  }).join('');
+  document.getElementById('sidebarNav').innerHTML = _htmlMenuLateral(itens);
   // Menu recém-renderizado (troca de perfil/login) — limpa o campo de busca
   // e garante que nenhum item fique escondido por um filtro de uma sessão
   // anterior.
@@ -3651,7 +4204,13 @@ async function irPara(pagina, params={}) {
   // Bloqueia navegação para telas fora do menu do perfil atual (ver
   // _perfilTemAcesso acima) — redireciona para o Início em vez de renderizar
   // uma tela sem permissão.
-  if (!_perfilTemAcesso(pagina)) pagina = 'home';
+  if (!_perfilTemAcesso(pagina)) {
+    // Pode ser rota de modulo que ainda nao chegou (os modulos carregam em
+    // segundo plano). Espera o carregamento em andamento antes de decidir que
+    // a pessoa nao tem acesso — senao um link profundo vira sempre 'home'.
+    if (_plataformaCarregando && !_GRID) { try { await _plataformaCarregando; } catch (e) {} }
+    if (!_perfilTemAcesso(pagina)) pagina = 'home';
+  }
   // Agenda da Equipe roda um refresh silencioso em segundo plano (ver
   // renderAgendaEquipe) enquanto a pessoa está nela — ao sair da tela,
   // sempre para esse timer aqui, independente de para onde ela está indo,
@@ -3667,15 +4226,27 @@ async function irPara(pagina, params={}) {
   // sub-rota. Não afeta nenhuma regra de negócio, só o estado de navegação.
   window._turmaAbertaViaHash = null;
   paginaAtual = pagina;
+  window._paramsRotaAtual = params;
   marcarNavAtivo(pagina);
   fecharSidebar();
   fabOcultar();
   document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
   if (_suporteAtivo) _suporteRegistrarAcao(pagina); // log de auditoria
-  // Atualiza URL com hash sem recarregar a página
-  const novoHash = '#' + pagina;
+  // Atualiza URL com hash sem recarregar a página.
+  // ── CORRIGIDO EM 05/09 (h20) ──────────────────────────────────────────
+  // O id da rota de modulo (a ficha de um lead) nao ia para a URL: o hash
+  // virava so "#crm-lead". Consequencia: recarregar a pagina em cima de uma
+  // ficha, ou Avancar depois de Voltar, abria "Nenhum lead selecionado".
+  // Turmas ja resolvia isso com "?turma=<id>"; aqui o mesmo padrao, com
+  // "?id=<id>", para qualquer rota de modulo que receba um.
+  const idDaRota = params && params.id ? '?id=' + encodeURIComponent(params.id) : '';
+  const novoHash = '#' + pagina + idDaRota;
   if (location.hash !== novoHash) history.pushState({pagina}, '', novoHash);
   showLoading();
+  // O esqueleto vale para a PRIMEIRA pintura de cada tela. Numa troca de tela
+  // ja carregada, o conteudo anterior fica ate o novo chegar — trocar conteudo
+  // bom por esqueleto seria piorar.
+  if (!window._telaJaPintada) { setConteudo(esqueletoConteudo()); window._telaJaPintada = true; }
   try {
     switch(pagina) {
       case 'home':          await renderHome(); break;
@@ -3694,7 +4265,24 @@ async function irPara(pagina, params={}) {
       case 'historico':     await renderHistorico(); break;
       case 'relatorios':    await renderRelatorios(); break;
       case 'conta':         await renderConta(); break;
-      default: renderEmBreve(TITULOS[pagina]||pagina);
+      // Rota de modulo: se algum modulo carregado responde por esta pagina,
+      // ele desenha. Só cai em "em breve" quando ninguem responde.
+      // (o despachante de acoes das telas de modulo esta em _ligarAcoesDeModulo)
+      default:
+        // ── BUG CORRIGIDO EM 05/09 (h18) ────────────────────────────────
+        // Os modulos carregam em segundo plano (ver a ordem de pintura em
+        // iniciarApp). Abrir o app direto num link profundo de modulo
+        // — "app.html#crm-funil", que e o que um favorito ou um link
+        // compartilhado tem — chegava aqui com _GRID ainda null e caia em
+        // "Esta secao esta sendo construida". Nao era rota inexistente: era
+        // rota que ainda nao tinha chegado.
+        // Agora esperamos o carregamento que ja esta em andamento (no maximo
+        // ~8s) antes de decidir que a rota nao existe.
+        if (!_GRID && _plataformaCarregando) {
+          try { await _plataformaCarregando; } catch (e) { /* segue para o "em breve" */ }
+        }
+        if (_GRID && await _GRID.abrir(pagina, params)) break;
+        renderEmBreve(TITULOS[pagina]||pagina);
     }
   } catch(e) {
     console.error(e);
@@ -3756,17 +4344,16 @@ async function renderHomeProvedor() {
   _setSinoAlertas(alertas);
   _limparDispensasResolvidas(dispensadosRows, chavesAtuais); // segundo plano, não bloqueia o render
 
-  const htmlAlertas = alertas.length ? `
-    <div style="margin-bottom:14px">
-      ${alertas.slice(0,6).map(a => `
-        <div onclick="verOrgProvedor('${a.orgId}')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-md);margin-bottom:6px;cursor:pointer;flex-wrap:wrap;background:${a.tipo==='critico'?'var(--red-l)':'var(--amber-l)'};border-left:3px solid ${a.tipo==='critico'?'var(--red)':'var(--amber)'}">
-          <span style="font-size:15px">${a.tipo==='critico'?'🔴':'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>'}</span>
-          <span style="font-size:13px;color:${a.tipo==='critico'?'var(--red-text)':'var(--amber-text)'};font-weight:500;flex:1;min-width:160px">${a.texto}</span>
-          ${a.acaoHtml || ''}
-          <span style="font-size:11px;color:var(--text-3)">Ver</span>
-          ${_htmlBtnDispensar(a)}
-        </div>`).join('')}
-    </div>` : '';
+  // Alertas do Provedor no mesmo componente do Inicio do cliente. Estes nao
+  // trazem numero — sao sobre uma organizacao, nao sobre uma contagem —, e o
+  // componente simplesmente nao desenha a coluna do numero quando ela falta.
+  const htmlAlertas = _alertaLista(alertas.slice(0, 6).map(a => ({
+    grave: a.tipo === 'critico',
+    texto: a.texto,
+    acaoHtml: (a.acaoHtml || '') + `<span class="ac">Ver${_CHEVRON_ALERTA}</span>`,
+    aoClicar: `verOrgProvedor('${a.orgId}')`,
+    extra: _htmlBtnDispensar(a)
+  })));
 
   const _badgePlano = (plano, ativo) => {
     if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
@@ -4786,6 +5373,64 @@ async function alterarPlanoOrg() {
   }
 }
 
+// NIVEL DE ARQUIVO, e nao dentro de renderHomeAdmin. Estava la dentro desde o
+// h36 e passou despercebido enquanto a unica chamada era a da propria tela: a
+// funcao existia so durante aquele desenho. Quando o h40 passou o componente
+// pela ponte e a tela de Turmas comecou a usa-lo, os dois quebraram com
+// "_alertaLista is not defined" — porque nao havia _alertaLista fora dali.
+// Componente compartilhado mora no escopo de quem compartilha.
+// ── Lista "Requer atenção" ────────────────────────────────────────────────
+// Um construtor para as três telas que mostravam alerta. Antes cada uma tinha
+// o seu, escrito com estilo inline, e a mesma decisão visual estava copiada em
+// três lugares — mudar o formato exigia lembrar dos três.
+//
+// Cada item: { grave, n, unidade, texto, acao, acaoHtml, aoClicar, extra }
+//   grave    → filete vermelho e sobe para o topo
+//   n        → o número, quando existe. Sai da frase e vira a primeira coisa
+//              da linha. Alerta sem número (os do Provedor) simplesmente não
+//              o passa, e o texto ocupa o lugar.
+//   unidade  → "turmas", "aulas" — o negrito que acompanha o número
+//   acao     → rótulo do link à direita ("Revisar"); acaoHtml para casos que
+//              já trazem HTML próprio
+//   aoClicar → JS do clique na linha inteira (a casca escreve codigo)
+//   acaoDeclarada → acao de MODULO ("ir:crm-funil"), vira data-acao e o
+//              despachante trata. Sao coisas diferentes: no h42 o painel
+//              passava "ir:crm-conversas" em aoClicar e virava
+//              onclick="ir:crm-conversas", que nao e JavaScript — o clique
+//              morria com "crm is not defined". Um campo, dois contratos.
+//   extra    → HTML solto no fim da linha (o botão de dispensar do Provedor)
+//
+// A ordenação por gravidade é do componente, não de quem chama: é ela que faz
+// a POSIÇÃO comunicar urgência, o que permite o filete ser discreto.
+const _CHEVRON_ALERTA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+function _alertaLista(itens) {
+  if (!itens || !itens.length) return '';
+  const ordenados = [...itens].sort((a, b) => (a.grave ? 0 : 1) - (b.grave ? 0 : 1));
+  /* Se UM item tem numero, todos reservam a coluna — mesmo os que nao tem.
+     Sem isto, um alerta sem numero (o do WhatsApp desconectado, no Painel
+     comercial) comeca colado no filete enquanto os vizinhos comecam 50px
+     adiante, e a coluna que justifica este formato deixa de existir bem na
+     linha mais importante. Lista inteira sem numero nao reserva nada. */
+  const temColuna = ordenados.some((a) => a.n != null);
+  return `<div class="ds-alertas">${ordenados.map((a) => {
+    const corpo = `<div class="tx">${a.unidade ? `<b>${a.unidade}</b> ` : ''}${a.texto}</div>`
+      + (a.sub    ? `<div class="sub">${a.sub}</div>` : '')
+      + (a.abaixo ? `<div class="abaixo">${a.abaixo}</div>` : '');
+    const temBloco = !!(a.sub || a.abaixo);
+    const clicavel = a.aoClicar || a.acaoDeclarada;
+    const gatilho = a.aoClicar ? ` onclick="${a.aoClicar}"`
+                  : a.acaoDeclarada ? ` data-acao="${a.acaoDeclarada}"` : '';
+    return `
+    <div class="ds-alerta ${a.grave ? 'grave' : ''} ${clicavel ? 'clicavel' : ''} ${temBloco ? 'com-bloco' : ''}"${gatilho}>
+      <span class="fil"></span>
+      ${temColuna ? `<span class="num">${a.n != null ? a.n : ''}</span>` : ''}
+      ${temBloco ? `<div class="corpo">${corpo}</div>` : corpo}
+      ${a.acaoHtml || (a.acao ? `<span class="ac">${a.acao}${_CHEVRON_ALERTA}</span>` : '')}
+      ${a.extra || ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
 async function renderHomeAdmin() {
   const oi = usuarioAtual.org_id;
   const hoje = new Date();
@@ -4874,9 +5519,10 @@ async function renderHomeAdmin() {
   );
   if (semInstrutor.length > 0) {
     alertas.push({
-      tipo: 'warning',
-      icone: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M20 21v-2a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v2"/><circle cx="12" cy="7" r="4"/></svg>',
-      texto: `${semInstrutor.length} aula${semInstrutor.length!==1?'s':''} nos próximos 7 dias sem instrutor atribuído`,
+      grave: false,
+      n: semInstrutor.length,
+      unidade: `aula${semInstrutor.length!==1?'s':''}`,
+      texto: 'nos próximos 7 dias sem instrutor atribuído',
       acao: "irParaTurmasFiltradas('em_andamento')",
       label: 'Ver turmas',
     });
@@ -4890,9 +5536,10 @@ async function renderHomeAdmin() {
   });
   if (travadas.length > 0) {
     alertas.push({
-      tipo: 'warning',
-      icone: '⏸',
-      texto: `${travadas.length} turma${travadas.length!==1?'s':''} em andamento sem próximas aulas agendadas`,
+      grave: false,
+      n: travadas.length,
+      unidade: `turma${travadas.length!==1?'s':''}`,
+      texto: 'em andamento sem próximas aulas agendadas',
       acao: "irParaTurmasFiltradas('em_andamento')",
       label: 'Verificar',
     });
@@ -4910,9 +5557,10 @@ async function renderHomeAdmin() {
   });
   if (atrasadas.length > 0) {
     alertas.push({
-      tipo: 'danger',
-      icone: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>',
-      texto: `${atrasadas.length} turma${atrasadas.length!==1?'s':''} com data de início no passado ainda aguardando início`,
+      grave: true,
+      n: atrasadas.length,
+      unidade: `turma${atrasadas.length!==1?'s':''}`,
+      texto: 'com data de início no passado ainda aguardando início',
       acao: "irParaTurmasFiltradas('agendada')",
       label: 'Revisar',
     });
@@ -4926,24 +5574,21 @@ async function renderHomeAdmin() {
   const comPendencia = tAll.filter(t => _turmaPendencias(t, sesAll.filter(s => s.turma_id === t.id)).length > 0);
   if (comPendencia.length > 0) {
     alertas.push({
-      tipo: 'warning',
-      icone: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg>',
-      texto: `${comPendencia.length} turma${comPendencia.length!==1?'s':''} com pendência de cadastro (participantes, local ou instrutor)`,
+      grave: false,
+      n: comPendencia.length,
+      unidade: `turma${comPendencia.length!==1?'s':''}`,
+      texto: 'com pendência de cadastro (participantes, local ou instrutor)',
       acao: "irParaTurmasComPendencia()",
       label: 'Ver turmas',
     });
   }
 
-  const alertasHtml = alertas.map(a => {
-    const bg    = a.tipo==='danger' ? 'rgba(220,38,38,.08)' : 'rgba(245,158,11,.08)';
-    const borda = a.tipo==='danger' ? 'rgba(220,38,38,.3)' : 'rgba(245,158,11,.3)';
-    const cor   = a.tipo==='danger' ? '#B91C1C' : '#92400E';
-    return `<div style="background:${bg};border:1px solid ${borda};border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px">
-      <span style="font-size:16px;flex-shrink:0">${a.icone}</span>
-      <div style="flex:1;font-size:12px;color:${cor};font-weight:500;line-height:1.4">${a.texto}</div>
-      <button onclick="${a.acao}" style="border:1px solid ${borda};background:transparent;color:${cor};font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;font-family:inherit">${a.label}</button>
-    </div>`;
-  }).join('');
+
+
+  const alertasHtml = _alertaLista(alertas.map(a => ({
+    grave: a.grave, n: a.n, unidade: a.unidade, texto: a.texto,
+    acao: a.label, aoClicar: a.acao
+  })));
 
   // ── Primeiros passos (onboarding guiado) ──────────────────────
   // Não é um flag "dispensado" salvo em algum lugar — o próprio dado real
@@ -5004,7 +5649,7 @@ async function renderHomeAdmin() {
     </div>
 
     <div class="h2-kpis" style="margin-bottom:16px">
-      <div class="h2-kpi" onclick="irParaTurmasFiltradas('em_andamento')"><div class="ic">🟢</div><div class="n">${ativas}</div><div class="l">Turmas ativas</div><div class="d a">Em andamento</div></div>
+      <div class="h2-kpi" onclick="irParaTurmasFiltradas('em_andamento')"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.8v6.4l5-3.2z"/></svg></div><div class="n">${ativas}</div><div class="l">Turmas ativas</div><div class="d a">Em andamento</div></div>
       <div class="h2-kpi" onclick="irParaTurmasFiltradas('agendada')"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></div><div class="n">${agendadas}</div><div class="l">A realizar</div><div class="d m">Próximas</div></div>
       <div class="h2-kpi" onclick="irPara('clientes')"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16M14 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3"/></svg></div><div class="n">${cliAtivos}</div><div class="l">Clientes ativos</div><div class="d g">↑ ${turmasMes} turmas no mês</div></div>
       <div class="h2-kpi" onclick="irParaTurmasFiltradas('concluida')"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg></div><div class="n">${concluidas}</div><div class="l">Concluídas</div><div class="d m">Ver histórico</div></div>
@@ -5154,18 +5799,18 @@ async function renderHomeComercial() {
 
     <div class="h2-kpis" style="margin-bottom:16px">
       <div class="h2-kpi" onclick="irParaTurmasFiltradas('agendada')"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></div><div class="n">${nAgendadas}</div><div class="l">A realizar</div><div class="d m">Próximas</div></div>
-      <div class="h2-kpi" onclick="irParaTurmasFiltradas('em_andamento')"><div class="ic">🟢</div><div class="n">${nAndamento}</div><div class="l">Em andamento</div><div class="d a">Acompanhar</div></div>
+      <div class="h2-kpi" onclick="irParaTurmasFiltradas('em_andamento')"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.8v6.4l5-3.2z"/></svg></div><div class="n">${nAndamento}</div><div class="l">Em andamento</div><div class="d a">Acompanhar</div></div>
       <div class="h2-kpi" onclick="irPara('clientes')"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16M14 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3"/></svg></div><div class="n">${(clientes||[]).length}</div><div class="l">Clientes ativos</div><div class="d ${cliNovosMes>0?'g':'m'}">${cliNovosMes>0?`↑ ${cliNovosMes} novo${cliNovosMes!==1?'s':''} no mês`:'Ver clientes'}</div></div>
       <div class="h2-kpi ${nPendencia>0?'warn-b':''}" onclick="${nPendencia>0?'irParaTurmasComPendencia()':`irPara('turmas')`}"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></div><div class="n">${nPendencia}</div><div class="l">Com pendência</div><div class="d ${nPendencia>0?'a':'m'}">${nPendencia>0?'Resolver':'Tudo em dia'}</div></div>
     </div>
 
     ${nPendencia > 0 ? `
     <div class="gh-sec"><div class="dot red"></div><span>Requer atenção</span><div class="line"></div></div>
-    <div onclick="irParaTurmasComPendencia()" style="cursor:pointer;background:var(--warn-l);border:1px solid rgba(217,119,6,.3);border-left:3px solid var(--warn);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <span style="font-size:16px;flex-shrink:0"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg></span>
-      <div style="flex:1;font-size:12.5px;color:var(--warn-text);font-weight:500;line-height:1.4">${nPendencia} turma${nPendencia!==1?'s':''} com pendência (participantes, local ou instrutor)</div>
-      <span style="font-size:11px;color:var(--warn-text);font-weight:600;white-space:nowrap">Ver</span>
-    </div>` : ''}
+    ${_alertaLista([{
+      grave: false, n: nPendencia, unidade: `turma${nPendencia!==1?'s':''}`,
+      texto: 'com pendência (participantes, local ou instrutor)',
+      acao: 'Ver', aoClicar: 'irParaTurmasComPendencia()'
+    }])}` : ''}
 
     <div class="gh-sec"><div class="dot"></div><span>Próximas turmas agendadas</span><div class="line"></div><span class="glink" data-nav="turmas">Todas</span></div>
     <div class="home-list-card" style="margin-bottom:14px">
@@ -6000,7 +6645,7 @@ async function renderAdocaoProvedor() {
   const RECURSOS_DEF = [
     { key:'colaboradores', label:'Colaboradores cadastrados',  icon:'users' },
     { key:'catalogo',      label:'Catálogo configurado',       icon:'book'  },
-    { key:'turmas',        label:'Turmas criadas',             icon:'clip'  },
+    { key:'turmas',        label:'Turmas criadas',             icon:'clipboard' },
     { key:'certificados',  label:'Certificados emitidos',      icon:'shield'},
     { key:'conformidade',  label:'Conformidade acompanhada',   icon:'target'},
     { key:'equipe',        label:'Equipe (mais de 1 usuário)', icon:'team'  },
@@ -7659,7 +8304,7 @@ async function renderClientes() {
       </select>
     </div>
     ${podeCriar?`<div class="acoes-row">
-      <button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.userplus} Novo cadastro</button>
+      <button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Novo cadastro</button>
       ${_btnAcaoBadge(ICONS.upload,'Importar CSV','abrirModalImportarCSV()')}
       ${_btnAcaoBadge(ICONS.filesheet,'Importar modelo 1',"abrirModalImportacaoSOC('clientes')")}
       ${usuarioAtual.orgSocIntegracaoAtiva ? _btnAcaoBadge(ICONS.search,'Buscar no SOC',"_socWsAbrirModal('clientes')",'var(--green-text)','var(--green)','#fff','var(--green-l)') : ''}
@@ -8140,7 +8785,7 @@ async function renderColaboradores() {
       na tela Clientes — a pedido do Alisson, pra não ter a mesma ação
       "Importar" duplicada com nomes ambíguos em duas telas. Colaboradores
       fica só com o cadastro manual. -->
-      ${podeCriar?`<div class="turmas-filtros-cta"><button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.userplus} Novo cadastro</button></div>`:''}
+      ${podeCriar?`<div class="turmas-filtros-cta"><button class="btn btn-amber" onclick="abrirModalColab()">${ICONS.plus} Novo cadastro</button></div>`:''}
     </div>
     <div class="card" style="padding:0" id="listaColabs">${_renderColabsListaPaginada()}</div>`);
 }
@@ -8196,7 +8841,7 @@ async function verColab(id) {
   // Clientes (_htmlInfoIcone) — reaproveitado aqui pra manter os dois
   // cadastros com a mesma linguagem visual.
   const linhasCadastro = [
-    c.cpf      ? _htmlInfoIcone(ICONS.clip,  escapeHtml(c.cpf)) : '',
+    c.cpf      ? _htmlInfoIcone(ICONS.doc,   escapeHtml(c.cpf)) : '',
     c.cargo    ? _htmlInfoIcone(ICONS.user,  escapeHtml(c.cargo)) : '',
     c.email    ? _htmlInfoIcone(ICONS.mail,  escapeHtml(c.email)) : '',
     c.telefone ? _htmlInfoIcone(ICONS.phone, escapeHtml(c.telefone)) : '',
@@ -8486,7 +9131,7 @@ async function renderCatalogo() {
     </div>
     ${podeMgr ? `<div class="acoes-row">
       <button class="btn btn-outline" onclick="carregarCatalogoModeloUI()" title="Adiciona os treinamentos do catálogo modelo que ainda não existem no seu catálogo">${ICONS.book} Catálogo modelo</button>
-      <button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.book} Novo</button>
+      <button class="btn btn-navy" onclick="abrirModalCatalogo()">${ICONS.plus} Novo</button>
     </div>` : ''}
 
     <div class="card" style="padding:0" id="listaCatalogo">${_renderCatalogoListaPaginada()}</div>`);
@@ -9009,7 +9654,7 @@ function _confRenderNivel1() {
       <div class="turmas-kpi"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18"/><path d="M6 21V11M11 21V5M16 21v-7M21 21v-4"/></svg></div><div class="n">${d.total}</div><div class="l">Total avaliado</div></div>
       <div class="turmas-kpi"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg></div><div class="n" style="color:var(--green)">${d.indice}%</div><div class="l">Conformes</div></div>
       <div class="turmas-kpi"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg></div><div class="n" style="color:var(--red)">${d.vencidos}</div><div class="l">Vencidos</div></div>
-      <div class="turmas-kpi"><div class="ic">⏳</div><div class="n" style="color:var(--amber-h)">${vencendoEmBreve}</div><div class="l">Próx. ${JANELA_CONFORMIDADE_DIAS}d</div></div>
+      <div class="turmas-kpi"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 1.9"/></svg></div><div class="n" style="color:var(--amber-h)">${vencendoEmBreve}</div><div class="l">Próx. ${JANELA_CONFORMIDADE_DIAS}d</div></div>
     </div>
 
     <div class="turmas-viewtoggle" style="margin-bottom:14px">
@@ -9204,7 +9849,7 @@ function _htmlPainelDetalheConf(x, aba) {
   const acoesHtml = !podeGerenciar ? '' : (tratada
     ? `<button class="btn btn-outline" data-action="reabrirPendencia" data-id="${x.id}" style="width:100%;justify-content:center">Reabrir pendência</button>`
     : `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-        ${x.sugestaoId ? `<button class="btn btn-amber" data-action="agendarReciclagem" data-id="${x.id}" style="justify-content:center">${ICONS.clip} Criar nova turma</button>
+        ${x.sugestaoId ? `<button class="btn btn-amber" data-action="agendarReciclagem" data-id="${x.id}" style="justify-content:center">${ICONS.plus} Criar nova turma</button>
         <button class="btn btn-outline" data-action="adicionarEmTurmaExistente" data-id="${x.id}" style="justify-content:center">Adicionar em turma existente</button>` : ''}
         <button class="btn btn-outline" data-action="abrirTreinoExternoConf" data-id="${x.id}" style="justify-content:center">Registrar treinamento externo</button>
       </div>
@@ -10077,7 +10722,7 @@ async function renderTurmas(abaInicial) {
       <!-- 2026-08-30: "Nova turma" volta pra esta linha. Na build 150 ele tinha
            ficado sozinho numa faixa própria (~50px) porque as abas saíram e
            não sobrou mais nada ao lado dele. -->
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.clip} Nova turma</button>`:''}
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.plus} Nova turma</button>`:''}
     </div>
     <div id="turmasCorpoEl">${_turmasPainelHtml()}${_turmasResumoHtml()}${_turmasFaixaPendHtml()}${_turmasRenderVisao(_turmasCache, abaAtiva, podeCriar)}</div>`);
   _turmasAtualizarBotoesVisao();
@@ -10898,18 +11543,20 @@ function _turmasFaixaPendHtml() {
   const chip = (v, rot, n) =>
     `<button type="button" class="tfx-chip${ligado===v?' on':''}" onclick="_turmasFiltrarPend('${v}')">${escapeHtml(rot)}<span class="n">${n}</span></button>`;
 
-  return `<div class="turmas-faixa-pend">
-    <span class="tfx-ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg></span>
-    <div class="tfx-tx">
-      <div class="t1">${q} turma${q>1?'s':''} ${q>1?'não estão prontas':'não está pronta'} para rodar</div>
-      <div class="t2">Toque no que falta para ver quais são.</div>
-      <div class="tfx-chips">
-        ${chip('todas','Todas',q)}
-        ${tipos.map(p => chip(p.id, p.curto, conta[p.id])).join('')}
-      </div>
-    </div>
-    ${ligado?`<button type="button" class="ds-btn-sair tfx-sair" onclick="_turmasFiltrarPend('')">Mostrar todas as turmas</button>`:''}
-  </div>`;
+  /* Passou a usar o MESMO componente da tela Inicio (06/09, h40). Antes era
+     uma faixa tinta propria, com icone, fundo e borda coloridos — o formato
+     que saiu do Inicio e do Painel comercial. Os chips continuam iguais: eles
+     nao sao decoracao, sao o filtro; entram no bloco `abaixo` do componente. */
+  return _alertaLista([{
+    n: q,
+    unidade: q > 1 ? 'turmas' : 'turma',
+    texto: q > 1 ? 'não estão prontas para rodar' : 'não está pronta para rodar',
+    sub: 'Toque no que falta para ver quais são.',
+    abaixo: chip('todas', 'Todas', q) + tipos.map(p => chip(p.id, p.curto, conta[p.id])).join(''),
+    acaoHtml: ligado
+      ? `<button type="button" class="ds-btn-sair tfx-sair" onclick="_turmasFiltrarPend('')">Mostrar todas as turmas</button>`
+      : ''
+  }]);
 }
 
 function _turmasSetFiltro(campo, valor) {
@@ -12021,7 +12668,7 @@ async function abrirModalTurma(id=null, preSel=null) {
             <div class="field">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                 <label style="margin:0">Cliente *</label>
-                ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.userplus} Novo cliente</button>`:''}
+                ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.plus} Novo cliente</button>`:''}
               </div>
               ${_comboBuscavelHtml('mTurCli', 'Buscar cliente por nome...', cliOpcoes, cliPreId, travado)}
             </div>
@@ -19106,9 +19753,9 @@ function _renderRelatorioView() {
           <div class="rel2-sub" id="relSubtitle">Últimos ${meses} meses · Atualizado agora</div>
         </div>
         <div class="rel2-export" style="flex-shrink:0">
-          <button class="rel2-export-btn" onclick="exportarRelatorioCSV()"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg> CSV</button>
+          <button class="rel2-export-btn" onclick="exportarRelatorioCSV()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> CSV</button>
           ${planoAtinge('pro')
-            ? '<button class="rel2-export-btn" onclick="exportarRelatorioExecutivoPDF()"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg> PDF Executivo</button><button class="rel2-export-btn" onclick="exportarRelatorioComparativoPDF()" id="btnExportComp" style="display:' + (meses>1?'inline-block':'none') + '"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg> PDF Comparativo</button>'
+            ? '<button class="rel2-export-btn" onclick="exportarRelatorioExecutivoPDF()"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg> PDF Executivo</button><button class="rel2-export-btn" onclick="exportarRelatorioComparativoPDF()" id="btnExportComp" style="display:' + (meses>1?'inline-block':'none') + '"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg> PDF Comparativo</button>'
             : '<button class="rel2-export-btn" style="opacity:.5" onclick="modalUpgrade(&quot;Relatório Executivo em PDF&quot;,&quot;pro&quot;)" title="Disponível no plano Pro"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> PDF Executivo</button><button class="rel2-export-btn" style="opacity:.5;' + (meses>1?'':'display:none') + '" onclick="modalUpgrade(&quot;Relatório Comparativo em PDF&quot;,&quot;pro&quot;)" id="btnExportComp" title="Disponível no plano Pro"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> PDF Comparativo</button>'
           }
         </div>
@@ -19727,9 +20374,9 @@ function _renderRelatorioInstrutorDetalhe() {
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-outline btn-sm" onclick="window.print()">Imprimir</button>
-            <button class="btn btn-sm" style="background:var(--navy);color:#fff" onclick="exportarRelatorioInstrutorCSV('${instrutorId}')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg> CSV</button>
+            <button class="btn btn-sm" style="background:var(--navy);color:#fff" onclick="exportarRelatorioInstrutorCSV('${instrutorId}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> CSV</button>
             ${planoAtinge('pro')
-              ? `<button class="btn btn-sm" style="background:var(--amber);color:var(--navy)" onclick="exportarRelatorioInstrutorPDF('${instrutorId}')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg> PDF</button>`
+              ? `<button class="btn btn-sm" style="background:var(--amber);color:var(--navy)" onclick="exportarRelatorioInstrutorPDF('${instrutorId}')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg> PDF</button>`
               : `<button class="btn btn-sm" style="opacity:.5" onclick="modalUpgrade('PDF do instrutor','pro')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> PDF</button>`}
           </div>
         </div>
@@ -21506,7 +22153,28 @@ document.addEventListener('click', function(e) {
 // ============================================================
 // INICIALIZAÇÃO
 // ============================================================
+// ── Medicao do carregamento (2026-09-04) ────────────────────────────────
+// Sem numero, discussao de desempenho vira opiniao. Cada etapa marca o tempo
+// e no fim sai uma tabela no console. Custo proximo de zero e fica ligado:
+// quando alguem reclamar de lentidao, a resposta esta na tela dele.
+window.__t0 = performance.now();
+window.__marcas = [];
+function marcaTempo(nome) {
+  window.__marcas.push({ etapa: nome, ms: Math.round(performance.now() - window.__t0) });
+}
+function _relatorioCarregamento() {
+  const nav = performance.getEntriesByType('navigation')[0];
+  const linhas = [...window.__marcas];
+  if (nav) linhas.unshift(
+    { etapa: 'html baixado',     ms: Math.round(nav.responseEnd) },
+    { etapa: 'js compilado',     ms: Math.round(nav.domContentLoadedEventStart) });
+  console.table(linhas);
+  const t = linhas[linhas.length - 1]?.ms;
+  if (t > 3000) console.warn(`[carregamento] ${t}ms ate a tela util — acima do alvo de 3s`);
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
+  marcaTempo('dom pronto');
   const {data:{session}} = await sb.auth.getSession();
   if (session) {
     // O supabase-js mantém a sessão em localStorage por padrão e a
@@ -21578,32 +22246,32 @@ window.addEventListener('popstate', async (e) => {
       return;
     }
   }
-  if (TITULOS[pagina] && _perfilTemAcesso(pagina) && pagina !== paginaAtual) {
-    paginaAtual = pagina;
-    marcarNavAtivo(pagina);
-    document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
-    showLoading();
-    try {
-      switch(pagina) {
-        case 'home':          await renderHome(); break;
-        case 'orgs':          await renderOrgs(); break;
-        case 'financeiro':    await renderFinanceiroProvedor(); break;
-        case 'adocao':        await renderAdocaoProvedor(); break;
-        case 'logs':          await renderLogsAuditoria(); break;
-        case 'clientes':      await renderClientes(); break;
-        case 'colaboradores': await renderColaboradores(); break;
-        case 'catalogo':      await renderCatalogo(); break;
-        case 'conformidade':  await renderConformidade(); break;
-        case 'turmas':        await renderTurmas(); break;
-        case 'equipe':        await renderEquipe(); break;
-        case 'agenda':        await renderAgenda(); break;
-        case 'historico':     await renderHistorico(); break;
-        case 'relatorios':    await renderRelatorios(); break;
-        case 'conta':         await renderConta(); break;
-        default: renderEmBreve(TITULOS[pagina]||pagina);
-      }
-    } catch(err) { console.error(err); renderErro(traduzErroSupabase(err)); }
-    finally { hideLoading(); }
+  // ── BUG CORRIGIDO EM 05/09 (h19) ──────────────────────────────────────────
+  // Este listener tinha uma COPIA do switch de irPara(), com 15 telas e sem o
+  // ramo de modulo. Consequencia: Voltar/Avancar do navegador, e abrir o app
+  // direto num link com hash de modulo (app.html#crm-funil), mostravam
+  // "Esta secao esta sendo construida" — a rota existe, mas este roteador nao
+  // a conhecia. O h18 corrigiu irPara() e nao este, porque eu nao sabia que
+  // havia dois.
+  //
+  // Agora ele delega. irPara() ja trata titulo, menu ativo, loading, erro e o
+  // ramo de modulo — inclusive esperar a plataforma terminar de carregar. E o
+  // pushState de la nao dispara aqui, porque num popstate o hash JA e o da
+  // pagina de destino (a condicao `location.hash !== novoHash` e falsa).
+  //
+  // Lição deste ciclo: a lei 7 do projeto ("duplicar expressao entre telas e o
+  // defeito recorrente") tambem vale para roteador. Duas copias do switch
+  // significavam que toda rota nova precisava ser lembrada em dois lugares.
+  // TITULOS recebe os itens VISIVEIS de menu dos modulos (_injetarMenuDosModulos),
+  // mas nao as rotas ocultas — a ficha do lead e a configuracao do funil. Sem a
+  // segunda condicao, "Voltar" para a ficha de um lead nao redesenhava nada.
+  const ehRotaDeModulo = !!(_GRID && _GRID.navegacao && _GRID.navegacao.rota(pagina));
+  if ((TITULOS[pagina] || ehRotaDeModulo) && _perfilTemAcesso(pagina) && pagina !== paginaAtual) {
+    // O id volta da propria URL (ver o pushState em irPara) — sem isto,
+    // Avancar para a ficha de um lead abria "Nenhum lead selecionado".
+    const qi = location.hash.indexOf('?');
+    const idDaUrl = qi !== -1 ? new URLSearchParams(location.hash.slice(qi + 1)).get('id') : null;
+    await irPara(pagina, idDaUrl ? { id: idDaUrl } : {});
   }
 });
 
@@ -26732,7 +27400,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '160';
+  var APP_BUILD = '161';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
@@ -26786,4 +27454,4 @@ async function exportarRelatorioComparativoPDF() {
 </script>
 </body>
 </html>
-                                                                                                                                         
+                                                                                                                                         

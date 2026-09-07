@@ -1,0 +1,209 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   GRID · nucleo/design-system-aditivo.css
+   So a PARTE 2 do design system: escalas, cor de atencao, sistema de icones e
+   os componentes canonicos. Extraido de design-system.css porque dentro do
+   app.html a PARTE 1 ja existe — ela e copia literal do <style> do proprio
+   app. Carregar o arquivo inteiro duplicaria 1.200 linhas de CSS identico.
+
+   Sem este arquivo, as telas dos modulos saem sem componente e sem tamanho de
+   icone: `.ico` fica sem width/height e um SVG ocupa a tela inteira. Foi
+   exatamente o que aconteceu no build h10.
+
+   Nenhuma classe da parte 1 e redefinida aqui — carregar isto nao muda
+   nenhuma tela de Treinamentos.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PARTE 2 — ADITIVO v3  (nada acima é alterado)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* Tipografia — 7 degraus, nenhum valor fracionário */
+  --fs-1:11px;  /* rótulo maiúsculo, contador          */
+  --fs-2:12px;  /* metadado, legenda                   */
+  --fs-3:13px;  /* corpo de lista — o corpo real do app*/
+  --fs-4:14px;  /* corpo, formulário, botão            */
+  --fs-5:16px;  /* título de card, de modal, de seção  */
+  --fs-6:20px;  /* KPI, título de página               */
+  --fs-7:26px;  /* número de destaque (uso raro)       */
+  --lh-tight:1.25; --lh-base:1.5;
+  /* Espaçamento — grade de 4 */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  /* Atenção deixa de ser clone do âmbar de marca (hoje --warn == --amber-h) */
+  --atencao:#B45309; --atencao-l:#FEF0E7; --atencao-text:#7C2D12;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+/* Ícone — família única, traço 1.75, três tamanhos. Nenhum emoji em UI. */
+.ico{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;vertical-align:-.18em}
+.ico svg{width:100%;height:100%;display:block}
+.ico{width:18px;height:18px}
+.ico.sm{width:16px;height:16px}
+.ico.lg{width:22px;height:22px}
+
+/* ── Cabeçalho de tela: título + contexto de módulo ───────────────────── */
+.ds-topo{display:flex;align-items:flex-start;gap:var(--sp-4);margin-bottom:var(--sp-4);flex-wrap:wrap}
+.ds-topo-txt{flex:1;min-width:220px}
+.ds-eyebrow{display:flex;align-items:center;gap:6px;font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px}
+.ds-titulo{font-size:var(--fs-6);font-weight:700;color:var(--text-1);line-height:var(--lh-tight);letter-spacing:-.2px}
+.ds-sub{font-size:var(--fs-3);color:var(--text-3);margin-top:3px}
+.ds-acoes{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}
+
+/* ── Botões (mesmas cores do app; só a escala é regularizada) ─────────── */
+.ds-btn{display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:var(--fs-3);font-weight:600;padding:8px 14px;border-radius:var(--r-md);cursor:pointer;border:1px solid transparent;line-height:1;white-space:nowrap}
+.ds-btn.pri{background:var(--amber);color:var(--navy);font-weight:700}
+.ds-btn.pri:hover{background:var(--amber-h)}
+.ds-btn.sec{background:var(--surface);color:var(--text-2);border-color:var(--border-2)}
+.ds-btn.sec:hover{border-color:var(--gray-400);color:var(--text-1)}
+.ds-btn.ghost{background:none;color:var(--text-2);border-color:transparent}
+.ds-btn.ghost:hover{background:var(--gray-100)}
+.ds-btn.sm{font-size:var(--fs-2);padding:6px 10px}
+.ds-icobtn{width:32px;height:32px;border-radius:var(--r-md);border:1px solid var(--border-2);background:var(--surface);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
+.ds-icobtn:hover{background:var(--gray-50);color:var(--text-1)}
+.ds-icobtn.pri{background:var(--amber);border-color:var(--amber);color:var(--navy)}
+
+/* ── Indicadores: sem “borda colorida em cima + sombra” em tudo ───────── */
+.ds-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-2);margin-bottom:var(--sp-4)}
+.ds-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-3)}
+.ds-kpi .top{display:flex;align-items:center;gap:6px;color:var(--text-3);margin-bottom:var(--sp-2)}
+.ds-kpi .rot{font-size:var(--fs-1);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.ds-kpi .val{font-size:var(--fs-6);font-weight:700;color:var(--navy);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+.ds-kpi .nota{font-size:var(--fs-2);color:var(--text-3);margin-top:5px;background:none;border:none;padding:0}
+.ds-kpi .nota.up{color:var(--green-text)}
+.ds-kpi .nota.at{color:var(--atencao-text)}
+.ds-kpi.destaque{border-left:2px solid var(--amber)}
+@media(max-width:900px){.ds-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ── Cartão de superfície: um só, com variação de densidade ───────────── */
+.ds-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--sp-4)}
+.ds-card.flat{padding:0;overflow:hidden}
+.ds-card-head{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border)}
+.ds-card-titulo{font-size:var(--fs-3);font-weight:700;color:var(--text-1)}
+.ds-card-head .ds-btn{margin-left:auto}
+.ds-sec{display:flex;align-items:center;gap:var(--sp-2);margin:var(--sp-5) 0 var(--sp-3)}
+.ds-sec .rot{font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.ds-sec .linha{flex:1;height:1px;background:var(--border)}
+.ds-sec .link{font-size:var(--fs-2);font-weight:600;color:var(--amber-h);cursor:pointer}
+
+/* ── Avisos: cor de atenção própria, não o âmbar de marca ─────────────── */
+.ds-aviso{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);border:1px solid;margin-bottom:var(--sp-2);font-size:var(--fs-3);line-height:1.5}
+.ds-aviso .txt{flex:1;min-width:0}
+.ds-aviso .txt b{display:block;font-weight:700}
+.ds-aviso.atencao{background:var(--atencao-l);border-color:rgba(180,83,9,.28);color:var(--atencao-text)}
+.ds-aviso.atencao .ico{color:var(--atencao)}
+.ds-aviso.erro{background:var(--red-l);border-color:rgba(220,38,38,.28);color:var(--red-text)}
+.ds-aviso.info{background:var(--blue-l);border-color:rgba(29,78,216,.22);color:var(--blue-text)}
+
+/* ── Selo de estado: paleta fechada, texto nunca abaixo de 11px ───────── */
+.ds-selo{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-1);font-weight:700;padding:3px 9px;border-radius:999px;line-height:1.35;white-space:nowrap}
+.ds-selo.neutro{background:var(--gray-100);color:var(--text-2)}
+.ds-selo.ok{background:var(--green-l);color:var(--green-text)}
+.ds-selo.atencao{background:var(--atencao-l);color:var(--atencao-text)}
+.ds-selo.erro{background:var(--red-l);color:var(--red-text)}
+.ds-selo.info{background:var(--blue-l);color:var(--blue-text)}
+.ds-selo.marca{background:var(--amber-l);color:var(--amber-text)}
+.ds-selo i.ponto{width:6px;height:6px;border-radius:50%;background:currentColor;display:block;flex-shrink:0;opacity:.75}
+
+/* ── Barra de filtros: uma só no produto inteiro ──────────────────────── */
+.ds-filtros{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-3)}
+.ds-busca{position:relative;flex:1;min-width:210px;max-width:360px}
+.ds-busca .ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none}
+.ds-busca input{width:100%;padding:9px 12px 9px 36px;border:1px solid var(--border-2);border-radius:var(--r-md);font-family:inherit;font-size:var(--fs-3);color:var(--text-1);background:var(--surface);outline:none}
+.ds-busca input:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(30,42,74,.08)}
+.ds-select{appearance:none;border:1px solid var(--border-2);border-radius:var(--r-md);background:var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235E6780' stroke-width='2' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat right 10px center;padding:9px 32px 9px 12px;font-family:inherit;font-size:var(--fs-3);font-weight:600;color:var(--text-2);cursor:pointer;outline:none}
+.ds-select:focus{border-color:var(--navy)}
+.ds-filtros .direita{margin-left:auto;display:flex;gap:var(--sp-2);align-items:center}
+
+/* ── TABELA DE DADOS — o componente que hoje não existe no produto ────── */
+.ds-tabela-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface)}
+.ds-tabela{width:100%;border-collapse:collapse;font-size:var(--fs-3);min-width:760px}
+.ds-tabela thead th{position:sticky;top:0;background:var(--gray-50);text-align:left;font-size:var(--fs-1);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+.ds-tabela thead th:hover{color:var(--text-1)}
+.ds-tabela thead th .ico{opacity:.4;margin-left:3px}
+.ds-tabela thead th.ord{color:var(--navy)}
+.ds-tabela thead th.ord .ico{opacity:1;color:var(--navy)}
+.ds-tabela thead th.chk,.ds-tabela tbody td.chk{width:38px;padding-left:14px;padding-right:0;cursor:default}
+.ds-tabela tbody td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle}
+.ds-tabela tbody tr:last-child td{border-bottom:none}
+.ds-tabela tbody tr:hover{background:var(--gray-50)}
+.ds-tabela tbody tr.sel{background:rgba(245,158,11,.07)}
+.ds-tabela .prim{font-weight:600;color:var(--text-1)}
+.ds-tabela .sub{font-size:var(--fs-2);color:var(--text-3);margin-top:2px}
+.ds-tabela .dir{text-align:right;font-variant-numeric:tabular-nums}
+.ds-chk{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border-2);display:inline-block;vertical-align:middle;cursor:pointer;background:var(--surface)}
+.ds-chk.on{background:var(--navy);border-color:var(--navy);position:relative}
+.ds-chk.on::after{content:"";position:absolute;left:5px;top:1.5px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.ds-tabela-rodape{display:flex;align-items:center;gap:var(--sp-3);padding:10px 14px;border-top:1px solid var(--border);font-size:var(--fs-2);color:var(--text-3);flex-wrap:wrap}
+.ds-tabela-rodape .pag{margin-left:auto;display:flex;gap:4px}
+.ds-tabela-rodape .pag span{min-width:26px;height:26px;border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-2);font-weight:600;color:var(--text-2);cursor:pointer;border:1px solid transparent}
+.ds-tabela-rodape .pag span.on{background:var(--navy);color:#fff}
+.ds-barra-sel{display:flex;align-items:center;gap:var(--sp-3);padding:9px 14px;background:var(--navy);color:#fff;font-size:var(--fs-3);font-weight:600}
+.ds-barra-sel .ds-btn{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.24)}
+
+/* ── Linha de lista: uma anatomia para o produto inteiro ──────────────── */
+.ds-linha{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border);cursor:pointer}
+.ds-linha:last-child{border-bottom:none}
+.ds-linha:hover{background:var(--gray-50)}
+.ds-av{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-2);font-weight:700;flex-shrink:0;background:var(--gray-100);color:var(--text-2);letter-spacing:-.2px}
+.ds-linha-main{flex:1;min-width:0}
+.ds-linha-tit{font-size:var(--fs-3);font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds-linha-sub{font-size:var(--fs-2);color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds-linha-fim{display:flex;align-items:center;gap:var(--sp-2);flex-shrink:0}
+
+
+/* ── Menu por blocos de módulo ────────────────────────────────────────────
+   Só aparece quando a organização tem mais de um módulo. Com um módulo só,
+   o menu continua sendo o de hoje. */
+.mod-head{display:flex;align-items:center;gap:9px;padding:9px 12px;margin:10px 10px 3px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.72);font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.mod-head:hover{background:rgba(255,255,255,.06)}
+.mod-head .ico{width:16px;height:16px;color:rgba(255,255,255,.5)}
+.mod-head .seta{margin-left:auto;color:rgba(255,255,255,.4);display:inline-flex}
+.mod-head.aberto{color:#fff}
+.mod-head.aberto .ico{color:var(--amber)}
+.mod-head .cnt{margin-left:auto;background:var(--amber);color:var(--navy);font-size:var(--fs-1);font-weight:700;border-radius:999px;padding:0 7px;font-variant-numeric:tabular-nums}
+.mod-itens{padding:0 10px}
+/* Contador de item: âmbar, não vermelho. Vermelho é erro, não pendência. */
+.mod-cnt{margin-left:auto;background:var(--amber);color:var(--navy);font-size:var(--fs-1);font-weight:700;padding:0 7px;border-radius:999px;line-height:1.6;font-variant-numeric:tabular-nums}
+
+/* ── Celular ─────────────────────────────────────────────────────────────── */
+@media(max-width:767px){
+  .ds-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* O cabeçalho do app já mostra módulo e tela no celular — o título grande
+     da página sairia repetido. O voltar e o subtítulo continuam. */
+  .ds-topo-txt .ds-titulo{display:none}
+  .ds-topo{flex-direction:column;align-items:stretch;gap:var(--sp-3)}
+  .ds-acoes{flex-wrap:wrap}
+  .ds-acoes .ds-btn{flex:1;justify-content:center}
+  .ds-busca{max-width:none;min-width:0;flex-basis:100%}
+  .ds-filtros .direita{margin-left:0;flex-basis:100%}
+  .ds-tabela{min-width:0}
+}
+/* Padrão de tela que só existe no computador (item de menu com mobile:false) */
+.ds-so-pc{padding:36px 20px;text-align:center}
+.ds-so-pc .ic{width:52px;height:52px;border-radius:14px;background:var(--gray-100);color:var(--text-3);display:flex;align-items:center;justify-content:center;margin:0 auto var(--sp-4)}
+.ds-so-pc h4{font-size:var(--fs-5);font-weight:700;color:var(--text-1);margin-bottom:var(--sp-2)}
+.ds-so-pc p{font-size:var(--fs-3);color:var(--text-3);line-height:1.65;max-width:44ch;margin:0 auto var(--sp-4)}
+/* Carregando — no lugar de tela branca */
+.ds-esqueleto{height:14px;border-radius:7px;background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-50) 37%,var(--gray-100) 63%);background-size:400% 100%;animation:ds-brilho 1.3s ease infinite;margin-bottom:var(--sp-2)}
+@keyframes ds-brilho{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media(prefers-reduced-motion:reduce){.ds-esqueleto{animation:none}}
+
+/* ── 05/09 (h17) — refinamento visual da revisao do CRM ────────────────────
+   Tres mudancas, todas de PESO e nao de paleta: a identidade Navy+Ambar fica
+   como esta; o que muda e quanto de cor aparece e para quantos significados. */
+
+/* Contagem informativa no cabecalho de secao. Nao e link — ate 05/09 esse
+   numero era clicavel e sem destino, e o clique terminava na Home. */
+.ds-sec .cnt{font-size:var(--fs-1);font-weight:700;color:var(--text-3);
+  background:var(--gray-100);border-radius:999px;padding:2px 9px;white-space:nowrap}
+
+/* Sombra marca elevacao real (algo que flutua sobre o resto), nunca acabamento.
+   KPI e cartao em repouso ficam apoiados na borda; a sombra entra no hover de
+   quem e clicavel. Isso tira ~30 sombras simultaneas das telas mais densas. */
+.ds-kpi{box-shadow:none}
+.ds-kpi[data-acao]:hover{box-shadow:var(--shadow);border-color:var(--border-2)}
+
+/* A lista "Requer atenção" (.ds-alerta) NAO mora mais aqui — foi para o
+   <style> do proprio app.html. Motivo: este arquivo so e baixado quando a
+   organizacao tem modulo contratado, e a tela Inicio usa o componente mesmo
+   sem CRM nenhum. Ver o comentario la. */

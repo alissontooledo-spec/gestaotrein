@@ -1,0 +1,1406 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   GRID · nucleo/design-system.css
+   ──────────────────────────────────────────────────────────────────────────
+   PARTE 1 — cópia literal do bloco <style> do app-final157.html (linhas
+   30-1242), sem uma única alteração. É o CSS que está em produção hoje.
+   PARTE 2 — bloco ADITIVO v3: escalas de tipografia e espaçamento, cor de
+   atenção própria, sistema de ícones e os componentes canônicos. Nenhuma
+   classe da parte 1 é redefinida — publicar este arquivo não muda nenhuma
+   tela existente.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════ PARTE 1 — CSS ATUAL, LITERAL ══════════════ */
+:root{
+  /* ── Navy Clean v2 — Toledo Labs ── */
+  --navy:#1E2A4A;--navy-2:#263554;--navy-3:#2E3F6B;
+  --amber:#F59E0B;--amber-h:#D97706;--amber-l:#FEF3C7;--amber-text:#92400E;
+  --blue:#1D4ED8;--blue-h:#1E40AF;--blue-l:#DBEAFE;--blue-text:#1E40AF;
+  --green:#059669;--green-l:#D1FAE5;--green-text:#065F46;
+  --red:#DC2626;--red-l:#FEE2E2;--red-text:#991B1B;
+  /* 05/09 (h17) — Decisao 2 da revisao de agosto, agora no app inteiro: ate o
+     h16 --warn era copia exata de --amber-h/--amber-l/--amber-text, entao
+     pendencia e marca eram a mesma cor na tela. O CRM ja usava o token novo
+     --atencao (#B45309); --warn agora aponta para os mesmos valores, e as
+     telas de Treinamentos param de pintar pendencia com a cor da marca. */
+  --warn:#B45309;--warn-l:#FEF0E7;--warn-text:#7C2D12;
+  --gray-50:#F0F2F7;--gray-100:#E8EBF2;--gray-200:#D2D7E1;--gray-300:#BFC5D2;--gray-400:#8B93A8;--gray-500:#5E6780;--gray-600:#454E66;
+  --text-1:#1E2A4A;--text-2:#414B63;--text-3:#5E6780;
+  --surface:#FFFFFF;--bg:#E9EAEF;--border:#D2D7E1;--border-2:#BFC5D2;
+  --r-sm:6px;--r-md:8px;--r-lg:12px;--r-xl:16px;--r-2xl:20px;
+  --shadow:0 1px 2px rgba(23,32,56,.05),0 3px 10px rgba(23,32,56,.09);
+  --shadow-md:0 2px 4px rgba(23,32,56,.06),0 12px 30px rgba(23,32,56,.14);
+  --nav-h:64px;--sidebar-w:228px;--header-h:58px
+}
+/* ── Reset & Base ── */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+/* 2026-08-29 — barra de rolagem padronizada. O sistema tem 24 areas
+   rolaveis e so 2 tinham estilo proprio; o resto (inclusive o scroll
+   horizontal da grade da Agenda) caia na barra nativa do SO, com setas e
+   trilho claro. Seletor universal = especificidade 0, entao .scrollable e
+   .sidebar-nav, que tem estilo proprio, continuam vencendo. */
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:999px}
+*::-webkit-scrollbar-thumb:hover{background:var(--gray-400)}
+*::-webkit-scrollbar-button{display:none;width:0;height:0}
+*::-webkit-scrollbar-corner{background:transparent}
+html{scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
+/* 2026-08-29 — o `maximum-scale=1.0` saiu do viewport (impedia zoom, unica
+   reprovacao de Acessibilidade do PageSpeed). Sem esta regra, a remocao
+   traria de volta o comportamento do iOS de dar zoom ao focar qualquer
+   campo com fonte < 16px E NAO VOLTAR — os campos do sistema sao 14px.
+   Checkbox e radio ficam de fora: nao tem texto, nao disparam o zoom. */
+@media (max-width:767px){
+  /* :not() repetido nos tres e !important de proposito. Especificidade e
+     contada por seletor da lista: sem o :not(), `textarea` e `select`
+     ficam em (0,0,1) e perdem para quase tudo — medido, iam a 12–14px, e
+     o auto-zoom do iOS voltava neles. E 60 dos campos do arquivo tem
+     font-size em style= inline, que so !important vence. */
+  input:not([type=checkbox]):not([type=radio]),
+  textarea:not([type=checkbox]):not([type=radio]),
+  select:not([type=checkbox]):not([type=radio]){font-size:16px!important}
+}
+html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-1);font-size:15px;line-height:1.5}
+.screen{display:none;position:fixed;inset:0;overflow:hidden;flex-direction:column}
+.screen.active{display:flex}
+
+/* ── Login Screen ── */
+#screenLogin{background:#0D1424;align-items:center;justify-content:center;padding:24px;background-image:radial-gradient(circle,rgba(255,255,255,.07) 1px,transparent 1.2px),radial-gradient(ellipse at 60% 20%,rgba(46,63,107,.5) 0%,transparent 60%);background-size:14px 14px,100% 100%}
+.login-card{background:linear-gradient(180deg,var(--navy-2) 0%,var(--navy) 100%);border:1px solid rgba(255,255,255,.08);border-radius:var(--r-2xl);padding:40px 36px;width:100%;max-width:400px;box-shadow:0 8px 36px rgba(0,0,0,.35)}
+.login-logo{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:26px}
+.login-logo-icon{width:56px;height:auto;margin-bottom:12px;filter:drop-shadow(0 2px 10px rgba(245,158,11,.35))}
+.login-logo-text{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.4px;line-height:1.1}
+.login-logo-sub{font-size:10.5px;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.6px;text-transform:uppercase;margin-top:4px}
+.login-title{font-size:19px;font-weight:700;color:#fff;margin-bottom:4px;letter-spacing:-.3px;text-align:center}
+.login-sub{font-size:13px;color:rgba(255,255,255,.55);margin-bottom:24px;text-align:center}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;font-weight:500;color:var(--text-2);margin-bottom:6px}
+.field input,.field textarea,.field select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;color:var(--text-1);background:var(--surface);transition:border-color .15s,box-shadow .15s;outline:none}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.field input::placeholder,.field textarea::placeholder{color:var(--text-3)}
+.btn-primary{width:100%;padding:13px;background:var(--navy);color:#fff;border:none;border-radius:var(--r-md);font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s,transform .1s;letter-spacing:-.1px}
+.btn-primary:hover{background:var(--navy-2)}
+.btn-primary:active{transform:scale(.98)}
+.btn-primary:disabled{background:var(--gray-300);cursor:not-allowed;transform:none}
+.login-footer{margin-top:20px;text-align:center;font-size:11px;color:rgba(255,255,255,.4)}
+.login-error{background:var(--red-l);color:var(--red-text);border-radius:var(--r-md);padding:10px 14px;font-size:13px;margin-bottom:16px;display:none;border:1px solid #FECACA}
+.login-error.show{display:block}
+#screenLogin .field label{color:rgba(255,255,255,.65)}
+#screenLogin .field input{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff}
+#screenLogin .field input::placeholder{color:rgba(255,255,255,.35)}
+#screenLogin .field input:-webkit-autofill,#screenLogin .field input:-webkit-autofill:hover,#screenLogin .field input:-webkit-autofill:focus{-webkit-text-fill-color:#fff;-webkit-box-shadow:0 0 0px 1000px #263554 inset;transition:background-color 9999s ease-in-out 0s}
+.login-forgot{display:block;margin-top:8px;font-size:11.5px;color:var(--amber);font-weight:600;cursor:pointer;text-align:right}
+#screenLogin .btn-primary{background:var(--amber);color:var(--navy)}
+#screenLogin .btn-primary:hover{background:var(--amber-h)}
+
+/* ── App shell ── */
+#screenApp{background:var(--bg)}
+
+/* ── Sidebar ── */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--navy);display:flex;flex-direction:column;z-index:100;transition:transform .25s}
+/* Modo Suporte: quando a tarja está visível, .screen e .sidebar (os únicos
+   elementos position:fixed que tocam o topo) recuam para não ficar por
+   baixo dela. A altura real da tarja é medida em JS (varia com quebra de
+   linha em telas estreitas) e aplicada via --suporte-h. */
+body.modo-suporte-ativo .screen{top:var(--suporte-h,34px)}
+body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
+.sidebar-logo{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.07)}
+.sidebar-logo-row{display:flex;align-items:center;gap:10px}
+.sidebar-logo-icon{width:28px;height:auto;flex-shrink:0;display:block}
+.sidebar-logo-name{font-size:14px;font-weight:800;color:#fff;letter-spacing:-.2px;line-height:1.3}
+.sidebar-tagline{font-size:10px;color:rgba(255,255,255,.45);margin-top:3px;font-weight:500;letter-spacing:.01em}
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}.sidebar-nav::-webkit-scrollbar{width:6px}.sidebar-nav::-webkit-scrollbar-track{background:transparent}.sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:10px}.sidebar-nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3)}.sidebar-nav::-webkit-scrollbar-button{display:none;width:0;height:0}
+.sidebar-section-label{display:flex;align-items:center;gap:7px;font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.45);padding:14px 2px 6px;font-weight:700}
+.sidebar-section-label::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
+.sidebar-item{position:relative;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 12px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;transition:background .12s,color .12s;margin-bottom:2px}
+.sidebar-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.9)}
+.sidebar-item.active{background:rgba(245,158,11,.14);color:var(--amber);font-weight:600}
+.sidebar-item.active::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--amber)}
+.si-badge{margin-left:auto;background:var(--amber);color:var(--navy);font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;line-height:1.6;flex-shrink:0}
+.si-icon{font-size:17px;width:20px;text-align:center;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.si-icon svg{width:17px;height:17px}
+.sidebar-badge{margin-left:auto;background:rgba(220,38,38,.85);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;line-height:1.6}
+.sidebar-bottom{padding:12px 10px;border-top:1px solid rgba(255,255,255,.07)}
+.sidebar-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-lg);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;transition:background .15s}
+.su-logout{margin-left:auto;flex-shrink:0;border:none;background:transparent;color:rgba(255,255,255,.35);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center}
+.su-logout:hover{color:#fff;background:rgba(255,255,255,.1)}
+.sidebar-collapse{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-md);color:rgba(255,255,255,.4);font-size:11.5px;font-weight:500;cursor:pointer;margin-bottom:6px;transition:background .12s,color .12s}
+.sidebar-collapse:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.8)}
+.sidebar-collapse svg{transition:transform .2s}
+.sidebar-user:hover{background:rgba(255,255,255,.06)}
+.su-avatar{width:30px;height:30px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy);flex-shrink:0}
+.su-name{font-size:12px;font-weight:500;color:#fff;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.su-role{font-size:9.5px;color:var(--amber);font-weight:600}
+
+/* ── Filtro de instrutor da Agenda (2026-08-29) — mesmo desenho do `.sel`
+   do mockup A+B: icone de pessoa, rotulo em peso 600 e chevron desenhado
+   no lugar da setinha nativa do sistema. Continua sendo um <select> de
+   verdade; o icone e o chevron sao irmaos com pointer-events:none para nao
+   roubarem o clique. ── */
+.ag-filtro{position:relative;display:inline-flex;align-items:center;max-width:100%}
+.ag-filtro select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  max-width:100%;text-overflow:ellipsis;
+  padding:9px 32px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);
+  font-size:13px;font-weight:600;font-family:inherit;background:var(--surface);
+  color:var(--text-1);min-width:210px;cursor:pointer;transition:border-color .15s
+}
+.ag-filtro select:hover{border-color:var(--border-2)}
+.ag-filtro select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.ag-filtro-ico{position:absolute;left:11px;display:flex;align-items:center;color:var(--text-3);pointer-events:none}
+.ag-filtro-ico svg{width:15px;height:15px}
+/* No celular a grade do Mes continua com 7 colunas: a celula fica com
+   ~40px e a bolinha de 5px + gap consumiam 57% do espaco de texto do chip
+   (sobravam 6,8px — nao cabe um caractere). Abaixo de 768px ela sai. */
+@media (max-width:767px){ .ag-mes-dot{display:none} }
+.ag-filtro-seta{
+  position:absolute;right:13px;width:7px;height:7px;pointer-events:none;
+  border-right:1.6px solid var(--text-3);border-bottom:1.6px solid var(--text-3);
+  transform:translateY(-2px) rotate(45deg)
+}
+
+/* ── Campo de busca do menu lateral (2026-08-18) — filtro local dos itens
+   de navegação, direto no menu (sem modal, sem atalho de teclado) ── */
+.sidebar-search{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:8px 10px;border-radius:var(--r-md);border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);font-size:12px;font-family:inherit;transition:background .12s,color .12s,border-color .12s;width:calc(100% - 20px)}
+.sidebar-search:focus-within{background:rgba(255,255,255,.08);color:rgba(255,255,255,.85);border-color:rgba(255,255,255,.22)}
+.sidebar-search svg{width:14px;height:14px;flex-shrink:0}
+.sidebar-search-input{flex:1;min-width:0;border:0;background:transparent;outline:0;font-family:inherit;font-size:12px;color:#fff}
+.sidebar-search-input::placeholder{color:rgba(255,255,255,.4)}
+.sidebar-search-clear{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;border:0;background:transparent;color:rgba(255,255,255,.5);cursor:pointer;border-radius:4px}
+.sidebar-search-clear:hover{color:#fff;background:rgba(255,255,255,.12)}
+.sidebar-search-clear svg{width:11px;height:11px}
+
+/* ── Main content area ── */
+.main-content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
+.main-header{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.main-header-title{font-size:16px;font-weight:600;color:var(--text-1);flex:1;letter-spacing:-.2px}
+.main-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--navy)}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+.sidebar-overlay.show{display:block}
+
+/* ── Mobile bottom nav ── */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy);border-top:none;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+.bn-items{display:flex}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 8px;cursor:pointer;color:rgba(255,255,255,.38);font-size:10px;font-weight:500;gap:3px;transition:color .15s;border:none;background:none;font-family:inherit}
+.bn-item.active{color:var(--amber)}
+.bn-item svg{width:22px;height:22px}
+.bn-dot{width:4px;height:4px;border-radius:50%;background:var(--amber);margin-top:1px;opacity:0}
+.bn-item.active .bn-dot{opacity:1}
+
+/* ── Mobile header ──
+   2026-08-09: redesenho da navegação mobile (motivo completo no changelog).
+   O antigo .mobile-menu-btn era fixed, sobreposto à logo da sidebar quando
+   ela abria, e só sabia abrir (nunca fechar) — o "não gostei" e o "às vezes
+   não responde" relatados pelo Alisson eram a mesma causa: duas coisas
+   disputando a mesma área da tela, sem um jeito dedicado de fechar. Agora
+   o botão de abrir mora DENTRO da barra do cabeçalho mobile (fluxo normal,
+   sem position:fixed, sem chance de sobrepor nada) e quem fecha é um X
+   dentro do próprio menu (ver .sidebar-close-btn), nunca o mesmo elemento. */
+.mobile-header{display:none;flex-shrink:0;background:var(--navy);padding:16px 16px 18px;padding-top:calc(16px + env(safe-area-inset-top));align-items:flex-start;gap:10px}
+.mobile-header-conteudo{flex:1;min-width:0}
+.mh-greeting{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:2px;font-weight:400}
+.mh-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.4px}
+.mh-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:rgba(245,158,11,.18);padding:4px 10px;border-radius:999px;font-size:11px;color:var(--amber);font-weight:500;border:1px solid rgba(245,158,11,.25)}
+.mobile-content{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px 16px calc(var(--nav-h) + 20px)}
+
+/* ── Botão de abrir o menu — agora dentro do fluxo normal do cabeçalho
+   mobile (não mais position:fixed flutuando por cima da sidebar). ── */
+.mobile-menu-btn{display:none;border:none;background:rgba(255,255,255,.12);color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin-top:1px}
+.mobile-menu-btn svg{width:18px;height:18px}
+
+/* ── Botão de fechar o menu, dentro da própria sidebar — some no desktop,
+   igual ao .mobile-menu-btn acima. Ter um controle dedicado pra fechar
+   (além de tocar fora) deixa abrir/fechar sempre em lugares diferentes da
+   tela, eliminando a sobreposição que existia antes. ── */
+.sidebar-close-btn{display:none;margin-left:auto;border:none;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);width:30px;height:30px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0}
+.sidebar-close-btn svg{width:16px;height:16px}
+
+/* ── Sino de notificações (fixo, só Provedor) — vive fora de #mainBody/
+   #mobileBody/#mobileHeader, por isso sobrevive a toda troca de tela. */
+.sino-btn{display:none;position:fixed;top:16px;right:16px;z-index:150;width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;align-items:center;justify-content:center;padding:0}
+.sino-btn svg{width:19px;height:19px}
+.sino-badge{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 3px;border-radius:8px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;line-height:1;border:2px solid var(--navy)}
+body.modo-suporte-ativo .sino-btn{top:calc(16px + var(--suporte-h,34px))}
+@media(min-width:768px){
+  .sino-btn{top:11px;right:24px;background:var(--gray-100);color:var(--navy)}
+  .sino-badge{border-color:var(--surface)}
+}
+.sino-painel{display:none;position:fixed;top:60px;right:16px;width:320px;max-width:calc(100vw - 32px);background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-md);border:1px solid var(--border);z-index:150;overflow:hidden}
+body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
+@media(min-width:768px){.sino-painel{top:54px;right:24px}}
+
+/* ── Cards & surfaces ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow)}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.card-title{font-size:13px;font-weight:600;color:var(--text-1);display:flex;align-items:center;gap:6px}
+.card-link{font-size:12px;color:var(--amber-h);font-weight:500;cursor:pointer;display:flex;align-items:center;gap:2px}
+
+/* ── Stats / KPI grid ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;position:relative;overflow:hidden}
+.stat-card.accent{border-top:3px solid var(--amber)}
+.stat-label{font-size:11px;color:var(--text-3);font-weight:500;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.stat-value{font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.5px;line-height:1}
+.stat-sub{font-size:11px;color:var(--text-3);margin-top:4px;display:flex;align-items:center;gap:3px}
+.stat-sub.up{color:var(--green)}
+.stat-sub.warn{color:var(--warn)}
+.stat-sub.down{color:var(--red)}
+.stat-card.navy{background:var(--navy);border-color:var(--navy);border-top:3px solid var(--amber)}
+.stat-card.navy .stat-label{color:rgba(255,255,255,.55)}
+.stat-card.navy .stat-value{color:#fff}
+.stat-card.navy .stat-sub{color:rgba(255,255,255,.5)}
+.stat-card.blue{background:var(--blue);border-color:var(--blue)}
+.stat-card.blue .stat-label,.stat-card.blue .stat-value,.stat-card.blue .stat-sub{color:#fff}
+.stat-card.blue .stat-label,.stat-card.blue .stat-sub{color:rgba(255,255,255,.75)}
+
+/* ── List items ── */
+.list-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.list-item:last-child{border-bottom:none}
+.list-item:hover{background:var(--gray-50);margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:var(--r-sm)}
+.li-icon{width:38px;height:38px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;font-weight:700}
+.li-info{flex:1;min-width:0}
+.li-title{font-size:14px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-sub{font-size:12px;color:var(--text-2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── Conformidade — grade de empresas (nível 1) e lista+painel (nível 2/3) ── */
+.conf-empresa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:1024px){.conf-empresa-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.conf-empresa-grid{grid-template-columns:1fr}}
+.conf-empresa-card{cursor:pointer;transition:border-color .15s}
+.conf-empresa-card:hover{border-color:var(--navy-3)}
+.conf-nivel2-body{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.conf-nivel2-body{grid-template-columns:1fr}}
+.conf-lista-colabs{max-height:640px;overflow-y:auto}
+.conf-colab-item{display:flex;border-bottom:1px solid var(--border);cursor:pointer}
+.conf-colab-item:last-child{border-bottom:none}
+.conf-colab-item:hover{background:var(--gray-50)}
+.conf-colab-item.selected{background:var(--blue-l)}
+.conf-colab-bar{width:4px;flex-shrink:0}
+.conf-colab-main{padding:11px 14px;flex:1;min-width:0}
+
+
+/* ── Badges / Pills ── */
+.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;letter-spacing:.05px}
+.badge-blue{background:var(--blue-l);color:var(--blue-text)}
+.badge-green{background:var(--green-l);color:var(--green-text)}
+.badge-amber{background:var(--amber-l);color:var(--amber-text)}
+.badge-red{background:var(--red-l);color:var(--red-text)}
+.badge-gray{background:var(--gray-100);color:var(--gray-600)}
+.badge-navy{background:rgba(30,42,74,.1);color:var(--navy)}
+/* 2026-08: pendência de turma (motor genérico, ver _turmaPendencias) —
+   reaproveita --warn/--warn-l/--warn-text, cor de atenção já existente no
+   design system mas ainda sem badge própria; fica distinta do --amber de
+   marca, usado em CTAs/destaques, pra não confundir os dois sentidos. */
+.badge-warn{background:var(--warn-l);color:var(--warn-text)}
+
+/* ── Documentos da turma — Central de Ações por Cartão (Opção B2), 2026-08-20 ── */
+.doc-status-row{display:flex;align-items:stretch;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.doc-stat{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;flex:1 1 220px}
+.doc-stat .ring{width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.doc-stat .ring i{width:26px;height:26px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:var(--text-1)}
+.doc-stat .tx{flex:1;font-size:12px;color:var(--text-2)}
+.doc-stat .tx b{color:var(--text-1)}
+.doc-chip{display:flex;flex-direction:column;justify-content:center;gap:1px;font-size:12px;font-weight:600;padding:10px 14px;border-radius:var(--r-lg);cursor:pointer;border:1px solid transparent;flex:1 1 220px}
+.doc-chip.warn{background:var(--amber-l);color:var(--amber-text);border-color:var(--amber)}
+.doc-chip.ok{background:var(--green-l);color:var(--green-text);border-color:var(--green);cursor:default}
+.doc-chip .sub{font-size:10px;font-weight:400;opacity:.85}
+.doc-section-label{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 8px}
+.doc-cards{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:16px}
+@media(min-width:900px){.doc-cards{grid-template-columns:repeat(3,1fr)}}
+.doc-card{border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;background:var(--surface);cursor:pointer;display:flex;align-items:center;gap:12px;transition:box-shadow .15s,transform .15s}
+.doc-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.doc-card .bic{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--gray-100)}
+.doc-card.done .bic{background:var(--green-l)}
+.doc-card.parcial .bic{background:var(--amber-l)}
+.doc-card .bt{flex:1;min-width:0}
+.doc-card .bt .ti{font-size:13px;font-weight:700;color:var(--text-1)}
+.doc-card .bt .su{font-size:11px;color:var(--text-3);margin-top:3px}
+.doc-card .arrow{color:var(--border-2);font-size:14px;flex-shrink:0}
+.doc-checklist{display:flex;flex-direction:column;margin-bottom:12px}
+.doc-check-item{display:flex;align-items:center;gap:10px;padding:6px 0;position:relative}
+.doc-check-item:not(:last-child)::after{content:'';position:absolute;left:9px;top:25px;width:2px;height:10px;background:var(--border)}
+.doc-check-item .ck{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;z-index:1}
+.doc-check-item.ok .ck{background:var(--green);color:#fff}
+.doc-check-item.pend .ck{background:var(--surface);border:2px solid var(--border-2);color:var(--text-3)}
+.doc-check-item .lb{font-size:12.5px;color:var(--text-2)}
+.doc-check-item.ok .lb{color:var(--text-1);font-weight:500}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--r-md);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:all .15s;text-decoration:none;white-space:nowrap}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-amber{background:var(--amber);color:var(--navy);font-weight:600}
+.btn-amber:hover{background:var(--amber-h)}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-blue:hover{background:var(--blue-h)}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-navy:hover{background:var(--navy-2)}
+.btn-outline{background:transparent;color:var(--text-1);border:1px solid var(--border-2)}
+.btn-outline:hover{background:var(--gray-100)}
+.btn-ghost{background:transparent;color:var(--text-2)}
+.btn-ghost:hover{background:var(--gray-100);color:var(--text-1)}
+.btn-danger{background:var(--red-l);color:var(--red-text);border:1px solid #FECACA}
+.btn-danger:hover{background:#FEE2E2}
+
+/* ── FAB ── */
+.fab:hover{transform:scale(1.06)}
+.fab svg{width:24px;height:24px}
+
+/* ── Section layout ── */
+.home-section{margin-bottom:24px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.section-title{font-size:13px;font-weight:600;color:var(--text-1);text-transform:uppercase;letter-spacing:.05em}
+.section-link{font-size:12px;color:var(--amber-h);font-weight:500;cursor:pointer;display:flex;align-items:center;gap:3px}
+
+/* ── Empty states ── */
+.empty{text-align:center;padding:40px 20px}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.35}
+.empty-title{font-size:15px;font-weight:600;color:var(--text-2);margin-bottom:4px}
+.empty-sub{font-size:13px;color:var(--text-3)}
+
+/* ── Quick actions grid ── */
+.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.qa-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s;font-family:inherit}
+.qa-btn:hover{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-l)}
+.qa-icon{width:36px;height:36px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;margin-bottom:10px;font-size:18px}
+.qa-label{font-size:13px;font-weight:600;color:var(--text-1)}
+.qa-sub{font-size:11px;color:var(--text-3);margin-top:2px}
+
+/* ── Misc ── */
+.divider{height:1px;background:var(--border);margin:16px 0}
+.scrollable{overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--gray-300) transparent}
+.scrollable::-webkit-scrollbar{width:8px}
+.scrollable::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:4px}
+.scrollable::-webkit-scrollbar-thumb:hover{background:var(--gray-400)}
+
+/* ── Modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:480px){.modal-overlay{align-items:center;padding:16px}}
+.modal-box{background:var(--surface);width:100%;max-width:480px;border-radius:var(--r-xl) var(--r-xl) 0 0;max-height:90vh;display:flex;flex-direction:column;animation:slideUp .2s ease;border-top:3px solid var(--amber)}
+@media(min-width:480px){.modal-box{border-radius:var(--r-xl);max-height:85vh}}
+/* 2026-08-14 (Proposta A do modal "Nova turma", aprovada pelo Alisson) —
+   classe opcional (largo=true em abrirModal) que só alarga ESTE modal;
+   .modal-box continua com max-width:480px por padrão, então nenhum outro
+   modal do sistema é afetado. */
+.modal-box-largo{max-width:760px}
+.nt-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+@media(max-width:700px){.nt-grid{grid-template-columns:1fr}}
+/* 2026-08-14 (correção pedida pelo Alisson): sem min-width:0, uma coluna de
+   grid nunca encolhe abaixo do min-content do que está dentro dela — um
+   nome de empresa/curso comprido e sem espaços na prévia forçava a coluna
+   (e o modal inteiro) a alargar e distorcer o resto do layout. */
+.nt-grid > div{min-width:0}
+.nt-sec{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:var(--r-md);background:var(--gray-50);border:1px solid var(--border);margin-bottom:12px}
+.nt-sec .nt-ic{width:30px;height:30px;border-radius:8px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.nt-sec .nt-body{flex:1;min-width:0}
+.nt-sec .nt-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:8px}
+.nt-preview{background:linear-gradient(160deg,var(--navy),var(--navy-2));color:#fff;border-radius:var(--r-md);padding:14px;font-size:12px;overflow:hidden}
+.nt-preview .k{color:rgba(255,255,255,.55);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.nt-preview .v{color:#fff;font-weight:600;margin-bottom:10px;word-break:break-word;overflow-wrap:anywhere}
+.nt-preview .v:last-child{margin-bottom:0}
+/* 2026-08-14 (correção pedida pelo Alisson): Data/Hora início/Hora término
+   em 3 colunas dentro de um .nt-sec (que já tem padding + ícone reduzindo a
+   largura útil) não cabiam mais em telas estreitas — "Hora término"
+   ultrapassava a borda do modal. Também: quando o rótulo de um campo é mais
+   comprido que o do campo vizinho (ex.: "Sala / complemento (desse
+   encontro)" vs "Modalidade"), os dois quebram em números de linha
+   diferentes e os campos abaixo ficam desalinhados — min-height reserva
+   sempre o mesmo espaço para o rótulo (até 2 linhas), com o texto ancorado
+   embaixo, então o campo sempre começa na mesma altura nas duas colunas. */
+.nt-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.nt-3col > div{min-width:0}
+@media(max-width:560px){.nt-3col{grid-template-columns:1fr}}
+.nt-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.nt-2col .field label{min-height:34px;display:flex;align-items:flex-end}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-title{font-size:15px;font-weight:600;color:var(--text-1);letter-spacing:-.2px}
+.modal-close{background:var(--gray-100);border:none;cursor:pointer;color:var(--text-2);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,color .15s}
+.modal-close:hover{background:var(--gray-200);color:var(--text-1)}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+
+/* ── Paleta de comandos (Ctrl+K / Cmd+K) ── acima do modal-overlay (500)
+   pra poder ser aberta a qualquer momento, sem depender de estar numa tela
+   específica — vive fora de #screenApp, junto com o modal genérico. */
+.cmdk-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:520;align-items:flex-start;justify-content:center;padding:12vh 16px 0}
+.cmdk-overlay.show{display:flex}
+.cmdk-box{background:var(--surface);border-radius:var(--r-xl);box-shadow:var(--shadow-md);width:100%;max-width:560px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden;animation:slideUp .15s ease}
+.cmdk-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);color:var(--text-3);flex-shrink:0}
+.cmdk-input-row svg{flex-shrink:0}
+.cmdk-input-row input{flex:1;min-width:0;border:none;outline:none;font-size:15px;font-family:inherit;color:var(--text-1);background:transparent}
+.cmdk-results{overflow-y:auto;flex:1;padding:6px}
+.cmdk-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);padding:10px 12px 4px;font-weight:600}
+.cmdk-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-md);cursor:pointer;font-size:13.5px;color:var(--text-1)}
+.cmdk-item .ci-icon{width:20px;flex-shrink:0;color:var(--text-3);display:flex;align-items:center;justify-content:center}
+.cmdk-item .ci-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmdk-item .ci-tag{font-size:10px;color:var(--text-3);flex-shrink:0}
+.cmdk-item.active{background:var(--amber-l)}
+.cmdk-item.active .ci-icon{color:var(--amber-text)}
+.cmdk-empty{padding:32px 16px;text-align:center;font-size:13px;color:var(--text-3)}
+.cmdk-footer{display:flex;gap:16px;padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);flex-shrink:0}
+.cmdk-footer kbd{background:var(--gray-100);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-family:inherit;font-size:10px;margin-right:2px}
+@media(max-width:640px){.cmdk-overlay{padding-top:6vh}.cmdk-footer{display:none}}
+
+/* ── Dropdown menu ── */
+.menu-item{padding:9px 14px;font-size:13px;color:var(--text-1);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+.menu-item:hover{background:var(--gray-100)}
+.menu-item.danger{color:var(--red)}
+.menu-item.danger:hover{background:var(--red-l)}
+
+/* ── Toast notifications ── */
+#toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--navy);color:#fff;padding:12px 16px;border-radius:var(--r-md);font-size:13px;font-weight:500;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:8px;transform:translateX(120%);transition:transform .25s;pointer-events:auto;max-width:320px}
+.toast.show{transform:translateX(0)}
+.toast.success{background:#064E3B;border-left:3px solid var(--green)}
+.toast.error{background:#7F1D1D;border-left:3px solid var(--red)}
+.toast.info{background:var(--navy-2);border-left:3px solid var(--amber)}
+
+/* ── Loading overlay ── */
+#loading-overlay{position:fixed;inset:0;background:rgba(30,42,74,.75);z-index:9998;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+#loading-overlay.show{display:flex}
+.spinner{width:38px;height:38px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite}
+.loading-text{color:rgba(255,255,255,.75);font-size:13px;font-weight:500}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Responsive breakpoints ── */
+/* ── Menu recolhido (64px) — 2026-08-15, Solução 1 aprovada. Estado por
+   usuário via localStorage (_sidebarMiniKey). Só desktop: no mobile a
+   gaveta continua sempre completa. --sidebar-w é a única variável que o
+   layout inteiro usa (sidebar + margin do conteúdo), então recolher é
+   trocar a variável no body. ── */
+@media(min-width:768px){
+  body.sidebar-mini{--sidebar-w:64px}
+  body.sidebar-mini .sidebar-logo{padding:16px 0 14px}
+  body.sidebar-mini .sidebar-logo-row{justify-content:center;gap:0}
+  body.sidebar-mini .sidebar-logo-name{display:none}
+  body.sidebar-mini .sidebar-tagline{display:none}
+  body.sidebar-mini .sidebar-search{display:none}
+  body.sidebar-mini .sidebar-nav{padding:8px 0;overflow-x:hidden}
+  body.sidebar-mini .sidebar-section-label{padding:7px 12px 6px;font-size:0;gap:0}
+  body.sidebar-mini .sidebar-item{justify-content:center;padding:11px 0;margin:0 12px 2px}
+  body.sidebar-mini .sidebar-item .si-label{display:none}
+  body.sidebar-mini .sidebar-item .si-badge{position:absolute;top:4px;right:4px;width:8px;height:8px;padding:0;font-size:0;line-height:0;border:1.5px solid var(--navy)}
+  body.sidebar-mini .sidebar-item:hover::after{content:attr(data-label);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--navy-3);color:#fff;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;white-space:nowrap;z-index:300;box-shadow:var(--shadow-md);pointer-events:none}
+  body.sidebar-mini .sidebar-collapse{justify-content:center;padding:7px 0;margin:0 12px 6px}
+  body.sidebar-mini .sidebar-collapse .sc-label{display:none}
+  body.sidebar-mini .sidebar-collapse svg{transform:rotate(180deg)}
+  body.sidebar-mini .sidebar-bottom{padding:12px 0}
+  body.sidebar-mini .sidebar-user{justify-content:center;padding:8px 0;margin:0 12px;background:transparent;border-color:transparent}
+  body.sidebar-mini .su-info,body.sidebar-mini .su-logout{display:none}
+}
+@media(min-width:768px){.sidebar{transform:none!important}.sidebar-overlay{display:none!important}.bottom-nav{display:none!important}.main-content{display:flex;flex:1}.mobile-header{display:none!important}.mobile-content{display:none!important}.hamburger{display:none!important}.mobile-menu-btn{display:none!important}.sidebar-close-btn{display:none!important}}
+@media(max-width:767px){.sidebar-collapse{display:none}}
+@media(max-width:767px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.bottom-nav{display:block}.main-content{display:none!important}.mobile-header{display:flex}.mobile-content{display:block}.hamburger{display:flex}.mobile-menu-btn{display:flex}.sidebar-close-btn{display:flex}#screenApp{flex-direction:column}}
+@media(min-width:768px) and (max-width:1024px){:root{--sidebar-w:204px}.stats-grid{grid-template-columns:repeat(2,1fr)}.rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rel2-rankings{grid-template-columns:1fr}.home-2col{grid-template-columns:1fr}}
+@media(min-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}.quick-actions{grid-template-columns:repeat(4,1fr)}.rel2-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* ── Home Admin redesign ── */
+.home-navy-header{background:var(--navy);border-radius:var(--r-xl);padding:18px 18px 22px;margin-bottom:14px}
+.home-navy-greeting{font-size:17px;font-weight:700;color:#fff;margin-bottom:2px}
+.home-navy-sub{font-size:12px;color:rgba(255,255,255,.45)}
+.home-kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
+.home-kpi{background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:11px 12px;cursor:pointer}
+.home-kpi-val{font-size:22px;font-weight:700;color:#fff;line-height:1}
+.home-kpi-lbl{font-size:10px;color:rgba(255,255,255,.45);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+.home-kpi-delta{font-size:10px;margin-top:5px;font-weight:600}
+.home-kpi-delta.amber{color:var(--amber)}
+.home-kpi-delta.green{color:#34D399}
+.home-kpi-delta.red{color:#F87171}
+.home-alert{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.22);border-left:3px solid var(--amber);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.home-alert-text{font-size:12px;color:var(--amber-h);font-weight:500}
+.home-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
+.home-chart-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.home-2col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;min-width:0}
+.home-list-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;min-width:0;overflow:hidden}
+.home-list-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.home-list-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.home-list-item:last-child{border:none}
+.home-list-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.home-list-info{flex:1;min-width:0}
+.home-list-name{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-list-sub{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-qa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
+/* ── Home v2 (Alternativa 1, 2026-08-15) + cabeçalhos de seção ponto+linha.
+   Medidas idênticas ao padrão aprovado em Turmas (.turmas-kpi / mockups). ── */
+.gh-sec{display:flex;align-items:center;gap:8px;margin:16px 0 10px}
+.gh-sec .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0}
+.gh-sec .dot.red{background:var(--red)}
+.gh-sec .dot.green{background:var(--green)}
+.gh-sec .dot.navy{background:var(--navy)}
+.gh-sec span{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.gh-sec .line{flex:1;height:1px;background:var(--border)}
+.gh-sec .glink{font-size:11px;font-weight:600;color:var(--amber-h);cursor:pointer;white-space:nowrap}
+.h2-hero{background:var(--navy);border-radius:var(--r-xl);padding:18px 20px;margin-bottom:14px}
+.h2-greet{font-size:17px;font-weight:700;color:#fff;letter-spacing:-.2px}
+.h2-sub{font-size:12px;color:rgba(255,255,255,.45);margin-top:2px}
+.h2-msg{font-size:11.5px;color:rgba(255,255,255,.55);margin-top:8px;font-style:italic}
+.h2-avatar{width:38px;height:38px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--navy);flex-shrink:0}
+.h2-ctas{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.hbtn2{display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:var(--r-md);cursor:pointer;border:none;transition:background .15s}
+.hbtn2.amber{background:var(--amber);color:var(--navy)}
+.hbtn2.amber:hover{background:var(--amber-h)}
+.hbtn2.ghost{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.hbtn2.ghost:hover{background:rgba(255,255,255,.14)}
+.h2-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}
+.h2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
+.h2-kpi:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+.h2-kpi .ic{font-size:13px;margin-bottom:3px}
+.h2-kpi .n{font-size:18px;font-weight:800;color:var(--navy);line-height:1.2}
+.h2-kpi .l{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2-kpi .d{font-size:10px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2-kpi .d.g{color:var(--green)}
+.h2-kpi .d.a{color:var(--amber-h)}
+.h2-kpi .d.m{color:var(--text-3);font-weight:500}
+.h2-kpi.warn-b{border-left:3px solid var(--warn)}
+.qa2-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;min-width:0}
+.qa2-row.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.qa2{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;display:flex;align-items:center;gap:9px;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,box-shadow .15s;min-width:0}
+.qa2:hover{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-l)}
+.qa2 .qic{width:30px;height:30px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.qa2 .qlb{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2-heronext{background:rgba(255,255,255,.08);border:0.5px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;margin-top:14px}
+@media(max-width:767px){.h2-kpis{grid-template-columns:repeat(2,1fr)}.qa2-row{grid-template-columns:repeat(2,minmax(0,1fr))}.qa2-row.c3{grid-template-columns:repeat(2,minmax(0,1fr))}.h2-ctas .hbtn2{flex:1;justify-content:center}}
+.fin-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.detail-layout{display:block}
+.detail-sidebar{display:flex;flex-direction:column;gap:12px;margin-bottom:14px;min-width:0}
+.detail-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.detail-info-row{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text-1);line-height:1.5;min-width:0}
+.detail-info-row:not(:last-child){margin-bottom:9px}
+.detail-info-row svg{flex-shrink:0;color:var(--text-3);margin-top:1px}
+.detail-info-row span{min-width:0;word-break:break-word}
+.detail-actions{display:flex;flex-direction:column;gap:6px}
+.detail-actions .btn{justify-content:center}
+.detail-card-accent{border-left:3px solid var(--navy)}
+.detail-page{max-width:760px;width:100%;margin:0 auto}
+@media(min-width:900px){
+  .detail-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+  .detail-sidebar{margin-bottom:0}
+  .detail-actions{flex-direction:row}
+  .detail-actions .btn{flex:0 0 auto;padding:8px 16px;font-size:13px}
+}
+@media(min-width:1280px){.detail-page{max-width:920px}}
+@media(max-width:767px){
+  .home-2col{grid-template-columns:minmax(0,1fr);gap:10px}
+  .fin-mini-grid{grid-template-columns:minmax(0,1fr);gap:8px}
+  .home-qa{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .home-kpi-val{font-size:20px}
+  .home-list-card{padding:12px 10px}
+  .home-list-name{font-size:13px}
+  .home-list-sub{font-size:11px}
+  .home-list-item{gap:8px;padding:8px 0}
+}
+
+/* ── Relatórios redesign v2 ── */
+.rel2-header{background:var(--navy);border-radius:var(--r-xl);padding:16px 18px;margin-bottom:12px}
+.rel2-title{font-size:17px;font-weight:700;color:#fff}
+.rel2-sub{font-size:12px;color:rgba(255,255,255,.4);margin-top:2px}
+.rel2-period{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.rel2-chip{padding:4px 14px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:0.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.5);transition:.1s}
+.rel2-chip.active{background:var(--amber);border-color:var(--amber);color:var(--navy)}
+.rel2-export{display:flex;gap:6px}
+.rel2-export-btn{padding:5px 12px;border-radius:var(--r-md);border:0.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);font-size:11px;font-weight:500;cursor:pointer;transition:.12s}
+.rel2-export-btn:hover{background:rgba(255,255,255,.14)}
+.rel2-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.rel2-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
+.rel2-kpi:hover{border-color:var(--border-2)}
+.rel2-kpi:hover{box-shadow:0 2px 8px rgba(30,42,74,.1)}
+.rel2-kpi-icon{font-size:13px;margin-bottom:3px;display:block}
+.rel2-kpi-val{font-size:18px;font-weight:800;color:var(--navy);line-height:1.2}
+.rel2-kpi-lbl{font-size:10px;color:var(--text-3);font-weight:600;margin-top:1px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rel2-kpi-delta{font-size:10px;color:var(--green);margin-top:5px;font-weight:600}
+.rel2-chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px}
+.rel2-chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.rel2-chart-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
+.rel2-toggle{display:flex;align-items:center;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;gap:2px}
+.rel2-tbtn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--text-3);transition:.12s;font-family:inherit}
+.rel2-tbtn.active{background:var(--surface);color:var(--navy);box-shadow:var(--shadow)}
+.rel2-rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;min-width:0}
+.rel2-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px;min-width:0;overflow:hidden}
+.rel2-card:last-child{margin-bottom:0}
+.rel2-card-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.rel2-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border);min-width:0}
+.rel2-row:last-child{border:none}
+.rel2-badge{width:24px;height:24px;min-width:24px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rel2-bar-wrap{height:3px;background:var(--gray-100);border-radius:2px;margin-top:5px}
+.rel2-bar{height:3px;border-radius:2px}
+.rel2-cli-btn{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;transition:background .12s;margin-bottom:6px;width:100%;text-align:left;min-width:0;overflow:hidden;box-sizing:border-box}
+.rel2-cli-btn:hover{background:var(--gray-50)}
+.rel2-cli-name{font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rel2-cli-meta{font-size:11px;color:var(--text-3);margin-top:2px}
+.rel2-back{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;margin-bottom:14px;background:none;border:1px solid var(--border);border-radius:var(--r-md);padding:7px 12px;width:fit-content}
+.rel2-back:hover{background:var(--gray-50)}
+@media(max-width:767px){
+  .rel2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rel2-rankings{grid-template-columns:minmax(0,1fr);gap:10px}
+  .rel2-card{padding:12px 10px}
+  .rel2-kpi{padding:12px 10px}
+  .rel2-kpi-val{font-size:20px}
+  .rel2-kpi-icon{font-size:14px;margin-bottom:4px}
+  .rel2-export{flex-wrap:wrap;gap:4px}
+  .rel2-export-btn{font-size:10px;padding:4px 8px}
+  .rel2-period{gap:4px}
+  .rel2-chip{padding:4px 10px;font-size:10px}
+  .rel2-cli-btn{padding:9px 10px}
+  .rel2-cli-name{font-size:12px}
+  .rel2-row{gap:8px;padding:8px 0}
+  .rel2-chart-header{flex-direction:column;align-items:flex-start;gap:6px}
+  .rel2-toggle{flex-wrap:wrap}
+}
+
+.rel3-faixa{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;-webkit-overflow-scrolling:touch}
+.rel3-dcard{position:relative;flex-shrink:0;min-width:104px;border:1px solid var(--border);border-radius:var(--r-md);padding:9px 12px;cursor:pointer;background:var(--surface);transition:border-color .15s,background .15s}
+.rel3-dcard:hover{border-color:var(--border-2)}
+.rel3-dcard.active{border:1.5px solid var(--amber);background:rgba(245,158,11,.05)}
+.rel3-dcard.active::before{content:'';position:absolute;left:12px;right:12px;top:0;height:3px;border-radius:0 0 3px 3px;background:var(--amber)}
+.rel3-dcard.alert{border-color:#FCA5A5;background:#FEF2F2}
+.rel3-dn{font-size:16px;font-weight:800;color:var(--navy);margin-top:4px;line-height:1.2}
+.rel3-dcard.alert .rel3-dn{color:var(--red)}
+.rel3-dl{font-size:9.5px;color:var(--text-3);margin-top:1px}
+.rel3-dcard.active .rel3-dl{color:var(--amber-text);font-weight:600}
+.rel3-pill{background:var(--gray-100);border-radius:20px;padding:3px 10px;font-size:10px;font-weight:600;color:var(--navy);cursor:pointer;border:none;font-family:inherit}
+.rel3-layout{display:flex;gap:16px;align-items:flex-start}
+.rel3-filtros{width:190px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px}
+.rel3-filtros input[type=checkbox]{accent-color:var(--navy);width:14px;height:14px}
+.rel3-lbl{font-size:9.5px;font-weight:600;color:var(--text-3);letter-spacing:.04em;margin-bottom:6px;text-transform:uppercase}
+.rel3-main{flex:1;min-width:0}
+/* Barra de filtros branca de Relatórios (2026-08-15, proposta aprovada) —
+   mesmo padrão dos filtros da tela Turmas (.turmas-filtro-select). Os
+   selects saíram do cabeçalho navy; comportamento idêntico. */
+.rel4-filtros{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.rel4-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;flex:1;min-width:150px;max-width:240px;padding:9px 30px 9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-weight:600;font-family:inherit;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394A3B8' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--text-1);cursor:pointer;transition:border-color .15s;outline:none}
+.rel4-select:hover{border-color:var(--border-2)}
+.rel4-select:focus{border-color:var(--navy)}
+.rel4-comp{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-md);padding:7px 12px;cursor:pointer;margin-left:auto;user-select:none}
+.rel4-comp .sw{width:32px;height:18px;border-radius:20px;position:relative;transition:background .2s;flex-shrink:0}
+.rel4-comp .sw i{width:14px;height:14px;background:#fff;border-radius:50%;position:absolute;top:2px;transition:all .2s;display:block}
+.rel4-comp span.lbl{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap}
+@media(max-width:767px){.rel4-select{max-width:none}.rel4-comp{margin-left:0;width:100%;justify-content:space-between}}
+@media(max-width:767px){
+  .rel3-dcard{min-width:84px;padding:8px}
+  .rel3-dn{font-size:13px}
+  .rel3-layout{flex-direction:column}
+  .rel3-filtros{width:100%}
+}
+
+/* ── Agenda do Instrutor v2 — "Semana em Foco" (2026-08-15, aprovada) ── */
+.ag2-layout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px;align-items:start}
+.ag2-week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:14px}
+.ag2-wd{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 4px;text-align:center;cursor:pointer;font-family:inherit;transition:border-color .15s}
+.ag2-wd:hover{border-color:var(--border-2)}
+.ag2-wd .dw{font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.ag2-wd .dn{font-size:15px;font-weight:800;color:var(--navy);margin-top:1px;line-height:1.2}
+.ag2-wd.on{background:var(--navy);border-color:var(--navy)}
+.ag2-wd.on .dw{color:rgba(255,255,255,.5)}
+.ag2-wd.on .dn{color:#fff}
+.ag2-wd .dot{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--amber)}
+.ag2-tlrow{display:flex;gap:10px;margin-bottom:8px}
+.ag2-hour{width:44px;flex-shrink:0;text-align:right;font-size:11px;font-weight:700;color:var(--text-3);padding-top:10px}
+.ag2-tcard{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.ag2-tcard:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+.ag2-tcard.destaque{border:2px solid var(--navy)}
+.ag2-tcard .tt{font-size:12.5px;font-weight:700;color:var(--text-1);padding-right:80px;line-height:1.3;word-break:break-word}
+.ag2-tcard .tm{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.5}
+.ag2-tcard .tbadge{position:absolute;top:10px;right:10px}
+.ag2-rail{display:flex;flex-direction:column;gap:10px}
+.ag2-cal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.ag2-cal-head{background:var(--navy);padding:9px 12px;display:flex;align-items:center;justify-content:space-between}
+.ag2-cal-head .m{font-size:12.5px;font-weight:700;color:#fff}
+.ag2-cal-head button{border:none;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;width:26px;height:26px;border-radius:7px;font-size:14px;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.ag2-cal-body{padding:10px}
+.ag2-resline{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:5px 0}
+.ag2-resline+.ag2-resline{border-top:1px solid var(--border)}
+.ag2-resline b{color:var(--navy)}
+@media(max-width:767px){
+  .ag2-layout{grid-template-columns:1fr}
+  .ag2-wd{padding:7px 2px}
+  .ag2-wd .dn{font-size:14px}
+}
+
+/* ── Histórico do Instrutor v2 — "Camadas por Ano" (2026-08-15, aprovada) ── */
+.kpis5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}
+@media(max-width:767px){.kpis5{grid-template-columns:repeat(2,1fr)}}
+.hist2-item{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 12px;margin-bottom:6px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.hist2-item:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+.hist2-item .ch{width:40px;height:40px;border-radius:10px;background:var(--green-l);color:var(--green);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hist2-item .hi{flex:1;min-width:0}
+.hist2-item .ht{font-size:12.5px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist2-item .hs{font-size:11px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── Execution tabs (não usadas mais — trocarAbaExec/.exec-tab/.exec-aba
+   ficaram sem gatilho depois da Jornada em Etapas Guiadas abaixo, mantidas
+   por segurança/histórico só, mesmo critério já usado neste projeto pra
+   código antigo sem uso, ver changelog 2026-08-18 sobre a paleta de
+   comandos) ── */
+.exec-tab{flex:1;padding:10px 8px;background:none;border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--text-3);cursor:pointer;font-family:inherit;transition:all .15s}
+.exec-tab:hover{color:var(--text-1)}
+.exec-tab.active{color:var(--navy);border-bottom-color:var(--amber)}
+.exec-aba{animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Jornada em Etapas Guiadas (execução: Presenças → Evidências → Finalizar),
+   2026-08-20 — Opção B escolhida pelo Alisson (ver
+   01-Requisitos/documentos-turma-redesign-proposta.md). Estrutura única e
+   responsiva: no mobile o trilho de etapas fica horizontal no topo; a partir
+   de 768px vira uma coluna fixa à esquerda, com o conteúdo sempre dentro de
+   um card de largura constante — evita o "salto" de layout entre etapas que
+   o Alisson apontou na 1ª versão do desktop. ── */
+.exec-wizard-wrap{display:flex;flex-direction:column}
+.exec-stepper{display:flex;margin-bottom:18px}
+.exec-step{display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;padding:8px 4px;border-radius:var(--r-md);justify-content:center;text-align:center;min-width:0}
+.exec-step-c{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2px solid var(--border-2);color:var(--text-3);background:var(--surface);flex-shrink:0}
+.exec-step.done .exec-step-c{background:var(--green);border-color:var(--green);color:#fff}
+.exec-step.current .exec-step-c{background:var(--navy);border-color:var(--navy);color:var(--amber)}
+.exec-step-txt{display:flex;flex-direction:column;min-width:0}
+.exec-step-l{font-size:11px;font-weight:700;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exec-step.current .exec-step-l{color:var(--navy)}
+.exec-step.done .exec-step-l{color:var(--text-1)}
+.exec-step-s{font-size:9.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exec-step-line{flex:0 0 16px;height:2px;background:var(--border-2);align-self:center}
+.exec-step-line.done{background:var(--green)}
+.exec-panel{display:none;flex-direction:column}
+.exec-panel.active{display:flex}
+.exec-footer{display:flex;justify-content:flex-end;margin-top:16px}
+.exec-footer .btn{width:100%}
+.exec-countbadge{display:inline-flex;background:var(--amber-l);color:var(--amber-text);font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;margin-bottom:12px}
+.exec-prow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);margin-bottom:8px;background:var(--surface);border:1px solid var(--border)}
+.exec-prow:last-child{margin-bottom:0}
+/* ── Busca e filtros da lista de presenças (2026-08-28) ── */
+.exec-buscabox{margin-bottom:12px}
+.exec-busca{position:relative;margin-bottom:8px}
+.exec-busca input{width:100%;height:42px;padding:10px 34px 10px 36px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;color:var(--text-1);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+.exec-busca input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.exec-busca input::-webkit-search-cancel-button{display:none}
+.exec-busca .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);display:flex;pointer-events:none}
+.exec-busca .clr{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:22px;height:22px;border:none;border-radius:50%;background:var(--gray-200);color:var(--gray-600);font-size:11px;font-weight:700;cursor:pointer;align-items:center;justify-content:center;font-family:inherit}
+.exec-chips{display:flex;gap:6px;flex-wrap:wrap}
+.exec-chip{font-size:11.5px;font-weight:700;padding:0 11px;height:32px;border-radius:999px;border:1.5px solid var(--border);background:var(--surface);color:var(--text-3);cursor:pointer;white-space:nowrap;font-family:inherit;transition:all .15s}
+.exec-chip:hover{border-color:var(--border-2)}
+.exec-chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.exec-chip.warnc:not(.on){border-color:var(--amber);color:var(--amber-text);background:var(--amber-l)}
+.exec-chip.redc:not(.on){border-color:#FECACA;color:var(--red-text);background:var(--red-l)}
+/* ── Controle Aprovado/Reprovado (só aparece depois da assinatura) ── */
+.exec-pact{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.exec-seg{display:inline-flex;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;gap:2px}
+.exec-seg button{font-size:11.5px;font-weight:700;padding:0 11px;height:30px;border:none;border-radius:5px;background:none;color:var(--text-3);cursor:pointer;white-space:nowrap;font-family:inherit;transition:all .15s}
+.exec-seg button.on{background:var(--surface);color:var(--navy);box-shadow:var(--shadow)}
+.exec-seg button.on.bad{color:var(--red-text)}
+.exec-obsreprov{font-size:11.5px;color:var(--text-3);font-style:italic;margin-top:3px;line-height:1.4}
+/* ── Etapa ART ── */
+.art-sub{font-size:12px;color:var(--text-2);margin:4px 0 16px;line-height:1.55}
+.art-inp{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:15px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:var(--text-1);background:var(--surface);outline:none;min-height:44px;transition:border-color .15s,box-shadow .15s}
+.art-inp:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.art-cnt{float:right;font-size:11px;font-weight:700;color:var(--text-3);font-family:ui-monospace,monospace}
+.art-hint{font-size:11.5px;color:var(--text-3);margin-top:5px;line-height:1.45}
+.art-hint.bad{color:var(--amber-text);font-weight:600}
+.art-drop{border:1.5px dashed var(--border-2);border-radius:var(--r-lg);padding:20px 16px;text-align:center;background:var(--gray-50)}
+.art-drop .t{font-size:13px;font-weight:600;color:var(--text-1)}
+.art-drop .s{font-size:11.5px;color:var(--text-3);margin-top:3px}
+.art-file{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+.art-file .fi{width:38px;height:44px;border-radius:5px;background:var(--red-l);color:var(--red-text);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.art-file .fn{font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.art-file .fs{font-size:11px;color:var(--text-3);margin-top:1px}
+.art-num{font-size:19px;font-weight:800;color:var(--navy);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;margin-top:3px}
+.art-lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.exec-seg.vazio button{color:var(--text-3)}
+#btnSalvarArtNumero:disabled{opacity:.45;cursor:not-allowed}
+/* A regra responsiva vale SÓ para a linha que tem o controle de avaliação
+   (.exec-prow-aval). A linha comum continua exatamente como sempre foi no
+   mobile — ação inline, sem quebra. */
+@media(max-width:520px){
+  .exec-prow-aval{flex-wrap:wrap}
+  .exec-prow-aval .exec-pact{width:100%;justify-content:flex-end;margin-top:4px}
+  .exec-prow-aval .exec-seg{width:100%}
+  .exec-prow-aval .exec-seg button{flex:1}
+}
+@media(min-width:768px){
+  .exec-wizard-wrap{flex-direction:row;gap:32px;align-items:flex-start}
+  .exec-stepper{flex-direction:column;width:196px;flex-shrink:0;margin-bottom:0;position:sticky;top:0}
+  .exec-step{justify-content:flex-start;text-align:left;padding:9px 10px}
+  .exec-step:hover{background:var(--gray-100)}
+  .exec-step.current{background:rgba(30,42,74,.07)}
+  .exec-step-l,.exec-step-s{white-space:normal}
+  .exec-step-line{flex:none;width:2px;height:22px;margin:0 0 0 23px}
+  .exec-panel-wrap{flex:1;max-width:600px;min-width:0}
+  .exec-panel-wrap .card{max-width:600px}
+  .exec-footer .btn{width:auto;padding:11px 22px}
+}
+
+/* ── Turmas grid v2 ── */
+.turmas-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;min-width:0}
+.turmas-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.turmas-tab:hover{border-color:var(--border-2);color:var(--text-1)}
+.turmas-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.turmas-tab .tab-count{font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
+.turmas-tab:not(.active) .tab-count{background:var(--gray-100);color:var(--text-3)}
+.turmas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:8px}
+/* 2026-08-14 (pedido do Alisson — 4ª rodada de fidelidade): filtros
+   nativos (<select>) tinham a aparência padrão do navegador, que foge do
+   padrão visual moderno do resto da tela — appearance:none remove o chrome
+   nativo (inclusive a setinha do sistema operacional) e uma seta própria
+   (SVG embutido) é desenhada por CSS, deixando o controle com a mesma cara
+   de "pill" arredondado usado em outros pontos do app. O filtro
+   "Pendência" (select) foi removido daqui — virou uma aba ao lado de
+   "Canceladas" (ver EDIT C/D), no mesmo padrão dos demais status. */
+.turmas-filtros{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.turmas-busca{position:relative;flex:1;min-width:180px;max-width:280px}
+.turmas-busca input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);transition:border-color .15s}
+.turmas-busca input:focus{border-color:var(--navy);outline:none}
+.turmas-busca .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-3);pointer-events:none}
+.turmas-filtro-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding:9px 30px 9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12.5px;font-weight:600;font-family:inherit;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394A3B8' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--text-1);cursor:pointer;min-width:150px;transition:border-color .15s}
+.turmas-filtro-select:hover{border-color:var(--border-2)}
+.turmas-filtro-select:focus{border-color:var(--navy);outline:none}
+.turmas-periodo-custom{display:flex;align-items:center;gap:6px}
+.turmas-periodo-custom input[type=date]{padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text-1)}
+/* Alternância Cards/Lista — antes discreta demais (sem borda própria, se
+   confundindo com o resto da barra). Agora tem borda delimitando o
+   controle como uma unidade e ícones (▦/☰) reforçando o significado de
+   cada opção; o estado ativo continua pílula branca + texto navy + sombra
+   sobre o fundo cinza (_turmasAtualizarBotoesVisao, JS) — mesmo padrão já
+   usado no mockup aprovado (.viewtoggle span.on), só ganhou mais contorno
+   ao redor pra não sumir no meio dos outros filtros. */
+.turmas-viewtoggle{display:flex;align-items:center;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;margin-left:auto;gap:2px}
+.turmas-viewtoggle button{display:flex;align-items:center;gap:5px;border:none;background:none;padding:7px 14px;border-radius:6px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--text-3);transition:background .15s,color .15s}
+@media(max-width:767px){.turmas-busca{max-width:none;min-width:0;flex-basis:100%}}
+/* CTA à direita da barra .turmas-filtros (Colaboradores) — mesmo
+   posicionamento de .turmas-viewtoggle, empilha em largura total no mobile. */
+.turmas-filtros-cta{margin-left:auto}
+@media(max-width:640px){.turmas-filtros-cta{margin-left:0;flex-basis:100%}.turmas-filtros-cta .btn{width:100%}}
+/* Linha de ações abaixo de .turmas-filtros (Clientes) — mesma ordem
+   vertical já usada em Turmas (filtros → linha de ação). Puramente
+   layout, não muda o estilo dos botões que já existiam. */
+.acoes-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+/* Card-resumo clicável no topo de Minha Conta (leva à tela de edição). */
+.resumo-card{transition:box-shadow .15s,transform .1s}
+.resumo-card:hover{box-shadow:0 0 0 2px rgba(245,158,11,.4),var(--shadow-md)}
+.resumo-card:active{transform:scale(.99)}
+/* 2026-08-14 (correção pedida pelo Alisson — visão Lista da tela Turmas):
+   colunas FIXAS via CSS Grid (não flex com proporções) — cada elemento tem
+   sua própria coluna reservada, mesmo quando fica vazio (ex.: turma sem
+   pendência, sem sessão concluída), então nenhuma linha "empurra" as
+   colunas seguintes por ter mais ou menos conteúdo do que a linha vizinha.
+   Textos longos truncam com reticências (ellipsis) em vez de alargar a
+   coluna, que é a única forma de garantir alinhamento independente do
+   tamanho do conteúdo. */
+/* 2026-08-30 (pedido do Alisson): a Lista ganhou cabeçalho de coluna
+   clicável, que assumiu o papel das abas de status (removidas). As 6
+   colunas são exatamente as pedidas — Curso | Cliente | Instrutor | Data |
+   Aulas | Status — por isso a bolinha de status que abria a linha saiu: o
+   badge da coluna Status já carrega essa informação, e manter as duas era
+   o mesmo sinal desenhado duas vezes (mesma lição de 2026-08-29, registrada
+   no diagnóstico da proposta). A grade do cabeçalho e a da linha são
+   declaradas juntas, num seletor só, justamente pra nunca dessincronizar —
+   se uma mudar sem a outra, as colunas desalinham. */
+.turma-lista-head,.turma-linha-lista{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) minmax(0,1fr) 96px 78px 112px;align-items:center;gap:10px;padding:9px 12px}
+.turma-lista-head{background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-sm) var(--r-sm) 0 0;position:sticky;top:0;z-index:6;padding-top:8px;padding-bottom:8px}
+.turma-lista-head .th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;background:none;border:none;padding:0;margin:0;font-family:inherit;cursor:pointer;min-width:0}
+.turma-lista-head .th:hover{color:var(--navy)}
+.turma-lista-head .th.on{color:var(--navy)}
+.turma-lista-head .th .ar{font-size:8px;flex-shrink:0}
+.turma-lista-head .th:not(.on) .ar{opacity:.45}
+.turma-lista-head .thend{justify-content:flex-end}
+.turma-lista-head .thwrap{position:relative;display:flex;justify-content:flex-end;min-width:0}
+.turma-lista-statusmenu{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:4px;z-index:30;min-width:196px;text-align:left}
+.turma-lista-statusmenu button{display:flex;width:100%;align-items:center;gap:8px;background:none;border:none;padding:7px 9px;border-radius:6px;font-size:11.5px;font-family:inherit;font-weight:500;color:var(--text-2);cursor:pointer;text-align:left;text-transform:none;letter-spacing:0}
+.turma-lista-statusmenu button:hover{background:var(--gray-100)}
+.turma-lista-statusmenu button.on{background:var(--gray-100);color:var(--navy);font-weight:700}
+.turma-lista-statusmenu .dt{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.turma-lista-statusmenu .qt{margin-left:auto;font-size:10px;font-weight:700;color:var(--text-3);flex-shrink:0}
+.turma-lista-statusmenu .sep{height:1px;background:var(--border);margin:4px 2px}
+.turma-linha-lista{background:var(--surface);border:1px solid var(--border);border-top:none;font-size:12.5px;cursor:pointer}
+.turma-linha-lista:last-child{border-radius:0 0 var(--r-sm) var(--r-sm)}
+.turma-linha-lista:hover{background:var(--gray-50)}
+.turma-linha-lista .tl-curso{font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-linha-lista .tl-cliente{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-linha-lista .tl-data,.turma-linha-lista .tl-inst{color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-linha-lista .tl-inst{display:flex;align-items:center;gap:5px}
+.turma-linha-lista .tl-inst .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.turma-linha-lista .tl-aulas{font-size:11px;color:var(--text-2);display:flex;flex-direction:column;gap:3px;min-width:0}
+.turma-linha-lista .tl-aulas .bar{height:3px;width:54px;background:var(--gray-100);border-radius:2px;overflow:hidden}
+.turma-linha-lista .tl-aulas .bar i{display:block;height:100%;background:var(--green)}
+.turma-linha-lista .tl-status{display:flex;align-items:center;gap:5px;justify-content:flex-end;min-width:0}
+.turma-linha-lista .tl-pend{font-size:12px;flex-shrink:0;line-height:1}
+.turma-linha-lista .tl-badge{font-size:9px;font-weight:700;padding:3px 8px;border-radius:999px;text-align:center;white-space:nowrap}
+/* Mobile: cabeçalho de tabela não funciona em 390px — a linha volta a se
+   comportar como um cartão empilhado (mesmo fallback que já existia), e o
+   cabeçalho some. Ordenação/filtro continuam acessíveis, porque quem
+   ordena é o estado em window._turmasListaSort, não o clique no <th>. */
+@media(max-width:680px){
+  .turma-lista-head{display:none}
+  .turma-linha-lista{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;border-top:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:6px}
+  .turma-linha-lista .tl-curso{flex:1 1 100%}
+  .turma-linha-lista .tl-status{justify-content:flex-start}
+  .turma-linha-lista .tl-aulas{flex-direction:row;align-items:center;gap:6px}
+  .turma-linha-lista .tl-aulas .bar{width:40px;flex-shrink:0}
+}
+.turma-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;display:flex;flex-direction:column;position:relative;cursor:pointer;transition:border-color .15s,box-shadow .15s;min-width:0}
+.turma-card:hover{border-color:var(--border-2);box-shadow:var(--shadow)}
+/* 2026-08-14 (pedido do Alisson — 4ª rodada de fidelidade): tamanho e
+   proporção do card agora seguem as MESMAS medidas do mockup aprovado
+   (.tcard em propostas-visuais-agenda-turmas.html) — padding 12px, título
+   12.5px, meta 11px — não só a estrutura (ícones, ordem das informações),
+   que já tinha sido corrigida antes. O badge de status volta a
+   position:absolute (igual ao mockup: top/right fixos) — diferente da
+   prévia da Nova Turma (onde nome de cliente/curso é texto livre e
+   position:absolute já causou estouro), aqui o texto do badge vem de um
+   conjunto fixo de 4 valores conhecidos (Agendada/Em andamento/Concluída/
+   Cancelada), então reservar um padding-right fixo no título é seguro. O
+   menu de gestão ("...") não existe no mockup (é uma ação real do
+   sistema, sem equivalente na referência) — desceu pro rodapé do card, em
+   vez de disputar o canto superior direito com o badge. */
+.turma-card-title{font-size:12.5px;font-weight:700;color:var(--text-1);line-height:1.3;word-break:break-word;padding-right:96px;margin-bottom:4px}
+.turma-card-status{position:absolute;top:12px;right:12px;font-size:9.5px}
+.turma-card-meta{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-card-date{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px}
+.turma-card-inst{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);margin-top:6px}
+.turma-card-inst .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+/* 2026-08-14 (pedido do Alisson): os indicadores (Este mês/Em andamento/
+   Pendências/Concluído) voltam a aparecer também no Cards — precisam
+   ficar disponíveis nas duas visualizações, não só na Lista. */
+.turmas-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.turmas-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
+.turmas-kpi .ic{font-size:13px;margin-bottom:3px}
+.turmas-kpi .n{font-size:18px;font-weight:800;color:var(--navy)}
+.turmas-kpi .l{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+@media(max-width:640px){.turmas-kpis{grid-template-columns:repeat(2,1fr)}}
+/* Variante de 3 colunas (Colaboradores) — aditiva, não altera .turmas-kpis
+   base usada em Turmas (4 colunas). */
+.turmas-kpis.kpi-3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:640px){.turmas-kpis.kpi-3{grid-template-columns:repeat(2,1fr)}}
+.turma-group-head{display:flex;align-items:center;gap:8px;margin:16px 0 8px}
+.turma-group-head:first-of-type{margin-top:0}
+.turma-group-head .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0}
+.turma-group-head span{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.turma-group-head .line{flex:1;height:1px;background:var(--border)}
+.turma-card-progress{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.turma-card-progress-row{display:flex;justify-content:space-between;align-items:center}
+.turma-card-progress-bar{height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden}
+.turma-card-progress-fill{height:100%;border-radius:2px;transition:width .3s}
+.turma-card-menu-row{text-align:right;margin-top:4px}
+.fill-agendada{background:var(--gray-300)}
+.fill-em_andamento{background:var(--amber)}
+.fill-concluida{background:var(--green)}
+.fill-cancelada{background:var(--red)}
+/* 2026-08: pendência de turma no card da lista — botão sem estilo de
+   navegador (herda o badge de dentro) que expande a lista específica do
+   que falta. É por toque/clique (nunca só :hover) de propósito: card
+   aparece igual em Web e Mobile, e hover não existe em touchscreen. */
+.turma-card-pend-toggle{all:unset;cursor:pointer;display:inline-flex}
+.turma-card-pend-list{margin-top:6px;padding:8px 10px;background:var(--warn-l);border-radius:var(--r-md);display:flex;flex-direction:column;gap:3px}
+.turma-card-pend-item{font-size:11.5px;color:var(--warn-text);line-height:1.4}
+.turma-card-nova{background:var(--surface);border:1.5px dashed var(--border-2);border-radius:var(--r-lg);padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:border-color .15s,background .15s;min-height:160px;color:var(--text-3)}
+.turma-card-nova:hover{border-color:var(--amber);background:rgba(245,158,11,.04);color:var(--amber-h)}
+.turmas-section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.turmas-section-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.turmas-section-line{flex:1;height:1px;background:var(--border)}
+
+/* ===== Turmas — barra de comando (2026-08-30, proposta "Barra de Comando" aprovada) =====
+   Substitui os 4 banners de KPI. A regra que rege este bloco: existe UM
+   número de contexto na tela (.turmas-resumo .cnt) e ele é sempre calculado
+   sobre a lista filtrada. Os banners antigos liam a lista completa enquanto
+   as colunas do Kanban liam a filtrada, então divergiam assim que qualquer
+   filtro era aplicado (medido: banner "Em andamento" 5 x coluna 1). */
+.turmas-filtros .turmas-busca{max-width:380px}
+.turmas-busca .clr{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:none;border-radius:50%;background:var(--gray-200);color:var(--gray-600);font-size:10px;font-weight:700;cursor:pointer;align-items:center;justify-content:center;font-family:inherit;padding:0;line-height:1}
+.turmas-busca input{padding-right:32px}
+.turmas-fbtn,.turmas-pendbtn{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-md);padding:9px 13px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s}
+.turmas-fbtn{background:var(--surface);border:1.5px solid var(--border);color:var(--text-2)}
+.turmas-fbtn:hover{border-color:var(--border-2);color:var(--text-1)}
+.turmas-fbtn.on{border-color:var(--navy);color:var(--navy)}
+.turmas-fbtn .fbadge{background:var(--navy);color:#fff;border-radius:999px;min-width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;padding:0 5px;font-variant-numeric:tabular-nums}
+.turmas-pendbtn{background:var(--surface);border:1.5px solid var(--border);color:var(--text-2);font-weight:700}
+.turmas-pendbtn:hover{border-color:rgba(180,83,9,.35);color:var(--warn-text)}
+.turmas-pendbtn.on{background:var(--warn-l);border-color:rgba(180,83,9,.35);color:var(--warn-text)}
+.turmas-pendbtn .q{font-variant-numeric:tabular-nums}
+.turmas-resumo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px;color:var(--text-3);min-height:24px}
+.turmas-resumo .cnt{font-weight:700;color:var(--text-2);font-variant-numeric:tabular-nums}
+.tchip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px 5px 3px 10px;font-size:11px;font-weight:600;color:var(--text-2);max-width:280px}
+.tchip .k{color:var(--text-3);font-weight:500;flex-shrink:0}
+.tchip .v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tchip .x{width:16px;height:16px;border:none;border-radius:50%;background:var(--gray-100);color:var(--gray-600);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;padding:0;flex-shrink:0;line-height:1}
+.tchip .x:hover{background:var(--gray-200);color:var(--text-1)}
+.tclr{background:none;border:none;color:var(--blue);font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:0}
+.turmas-painel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:14px;margin-bottom:12px;max-width:560px}
+.turmas-painel .tp-head{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:11px}
+.turmas-painel .tp-row{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:10px;margin-bottom:9px}
+.turmas-painel .tp-row.tp-top{align-items:start}
+.turmas-painel .tp-lb{font-size:11.5px;font-weight:600;color:var(--text-2)}
+.turmas-painel .tp-sel{width:100%;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px;font-size:11.5px;font-family:inherit;color:var(--text-2);cursor:pointer}
+.turmas-painel .tp-sel:focus{outline:2px solid var(--navy);outline-offset:-1px}
+.turmas-painel .tp-presets{display:flex;gap:5px;flex-wrap:wrap}
+.turmas-painel .tp-preset{background:var(--gray-50);border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:600;font-family:inherit;color:var(--text-2);cursor:pointer}
+.turmas-painel .tp-preset:hover{border-color:var(--border-2);color:var(--text-1)}
+.turmas-painel .tp-preset.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.turmas-painel .tp-datas{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.turmas-painel .tp-datas input{background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 9px;font-size:11.5px;font-family:inherit;color:var(--text-2)}
+.turmas-painel .tp-datas span{font-size:11px;color:var(--text-3)}
+.turmas-painel .tp-foot{display:flex;justify-content:space-between;align-items:center;margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
+.turmas-painel .tp-clr{background:none;border:none;font-size:11.5px;color:var(--text-3);font-weight:600;font-family:inherit;cursor:pointer;padding:0}
+.turmas-painel .tp-clr:hover{color:var(--text-1)}
+.turmas-painel .tp-ok{background:var(--navy);color:#fff;border:none;font-size:11.5px;font-weight:700;padding:7px 16px;border-radius:var(--r-sm);font-family:inherit;cursor:pointer}
+@media(max-width:560px){
+  .turmas-painel{max-width:none}
+  .turmas-painel .tp-row{grid-template-columns:1fr;gap:4px}
+}
+
+/* ===== Turmas — visão Kanban (2026-08-30, mockup aprovado pelo Alisson) =====
+   Reaproveita 100% o _htmlTurmaCard já usado pela visão Cards — o card
+   dentro do Kanban é intencionalmente idêntico, zero marcação nova. A
+   única peça nova é o cabeçalho de coluna, que usa as MESMAS variáveis
+   --*-l/--*-text já usadas pelos badges (.badge-* acima) — nenhuma cor
+   nova entra no sistema. Azul cobre a coluna "Pendências" porque é a
+   única cor do sistema ainda não usada por nenhum status real de Turma
+   (âmbar já é "Em andamento") — ver decisão em
+   01-Requisitos/2026-08-30-proposta-turmas-kanban-reorganizacao.md. */
+.turma-kanban-wrap{overflow-x:auto;padding-bottom:4px}
+.turma-kanban{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px;min-width:1180px}
+.turma-kanban-col{display:flex;flex-direction:column;min-width:0}
+.turma-kanban-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:var(--r-md) var(--r-md) 0 0;border-bottom:2px solid transparent}
+.turma-kanban-head .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.turma-kanban-head .name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turma-kanban-head .count{margin-left:auto;background:rgba(255,255,255,.6);border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;flex-shrink:0}
+.turma-kanban-body{background:var(--gray-50);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-md) var(--r-md);padding:8px 6px;display:flex;flex-direction:column;gap:8px;max-height:560px;overflow-y:auto}
+.turma-kanban-body .turma-card{padding:9px 10px}
+.turma-kanban-empty{font-size:11px;color:var(--text-3);text-align:center;padding:16px 4px}
+/* 2026-08-30 (correção de desempenho, build 153): botão que revela o resto da
+   coluna. Sem ele o quadro montava as 89 turmas de uma vez — 94 cards, 504
+   SVGs inline depois do dual-DOM, ~13x mais elementos do que a tela que abria
+   na build 148. Ver 06-Changelog/2026-08-30-correcao-desempenho-turmas.md. */
+.turma-mais{display:block;width:100%;background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-sm);padding:7px 8px;font-size:10.5px;font-weight:700;font-family:inherit;color:var(--text-3);cursor:pointer;transition:border-color .15s,color .15s}
+.turma-mais:hover{border-color:var(--navy);color:var(--navy)}
+.turma-lista-mais{margin-top:8px;padding:10px}
+@media(max-width:767px){.turma-kanban{grid-template-columns:repeat(5,minmax(200px,1fr))}.turma-kanban-body{max-height:420px}}
+.turmas-empty-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-3);gap:8px}
+@media(max-width:767px){
+  .turmas-grid{grid-template-columns:minmax(0,1fr)}
+  .turmas-tab{font-size:12px;padding:6px 10px;gap:5px}
+  .turmas-tabs{flex-wrap:wrap;row-gap:6px}
+  .turma-card-nova{min-height:72px}
+  .turmas-toolbar-mobile{flex-direction:column;align-items:stretch!important}
+  .turmas-toolbar-mobile .btn-amber{width:100%;justify-content:center}
+  .turma-ag-row{flex-wrap:wrap;align-items:flex-start!important;row-gap:10px}
+  .turma-ag-row .turma-ag-actions{flex-wrap:wrap;flex-basis:100%;padding-left:50px}
+  .turma-ag-row .turma-ag-actions .btn{flex:1;justify-content:center;min-width:80px}
+}
+/* ── Tela de Turma v2 (2026-08-29) — prefixo tv-, só tokens existentes ── */
+.tv-head{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.tv-head-top{display:flex;align-items:flex-start;gap:14px;padding:14px 16px 12px}
+.tv-ident{flex:1;min-width:0}
+.tv-title{font-size:18px;font-weight:700;color:var(--text-1);line-height:1.25;overflow-wrap:anywhere}
+.tv-proto{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;font-size:12.5px;color:var(--text-2)}
+.tv-acts{display:flex;gap:7px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.tv-facts{display:flex;border-top:1px solid var(--border);background:var(--gray-50);flex-wrap:wrap}
+.tv-fact{padding:9px 16px;border-right:1px solid var(--border);min-width:0;flex:1 1 150px}
+.tv-fact:last-child{border-right:none}
+.tv-fact .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);font-weight:700}
+.tv-fact .v{font-size:13.5px;color:var(--text-1);font-weight:600;margin-top:2px;line-height:1.35;overflow-wrap:anywhere}
+.tv-fact.wide{flex:2 1 260px}
+.tv-trilha{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.tv-step{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:11px 13px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);text-align:left;font-family:inherit;width:100%;cursor:pointer}
+.tv-step .ic{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;background:var(--gray-100);color:var(--text-3)}
+.tv-step .k{font-size:12.5px;font-weight:700;color:var(--text-1);line-height:1.25}
+.tv-step .v{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.tv-step.done{border-color:#A7E3C8}
+.tv-step.done .ic{background:var(--green);color:#fff}
+.tv-step.done .v{color:var(--green-text)}
+.tv-step.todo{border-color:var(--amber)}
+.tv-step.todo .ic{background:var(--amber);color:#3d2c05}
+.tv-step.todo .v{color:var(--amber-text);font-weight:600}
+.tv-step.now{border-color:var(--blue)}
+.tv-step.now .ic{background:var(--blue);color:#fff}
+.tv-step.now .v{color:var(--blue-text);font-weight:600}
+.tv-step.bad{border-color:var(--red)}
+.tv-step.bad .ic{background:var(--red);color:#fff}
+.tv-step.bad .v{color:var(--red-text);font-weight:600}
+.tv-step.off{opacity:.6;cursor:default}
+/* Agendamentos — LISTA de largura inteira (2026-08-29, patch22). Cards
+   lado a lado não escalavam: com 3+ encontros cada card ficava com ~270px
+   e os elementos de largura fixa (selo + Editar + Excluir) esmagavam o
+   texto, que quebrava letra a letra. Uma linha por encontro tem sempre a
+   mesma largura, independente da quantidade. Mesma linguagem visual da
+   lista de participantes logo abaixo. */
+.tv-aghead{display:grid;align-items:center;gap:12px;padding:7px 10px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md) var(--r-md) 0 0;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);font-weight:700}
+.tv-aglist{border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-md) var(--r-md);overflow:hidden}
+.tv-agrow{display:grid;align-items:center;gap:12px;padding:9px 10px;border-bottom:1px solid var(--border);background:var(--surface)}
+.tv-agrow:last-child{border-bottom:none}
+.tv-aghead,.tv-agrow{grid-template-columns:34px 150px minmax(0,1.1fr) minmax(0,1.2fr) 96px 156px}
+.tv-agn{width:30px;height:30px;border-radius:var(--r-md);background:var(--gray-100);color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.tv-agrow.ok .tv-agn{background:var(--green-l);color:var(--green-text)}
+.tv-agd{font-size:13.5px;font-weight:700;color:var(--text-1);white-space:nowrap}
+.tv-agh{font-size:12px;color:var(--text-2);white-space:nowrap;margin-top:1px}
+.tv-agsub-mid,.tv-agsub-mob{display:none;font-size:11.5px;color:var(--text-3);margin-top:2px;overflow-wrap:anywhere}
+.tv-agi,.tv-agl{font-size:12.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tv-agev{grid-column:1 / -1;padding-top:2px}
+.tv-agacts{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.tv-ag-btns{display:flex;gap:6px;align-items:center}
+.tv-ag-menu{display:none;width:34px;height:34px;border-radius:var(--r-sm);border:1px solid transparent;background:none;color:var(--text-2);cursor:pointer;align-items:center;justify-content:center;font-size:16px;font-family:inherit;flex-shrink:0}
+.tv-ag-add{background:var(--surface);border:1.5px dashed var(--border-2);border-radius:var(--r-md);padding:10px 14px;display:flex;align-items:center;justify-content:center;gap:7px;color:var(--text-2);font-size:13px;font-weight:600;width:100%;margin-top:10px;cursor:pointer;font-family:inherit}
+.tv-ag-add:hover{border-color:var(--amber);color:var(--amber-text)}
+/* Nível intermediário: janela estreita mas ainda desktop. Sem isso as duas
+   colunas de texto ficariam com ~50px cada e voltariam a quebrar. */
+@media(max-width:1100px){
+  .tv-aghead,.tv-agrow{grid-template-columns:34px minmax(120px,150px) minmax(0,1fr) 96px 156px}
+  .tv-agl,.tv-aghead .h-local{display:none}
+  .tv-agsub-mid{display:block}
+}
+.tv-tool{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.tv-busca{flex:1 1 220px;position:relative;min-width:0}
+.tv-busca input{width:100%;padding:8px 30px 8px 31px;border:1px solid var(--border-2);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1)}
+.tv-busca input:focus{outline:none;border-color:var(--navy)}
+.tv-busca .mg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;display:flex}
+.tv-busca .cl{position:absolute;right:3px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--text-3);cursor:pointer;font-size:15px;line-height:1;padding:6px 8px;font-family:inherit}
+.tv-cont{font-size:12.5px;color:var(--text-3);white-space:nowrap}
+.tv-cont b{color:var(--text-1)}
+.tv-phead{display:grid;align-items:center;gap:10px;padding:7px 10px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md) var(--r-md) 0 0;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);font-weight:700}
+.tv-plist{border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-md) var(--r-md);overflow:hidden}
+.tv-prow{display:grid;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface)}
+.tv-prow:last-child{border-bottom:none}
+.tv-prow.sel{background:#F4F8FF}
+.tv-phead,.tv-prow{grid-template-columns:26px 34px minmax(0,1fr) 132px 176px 100px 38px}
+.tv-pav{width:32px;height:32px;border-radius:50%;background:var(--green-l);color:var(--green-text);display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700}
+.tv-pn{font-size:13.5px;font-weight:600;color:var(--text-1);overflow-wrap:anywhere}
+.tv-psub{display:none;font-size:11.5px;color:var(--text-3);margin-top:1px;overflow-wrap:anywhere}
+.tv-pcpf,.tv-pemp{font-size:12.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tv-chkw{display:flex;align-items:center;justify-content:center;cursor:pointer}
+.tv-chk{width:16px;height:16px;flex-shrink:0;cursor:pointer;accent-color:var(--blue)}
+.tv-px{width:30px;height:30px;border-radius:var(--r-sm);border:1px solid transparent;background:none;color:var(--red);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.tv-px:hover{background:var(--red-l)}
+.tv-selbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:9px 13px;margin-bottom:10px;background:var(--blue-l);border:1px solid var(--blue-h);border-radius:var(--r-md)}
+.tv-selbar .t{font-size:13px;font-weight:700;color:var(--blue-h);flex:1 1 150px}
+@media(max-width:767px){
+  .tv-head-top{flex-wrap:wrap;padding:12px 13px 10px;gap:10px}
+  .tv-title{font-size:16px}
+  .tv-acts{width:100%;justify-content:stretch}
+  .tv-acts .btn{flex:1;justify-content:center;min-height:40px}
+  .tv-back-lbl{display:none}
+  .tv-facts{display:grid;grid-template-columns:1fr 1fr}
+  .tv-fact{padding:8px 13px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .tv-fact:nth-child(2n){border-right:none}
+  .tv-fact.wide{grid-column:1 / -1;border-right:none}
+  .tv-facts .tv-fact:last-child{border-bottom:none}
+  .tv-trilha{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .tv-step{padding:10px 11px}
+  .tv-aghead{display:none}
+  .tv-aglist{border-top:1px solid var(--border);border-radius:var(--r-md)}
+  .tv-agrow{grid-template-columns:34px minmax(0,1fr) 38px;gap:10px;padding:10px 8px}
+  .tv-agi,.tv-agl,.tv-agst{display:none}
+  .tv-agsub-mid{display:none}
+  .tv-agsub-mob{display:block}
+  .tv-ag-add{min-height:44px}
+  .tv-ag-btns{display:none}
+  .tv-ag-menu{display:flex}
+  .tv-phead{display:none}
+  .tv-plist{border-top:1px solid var(--border);border-radius:var(--r-md)}
+  /* 4 colunas, não 5: o selo de presença sai da grade e vira a primeira
+     informação do subtítulo. A 390px isso devolve ~70px ao nome, que
+     antes quebrava em duas linhas. */
+  .tv-prow{grid-template-columns:34px 38px minmax(0,1fr) 38px;padding:9px 8px;min-height:56px}
+  .tv-pcpf,.tv-pemp,.tv-ppres{display:none}
+  .tv-psub{display:block}
+  .tv-chk{width:20px;height:20px}
+  .tv-chkw{min-width:34px;min-height:44px}
+  .tv-px{width:38px;height:38px;font-size:15px}
+  .tv-pav{width:36px;height:36px;font-size:12px}
+  .tv-busca{flex:1 1 100%}
+  /* "Selecionar todos" + "Adicionar participante" somados passam de 390px,
+     então empilhavam em duas linhas de botão. Agora "Selecionar todos"
+     sobe para a linha da contagem e "Adicionar participante" fica sozinho,
+     inteiro, como ação principal. */
+  .tv-tool .btn{flex:1 1 100%;justify-content:center;min-height:40px}
+  /* Sem o nowrap a contagem encolhe e "Selecionar todos" cabe ao lado
+     dela, em vez de descer para uma linha só sua. */
+  .tv-cont{order:-1;flex:1 1 0;min-width:0;width:auto;white-space:normal}
+  .tv-tool #tvSelTodos{order:-1;flex:0 0 auto;min-height:34px;padding:5px 10px}
+  .tv-plist.com-barra{padding-bottom:104px}
+  .tv-selbar{position:fixed;left:10px;right:10px;bottom:calc(var(--nav-h) + 10px);z-index:60;box-shadow:var(--shadow-md);margin:0}
+  .tv-selbar .t{flex:1 1 100%;font-size:12.5px}
+  .tv-selbar .btn{flex:1 1 0;justify-content:center;min-height:40px}
+}
+/* ── Editor de texto rico (Quill) — alinhado ao Navy Clean v2 ── */
+.ql-editor-wrap{border:1.5px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.ql-toolbar.ql-snow{border:none;border-bottom:1px solid var(--border);background:var(--gray-50);font-family:inherit}
+.ql-container.ql-snow{border:none;font-family:inherit;font-size:14px}
+.ql-editor{min-height:120px;max-height:320px;overflow-y:auto;color:var(--text-1)}
+.ql-editor.ql-blank::before{color:var(--text-3);font-style:normal}
+.ql-snow .ql-picker{color:var(--text-2)}
+.ql-snow .ql-stroke{stroke:var(--text-2)}
+.ql-snow .ql-fill{fill:var(--text-2)}
+.ql-toolbar-undo-redo{display:flex;gap:2px;align-items:center;border-right:1px solid var(--border);padding-right:6px;margin-right:6px}
+.ql-toolbar-undo-redo button{background:none;border:none;padding:5px 7px;border-radius:6px;cursor:pointer;color:var(--text-2);font-size:13px;line-height:1}
+.ql-toolbar-undo-redo button:hover{background:var(--border)}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PARTE 2 — ADITIVO v3  (nada acima é alterado)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* Tipografia — 7 degraus, nenhum valor fracionário */
+  --fs-1:11px;  /* rótulo maiúsculo, contador          */
+  --fs-2:12px;  /* metadado, legenda                   */
+  --fs-3:13px;  /* corpo de lista — o corpo real do app*/
+  --fs-4:14px;  /* corpo, formulário, botão            */
+  --fs-5:16px;  /* título de card, de modal, de seção  */
+  --fs-6:20px;  /* KPI, título de página               */
+  --fs-7:26px;  /* número de destaque (uso raro)       */
+  --lh-tight:1.25; --lh-base:1.5;
+  /* Espaçamento — grade de 4 */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  /* Atenção deixa de ser clone do âmbar de marca (hoje --warn == --amber-h) */
+  --atencao:#B45309; --atencao-l:#FEF0E7; --atencao-text:#7C2D12;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+/* Ícone — família única, traço 1.75, três tamanhos. Nenhum emoji em UI. */
+.ico{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;vertical-align:-.18em}
+.ico svg{width:100%;height:100%;display:block}
+.ico{width:18px;height:18px}
+.ico.sm{width:16px;height:16px}
+.ico.lg{width:22px;height:22px}
+
+/* ── Cabeçalho de tela: título + contexto de módulo ───────────────────── */
+.ds-topo{display:flex;align-items:flex-start;gap:var(--sp-4);margin-bottom:var(--sp-4);flex-wrap:wrap}
+.ds-topo-txt{flex:1;min-width:220px}
+.ds-eyebrow{display:flex;align-items:center;gap:6px;font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px}
+.ds-titulo{font-size:var(--fs-6);font-weight:700;color:var(--text-1);line-height:var(--lh-tight);letter-spacing:-.2px}
+.ds-sub{font-size:var(--fs-3);color:var(--text-3);margin-top:3px}
+.ds-acoes{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}
+
+/* ── Botões (mesmas cores do app; só a escala é regularizada) ─────────── */
+.ds-btn{display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:var(--fs-3);font-weight:600;padding:8px 14px;border-radius:var(--r-md);cursor:pointer;border:1px solid transparent;line-height:1;white-space:nowrap}
+.ds-btn.pri{background:var(--amber);color:var(--navy);font-weight:700}
+.ds-btn.pri:hover{background:var(--amber-h)}
+.ds-btn.sec{background:var(--surface);color:var(--text-2);border-color:var(--border-2)}
+.ds-btn.sec:hover{border-color:var(--gray-400);color:var(--text-1)}
+.ds-btn.ghost{background:none;color:var(--text-2);border-color:transparent}
+.ds-btn.ghost:hover{background:var(--gray-100)}
+.ds-btn.sm{font-size:var(--fs-2);padding:6px 10px}
+.ds-icobtn{width:32px;height:32px;border-radius:var(--r-md);border:1px solid var(--border-2);background:var(--surface);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
+.ds-icobtn:hover{background:var(--gray-50);color:var(--text-1)}
+.ds-icobtn.pri{background:var(--amber);border-color:var(--amber);color:var(--navy)}
+
+/* ── Indicadores: sem “borda colorida em cima + sombra” em tudo ───────── */
+.ds-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-2);margin-bottom:var(--sp-4)}
+.ds-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-3)}
+.ds-kpi .top{display:flex;align-items:center;gap:6px;color:var(--text-3);margin-bottom:var(--sp-2)}
+.ds-kpi .rot{font-size:var(--fs-1);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.ds-kpi .val{font-size:var(--fs-6);font-weight:700;color:var(--navy);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+.ds-kpi .nota{font-size:var(--fs-2);color:var(--text-3);margin-top:5px;background:none;border:none;padding:0}
+.ds-kpi .nota.up{color:var(--green-text)}
+.ds-kpi .nota.at{color:var(--atencao-text)}
+.ds-kpi.destaque{border-left:2px solid var(--amber)}
+@media(max-width:900px){.ds-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ── Cartão de superfície: um só, com variação de densidade ───────────── */
+.ds-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--sp-4)}
+.ds-card.flat{padding:0;overflow:hidden}
+.ds-card-head{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border)}
+.ds-card-titulo{font-size:var(--fs-3);font-weight:700;color:var(--text-1)}
+.ds-card-head .ds-btn{margin-left:auto}
+.ds-sec{display:flex;align-items:center;gap:var(--sp-2);margin:var(--sp-5) 0 var(--sp-3)}
+.ds-sec .rot{font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.ds-sec .linha{flex:1;height:1px;background:var(--border)}
+.ds-sec .link{font-size:var(--fs-2);font-weight:600;color:var(--amber-h);cursor:pointer}
+
+/* ── Avisos: cor de atenção própria, não o âmbar de marca ─────────────── */
+.ds-aviso{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);border:1px solid;margin-bottom:var(--sp-2);font-size:var(--fs-3);line-height:1.5}
+.ds-aviso .txt{flex:1;min-width:0}
+.ds-aviso .txt b{display:block;font-weight:700}
+.ds-aviso.atencao{background:var(--atencao-l);border-color:rgba(180,83,9,.28);color:var(--atencao-text)}
+.ds-aviso.atencao .ico{color:var(--atencao)}
+.ds-aviso.erro{background:var(--red-l);border-color:rgba(220,38,38,.28);color:var(--red-text)}
+.ds-aviso.info{background:var(--blue-l);border-color:rgba(29,78,216,.22);color:var(--blue-text)}
+
+/* ── Selo de estado: paleta fechada, texto nunca abaixo de 11px ───────── */
+.ds-selo{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-1);font-weight:700;padding:3px 9px;border-radius:999px;line-height:1.35;white-space:nowrap}
+.ds-selo.neutro{background:var(--gray-100);color:var(--text-2)}
+.ds-selo.ok{background:var(--green-l);color:var(--green-text)}
+.ds-selo.atencao{background:var(--atencao-l);color:var(--atencao-text)}
+.ds-selo.erro{background:var(--red-l);color:var(--red-text)}
+.ds-selo.info{background:var(--blue-l);color:var(--blue-text)}
+.ds-selo.marca{background:var(--amber-l);color:var(--amber-text)}
+.ds-selo i.ponto{width:6px;height:6px;border-radius:50%;background:currentColor;display:block;flex-shrink:0;opacity:.75}
+
+/* ── Barra de filtros: uma só no produto inteiro ──────────────────────── */
+.ds-filtros{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-3)}
+.ds-busca{position:relative;flex:1;min-width:210px;max-width:360px}
+.ds-busca .ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none}
+.ds-busca input{width:100%;padding:9px 12px 9px 36px;border:1px solid var(--border-2);border-radius:var(--r-md);font-family:inherit;font-size:var(--fs-3);color:var(--text-1);background:var(--surface);outline:none}
+.ds-busca input:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(30,42,74,.08)}
+.ds-select{appearance:none;border:1px solid var(--border-2);border-radius:var(--r-md);background:var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235E6780' stroke-width='2' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat right 10px center;padding:9px 32px 9px 12px;font-family:inherit;font-size:var(--fs-3);font-weight:600;color:var(--text-2);cursor:pointer;outline:none}
+.ds-select:focus{border-color:var(--navy)}
+.ds-filtros .direita{margin-left:auto;display:flex;gap:var(--sp-2);align-items:center}
+
+/* ── TABELA DE DADOS — o componente que hoje não existe no produto ────── */
+.ds-tabela-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface)}
+.ds-tabela{width:100%;border-collapse:collapse;font-size:var(--fs-3);min-width:760px}
+.ds-tabela thead th{position:sticky;top:0;background:var(--gray-50);text-align:left;font-size:var(--fs-1);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+.ds-tabela thead th:hover{color:var(--text-1)}
+.ds-tabela thead th .ico{opacity:.4;margin-left:3px}
+.ds-tabela thead th.ord{color:var(--navy)}
+.ds-tabela thead th.ord .ico{opacity:1;color:var(--navy)}
+.ds-tabela thead th.chk,.ds-tabela tbody td.chk{width:38px;padding-left:14px;padding-right:0;cursor:default}
+.ds-tabela tbody td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle}
+.ds-tabela tbody tr:last-child td{border-bottom:none}
+.ds-tabela tbody tr:hover{background:var(--gray-50)}
+.ds-tabela tbody tr.sel{background:rgba(245,158,11,.07)}
+.ds-tabela .prim{font-weight:600;color:var(--text-1)}
+.ds-tabela .sub{font-size:var(--fs-2);color:var(--text-3);margin-top:2px}
+.ds-tabela .dir{text-align:right;font-variant-numeric:tabular-nums}
+.ds-chk{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border-2);display:inline-block;vertical-align:middle;cursor:pointer;background:var(--surface)}
+.ds-chk.on{background:var(--navy);border-color:var(--navy);position:relative}
+.ds-chk.on::after{content:"";position:absolute;left:5px;top:1.5px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.ds-tabela-rodape{display:flex;align-items:center;gap:var(--sp-3);padding:10px 14px;border-top:1px solid var(--border);font-size:var(--fs-2);color:var(--text-3);flex-wrap:wrap}
+.ds-tabela-rodape .pag{margin-left:auto;display:flex;gap:4px}
+.ds-tabela-rodape .pag span{min-width:26px;height:26px;border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-2);font-weight:600;color:var(--text-2);cursor:pointer;border:1px solid transparent}
+.ds-tabela-rodape .pag span.on{background:var(--navy);color:#fff}
+.ds-barra-sel{display:flex;align-items:center;gap:var(--sp-3);padding:9px 14px;background:var(--navy);color:#fff;font-size:var(--fs-3);font-weight:600}
+.ds-barra-sel .ds-btn{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.24)}
+
+/* ── Linha de lista: uma anatomia para o produto inteiro ──────────────── */
+.ds-linha{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border);cursor:pointer}
+.ds-linha:last-child{border-bottom:none}
+.ds-linha:hover{background:var(--gray-50)}
+.ds-av{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-2);font-weight:700;flex-shrink:0;background:var(--gray-100);color:var(--text-2);letter-spacing:-.2px}
+.ds-linha-main{flex:1;min-width:0}
+.ds-linha-tit{font-size:var(--fs-3);font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds-linha-sub{font-size:var(--fs-2);color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds-linha-fim{display:flex;align-items:center;gap:var(--sp-2);flex-shrink:0}
+
+
+/* ── Menu por blocos de módulo ────────────────────────────────────────────
+   Só aparece quando a organização tem mais de um módulo. Com um módulo só,
+   o menu continua sendo o de hoje. */
+.mod-head{display:flex;align-items:center;gap:9px;padding:9px 12px;margin:10px 10px 3px;border-radius:var(--r-md);cursor:pointer;color:rgba(255,255,255,.72);font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.mod-head:hover{background:rgba(255,255,255,.06)}
+.mod-head .ico{width:16px;height:16px;color:rgba(255,255,255,.5)}
+.mod-head .seta{margin-left:auto;color:rgba(255,255,255,.4);display:inline-flex}
+.mod-head.aberto{color:#fff}
+.mod-head.aberto .ico{color:var(--amber)}
+.mod-head .cnt{margin-left:auto;background:var(--amber);color:var(--navy);font-size:var(--fs-1);font-weight:700;border-radius:999px;padding:0 7px;font-variant-numeric:tabular-nums}
+.mod-itens{padding:0 10px}
+/* Contador de item: âmbar, não vermelho. Vermelho é erro, não pendência. */
+.mod-cnt{margin-left:auto;background:var(--amber);color:var(--navy);font-size:var(--fs-1);font-weight:700;padding:0 7px;border-radius:999px;line-height:1.6;font-variant-numeric:tabular-nums}
+
+/* ── Celular ─────────────────────────────────────────────────────────────── */
+@media(max-width:767px){
+  .ds-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* O cabeçalho do app já mostra módulo e tela no celular — o título grande
+     da página sairia repetido. O voltar e o subtítulo continuam. */
+  .ds-topo-txt .ds-titulo{display:none}
+  .ds-topo{flex-direction:column;align-items:stretch;gap:var(--sp-3)}
+  .ds-acoes{flex-wrap:wrap}
+  .ds-acoes .ds-btn{flex:1;justify-content:center}
+  .ds-busca{max-width:none;min-width:0;flex-basis:100%}
+  .ds-filtros .direita{margin-left:0;flex-basis:100%}
+  .ds-tabela{min-width:0}
+}
+/* Padrão de tela que só existe no computador (item de menu com mobile:false) */
+.ds-so-pc{padding:36px 20px;text-align:center}
+.ds-so-pc .ic{width:52px;height:52px;border-radius:14px;background:var(--gray-100);color:var(--text-3);display:flex;align-items:center;justify-content:center;margin:0 auto var(--sp-4)}
+.ds-so-pc h4{font-size:var(--fs-5);font-weight:700;color:var(--text-1);margin-bottom:var(--sp-2)}
+.ds-so-pc p{font-size:var(--fs-3);color:var(--text-3);line-height:1.65;max-width:44ch;margin:0 auto var(--sp-4)}
+/* Carregando — no lugar de tela branca */
+.ds-esqueleto{height:14px;border-radius:7px;background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-50) 37%,var(--gray-100) 63%);background-size:400% 100%;animation:ds-brilho 1.3s ease infinite;margin-bottom:var(--sp-2)}
+@keyframes ds-brilho{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media(prefers-reduced-motion:reduce){.ds-esqueleto{animation:none}}

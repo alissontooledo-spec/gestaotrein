@@ -20,7 +20,7 @@
 // version.json e o `APP_BUILD` dentro do app.html — os três com o mesmo
 // número. É o único passo manual do processo.
 
-const BUILD    = '160';
+const BUILD    = '161';
 const CACHE    = 'grid-' + BUILD;
 const FALLBACK = './app.html';
 
@@ -46,7 +46,30 @@ const ASSETS = [
 //
 // `cache: 'reload'` no install é o que fura esses dez minutos.
 const CODIGO = [
-  // './nucleo/dados.js', './nucleo/ui.js', … (Entrega 2)
+  './modulos/crm/acoes.js',
+  './modulos/crm/atividades.js',
+  './modulos/crm/contatos.js',
+  './modulos/crm/conversas.js',
+  './modulos/crm/crm.css',
+  './modulos/crm/empresa.js',
+  './modulos/crm/exemplo.js',
+  './modulos/crm/funil.js',
+  './modulos/crm/funis.js',
+  './modulos/crm/lead.js',
+  './modulos/crm/modulo.js',
+  './modulos/crm/numeros.js',
+  './modulos/crm/painel.js',
+  './modulos/treinamentos/modulo.js',
+  './nucleo/config.js',
+  './nucleo/dados.js',
+  './nucleo/design-system-aditivo.css',
+  './nucleo/design-system.css',
+  './nucleo/estagios.js',
+  './nucleo/icones.js',
+  './nucleo/navegacao.js',
+  './nucleo/plataforma.js',
+  './nucleo/sessao.js',
+  './nucleo/ui.js',
 ];
 
 self.addEventListener('install', (event) => {
