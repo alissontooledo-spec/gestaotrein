@@ -20,7 +20,7 @@
 // version.json e o `APP_BUILD` dentro do app.html — os três com o mesmo
 // número. É o único passo manual do processo.
 
-const BUILD    = '159';
+const BUILD    = '160';
 const CACHE    = 'grid-' + BUILD;
 const FALLBACK = './app.html';
 
@@ -33,12 +33,33 @@ const ASSETS = [
   './icons/icon-512-maskable.png',
 ];
 
+// ── PRECACHE DE CÓDIGO — preencher na Entrega 2 ────────────────────────────
+// Hoje produção é um HTML único e esta lista fica vazia. Quando a Entrega 2
+// trouxer `nucleo/` e `modulos/`, cada arquivo precisa entrar aqui.
+//
+// Por que não basta o network-first do fetch: ele só vale depois que este
+// service worker assume a página. No primeiro carregamento após publicar, quem
+// responde é o cache HTTP do navegador, e o GitHub Pages manda
+// `Cache-Control: max-age=600` — por dez minutos o módulo ANTIGO é servido sem
+// consultar o servidor. Aconteceu duas vezes em homologação (h26→h27 e
+// h31→h32), e nas duas o número da versão na tela estava certo.
+//
+// `cache: 'reload'` no install é o que fura esses dez minutos.
+const CODIGO = [
+  // './nucleo/dados.js', './nucleo/ui.js', … (Entrega 2)
+];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
       // addAll falha inteiro se um único arquivo faltar; aqui cada um é
       // independente, para um ícone ausente não impedir a instalação.
-      .then((cache) => Promise.all(ASSETS.map((u) => cache.add(u).catch(() => null))))
+      .then((cache) => Promise.all([
+        ...ASSETS.map((u) => cache.add(u).catch(() => null)),
+        ...CODIGO.map((u) => fetch(u, { cache: 'reload' })
+          .then((res) => res && res.ok ? cache.put(u, res) : null)
+          .catch(() => null))
+      ]))
       .then(() => self.skipWaiting())
   );
 });
@@ -86,6 +107,36 @@ self.addEventListener('fetch', (event) => {
 
   // Demais arquivos estáticos: cache primeiro. Seguro porque o nome do cache
   // muda a cada publicação — não existe cópia sobrevivendo entre versões.
+  // ── 2026-09-05 · correção obrigatória antes da Entrega 2 ──────────────────
+  // A estratégia abaixo é cache-first. Hoje isso é quase inofensivo em
+  // produção, porque o app é um HTML único e o HTML já é network-first.
+  // A Entrega 2 muda esse cenário: ela traz `nucleo/` e `modulos/` — módulos
+  // ES importados SEM `?v=` (regra do projeto, correta). Com cache-first, a
+  // URL de `nucleo/dados.js` é a mesma em toda versão, e a cópia antiga fica
+  // no cache indefinidamente: o cliente vê o número da versão nova na tela e
+  // executa o código velho. Aconteceu em homologação entre o h26 e o h27, e
+  // levou um ciclo inteiro para ser diagnosticado.
+  //
+  // `cache: 'reload'` é necessário junto: o GitHub Pages responde com
+  // `Cache-Control: max-age=600`, então por dez minutos nem o service worker
+  // pergunta ao servidor. São dois caches em série.
+  //
+  // Imagem e fonte seguem cache-first — não mudam sem mudar de nome.
+  const ehCodigo = /\.(js|css)$/i.test(url.pathname);
+
+  if (ehCodigo) {
+    event.respondWith(
+      fetch(req, { cache: 'reload' }).then((res) => {
+        if (res && res.ok && res.type === 'basic') {
+          const copia = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+        }
+        return res;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(req).then((cached) => cached || fetch(req).then((res) => {
       if (res && res.ok && res.type === 'basic') {
