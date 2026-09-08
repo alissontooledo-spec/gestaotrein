@@ -5215,8 +5215,48 @@ async function alternarModuloOrg(modulo, ligar) {
       .update({ ativo: false }).eq('org_id', est.orgId).eq('modulo', modulo);
   }
 
+  /* Ligar o CRM sem funil deixa o cliente com Painel comercial e Funil de
+     vendas abrindo em erro — e sem saida, porque a unica forma de criar o
+     primeiro funil era a tela de configuracao, que so abre no computador e
+     cujo botao de erro nao respondia. Aconteceu com o primeiro cliente real,
+     em 08/09/2026. O modulo passa a nascer utilizavel.
+     Ver 05-Decisoes/2026-09-08-ligar-crm-cria-funil-padrao.md */
+  if (ligar && modulo === 'crm') await _garantirFunilPadrao(est.orgId);
+
   showToast(`${nome} ${ligar ? 'liberado' : 'desligado'} para esta organização.`, 'success');
   _recarregarCardModulosOrg();
+}
+
+/* As mesmas cinco etapas que `nucleo/dados.js` cria para um funil novo —
+   mesmos nomes, slugs, tipos, cores e ordem. Se a organizacao ja tiver funil,
+   nao faz nada. Falha aqui NAO desfaz a liberacao do modulo: avisa e segue,
+   porque modulo ligado sem funil e recuperavel, e modulo meio-ligado nao. */
+async function _garantirFunilPadrao(orgId) {
+  try {
+    const { data: existentes, error: e0 } = await sb.from('crm_funis')
+      .select('id').eq('org_id', orgId).limit(1);
+    if (e0) throw e0;
+    if (existentes && existentes.length) return;
+
+    const { data: funil, error: e1 } = await sb.from('crm_funis')
+      .insert({ org_id: orgId, nome: 'Funil de vendas', padrao: true, ativo: true })
+      .select('id').single();
+    if (e1) throw e1;
+
+    const etapas = [
+      { nome:'Novo',       slug:'novo',       tipo:'aberto',  cor:'#1E2A4A' },
+      { nome:'Em contato', slug:'em-contato', tipo:'aberto',  cor:'#8B93A8' },
+      { nome:'Proposta',   slug:'proposta',   tipo:'aberto',  cor:'#B45309' },
+      { nome:'Ganho',      slug:'ganho',      tipo:'ganho',   cor:'#059669' },
+      { nome:'Perdido',    slug:'perdido',    tipo:'perdido', cor:'#8B93A8' }
+    ].map((e, i) => ({ ...e, org_id: orgId, funil_id: funil.id, ordem: i + 1 }));
+
+    const { error: e2 } = await sb.from('crm_funil_etapas').insert(etapas);
+    if (e2) throw e2;
+    showToast('Funil padrão criado — o CRM já abre pronto para uso.', 'success');
+  } catch (e) {
+    showToast('Módulo liberado, mas não consegui criar o funil padrão: ' + (e.message || e), 'error');
+  }
 }
 
 async function alternarFuncionalidadeOrg(modulo, funcionalidade, ligar) {
@@ -27556,7 +27596,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '162';
+  var APP_BUILD = '163';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
