@@ -25,7 +25,12 @@ export default {
       perfis:['administrador','comercial'], mobile:true,
       rota:() => import('./painel.js') },
 
-    { id:'crm-conversas',   rotulo:'Conversas', icone:'chat',
+    /* Conversas e WhatsApp dependem de gateway em VPS propria, que ainda nao
+       existe. Ate la as telas rodam com dados de demonstracao — por isso so
+       aparecem para quem tiver a funcionalidade `whatsapp` contratada
+       (organizacoes_modulo_funcionalidades). Ausencia de linha = nao aparece.
+       Ver 05-Decisoes/2026-09-08-conversas-mostram-dados-inventados-sem-aviso.md */
+    { id:'crm-conversas',   rotulo:'Conversas', icone:'chat', funcionalidade:'whatsapp',
       perfis:['administrador','comercial'], mobile:true,
       rota:() => import('./conversas.js') },
 
@@ -41,7 +46,7 @@ export default {
       perfis:['administrador','comercial'], mobile:true,
       rota:() => import('./atividades.js') },
 
-    { id:'crm-numeros',     rotulo:'WhatsApp', icone:'phone',
+    { id:'crm-numeros',     rotulo:'WhatsApp', icone:'phone', funcionalidade:'whatsapp',
       perfis:['administrador'], mobile:false,
       textoDesktop:'Configurar equipe, horário de atendimento e mensagem de ausência é trabalho de mesa. No computador esta tela abre direto.',
       alternativa:{ rotulo:'Ver status dos números', acao:'ir:crm-numeros-status' },
@@ -66,6 +71,7 @@ export default {
 
   /* Contadores mostrados no menu e no bloco recolhido do módulo. */
   async contadores(dados) {
+    if (!dados.temFuncionalidade('whatsapp')) return {};
     try {
       const conversas = await dados.listar('crm_conversas');
       const naoLidas = conversas.filter(c => c.nao_lidas > 0).length;

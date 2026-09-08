@@ -13,6 +13,11 @@ export async function render() {
     dados.listar('crm_caixas')
   ]);
 
+  /* Superficie de WhatsApp: so existe para quem tem a funcionalidade
+     contratada. Sem ela, `conversas` e `caixas` vem vazios (dados.js) e estes
+     tres pontos saem da tela em vez de mostrar zero sem sentido. */
+  const temWhats = dados.temFuncionalidade('whatsapp');
+
   const abertos     = leads.filter(l => l.estagio !== 'ganho');
   const ganhos      = leads.filter(l => l.estagio === 'ganho');
   const negociacao  = leads.filter(l => ['proposta','negociacao'].includes(l.estagio));
@@ -59,16 +64,18 @@ export async function render() {
   ${ui.topo({
     modulo:'CRM', moduloIcone:'funnel',
     titulo:'Painel comercial',
-    sub: `${dataLonga()} · ${aguardando.length} conversas aguardando e ${parados.length} propostas paradas`,
+    sub: temWhats
+      ? `${dataLonga()} · ${aguardando.length} conversas aguardando e ${parados.length} propostas paradas`
+      : `${dataLonga()} · ${parados.length} ${parados.length === 1 ? 'proposta parada' : 'propostas paradas'}`,
     acoes:[
-      { rotulo:'Nova conversa', icone:'chat',  tipo:'sec', acao:'crm:nova-conversa' },
+      ...(temWhats ? [{ rotulo:'Nova conversa', icone:'chat', tipo:'sec', acao:'crm:nova-conversa' }] : []),
       { rotulo:'Novo lead',     icone:'plus',  tipo:'pri', acao:'crm:novo-lead' }
     ]
   })}
 
   ${ui.kpis([
     { rotulo:'Leads abertos',      icone:'funnel', valor: abertos.length,  nota:`Em ${new Set(abertos.map(l=>l.estagio)).size} estágios`, acao:'ir:crm-funil' },
-    { rotulo:'Aguardando resposta',icone:'chat',   valor: aguardando.length, nota:'Precisa de resposta hoje', notaTipo:'at', destaque:true, acao:'ir:crm-conversas' },
+    ...(temWhats ? [{ rotulo:'Aguardando resposta',icone:'chat',   valor: aguardando.length, nota:'Precisa de resposta hoje', notaTipo:'at', destaque:true, acao:'ir:crm-conversas' }] : []),
     { rotulo:'Em negociação',      icone:'doc',    valor: ui.fmt.moeda(soma(negociacao)), nota:`${negociacao.length} propostas` },
     { rotulo:'Ganhos no mês',      icone:'check',  valor: ganhos.length, nota: ui.fmt.moeda(soma(ganhos)), notaTipo:'up' }
   ])}
@@ -181,6 +188,7 @@ export async function render() {
       { plano:true })}
   </div>
 
+  ${!temWhats ? '' : `
   ${ui.secao('Conversas recentes', { link:{ rotulo:'Abrir caixa de entrada', acao:'ir:crm-conversas' } })}
   ${ui.lista(conversas.slice(0,3).map(c => ({
       titulo: `${c.empresa || c.nome}${c.empresa && c.nome !== c.empresa ? ' · ' + c.nome : ''}`,
@@ -189,7 +197,7 @@ export async function render() {
       acao: `crm:conversa:${c.id}`,
       fim: `${etiquetaCaixa(caixas, c.caixa_id)} ${ui.selo(rotuloEstado(c.estado), tipoEstado(c.estado))}
             <span class="num" style="font-size:var(--fs-2);color:var(--text-3);width:44px;text-align:right">${c.hora}</span>`
-  })))}
+  })))}`}
   ${dados.ehExemplo() ? avisoDemo() : ''}`;
 }
 
