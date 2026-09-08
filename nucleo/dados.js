@@ -121,12 +121,44 @@ const _mapContato = (c) => ({
   ultimo: c.criado_em || null
 });
 
-/* WhatsApp ainda nao existe no banco — estas duas colecoes continuam vindo
-   do arquivo de demonstracao mesmo em modo banco, e as telas ja avisam isso. */
+/* WhatsApp ainda nao existe no banco. Em modo EXEMPLO (demo.html) estas
+   colecoes vem do arquivo de demonstracao; em modo BANCO devolvem VAZIO.
+   ── 08/09/2026 ────────────────────────────────────────────────────────────
+   Antes devolviam o arquivo de demonstracao tambem em modo banco, e o aviso
+   "Modo demonstracao" so aparece quando ehExemplo() e verdadeiro — falso em
+   producao. Resultado: o Painel comercial mostraria conversa inventada ao lado
+   de proposta real, na mesma frase, sem aviso. Vazio e a falha pelo lado
+   seguro: a tela mostra zero em vez de ficcao.
+   Ver 05-Decisoes/2026-09-08-conversas-mostram-dados-inventados-sem-aviso.md */
 const SO_EXEMPLO = ['crm_conversas', 'crm_caixas', 'crm_mensagens'];
 
 export const origem   = () => _origem;
 export const ehExemplo = () => _origem === 'exemplo';
+
+/* ── Funcionalidades contratadas dentro de um modulo (PASSO-30) ────────────
+   AUSENCIA DE LINHA = DESLIGADO. Em modo exemplo tudo fica ligado, para a
+   demonstracao mostrar o produto inteiro. Carregado uma vez, na entrada dos
+   modulos (plataforma.carregarModulos), pelo mesmo motivo de carregarEtapas:
+   o menu e desenhado sem poder esperar consulta. */
+let _funcionalidades = new Set();
+
+export const temFuncionalidade = (f) => _origem !== 'banco' || _funcionalidades.has(f);
+
+export async function carregarFuncionalidades() {
+  if (_origem !== 'banco' || !_sb) return _funcionalidades;
+  try {
+    const { data, error } = await _sb.from('organizacoes_modulo_funcionalidades')
+      .select('modulo, funcionalidade').eq('org_id', sessao.orgId()).eq('ativo', true);
+    if (error) throw error;
+    _funcionalidades = new Set((data || []).map(f => f.funcionalidade));
+  } catch (e) {
+    /* Tabela ausente ou consulta barrada: segue sem funcionalidade nenhuma —
+       que e o lado seguro (a superficie extra simplesmente nao aparece). */
+    console.warn('[GRID] funcionalidades: seguindo sem nenhuma —', e?.message || e);
+    _funcionalidades = new Set();
+  }
+  return _funcionalidades;
+}
 
 /* Leitura padrão de uma coleção do módulo. Sempre filtrada por organização.
    Em modo exemplo devolve o conjunto de demonstração, com o mesmo formato. */
@@ -214,6 +246,7 @@ export async function listar(colecao, { filtro = {}, ordem = null } = {}) {
       });
     }
   }
+  if (_origem === 'banco' && SO_EXEMPLO.includes(colecao)) return [];
   if (_origem === 'exemplo' || SO_EXEMPLO.includes(colecao)) {
     let r = [...(_exemplo[colecao] || [])];
     for (const [k, v] of Object.entries(filtro)) if (v != null && v !== '') r = r.filter(x => x[k] === v);
@@ -243,6 +276,7 @@ export async function obter(colecao, id) {
     if (error) throw error;
     return data ? _mapContato(data) : null;
   }
+  if (_origem === 'banco' && SO_EXEMPLO.includes(colecao)) return null;
   if (_origem === 'exemplo' || SO_EXEMPLO.includes(colecao)) return (_exemplo[colecao] || []).find(x => x.id === id) || null;
   const { data, error } = await _sb.from(colecao).select('*')
     .eq('org_id', sessao.orgId()).eq('id', id).maybeSingle();

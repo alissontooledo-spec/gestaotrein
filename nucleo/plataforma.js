@@ -22,6 +22,10 @@ export const GRID = {
   /* Carrega os módulos contratados. Tolerante por desenho: se a consulta
      falhar, nenhum módulo é registrado e o app segue exatamente como hoje. */
   async carregarModulos(ids, build = 'dev') {
+    /* Antes dos modulos: o que a organizacao tem contratado DENTRO deles.
+       Sem isto, itensDeMenu nao teria como esconder uma tela cuja
+       funcionalidade nao foi contratada. Nunca lanca. */
+    await dados.carregarFuncionalidades();
     const carregados = [];
     for (const id of ids) {
       try {
@@ -67,6 +71,9 @@ export const GRID = {
       for (const item of (mod.itens || [])) {
         if (item.oculto) continue;                        // rotas de detalhe
         if (item.perfis && !item.perfis.includes(perfil)) continue;
+        /* Tela que depende de funcionalidade contratada (ex.: WhatsApp dentro
+           do CRM). Ausencia de linha no banco = desligado. */
+        if (item.funcionalidade && !dados.temFuncionalidade(item.funcionalidade)) continue;
         fora.push({ id: item.id, rotulo: item.rotulo, icone: item.icone, modulo: mod.id });
       }
     }

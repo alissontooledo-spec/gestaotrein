@@ -14,6 +14,7 @@
 import { icone } from './icones.js';
 import { esc }   from './ui.js';
 import * as sessao from './sessao.js';
+import * as dados  from './dados.js';
 
 const _modulos = new Map();
 let _rotaAtual = null;
@@ -193,6 +194,14 @@ export async function abrir(id, params = {}) {
   const r = rota(id);
   if (!r) return false;
   const { modulo: mod, item } = r;
+  /* Trava de funcionalidade, tambem aqui e nao so no menu (08/09/2026).
+     Esconder do menu nao e travar: o endereco digitado direto chegaria nesta
+     funcao. Devolver false faz o roteador do app tratar como rota que nao
+     existe — restritivo, que e a licao do PASSO-29. */
+  if (item.funcionalidade && !dados.temFuncionalidade(item.funcionalidade)) {
+    console.info(`[GRID] rota "${id}" exige a funcionalidade "${item.funcionalidade}", que nao esta contratada.`);
+    return false;
+  }
   _rotaAtual = id; _moduloAberto = mod.id;
 
   const { soComputador, carregando } = await import('./ui.js');
