@@ -3981,13 +3981,18 @@ function _ligarAcoesDeModulo() {
 const MENU_MODULO_PREVIO = {
   crm: [
     { id:'crm',            rotulo:'Painel comercial', icone:'trend',    perfis:['administrador','comercial'] },
-    { id:'crm-conversas',  rotulo:'Conversas',        icone:'chat',     perfis:['administrador','comercial'] },
+    /* Conversas e WhatsApp NAO entram no preview: dependem da funcionalidade
+       `whatsapp`, que so o manifesto do modulo sabe consultar (08/09/2026).
+       Preview e um palpite para o primeiro quadro — palpite que mostra a mais
+       deixa item morto no menu, entao o palpite erra para menos. */
     { id:'crm-funil',      rotulo:'Funil de vendas',  icone:'funnel',   perfis:['administrador','comercial'] },
     { id:'crm-contatos',   rotulo:'Contatos',         icone:'user',     perfis:['administrador','comercial'] },
     { id:'crm-atividades', rotulo:'Atividades',       icone:'activity', perfis:['administrador','comercial'] },
-    { id:'crm-numeros',    rotulo:'WhatsApp',         icone:'phone',    perfis:['administrador'] }
   ]
 };
+
+/* Ids que a ultima passada injetou no menu — ver a correcao de 08/09 abaixo. */
+let _idsDeModuloNoMenu = [];
 
 function _injetarMenuDosModulos({ soCache = false } = {}) {
   const perfil = usuarioAtual.perfil;
@@ -4001,15 +4006,22 @@ function _injetarMenuDosModulos({ soCache = false } = {}) {
     itens = _GRID.itensDeMenu(perfil);
     console.info('[modulos] itens de menu para', perfil, ':', itens.map(i => i.id));
   }
-  if (!itens.length) return;
-  // Redesenho: tira o que a passada anterior colocou, para nao duplicar item.
+  /* ── CORRIGIDO EM 08/09/2026 ─────────────────────────────────────────
+     A limpeza removia só o que estava prestes a ser recolocado. Item que a
+     passada anterior colocou e a nova NAO tem — porque a funcionalidade nao
+     esta contratada — ficava no menu para sempre, levando a "Esta secao esta
+     sendo construida". Agora guardamos o que foi injetado e removemos isso.
+     E a limpeza acontece ANTES do retorno por lista vazia: modulo que perdeu
+     todos os itens tambem precisa sumir do menu. */
   const navLimpar = NAV[perfil];
   if (navLimpar) {
-    const ids = new Set(itens.map(i => i.id));
+    const ids = new Set([...itens.map(i => i.id), ..._idsDeModuloNoMenu]);
     for (let k = navLimpar.length - 1; k >= 0; k--) {
       if (ids.has(navLimpar[k].id) || navLimpar[k].sec === 'CRM') navLimpar.splice(k, 1);
     }
   }
+  _idsDeModuloNoMenu = itens.map(i => i.id);
+  if (!itens.length) return;
   const nav = NAV[perfil];
   if (!nav) return;
   const iConta = nav.findIndex(i => i.sec === 'Conta');
@@ -4928,6 +4940,18 @@ async function verOrgProvedor(orgId) {
   const { data: socGedConfig } = await sb.from('soc_ged_config').select('org_id,soc_codigo_usuario,soc_codigo_empresa_principal,soc_codigo_responsavel,soc_codigo_tipo_ged,soc_url_socged,soc_url_upload,ativo,atualizado_em').eq('org_id', orgId).maybeSingle();
   window._orgSocGedConfigAtual = socGedConfig || null;
 
+  // Modulos contratados e funcionalidades dentro deles (PASSO-30). Mesmo
+  // padrao tolerante dos cards acima: se a migration ainda nao rodou, o
+  // select falha, a variavel fica undefined e o card simplesmente nao
+  // aparece — sem quebrar o resto da tela.
+  // Isto e o que tira a liberacao de modulo do SQL e poe no painel: ver
+  // 05-Decisoes/2026-09-08-liberacao-de-modulos-pelo-painel-do-provedor.md
+  const { data: modsOrg }  = await sb.from('organizacoes_modulos')
+    .select('modulo,ativo,leitura_ate').eq('org_id', orgId);
+  const { data: funcsOrg } = await sb.from('organizacoes_modulo_funcionalidades')
+    .select('modulo,funcionalidade,ativo').eq('org_id', orgId);
+  window._orgModulosAtual = modsOrg ? { orgId, modulos: modsOrg, funcionalidades: funcsOrg || [] } : undefined;
+
   // Histórico de mudanças desta organização — reaproveita a mesma tabela
   // de auditoria (eventos_sistema) que já alimenta o feed geral do
   // Início, só que filtrada pra uma organização específica. A tabela não
@@ -5053,6 +5077,14 @@ async function verOrgProvedor(orgId) {
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Notas internas</div>
     <div class="card" style="padding:14px" id="notasInternasOrg">${_htmlNotasInternasOrg()}</div>
 
+    <!-- Módulos contratados — 08/09/2026. Liberação pela aplicação, não pelo
+         SQL: é o que o desenho da plataforma modular sempre previu. Só
+         aparece se o PASSO-30 já rodou neste banco. -->
+    ${window._orgModulosAtual !== undefined ? `
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Módulos contratados</div>
+    <div class="card" style="padding:14px" id="modulosOrg">${_htmlModulosOrg()}</div>
+    ` : ''}
+
     <!-- Integração SOC (SOCGED) — feature nova e isolada, 2026-08-10. Só
          aparece se a migration migration-soc-ged-certificados.sql já rodou
          (senão window._orgSocGedConfigAtual fica undefined, não null). -->
@@ -5074,6 +5106,130 @@ async function verOrgProvedor(orgId) {
 // cadastro da organização em si. Pedido do Alisson (2026-08-10): evitar ter
 // que passar as credenciais manualmente por SQL a cada nova organização.
 // ─────────────────────────────────────────────────────────────
+/* ══════════════════════════════════════════════════════════════════════════
+   MÓDULOS CONTRATADOS — liberação pelo painel, não pelo SQL (08/09/2026)
+   --------------------------------------------------------------------------
+   O desenho da plataforma modular sempre previu "permissões e planos
+   administráveis pela aplicação em vez do banco". Isto é essa parte: o
+   Provedor liga e desliga módulo de um cliente clicando, sem SQL.
+
+   A trava de verdade continua sendo a RLS: as policies do PASSO-30 só deixam
+   `is_provedor()` escrever nestas duas tabelas. Este card é a interface de uma
+   permissão que já existia, não uma permissão nova.
+
+   Toda mudança aqui é auditada — PASSO-34 pôs o gatilho de auditoria nas duas
+   tabelas, então liga/desliga aparece no "Histórico de mudanças" da própria
+   organização.
+   ══════════════════════════════════════════════════════════════════════════ */
+const _MODULOS_DO_PRODUTO = [
+  { id:'treinamentos', nome:'Treinamentos',
+    desc:'Turmas, certificados, conformidade e agenda. É o sistema que o cliente já usa hoje.' },
+  { id:'crm', nome:'CRM',
+    desc:'Painel comercial, funil de vendas, contatos, atividades e empresas.',
+    funcionalidades:[
+      { id:'whatsapp', nome:'WhatsApp',
+        desc:'Conversas e configuração de números. O gateway ainda não existe — ligado, as telas abrem vazias.' }
+    ] }
+];
+
+/* `leitura_ate` e uma DATA, nao um instante. `new Date('2026-12-07')` e lido
+   como meia-noite UTC e, em UTC-3, volta 06/12 na tela — o mesmo defeito de
+   fuso que o h26 teve na previsao de fechamento. Aqui a data nunca vira Date:
+   os pedacos do texto sao reordenados. */
+const _dataSoDia = (iso) => String(iso || '').slice(0, 10).split('-').reverse().join('/');
+
+function _htmlModulosOrg() {
+  const est = window._orgModulosAtual;
+  if (!est) return '';
+  const ligado     = (m)    => (est.modulos || []).some(x => x.modulo === m && x.ativo);
+  const funcLigada = (m, f) => (est.funcionalidades || []).some(x => x.modulo === m && x.funcionalidade === f && x.ativo);
+  const prazo      = (m)    => ((est.modulos || []).find(x => x.modulo === m) || {}).leitura_ate;
+
+  const linha = (o) => `
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:11px 0;cursor:${o.travado?'not-allowed':'pointer'};opacity:${o.travado?.55:1}">
+      <input type="checkbox" ${o.on?'checked':''} ${o.travado?'disabled':''}
+             onchange="${o.acao}" style="width:16px;height:16px;margin-top:2px;cursor:inherit;flex-shrink:0">
+      <span style="flex:1;min-width:0">
+        <span style="display:block;font-size:13px;font-weight:600;color:var(--text-1)">${escapeHtml(o.nome)}</span>
+        <span style="display:block;font-size:11.5px;color:var(--text-3);line-height:1.5;margin-top:1px">${escapeHtml(o.desc)}</span>
+        ${o.aviso ? `<span style="display:block;font-size:11.5px;color:var(--warn-text);margin-top:3px">${escapeHtml(o.aviso)}</span>` : ''}
+      </span>
+    </label>`;
+
+  return _MODULOS_DO_PRODUTO.map(mod => {
+    const on = ligado(mod.id);
+    const ate = prazo(mod.id);
+    return `
+    <div style="border-bottom:1px solid var(--border)">
+      ${linha({ nome: mod.nome, desc: mod.desc, on, acao: `alternarModuloOrg('${mod.id}', this.checked)`,
+                aviso: (!on && ate) ? `Desligado. Os dados continuam consultáveis até ${_dataSoDia(ate)}.` : '' })}
+      ${(mod.funcionalidades || []).map(f => `
+        <div style="margin-left:26px;border-top:1px solid var(--border)">
+          ${linha({ nome: f.nome, desc: f.desc, on: funcLigada(mod.id, f.id), travado: !on,
+                    acao: `alternarFuncionalidadeOrg('${mod.id}', '${f.id}', this.checked)`,
+                    aviso: !on ? 'Ligue o módulo acima para liberar esta opção.' : '' })}
+        </div>`).join('')}
+    </div>`;
+  }).join('') + `
+    <div style="font-size:11px;color:var(--text-3);margin-top:12px;line-height:1.5">
+      Muda na hora. O cliente vê a diferença ao recarregar o sistema dele.
+      Desligar nunca apaga dado: fica consultável por 90 dias e depois invisível.
+    </div>`;
+}
+
+async function _recarregarCardModulosOrg() {
+  const est = window._orgModulosAtual;
+  if (!est) return;
+  const { data: mods }  = await sb.from('organizacoes_modulos')
+    .select('modulo,ativo,leitura_ate').eq('org_id', est.orgId);
+  const { data: funcs } = await sb.from('organizacoes_modulo_funcionalidades')
+    .select('modulo,funcionalidade,ativo').eq('org_id', est.orgId);
+  window._orgModulosAtual = { orgId: est.orgId, modulos: mods || [], funcionalidades: funcs || [] };
+  const el = document.getElementById('modulosOrg');
+  if (el) el.innerHTML = _htmlModulosOrg();
+}
+
+async function alternarModuloOrg(modulo, ligar) {
+  const est = window._orgModulosAtual;
+  if (!est) return;
+  const nome = (_MODULOS_DO_PRODUTO.find(m => m.id === modulo) || {}).nome || modulo;
+
+  /* Desligar é a ação que o cliente sente. Confirmar antes, e dizer o que
+     acontece de verdade — nada é apagado. */
+  if (!ligar) {
+    const ok = await confirmarAcao(
+      `Desligar o módulo ${nome} para esta organização? As telas somem do sistema do cliente. Nenhum dado é apagado: fica consultável por 90 dias.`,
+      'Desligar módulo', true);
+    if (!ok) { _recarregarCardModulosOrg(); return; }
+  }
+
+  const { error } = await sb.from('organizacoes_modulos')
+    .upsert({ org_id: est.orgId, modulo, ativo: ligar }, { onConflict: 'org_id,modulo' });
+  if (error) { showToast('Não foi possível salvar: ' + error.message, 'error'); _recarregarCardModulosOrg(); return; }
+
+  /* Módulo desligado leva junto as funcionalidades dele: deixar uma
+     funcionalidade "ligada" dentro de um módulo desligado é estado mentiroso
+     — e a leitura do app já ignora, mas o painel não pode mostrar diferente. */
+  if (!ligar) {
+    await sb.from('organizacoes_modulo_funcionalidades')
+      .update({ ativo: false }).eq('org_id', est.orgId).eq('modulo', modulo);
+  }
+
+  showToast(`${nome} ${ligar ? 'liberado' : 'desligado'} para esta organização.`, 'success');
+  _recarregarCardModulosOrg();
+}
+
+async function alternarFuncionalidadeOrg(modulo, funcionalidade, ligar) {
+  const est = window._orgModulosAtual;
+  if (!est) return;
+  const { error } = await sb.from('organizacoes_modulo_funcionalidades')
+    .upsert({ org_id: est.orgId, modulo, funcionalidade, ativo: ligar },
+            { onConflict: 'org_id,modulo,funcionalidade' });
+  if (error) { showToast('Não foi possível salvar: ' + error.message, 'error'); _recarregarCardModulosOrg(); return; }
+  showToast(`${funcionalidade === 'whatsapp' ? 'WhatsApp' : funcionalidade} ${ligar ? 'liberado' : 'desligado'}.`, 'success');
+  _recarregarCardModulosOrg();
+}
+
 function _htmlIntegracaoSocOrg() {
   const c = window._orgSocGedConfigAtual || {};
   // A chave de acesso não é mais buscada para o client (ver select() acima) —
@@ -27400,7 +27556,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '161';
+  var APP_BUILD = '162';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
