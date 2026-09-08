@@ -417,6 +417,20 @@ export async function salvarFunil(form) {
   const linha = { org_id: sessao.orgId(), nome: (form.nome || '').trim(),
                   tipo_item: form.tipo_item || null };
   if (!linha.nome) throw new Error('Informe o nome do funil.');
+  /* ── 08/09/2026 ────────────────────────────────────────────────────────
+     `crm_funis.padrao` e NOT NULL DEFAULT false, e este insert nunca a
+     definia. O app procura o funil da organizacao com `padrao=eq.true`, entao
+     o PRIMEIRO funil criado pela interface nascia INVISIVEL — a tela de
+     Funil e o Painel comercial continuavam dizendo "esta organizacao ainda
+     nao tem um funil configurado", com o funil ja no banco.
+     Nunca apareceu em homologacao porque la o funil veio do seed, ja marcado.
+     Apareceu em producao no dia em que o CRM foi ligado para o primeiro
+     cliente. Regra: se a organizacao ainda nao tem funil padrao, este vira. */
+  if (!form.id) {
+    const { data: jaTemPadrao } = await _sb.from('crm_funis')
+      .select('id').eq('org_id', sessao.orgId()).eq('padrao', true).limit(1);
+    if (!jaTemPadrao || !jaTemPadrao.length) linha.padrao = true;
+  }
   const q = form.id
     ? _sb.from('crm_funis').update(linha).eq('id', form.id).select('id').single()
     : _sb.from('crm_funis').insert(linha).select('id').single();

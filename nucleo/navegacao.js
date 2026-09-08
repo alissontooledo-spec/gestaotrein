@@ -249,6 +249,13 @@ export async function tratarAcao(acao) {
   if (!acao) return false;
   const [nome, ...resto] = acao.split(':');
   const valor = resto.join(':');
+  /* ── 08/09/2026 ────────────────────────────────────────────────────────
+     `ui.erro()` desenha um botao "Tentar de novo" com acao 'recarregar', e
+     NINGUEM tratava: toda tela de erro do CRM tinha um botao que respondia
+     "Esta acao ainda nao esta pronta". Achado em producao, no dia em que o
+     modulo foi ligado para o primeiro cliente — a unica saida da tela de erro
+     era o botao morto. Vale para qualquer erro, nao so o do funil. */
+  if (nome === 'recarregar') { await redesenhar(); return true; }
 
   if (nome === 'ir') {
     const [rota, id] = valor.split(':');
