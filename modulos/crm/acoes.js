@@ -275,17 +275,23 @@ async function moverEtapa(ponte, redesenhar, funilId, etapaId, passo) {
 /* Tudo que so existe quando houver gateway de WhatsApp. Tratado aqui, e nao
    deixado cair no "acao desconhecida", para a mensagem ser a verdadeira: nao e
    um botao quebrado, e um recurso que ainda nao existe. */
-/* ── REVISTO EM 05/09 (h17) ────────────────────────────────────────────────
-   Esta lista ficou grande demais e passou a bloquear NAVEGACAO, nao so envio:
-   trocar de caixa (`crm:caixa:`), abrir outra conversa (`crm:conversa:`) e
-   buscar na lista (`crm:buscar-conversa`) sao leitura de dado ja carregado e
-   nao dependem de gateway nenhum. Com elas aqui, a tela de Conversas respondia
-   "depende do WhatsApp" a qualquer clique e parecia congelada.
-   Ficam so as acoes que de fato precisam do gateway existir. */
+/* ── REVISTO EM 13/09 ──────────────────────────────────────────────────────
+   PASSO-37/PASSO-40 e o gateway em VPS ligaram de verdade: criar caixa
+   (`crm:add-numero`), enviar mensagem (`crm:enviar:`) e marcar conversa como
+   resolvida (`crm:resolver:`) agora escrevem no banco de verdade — saem
+   daqui e ganham tratador proprio logo abaixo. `crm:qr-lido` so fecha um
+   modal local, nunca dependeu de gateway nenhum. `crm:qr` virou `crm:qr:`
+   para bloquear so a acao real "ver a imagem do QR Code", que ainda nao foi
+   construida (o modal de conexao hoje mostra um icone decorativo, nao o QR
+   de verdade — ver 05-Decisoes, pendencia de UI separada).
+   Ficam so as acoes que de fato ainda dependem de algo nao construido:
+   ligar/reconectar caixa, horarios/respostas rapidas, importar contatos,
+   anexar arquivo, ver quem acessa, modelos de mensagem, vincular a um lead,
+   o menu "mais", editar/remover numero. */
 const DEPENDE_WHATSAPP = ['crm:nova-conversa', 'crm:conversar:', 'crm:ligar:', 'crm:reconectar:',
-  'crm:add-numero', 'crm:horarios', 'crm:respostas', 'crm:importar-contatos', 'crm:anexar',
-  'crm:acesso:', 'crm:enviar', 'crm:qr', 'crm:modelo:', 'crm:resolver:', 'crm:vincular:',
-  'crm:mais:', 'crm:editar-numero:', 'crm:qr-lido', 'crm:remover:'];
+  'crm:horarios', 'crm:respostas', 'crm:importar-contatos', 'crm:anexar',
+  'crm:acesso:', 'crm:qr:', 'crm:modelo:', 'crm:vincular:',
+  'crm:mais:', 'crm:editar-numero:', 'crm:remover:'];
 
 export default async function acoes(acao, { redesenhar }) {
   const ponte = (typeof window !== 'undefined' && window.__GRID_PONTE) || {};
@@ -442,6 +448,48 @@ export default async function acoes(acao, { redesenhar }) {
   if (acao.startsWith('crm:concluir:')) {
     await gravar(ponte, () => dados.concluirAtividade(resto.replace('concluir:', ''), true),
                  redesenhar, 'Atividade concluída.');
+    return true;
+  }
+
+  /* Fecha o modal de conexao (numeros.js/modalConectar). So um "ja li o
+     codigo" local — nunca dependeu do gateway existir. */
+  if (acao === 'crm:qr-lido') { ponte.fecharModal?.(); return true; }
+
+  /* Cria a linha da caixa em crm_caixas. O gateway descobre o numero novo
+     sozinho, em ate 30s (PASSO-40) — nao ha QR de verdade para mostrar aqui
+     ainda (pendencia de UI separada), entao o aviso deixa isso claro. */
+  if (acao === 'crm:add-numero') {
+    ponte.abrirModal('Adicionar número de WhatsApp', `
+      ${linha('Nome desta caixa *', `<input id="crmN_nome" style="${CAMPO}" placeholder="Ex.: Comercial, Financeiro, Filial Joinville">`)}
+      ${linha('Horário de atendimento (opcional)', `<input id="crmN_horario" style="${CAMPO}" placeholder="Ex.: Seg a sex · 08h-18h">`)}
+      <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+        Depois de criar, o número aparece em "WhatsApp" como aguardando conexão. O gateway detecta o
+        número novo sozinho em até 30 segundos.</div>
+    `, ponte.botoes('Criar', 'crmCriarCaixa'));
+
+    ponte.aoConfirmar('crmCriarCaixa', () => gravar(ponte, async () => {
+      const nome = val('crmN_nome');
+      if (!nome) throw new Error('Dê um nome para este número.');
+      await dados.criarCaixaWhatsapp({ nome, horario: val('crmN_horario') || null });
+    }, redesenhar, 'Número criado. Assim que o gateway conectar, ele aparece como conectado em WhatsApp.'));
+    return true;
+  }
+
+  /* Envia a mensagem digitada no composer da conversa aberta. */
+  if (acao.startsWith('crm:enviar:')) {
+    const conversaId = resto.replace('enviar:', '');
+    const texto = val('crmComposerTexto');
+    if (!texto) { ponte.avisar?.('Escreva uma mensagem antes de enviar.', 'error'); return true; }
+    await gravar(ponte, () => dados.enviarMensagem(conversaId, texto), redesenhar, 'Mensagem enviada.');
+    const campo = document.getElementById('crmComposerTexto');
+    if (campo) campo.value = '';
+    return true;
+  }
+
+  /* Marca a conversa como resolvida. */
+  if (acao.startsWith('crm:resolver:')) {
+    const id = resto.replace('resolver:', '');
+    await gravar(ponte, () => dados.resolverConversa(id), redesenhar, 'Conversa marcada como resolvida.');
     return true;
   }
 

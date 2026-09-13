@@ -3,7 +3,6 @@ import * as ui from '../../nucleo/ui.js';
 import { icone } from '../../nucleo/icones.js';
 import * as dados from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
-import { EXEMPLO } from './exemplo.js';
 import { avisoDemo } from './painel.js';
 
 let _caixaAtiva = 'todas';
@@ -34,6 +33,10 @@ export async function render(params = {}) {
   _conversaAtiva = params.conversa || _conversaAtiva || lista[0]?.id;
   const atual   = conversas.find(c => c.id === _conversaAtiva) || lista[0];
   const contato = contatos.find(c => c.id === atual?.contato_id);
+  /* Mensagens e lead vinculado: sempre da conversa aberta, nunca em bloco —
+     mesmo motivo de `mensagensDaConversa` ser por-conversa em dados.js. */
+  const msgs = atual ? await dados.mensagensDaConversa(atual.id) : [];
+  const lead = atual?.lead_id ? await dados.obter('crm_leads', atual.lead_id).catch(() => null) : null;
 
   return `
     <div class="crm-inbox ${varios ? '' : 'um-numero'}">
@@ -41,8 +44,8 @@ export async function render(params = {}) {
       ${varios ? trilhoCaixas(caixas, conversas) : ''}
       ${colunaLista(lista, caixas, varios)}
       <div class="crm-mob-sep">${icone('chevrondown','sm')} Ao tocar em uma conversa</div>
-      ${atual ? colunaConversa(atual, caixas, varios) : ui.vazio({ icone:'inbox', titulo:'Nenhuma conversa' })}
-      ${atual ? colunaContexto(atual, contato) : ''}
+      ${atual ? colunaConversa(atual, caixas, varios, contato, msgs) : ui.vazio({ icone:'inbox', titulo:'Nenhuma conversa' })}
+      ${atual ? colunaContexto(atual, contato, lead) : ''}
     </div>
     ${dados.ehExemplo() ? avisoDemo() : ''}`;
 }
@@ -119,16 +122,15 @@ function colunaLista(lista, caixas, varios) {
 }
 
 /* ── conversa ───────────────────────────────────────────────────────────── */
-function colunaConversa(c, caixas, varios) {
+function colunaConversa(c, caixas, varios, contato, msgs) {
   const cx = caixas.find(x => x.id === c.caixa_id);
-  const msgs = EXEMPLO.crm_mensagens[c.id] || [];
   return `
   <div class="crm-col crm-thread">
     <div class="crm-thread-head">
       <div class="crm-conv-av" style="background:rgba(30,42,74,.08);color:var(--navy);width:34px;height:34px">${ui.fmt.iniciais(c.nome)}</div>
       <div class="crm-thread-ident">
         <div class="nome">${ui.esc(c.nome)}</div>
-        <div class="meta"><span class="num">${ui.fmt.telefone(EXEMPLO.crm_contatos.find(x => x.id === c.contato_id)?.telefone)}</span>
+        <div class="meta"><span class="num">${ui.fmt.telefone(contato?.telefone || c.telefone)}</span>
           ${varios && cx ? `<span class="crm-tag-caixa"><i></i> ${ui.esc(cx.nome)}</span>` : ''}</div>
       </div>
       <div class="crm-thread-acoes">
@@ -140,7 +142,7 @@ function colunaConversa(c, caixas, varios) {
     <div class="crm-thread-body">
       <div class="crm-dia">Hoje</div>
       ${msgs.map(m => m.tipo === 'sistema'
-        ? `<div class="crm-msg sis">${m.texto}</div>`
+        ? `<div class="crm-msg sis">${ui.esc(m.texto)}</div>`
         : `<div class="crm-msg ${m.tipo === 'enviada' ? 'env' : 'rec'}">
              ${m.autor ? `<div class="crm-msg-aut">${ui.esc(m.autor)}</div>` : ''}
              ${ui.esc(m.texto)}<span class="h">${m.hora || ''}</span></div>`).join('')}
@@ -154,7 +156,7 @@ function colunaConversa(c, caixas, varios) {
       </div>
       <div class="crm-composer-box">
         <button class="ds-icobtn" style="border:none" data-acao="crm:anexar">${icone('clip','sm')}</button>
-        <input type="text" placeholder="Escreva a resposta" data-acao="crm:digitar">
+        <input type="text" id="crmComposerTexto" placeholder="Escreva a resposta">
         <button class="ds-icobtn pri" data-acao="crm:enviar:${c.id}">${icone('send','sm')}</button>
       </div>
     </div>
@@ -162,16 +164,14 @@ function colunaConversa(c, caixas, varios) {
 }
 
 /* ── contexto do contato ────────────────────────────────────────────────── */
-function colunaContexto(c, contato) {
-  const lead = EXEMPLO.crm_leads.find(l => l.id === c.lead_id);
-  const trein = contato?.cliente_id ? EXEMPLO.treinamentos_por_cliente[contato.cliente_id] : null;
+function colunaContexto(c, contato, lead) {
   return `
   <div class="crm-col crm-ctx">
     <div class="crm-ctx-bloco">
       <div class="crm-ctx-lbl">Contato</div>
       <div style="font-size:var(--fs-4);font-weight:700;color:var(--text-1)">${ui.esc(contato?.nome || c.nome)}</div>
       <div style="font-size:var(--fs-2);color:var(--text-3);margin-bottom:12px">${ui.esc(contato?.cargo || '')}</div>
-      ${linhaCtx('Telefone', ui.fmt.telefone(contato?.telefone))}
+      ${linhaCtx('Telefone', ui.fmt.telefone(contato?.telefone || c.telefone))}
       ${linhaCtx('Empresa', contato?.empresa || '—')}
       ${linhaCtx('Origem', contato?.origem || '—')}
       ${linhaCtx('Responsável', c.responsavel || 'Sem responsável')}
@@ -179,20 +179,11 @@ function colunaContexto(c, contato) {
     ${lead ? `<div class="crm-ctx-bloco">
       <div class="crm-ctx-lbl">Lead ativo</div>
       <div class="crm-lead-card" data-acao="ir:crm-lead:${lead.id}">
-        <div class="crm-lead-emp">${ui.esc(lead.treinamento)} — ${lead.vagas} vagas</div>
+        <div class="crm-lead-emp">${ui.esc(lead.item || lead.treinamento || 'Negócio')}${lead.vagas ? ' — ' + lead.vagas + ' vagas' : ''}</div>
         <div class="crm-lead-meta"><span>${icone('funnel','sm')} Estágio: ${ui.esc(lead.estagio)}</span>
           <span>${icone('user','sm')} ${ui.esc(lead.responsavel || 'sem dono')}</span></div>
         <div class="crm-lead-rod"><span class="crm-lead-val">${ui.fmt.moeda(lead.valor)}</span></div>
       </div></div>` : ''}
-    ${trein ? `<div class="crm-ctx-bloco">
-      <div class="crm-ctx-lbl">No módulo de Treinamentos</div>
-      <div class="crm-ctx-cross">
-        <div class="t">${icone('cap','sm')} Já é cliente</div>
-        <div class="l">${trein.turmas} turmas realizadas · última ${ui.esc(trein.ultima)}<br>
-          ${trein.proxima ? `Próxima turma: ${ui.esc(trein.proxima)}<br>` : ''}Conformidade: ${trein.conformidade}%</div>
-      </div>
-      <button class="ds-btn sec" style="width:100%;margin-top:10px;justify-content:center" data-acao="ir:clientes:${contato.cliente_id}">Abrir ficha do cliente</button>
-    </div>` : ''}
   </div>`;
 }
 
