@@ -121,16 +121,67 @@ const _mapContato = (c) => ({
   ultimo: c.criado_em || null
 });
 
-/* WhatsApp ainda nao existe no banco. Em modo EXEMPLO (demo.html) estas
-   colecoes vem do arquivo de demonstracao; em modo BANCO devolvem VAZIO.
-   ── 08/09/2026 ────────────────────────────────────────────────────────────
-   Antes devolviam o arquivo de demonstracao tambem em modo banco, e o aviso
-   "Modo demonstracao" so aparece quando ehExemplo() e verdadeiro — falso em
-   producao. Resultado: o Painel comercial mostraria conversa inventada ao lado
-   de proposta real, na mesma frase, sem aviso. Vazio e a falha pelo lado
-   seguro: a tela mostra zero em vez de ficcao.
+/* ── 13/09/2026 ────────────────────────────────────────────────────────────
+   PASSO-37/PASSO-40 criaram as tabelas de verdade de crm_caixas e
+   crm_conversas em produção (confirmado: 26/26 OK na verificação). As duas
+   saem da lista abaixo e ganham tradução própria (`_mapCaixa`/`_mapConversa`)
+   logo adiante, no mesmo padrão de `_mapLead`/`_mapContato`.
+
+   `crm_mensagens` continua aqui: mensagem é sempre lida por conversa
+   (`mensagensDaConversa`), nunca em bloco — não faz sentido a tela pedir
+   "todas as mensagens da organização" de uma vez. Um `listar('crm_mensagens')`
+   direto (se algum código chamar) continua devolvendo vazio, pelo mesmo
+   motivo de sempre: melhor tela vazia do que tela com dado errado.
    Ver 05-Decisoes/2026-09-08-conversas-mostram-dados-inventados-sem-aviso.md */
-const SO_EXEMPLO = ['crm_conversas', 'crm_caixas', 'crm_mensagens'];
+const SO_EXEMPLO = ['crm_mensagens'];
+
+/* Hora curta para exibição: HH:MM no mesmo dia, dd/mm depois disso. Usada nas
+   telas de WhatsApp (conversa, caixa, mensagem) — o mesmo formato que o
+   arquivo de demonstração já usava ('09:41', '07:20'). */
+function _horaCurta(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const hoje = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return d.toDateString() === hoje.toDateString()
+    ? `${p(d.getHours())}:${p(d.getMinutes())}`
+    : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+/* ── Tradutores de WhatsApp — mesmo padrão de _mapLead/_mapContato ────────
+   `equipe` e a contagem de `abertas` não vêm prontos do banco (uuid[] e
+   nenhuma coluna, respectivamente); a consulta em `listar()` resolve os dois
+   antes de mapear, e anexa como `_equipeNomes`/`_abertas` em cada linha crua. */
+const _mapCaixa = (c) => ({
+  id: c.id,
+  nome: c.nome,
+  numero: c.numero,
+  estado: c.estado,
+  abertas: c._abertas || 0,
+  equipe: c._equipeNomes || [],
+  horario: c.horario,
+  desde: c.estado !== 'conectado' ? _horaCurta(c.desde) : null,
+  ativa: c.ativa !== false,
+  gateway_qr: c.gateway_qr || null,
+  gateway_qr_em: c.gateway_qr_em || null,
+  ultimo_erro: c.ultimo_erro || null
+});
+
+const _mapConversa = (c) => ({
+  id: c.id,
+  contato_id: c.contato_id,
+  caixa_id: c.caixa_id,
+  lead_id: c.lead_id,
+  telefone: c.telefone,
+  nome: c.contato?.nome || c.nome_exibicao || c.telefone,
+  empresa: c.contato?.cliente?.nome || null,
+  previa: c.ultima_mensagem_previa || '',
+  hora: _horaCurta(c.ultima_mensagem_em) || '',
+  nao_lidas: c.nao_lidas || 0,
+  estado: c.estado,
+  responsavel: c.responsavel?.nome || null
+});
 
 export const origem   = () => _origem;
 export const ehExemplo = () => _origem === 'exemplo';
@@ -244,6 +295,49 @@ export async function listar(colecao, { filtro = {}, ordem = null } = {}) {
           concluida: !!a.concluida_em
         };
       });
+    }
+    if (colecao === 'crm_caixas') {
+      const { data, error } = await _sb.from('crm_caixas').select('*')
+        .eq('org_id', sessao.orgId()).order('criado_em');
+      if (error) throw error;
+      const caixas = data || [];
+      if (!caixas.length) return [];
+
+      /* Nomes da equipe: uma consulta so, com os ids de todas as caixas juntos —
+         nao uma por caixa. `equipe` guarda uuid de usuarios; a tela mostra nome. */
+      const idsEquipe = [...new Set(caixas.flatMap(c => c.equipe || []))];
+      let nomesPorId = new Map();
+      if (idsEquipe.length) {
+        const { data: usuarios } = await _sb.from('usuarios').select('id, nome').in('id', idsEquipe);
+        nomesPorId = new Map((usuarios || []).map(u => [u.id, u.nome]));
+      }
+
+      /* "Abertas": quantas conversas desta caixa ainda pedem atencao. Uma
+         consulta so, contando em JS — nao ha coluna pronta para isso e nao vale
+         uma consulta por caixa so para contar. */
+      const { data: convs } = await _sb.from('crm_conversas')
+        .select('caixa_id, estado').eq('org_id', sessao.orgId());
+      const abertasPorCaixa = new Map();
+      for (const cv of convs || []) {
+        if (cv.estado === 'resolvida') continue;
+        abertasPorCaixa.set(cv.caixa_id, (abertasPorCaixa.get(cv.caixa_id) || 0) + 1);
+      }
+
+      return caixas.map(c => _mapCaixa({
+        ...c,
+        _abertas: abertasPorCaixa.get(c.id) || 0,
+        _equipeNomes: (c.equipe || []).map(id => nomesPorId.get(id)).filter(Boolean)
+      }));
+    }
+    if (colecao === 'crm_conversas') {
+      const { data, error } = await _sb.from('crm_conversas')
+        .select(`*,
+          contato:contatos!crm_conversas_contato_id_fkey(nome, cliente:clientes(nome)),
+          responsavel:usuarios!crm_conversas_responsavel_id_fkey(nome)`)
+        .eq('org_id', sessao.orgId())
+        .order('ultima_mensagem_em', { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return (data || []).map(_mapConversa);
     }
   }
   if (_origem === 'banco' && SO_EXEMPLO.includes(colecao)) return [];
@@ -906,4 +1000,90 @@ export async function salvarContato(form) {
   const { data, error } = await q;
   if (error) throw error;
   return data;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   WHATSAPP — 13/09/2026
+   Fecha o que o PASSO-37/PASSO-40 abriram: ler as mensagens de uma conversa,
+   criar um número novo (o gateway na VPS descobre sozinho e conecta), enviar
+   mensagem e marcar conversa como resolvida. Nada disto precisa de fila
+   nenhuma nova nem de acesso a VPS — é escrita comum nas tabelas que já
+   existem, do mesmo jeito que qualquer outra gravação deste arquivo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Mensagem é sempre lida por conversa — nunca em bloco (ver nota em
+   SO_EXEMPLO, acima). Em modo exemplo continua vindo do arquivo de
+   demonstração, no mesmo formato. */
+export async function mensagensDaConversa(conversaId) {
+  if (_origem !== 'banco') return (_exemplo.crm_mensagens || {})[conversaId] || [];
+  const { data, error } = await _sb.from('crm_mensagens')
+    .select('tipo, texto, criado_em, autor:usuarios!crm_mensagens_autor_id_fkey(nome)')
+    .eq('org_id', sessao.orgId()).eq('conversa_id', conversaId)
+    .order('criado_em');
+  if (error) throw error;
+  return (data || []).map(m => ({
+    tipo: m.tipo,
+    texto: m.texto,
+    hora: _horaCurta(m.criado_em) || '',
+    autor: m.autor?.nome || null
+  }));
+}
+
+/* Cria a caixa (o número). É só isto: o gateway na VPS descobre a linha nova
+   em até 30 segundos, abre a sessão e escreve o QR Code sozinho em
+   `gateway_qr` — nada aqui precisa falar com a VPS.
+   Ver 02-Arquitetura/whatsapp-gateway-node/README.md. */
+export async function criarCaixaWhatsapp(form) {
+  if (_origem !== 'banco') return _simulado();
+  const nome = (form.nome || '').trim();
+  if (!nome) throw new Error('Dê um nome para este número (ex.: Comercial, Financeiro).');
+  const { data, error } = await _sb.from('crm_caixas')
+    .insert({ org_id: sessao.orgId(), nome, horario: form.horario || null })
+    .select('id, nome').single();
+  if (error) throw error;
+  return data;
+}
+
+/* Enviar: grava a mensagem como pendente e deixa o pedido na fila que o
+   gateway já lê. Quem confirma "entregue" é o próprio gateway, atualizando
+   `crm_mensagens.status` — esta função só entrega o pedido. */
+export async function enviarMensagem(conversaId, texto) {
+  if (_origem !== 'banco') return _simulado();
+  const txt = String(texto || '').trim();
+  if (!txt) throw new Error('Escreva uma mensagem antes de enviar.');
+
+  const { data: conversa, error: e0 } = await _sb.from('crm_conversas')
+    .select('id, caixa_id, telefone').eq('org_id', sessao.orgId()).eq('id', conversaId).maybeSingle();
+  if (e0) throw e0;
+  if (!conversa) throw new Error('Conversa não encontrada.');
+
+  const { data: msg, error: e1 } = await _sb.from('crm_mensagens').insert({
+    org_id: sessao.orgId(), conversa_id: conversaId, tipo: 'enviada',
+    autor_id: sessao.usuario()?.id || null, texto: txt, status: 'pendente'
+  }).select('id').single();
+  if (e1) throw e1;
+
+  const { error: e2 } = await _sb.from('crm_whatsapp_fila_envio').insert({
+    org_id: sessao.orgId(), caixa_id: conversa.caixa_id, mensagem_id: msg.id,
+    telefone_destino: conversa.telefone, conteudo: txt
+  });
+  if (e2) throw e2;
+
+  const { error: e3 } = await _sb.from('crm_conversas').update({
+    ultima_mensagem_em: new Date().toISOString(),
+    ultima_mensagem_previa: txt.slice(0, 140),
+    estado: 'respondida'
+  }).eq('id', conversaId);
+  if (e3) throw e3;
+
+  return true;
+}
+
+/* Resolver: some do "requer atenção" sem apagar nada — a conversa continua
+   com todo o histórico, só sai da fila de pendências. */
+export async function resolverConversa(id) {
+  if (_origem !== 'banco') return _simulado();
+  const { error } = await _sb.from('crm_conversas').update({ estado: 'resolvida' }).eq('id', id);
+  if (error) throw error;
+  return true;
 }
