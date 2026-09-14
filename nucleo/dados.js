@@ -1060,7 +1060,7 @@ export async function enviarMensagem(conversaId, texto) {
   if (!txt) throw new Error('Escreva uma mensagem antes de enviar.');
 
   const { data: conversa, error: e0 } = await _sb.from('crm_conversas')
-    .select('id, caixa_id, telefone').eq('org_id', sessao.orgId()).eq('id', conversaId).maybeSingle();
+    .select('id, caixa_id, telefone, responsavel_id').eq('org_id', sessao.orgId()).eq('id', conversaId).maybeSingle();
   if (e0) throw e0;
   if (!conversa) throw new Error('Conversa não encontrada.');
 
@@ -1076,14 +1076,94 @@ export async function enviarMensagem(conversaId, texto) {
   });
   if (e2) throw e2;
 
-  const { error: e3 } = await _sb.from('crm_conversas').update({
+  /* Quem responde ASSUME a conversa — e só quem não tinha dono muda de mãos.
+     14/09: a tela passou a separar "Fila" (sem responsável) de "Chats" (em
+     atendimento). Sem esta linha, responder uma conversa da fila deixava ela
+     na fila para sempre, e duas pessoas atenderiam a mesma pessoa sem saber.
+     O `?? null` importa: sobrescrever o responsável de um colega seria roubar
+     o atendimento dele, então só entra quando o campo está vazio. */
+  const atualizacao = {
     ultima_mensagem_em: new Date().toISOString(),
     ultima_mensagem_previa: txt.slice(0, 140),
     estado: 'respondida'
-  }).eq('id', conversaId);
+  };
+  const eu = sessao.usuario()?.id || null;
+  if (!conversa.responsavel_id && eu) atualizacao.responsavel_id = eu;
+
+  const { error: e3 } = await _sb.from('crm_conversas').update(atualizacao).eq('id', conversaId);
   if (e3) throw e3;
 
   return true;
+}
+
+/* ── Assumir uma conversa da fila (14/09) ──────────────────────────────────
+   O equivalente a "pegar o chamado": tira da Fila e põe em Chats, no nome de
+   quem clicou. Só age quando não há dono — se alguém assumiu meio segundo
+   antes, o certo é a tela mostrar o nome dele, não o meu por cima. */
+export async function assumirConversa(id) {
+  if (_origem !== 'banco') return _simulado();
+  const eu = sessao.usuario()?.id || null;
+  if (!eu) throw new Error('Não foi possível identificar quem está assumindo.');
+  const { data, error } = await _sb.from('crm_conversas')
+    .update({ responsavel_id: eu })
+    .eq('org_id', sessao.orgId()).eq('id', id).is('responsavel_id', null)
+    .select('id');
+  if (error) throw error;
+  if (!data || !data.length) throw new Error('Esta conversa já foi assumida por outra pessoa. Atualize a tela para ver quem.');
+  return true;
+}
+
+/* ── Começar uma conversa (14/09) ──────────────────────────────────────────
+   Era a queixa nº 1 do Alisson: "não tem botão de chamar uma conversa nova".
+   Não havia impedimento técnico nenhum — o código tratava isso como se
+   dependesse de recurso do WhatsApp que não temos, confundindo a regra da API
+   PAGA da Meta (janela de 24h e modelo aprovado) com a nossa conexão, que é a
+   de um WhatsApp comum e pode puxar assunto como qualquer pessoa faz.
+
+   Procura-ou-cria por caixa + telefone: chamar duas vezes o mesmo número
+   devolve a MESMA conversa, nunca uma segunda linha com o histórico partido
+   ao meio. */
+export function normalizarTelefone(valor) {
+  let n = String(valor || '').replace(/\D/g, '');
+  if (!n) throw new Error('Informe o número de WhatsApp.');
+  /* Número digitado como se fala no Brasil ((47) 99999-0000) chega com 10 ou
+     11 dígitos e precisa do código do país na frente — sem ele o WhatsApp
+     entrega para outro lugar, ou para lugar nenhum. */
+  if (n.length === 10 || n.length === 11) n = '55' + n;
+  if (n.length < 12 || n.length > 15) {
+    throw new Error('Número incompleto. Use DDD + número, por exemplo (47) 99999-0000.');
+  }
+  return n;
+}
+
+export async function iniciarConversa({ caixaId, telefone, nome = null, contatoId = null } = {}) {
+  if (_origem !== 'banco') return _simulado({ id: 'demo' });
+  const fone = normalizarTelefone(telefone);
+  if (!caixaId) throw new Error('Escolha por qual número o GRID deve falar.');
+
+  const { data: caixa, error: e0 } = await _sb.from('crm_caixas')
+    .select('id, estado').eq('org_id', sessao.orgId()).eq('id', caixaId).maybeSingle();
+  if (e0) throw e0;
+  if (!caixa) throw new Error('Número (caixa) não encontrado nesta organização.');
+
+  const { data: existente, error: e1 } = await _sb.from('crm_conversas')
+    .select('id').eq('org_id', sessao.orgId())
+    .eq('caixa_id', caixaId).eq('telefone', fone).maybeSingle();
+  if (e1) throw e1;
+  if (existente) return { id: existente.id, criada: false };
+
+  const { data: nova, error: e2 } = await _sb.from('crm_conversas').insert({
+    org_id: sessao.orgId(), caixa_id: caixaId, telefone: fone,
+    contato_id: contatoId || null,
+    nome_exibicao: (nome || '').trim() || null,
+    /* Nasce no nome de quem abriu e já em atendimento: ninguém pôs isto na
+       fila — a conversa foi criada de propósito por alguém que vai falar. */
+    responsavel_id: sessao.usuario()?.id || null,
+    estado: 'respondida',
+    nao_lidas: 0
+  }).select('id').single();
+  if (e2) throw e2;
+  return { id: nova.id, criada: true };
 }
 
 /* Resolver: some do "requer atenção" sem apagar nada — a conversa continua
