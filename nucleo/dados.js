@@ -1021,7 +1021,7 @@ export async function salvarContato(form) {
 export async function mensagensDaConversa(conversaId) {
   if (_origem !== 'banco') return (_exemplo.crm_mensagens || {})[conversaId] || [];
   const { data, error } = await _sb.from('crm_mensagens')
-    .select('tipo, texto, criado_em, status, autor:usuarios!crm_mensagens_autor_id_fkey(nome)')
+    .select('tipo, texto, criado_em, status, erro, autor:usuarios!crm_mensagens_autor_id_fkey(nome)')
     .eq('org_id', sessao.orgId()).eq('conversa_id', conversaId)
     .order('criado_em');
   if (error) throw error;
@@ -1036,6 +1036,10 @@ export async function mensagensDaConversa(conversaId) {
        `criado_em` cru é o que permite agrupar por dia de verdade; antes a tela
        escrevia "Hoje" fixo, inclusive em mensagem da semana passada. */
     status: m.status || null,
+    /* 14/09: o motivo da falha precisa chegar na tela. Sem ele, uma mensagem
+       que nao foi entregue aparece so com um "!" e ninguem descobre por que —
+       foi o caso do numero que nao existia no WhatsApp. */
+    erro: m.erro || null,
     criado_em: m.criado_em || null
   }));
 }
