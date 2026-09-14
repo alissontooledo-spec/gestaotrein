@@ -5,8 +5,13 @@
    Carregado apenas por organizações que contrataram o módulo.
    ══════════════════════════════════════════════════════════════════════════ */
 /* ── Caixa de entrada ─────────────────────────────────────────────────── */
-.crm-inbox{display:grid;grid-template-columns:180px 320px minmax(0,1fr) 272px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;height:640px}
-.crm-inbox.um-numero{grid-template-columns:320px minmax(0,1fr) 272px}
+/* 14/09: a ficha do contato saiu da grade (virou painel sobreposto, ver
+   `.crm-ctx` adiante) e a conversa herdou os 272px dela. A altura deixou de
+   ser fixa em 640px: numa tela de 1080 sobrava faixa cinza embaixo enquanto a
+   conversa rolava por dentro. O `clamp` mantém piso e teto, então nem encolhe
+   demais em notebook nem estica sem fim em monitor grande. */
+.crm-inbox{display:grid;grid-template-columns:180px 320px minmax(0,1fr);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;position:relative;height:clamp(520px,calc(100vh - 230px),900px)}
+.crm-inbox.um-numero{grid-template-columns:320px minmax(0,1fr)}
 .crm-inbox>*{min-width:0}
 .crm-col{display:flex;flex-direction:column;border-right:1px solid var(--border);min-height:0}
 .crm-col:last-child{border-right:none}
@@ -45,19 +50,62 @@
 .crm-thread-acoes{display:flex;gap:6px;flex-shrink:0;margin-left:auto}
 .crm-thread-body{flex:1;overflow-y:auto;padding:var(--sp-4) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2);min-height:0}
 .crm-dia{align-self:center;font-size:var(--fs-1);font-weight:700;color:var(--text-3);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px 12px;margin:var(--sp-1) 0;letter-spacing:.04em;text-transform:uppercase}
-.crm-msg{max-width:74%;padding:9px 13px;border-radius:var(--r-lg);font-size:var(--fs-4);line-height:1.5;color:var(--text-1)}
-.crm-msg .h{display:block;font-size:var(--fs-1);font-weight:600;color:var(--text-3);margin-top:4px;text-align:right;font-variant-numeric:tabular-nums}
+.crm-msg{max-width:68%;padding:9px 13px;border-radius:var(--r-lg);font-size:var(--fs-4);line-height:1.5;color:var(--text-1)}
+.crm-msg .h{display:flex;align-items:center;justify-content:flex-end;gap:5px;font-size:var(--fs-1);font-weight:600;color:var(--text-3);margin-top:4px;font-variant-numeric:tabular-nums}
+.crm-msg-txt{white-space:pre-wrap;overflow-wrap:anywhere}
 .crm-msg.rec{align-self:flex-start;background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:var(--r-sm)}
-.crm-msg.env{align-self:flex-end;background:var(--amber-l);border:1px solid rgba(245,158,11,.35);border-bottom-right-radius:var(--r-sm)}
+/* 14/09: enviada passou de âmbar para verde. O âmbar do sistema significa
+   "atenção" em toda a plataforma — usá-lo na própria resposta fazia cada
+   mensagem enviada parecer um aviso. Verde à direita é a convenção que quem
+   usa WhatsApp já conhece, e não precisa ser ensinada. */
+.crm-msg.env{align-self:flex-end;background:var(--green-l);border:1px solid rgba(5,150,105,.28);border-bottom-right-radius:var(--r-sm)}
+.crm-msg.env .h{color:var(--green-text)}
 .crm-msg.sis{align-self:center;background:none;border:1px dashed var(--border-2);color:var(--text-3);font-size:var(--fs-2);padding:5px 13px;border-radius:999px;max-width:88%;text-align:center}
-.crm-msg-aut{font-size:var(--fs-1);font-weight:700;color:var(--amber-text);margin-bottom:3px}
-.crm-composer{background:var(--surface);border-top:1px solid var(--border);padding:var(--sp-3);flex-shrink:0}
-.crm-composer-box{display:flex;align-items:center;gap:var(--sp-2);border:1px solid var(--border-2);border-radius:var(--r-md);padding:7px 9px;background:var(--surface)}
-.crm-composer-box input{flex:1;border:none;outline:none;font-family:inherit;font-size:var(--fs-4);color:var(--text-1);background:none}
-.crm-atalhos{display:flex;gap:6px;margin-bottom:var(--sp-2);flex-wrap:wrap}
-.crm-atalho{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2);font-weight:600;color:var(--text-2);background:var(--gray-50);border:1px solid var(--border);border-radius:999px;padding:5px 11px;cursor:pointer}
-.crm-atalho:hover{border-color:var(--border-2);background:var(--gray-100)}
-.crm-ctx{background:var(--surface)}
+.crm-msg-aut{font-size:var(--fs-1);font-weight:700;color:var(--green-text);margin-bottom:3px}
+.crm-tique{font-weight:700;letter-spacing:-.04em}
+.crm-tique.ok{color:var(--green)}
+.crm-tique.erro{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--red);color:#fff;font-size:9px}
+
+/* ── selos do cabeçalho: caixa e responsável ──────────────────────────────
+   Quem responde precisa saber por qual número a pessoa falou e de quem é o
+   atendimento — antes isso só existia na ficha, que agora vem fechada. */
+.crm-thread-selos{display:flex;gap:5px;align-items:center;flex-shrink:0}
+.crm-selo-cx,.crm-selo-dono{font-size:var(--fs-1);font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.crm-selo-cx{background:var(--gray-50);color:var(--text-2);border:1px solid var(--border)}
+.crm-selo-dono{background:var(--green-l);color:var(--green-text)}
+.crm-selo-dono.sem{background:var(--amber-l);color:var(--amber-text)}
+
+/* ── barra de escrever ───────────────────────────────────────────────────
+   O campo era `input` de uma linha: texto longo rolava para o lado e a pessoa
+   não via o que tinha escrito. Virou `textarea` que cresce com o conteúdo até
+   ~5 linhas (o teto está aqui e também no JS) e então rola por dentro. */
+.crm-composer{background:var(--surface);border-top:1px solid var(--border);padding:var(--sp-3);flex-shrink:0;position:relative}
+.crm-composer-box{display:flex;align-items:flex-end;gap:var(--sp-2);border:1.5px solid var(--border-2);border-radius:var(--r-lg);padding:7px 9px;background:var(--surface)}
+.crm-composer-box:focus-within{border-color:var(--navy)}
+.crm-composer-icos{display:flex;gap:2px;padding-bottom:3px;flex-shrink:0}
+.crm-cico{width:28px;height:28px;border:none;background:none;border-radius:var(--r-sm);color:var(--text-3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.crm-cico:hover{background:var(--gray-50);color:var(--text-1)}
+.crm-composer-box textarea{flex:1;min-width:0;border:none;outline:none;resize:none;font-family:inherit;font-size:var(--fs-4);line-height:1.55;color:var(--text-1);background:none;padding:4px 0;min-height:30px;max-height:132px;overflow-y:auto}
+.crm-enviar{width:36px;height:36px;flex-shrink:0;border:none;border-radius:var(--r-md);background:var(--amber);color:#3b2600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.crm-enviar:hover{background:var(--amber-h)}
+.crm-composer-dica{font-size:var(--fs-1);color:var(--text-3);margin-top:6px;padding-left:4px}
+.crm-composer-dica kbd{font-family:inherit;font-size:10px;font-weight:700;background:var(--gray-50);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:1px 5px;color:var(--text-2)}
+.crm-modelos{position:absolute;left:var(--sp-3);bottom:calc(100% - var(--sp-2));display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-md);box-shadow:var(--shadow-md);padding:5px;z-index:5;min-width:216px}
+.crm-modelo{display:flex;align-items:center;gap:7px;font-size:var(--fs-3);font-weight:600;color:var(--text-2);background:none;border:none;border-radius:var(--r-sm);padding:8px 10px;cursor:pointer;text-align:left;font-family:inherit}
+.crm-modelo:hover{background:var(--gray-50);color:var(--text-1)}
+
+/* ── ficha do contato: painel, não coluna ────────────────────────────────
+   Deslizava 272px de largura fixa de uma tela cujo trabalho é ler e escrever.
+   Agora entra por cima da conversa, pelo botão no cabeçalho, e sai do caminho
+   quando não está em uso. */
+.crm-ctx{background:var(--surface);position:absolute;top:0;right:0;bottom:0;width:300px;max-width:88%;
+  border-left:1px solid var(--border);box-shadow:var(--shadow-md);z-index:6;overflow-y:auto;
+  transform:translateX(101%);transition:transform .18s ease;visibility:hidden}
+.crm-inbox.com-ficha .crm-ctx{transform:none;visibility:visible}
+.crm-ctx-topo{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);padding:var(--sp-3);
+  border-bottom:1px solid var(--border);font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--text-3);position:sticky;top:0;background:var(--surface)}
+@media(prefers-reduced-motion:reduce){.crm-ctx{transition:none}}
 .crm-ctx-bloco{padding:var(--sp-3) var(--sp-3);border-bottom:1px solid var(--border)}
 .crm-ctx-lbl{font-size:var(--fs-1);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:var(--sp-2)}
 .crm-ctx-linha{display:flex;justify-content:space-between;gap:var(--sp-2);font-size:var(--fs-2);margin-bottom:5px}
@@ -116,7 +164,6 @@
 /* Marca de disponibilidade no celular, na lista de menu da proposta */
 /* Estado de tela feita para o computador, visto no celular */
 
-
 .crm-mob-sep{display:none}
 @media(max-width:767px){.crm-mob-sep{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--gray-50);font-size:var(--fs-1);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);border-top:1px solid var(--border)}}
 
@@ -125,7 +172,11 @@
   .crm-inbox,.crm-inbox.um-numero{grid-template-columns:1fr;height:auto;border:none;border-radius:0}
   .crm-col{border-right:none}
   .crm-col-body,.crm-thread-body{flex:none;overflow:visible;min-height:0}
+  /* No celular a ficha não existe, então o botão que a abre também não pode
+     existir — botão que não faz nada é pior do que botão ausente. */
   .crm-caixas,.crm-ctx{display:none}
+  .crm-thread-acoes [data-acao="crm:ficha"]{display:none}
+  .crm-thread-selos{flex-wrap:wrap}
   .crm-num-grid{grid-template-columns:1fr}
   .crm-kanban{display:none}
   .crm-mob-caixas{display:flex}
@@ -134,7 +185,6 @@
 .crm-mob-caixa{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border-2);border-radius:999px;padding:6px 12px;font-size:var(--fs-2);font-weight:600;color:var(--text-2);white-space:nowrap;flex-shrink:0}
 .crm-mob-caixa.ativa{background:var(--navy);border-color:var(--navy);color:#fff}
 .crm-mob-caixa .n{background:var(--atencao);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:0 6px}
-
 
 /* ══════════════════════════════════════════════════════════════════════════
    05/09 (h17) — arrastar-e-soltar, seletor de funis, configuração e quadro
@@ -213,7 +263,6 @@
 
 @media(max-width:767px){.crm-funis-trilho{overflow-x:auto;flex-wrap:nowrap}}
 
-
 /* ── 05/09 (h21) — cartão de atividade completo e linhas clicáveis ────────
    O cartão passou a responder "de que negócio se trata" e "quem pediu": uma
    atividade criada por outra pessoa chegava sem remetente. */
@@ -245,7 +294,6 @@
 /* Linha de tabela clicável (Contatos, Leads) */
 .ds-tabela tr.clicavel{cursor:pointer}
 .ds-tabela tr.clicavel:hover{background:var(--gray-50)}
-
 
 /* ── 05/09 (h24) — previsão de fechamento e ficha da empresa ─────────────── */
 .crm-lead-prev{display:flex;align-items:center;gap:5px;margin-top:8px;padding-top:8px;

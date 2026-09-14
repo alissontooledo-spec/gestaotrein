@@ -284,13 +284,19 @@ async function moverEtapa(ponte, redesenhar, funilId, etapaId, passo) {
    para bloquear so a acao real "ver a imagem do QR Code", que ainda nao foi
    construida (o modal de conexao hoje mostra um icone decorativo, nao o QR
    de verdade — ver 05-Decisoes, pendencia de UI separada).
+   ── 14/09: `crm:modelo:` saiu daqui. Modelo de mensagem nunca dependeu do
+   gateway: ele só escreve um texto pronto no campo de resposta, e quem envia
+   continua sendo a pessoa. Passou a ser tratado pela própria tela
+   (`conversas.js`), que insere o texto sem redesenhar — redesenhar apagaria o
+   que já estava digitado.
+
    Ficam so as acoes que de fato ainda dependem de algo nao construido:
    ligar/reconectar caixa, horarios/respostas rapidas, importar contatos,
-   anexar arquivo, ver quem acessa, modelos de mensagem, vincular a um lead,
-   o menu "mais", editar/remover numero. */
+   anexar arquivo, ver quem acessa, vincular a um lead, o menu "mais",
+   editar/remover numero. */
 const DEPENDE_WHATSAPP = ['crm:nova-conversa', 'crm:conversar:', 'crm:ligar:', 'crm:reconectar:',
   'crm:horarios', 'crm:respostas', 'crm:importar-contatos', 'crm:anexar',
-  'crm:acesso:', 'crm:qr:', 'crm:modelo:', 'crm:vincular:',
+  'crm:acesso:', 'crm:qr:', 'crm:vincular:',
   'crm:mais:', 'crm:editar-numero:', 'crm:remover:'];
 
 export default async function acoes(acao, { redesenhar }) {
