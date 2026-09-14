@@ -17,6 +17,7 @@
 import * as ui from '../../nucleo/ui.js';
 import { icone } from '../../nucleo/icones.js';
 import * as dados from '../../nucleo/dados.js';
+import * as navegacao from '../../nucleo/navegacao.js';
 import { avisoDemo } from './painel.js';
 
 /* O QR Code expira em segundos e o gateway emite outro enquanto ninguém
@@ -181,7 +182,7 @@ export function modalQR(caixa) {
     corpo: `
     <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
       <div id="crmQRAlvo" style="width:188px;height:188px;background:#fff;border:1px solid var(--border-2);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-3);font-size:12px;text-align:center;padding:10px">
-        ${caixa.gateway_qr ? 'Desenhando o código…' : 'Nenhum código emitido ainda'}
+        ${caixa.gateway_qr ? 'Desenhando o código…' : 'Esperando o servidor emitir um código…'}
       </div>
       <div style="flex:1;min-width:220px">
         <div style="font-size:var(--fs-4);font-weight:700;color:var(--text-1);margin-bottom:10px">${ui.esc(caixa.nome)}</div>
@@ -191,18 +192,117 @@ export function modalQR(caixa) {
           <li>Toque em <b>Conectar um aparelho</b></li>
           <li>Aponte a câmera para o código ao lado</li>
         </ol>
-        <div style="margin-top:12px;font-size:var(--fs-2);color:${valido ? 'var(--text-3)' : 'var(--atencao-text)'};line-height:1.6">
+        ${/* 14/09, segunda rodada: o código do WhatsApp expira em segundos, e
+             a primeira versão desta janela mostrava uma FOTO dele. Enquanto a
+             pessoa pegava o celular, o código já tinha morrido — o Alisson
+             precisou fechar e abrir a janela para conseguir ler. Agora a
+             janela se atualiza sozinha e avisa quando conectar. */''}
+        <div id="crmQRIdade" style="margin-top:12px;font-size:var(--fs-2);color:var(--text-3);line-height:1.6">
           ${caixa.gateway_qr
-            ? (valido
-                ? `Código gerado há ${idade} segundos. Ele expira rápido — se não funcionar, feche e abra esta janela para pegar o mais recente.`
-                : `<b>Este código já expirou</b> (gerado há ${idade} segundos). O servidor emite um novo a cada 30 segundos: feche esta janela, espere meio minuto e abra de novo.`)
-            : 'O servidor ainda não emitiu nenhum código para este número. Ele tenta a cada 30 segundos — feche e abra esta janela em instantes.'}
+            ? (valido ? `Código gerado há ${idade} segundos.` : 'Buscando um código novo…')
+            : 'O servidor emite um código a cada 30 segundos.'}
+        </div>
+        <div style="margin-top:8px;font-size:var(--fs-2);color:var(--text-3);line-height:1.6;display:flex;align-items:center;gap:7px">
+          <span class="crm-qr-pulso"></span>
+          Esta janela se atualiza sozinha: o código novo aparece aqui e, assim que você escanear, ela fecha.
         </div>
       </div>
     </div>
     ${ui.aviso({ titulo:'Use um número dedicado ao sistema',
       texto:'A conexão é feita como um aparelho conectado do WhatsApp, e o próprio WhatsApp pode encerrá-la se o aparelho principal ficar muito tempo offline.' })}`
   };
+}
+
+/* ── A janela do QR fica viva enquanto estiver aberta ──────────────────────
+   Duas coisas que a primeira versão não fazia, e que fizeram o Alisson penar:
+
+   1. O código do WhatsApp expira em segundos e o gateway emite outro. Mostrar
+      uma foto dele obrigava a fechar e abrir a janela até pegar um válido.
+   2. Depois de escanear com sucesso, a tela continuava dizendo "Aguardando
+      QR", porque nada relia o banco. Quem conectou não tinha como saber que
+      tinha dado certo.
+
+   Agora a janela pergunta ao banco de 4 em 4 segundos: se veio código novo,
+   redesenha; se a caixa conectou, avisa e fecha. Para sozinha quando a janela
+   é fechada (o alvo some do DOM) ou depois de LIMITE_MINUTOS — nenhum laço
+   fica rodando para sempre numa aba esquecida. */
+const LIMITE_MINUTOS = 5;
+
+export function acompanharQR(caixaId, aoConectar) {
+  if (typeof document === 'undefined') return () => {};
+  let ultimoQR = null;
+  let fim = Date.now() + LIMITE_MINUTOS * 60_000;
+
+  const timer = setInterval(async () => {
+    const alvo = document.getElementById('crmQRAlvo');
+    if (!alvo || Date.now() > fim) { clearInterval(timer); return; }
+
+    let c = null;
+    try { c = await dados.obter('crm_caixas', caixaId); } catch { return; }
+    if (!c) return;
+
+    if (c.estado === 'conectado') {
+      clearInterval(timer);
+      aoConectar?.(c);
+      return;
+    }
+
+    if (c.gateway_qr && c.gateway_qr !== ultimoQR) {
+      ultimoQR = c.gateway_qr;
+      pintarQR(c.gateway_qr);
+    }
+
+    const idade = c.gateway_qr_em
+      ? Math.round((Date.now() - new Date(c.gateway_qr_em).getTime()) / 1000) : null;
+    const legenda = document.getElementById('crmQRIdade');
+    if (legenda) {
+      legenda.textContent = idade == null
+        ? 'O servidor emite um código a cada 30 segundos.'
+        : idade < 60
+          ? `Código gerado há ${idade} segundos.`
+          : 'Buscando um código novo…';
+    }
+  }, 4000);
+
+  return () => clearInterval(timer);
+}
+
+/* ── A própria TELA também se atualiza sozinha ─────────────────────────────
+   O segundo sintoma que o Alisson relatou: ele escaneou o código, o WhatsApp
+   conectou no celular, e a tela continuou dizendo "Aguardando QR". Não era
+   defeito de conexão — era a tela, que desenhava uma vez e nunca mais olhava
+   o banco. Quem conectou ficava sem saber que tinha dado certo.
+
+   Regras para isto não virar um problema novo:
+   · Só vigia quando há algo fora do ar. Número conectado não gera consulta
+     nenhuma — não faz sentido ficar perguntando ao banco o que não muda.
+   · Não redesenha com uma janela deste módulo aberta: redesenhar por baixo
+     de um formulário tira o foco de quem está digitando.
+   · Um temporizador só, sempre. `depois()` roda a cada redesenho, então a
+     primeira coisa que ele faz é apagar o anterior. */
+let _timerTela = null;
+
+export function depois() {
+  if (typeof document === 'undefined') return;
+  if (_timerTela) { clearInterval(_timerTela); _timerTela = null; }
+
+  const algoForaDoAr = document.querySelector(
+    '[data-acao^="crm:qr:"], [data-acao^="crm:reconectar:"], [data-acao^="crm:religar:"]');
+  if (!algoForaDoAr) return;
+
+  const janelaAberta = () => !!(
+    document.getElementById('crmQRAlvo') ||        // QR Code
+    document.getElementById('crmE_nome') ||        // Editar
+    document.getElementById('crmReconectarEstado') || // Reconectar
+    document.querySelector('.crmAcessoPessoa'));   // Quem acessa
+
+  _timerTela = setInterval(async () => {
+    if (navegacao.rotaAtual?.() !== 'crm-numeros') {
+      clearInterval(_timerTela); _timerTela = null; return;
+    }
+    if (janelaAberta()) return; // a janela do QR tem o próprio acompanhamento
+    try { await navegacao.redesenhar(); } catch { /* tela trocou no meio */ }
+  }, 8000);
 }
 
 /* Desenha a imagem do QR dentro do modal já aberto. Chamado por acoes.js logo

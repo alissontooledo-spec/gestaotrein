@@ -741,6 +741,16 @@ export default async function acoes(acao, { redesenhar }) {
        casca carrega sob demanda, e esperar por ela antes de abrir deixaria o
        clique sem resposta por um tempo. */
     tela.pintarQR(caixa.gateway_qr);
+    /* O código do WhatsApp morre em segundos. Sem este acompanhamento a
+       pessoa precisa fechar e abrir a janela até pegar um válido — foi o que
+       aconteceu com o Alisson em 14/09 — e, depois de escanear, a tela não
+       dizia que tinha conectado. Agora a janela busca código novo sozinha e
+       fecha quando a conexão entra. */
+    tela.acompanharQR(id, (c) => {
+      ponte.fecharModal?.();
+      ponte.avisar?.(`Conectado! O número ${c.numero || ''} está pronto para enviar e receber.`.replace('  ', ' '), 'success');
+      redesenhar();
+    });
     return true;
   }
 
