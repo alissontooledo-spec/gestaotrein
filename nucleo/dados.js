@@ -1090,7 +1090,24 @@ export async function enviarMensagem(conversaId, texto) {
    com todo o histórico, só sai da fila de pendências. */
 export async function resolverConversa(id) {
   if (_origem !== 'banco') return _simulado();
-  const { error } = await _sb.from('crm_conversas').update({ estado: 'resolvida' }).eq('id', id);
+  /* 14/09: zera `nao_lidas` junto. Sem isso a conversa resolvida continuava
+     com o número laranja de não lidas, seguia contando no contador do menu
+     (`modulo.js`) e no painel — resolver não resolvia nada aos olhos de quem
+     usa. */
+  const { error } = await _sb.from('crm_conversas')
+    .update({ estado: 'resolvida', nao_lidas: 0 }).eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+/* Liga (ou desliga) a conversa a um negócio do funil. A coluna `lead_id` já
+   existia em `crm_conversas` desde o PASSO-37 e já era lida para desenhar o
+   cartão "Lead ativo" — faltava só o caminho de ida. Sem SQL novo. */
+export async function vincularConversaLead(conversaId, leadId) {
+  if (_origem !== 'banco') return _simulado();
+  const { error } = await _sb.from('crm_conversas')
+    .update({ lead_id: leadId || null })
+    .eq('org_id', sessao.orgId()).eq('id', conversaId);
   if (error) throw error;
   return true;
 }
