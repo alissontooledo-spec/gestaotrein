@@ -279,15 +279,27 @@ function rotuloDia(iso) {
   return d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-/* Estado de entrega. `enviarMensagem` grava 'pendente' e o gateway atualiza
-   depois; por isso qualquer valor desconhecido conta como já enviada, e não
-   como erro — errar para o lado de "saiu" é menos ruim do que alarmar à toa. */
+/* ── Estado de entrega, dito com honestidade (14/09, 2ª correção) ──────────
+   Isto mostrava ✓✓ — os dois tiques do WhatsApp, que para qualquer pessoa
+   significam "chegou no celular da outra pessoa". E não é isso que a gente
+   sabe. O que a gente sabe é que o WhatsApp ACEITOU a mensagem do gateway;
+   se ela foi entregue de verdade, ninguém aqui confirmou.
+
+   A diferença apareceu no pior jeito possível: o Alisson mandou "oi", a tela
+   mostrou ✓✓, e a mensagem não chegou no outro celular dele. A tela estava
+   prometendo mais do que o sistema tinha como garantir.
+
+   Agora é um tique só, com o texto certo. No dia em que o gateway passar a
+   ouvir a confirmação de entrega do WhatsApp (`messages.update`), aí sim
+   caberá o segundo tique — e ele vai querer dizer alguma coisa. */
 function tiqueEntrega(m) {
   if (m.tipo !== 'enviada') return '';
   const s = String(m.status || '').toLowerCase();
-  if (s === 'pendente')            return `<span class="crm-tique" title="Na fila — sai em instantes">◷</span>`;
-  if (s === 'erro' || s === 'falha') return `<span class="crm-tique erro" title="Não foi possível enviar">!</span>`;
-  return `<span class="crm-tique ok" title="Enviada">✓✓</span>`;
+  if (s === 'pendente') return `<span class="crm-tique" title="Na fila — sai em instantes">◷</span>`;
+  if (s === 'erro' || s === 'falha' || s === 'falhou') {
+    return `<span class="crm-tique erro" title="${ui.esc(m.erro || 'Não foi possível enviar')}">!</span>`;
+  }
+  return `<span class="crm-tique ok" title="Entregue ao WhatsApp para envio">✓</span>`;
 }
 
 /* ── conversa ───────────────────────────────────────────────────────────── */
@@ -303,6 +315,11 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
       : `<div class="crm-msg ${m.tipo === 'enviada' ? 'env' : 'rec'}">
            ${m.autor ? `<div class="crm-msg-aut">${ui.esc(m.autor)}</div>` : ''}
            <div class="crm-msg-txt">${ui.esc(m.texto)}</div>
+           ${/* O motivo da falha fica VISÍVEL na mensagem, não escondido num
+                title que só aparece com o mouse parado em cima. Quem precisa
+                dessa informação normalmente está no celular, onde title não
+                existe. */''}
+           ${m.erro ? `<div class="crm-msg-erro">${ui.esc(m.erro)}</div>` : ''}
            <span class="h">${m.hora || ''}${tiqueEntrega(m)}</span></div>`;
     return divisor + corpo;
   }).join('');
