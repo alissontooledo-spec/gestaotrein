@@ -26,10 +26,28 @@ const QR_VALIDO_SEGUNDOS = 120;
 export const qrAindaVale = (c) => !!c.gateway_qr && !!c.gateway_qr_em
   && (Date.now() - new Date(c.gateway_qr_em).getTime()) < QR_VALIDO_SEGUNDOS * 1000;
 
+/* ── Quem manda é o QR, não o `estado` (14/09, achado com dado real) ───────
+   O `estado` da caixa oscila: quando o gateway emite um QR, ele grava
+   `aguardando_qr`; sete segundos depois o ciclo de sincronia grava
+   `desconectado` por cima, porque para o gateway "não conectado" é
+   desconectado. As duas escritas brigam, e quem olha a tela vê "Desconectado"
+   mesmo com um código esperando leitura.
+
+   Na prática isso mandava a pessoa para o botão ERRADO: "Reconectar" não
+   resolve sessão deslogada — só a leitura do QR resolve. Então a tela decide
+   pelo fato que não oscila: existe um código esperando? Então é isso que
+   precisa ser feito, diga o `estado` o que disser.
+   (A briga entre as duas escritas também foi corrigida na Edge Function
+   `whatsapp-gateway-sync`, para o banco parar de se contradizer.) */
+const precisaQR = (c) => c.ativa !== false && (c.estado === 'aguardando_qr' || !!c.gateway_qr);
+
 export async function render() {
   const caixas = await dados.listar('crm_caixas');
   const conectados = caixas.filter(c => c.estado === 'conectado' && c.ativa !== false);
-  const fora       = caixas.filter(c => c.estado === 'desconectado' && c.ativa !== false);
+  /* "Caiu" é só quem caiu mesmo: com QR pendente, o caminho é escanear, e
+     oferecer "Reconectar" seria mandar a pessoa para o lugar errado. */
+  const fora       = caixas.filter(c => c.estado === 'desconectado' && c.ativa !== false && !precisaQR(c));
+  const esperandoQR = caixas.filter(precisaQR);
   const desligadas = caixas.filter(c => c.ativa === false);
 
   return `
@@ -54,6 +72,16 @@ export async function render() {
     texto:'Enquanto estiver desligado, nenhuma mensagem entra nem sai por ele. As conversas antigas continuam guardadas.',
     acao:{ rotulo:'Religar agora', acao:`crm:religar:${c.id}` } })).join('')}
 
+  ${/* Sessão deslogada no aparelho é o caso mais comum de queda, e o único
+       jeito de sair dele é escanear o código de novo. O aviso leva direto
+       para lá, em vez de oferecer um "Reconectar" que não resolveria. */''}
+  ${esperandoQR.map(c => ui.aviso({
+    icone:'qr', titulo:`O número "${c.nome}" precisa ser conectado de novo`,
+    texto: c.ultimo_erro
+      ? c.ultimo_erro
+      : 'Leia o QR Code no celular deste número para voltar a enviar e receber mensagens.',
+    acao:{ rotulo:'Ler QR Code', acao:`crm:qr:${c.id}` } })).join('')}
+
   ${fora.map(c => ui.aviso({
     icone:'wifioff', titulo:`O número do ${c.nome} caiu às ${c.desde || 'pouco tempo atrás'}`,
     texto:'As mensagens continuam sendo recebidas e entram na caixa assim que a conexão voltar',
@@ -72,8 +100,11 @@ export async function render() {
 
 function cartao(c) {
   const desligada = c.ativa === false;
+  const querQR = precisaQR(c);
   const estado = desligada
     ? { selo:['Desligado','neutro'], ic:'wifioff', cor:'background:var(--gray-100);color:var(--text-3)' }
+    : querQR
+    ? { selo:['Aguardando QR','atencao'], ic:'qr', cor:'background:var(--atencao-l);color:var(--atencao)' }
     : ({
         conectado:     { selo:['Conectado','ok'],         ic:'chat',    cor:'' },
         desconectado:  { selo:['Desconectado','atencao'],  ic:'wifioff', cor:'background:var(--atencao-l);color:var(--atencao)' },
@@ -103,7 +134,7 @@ function cartao(c) {
            <button class="ds-btn pri sm" data-acao="crm:religar:${c.id}">Religar</button>
            <button class="ds-btn sec sm" data-acao="crm:editar-numero:${c.id}">Editar</button></div>`
 
-      : c.estado === 'aguardando_qr'
+      : querQR
       ? `<div style="font-size:var(--fs-3);color:var(--text-3);line-height:1.6;margin:4px 0 12px">
            ${qrAindaVale(c)
              ? 'Código pronto para leitura. Abra o WhatsApp no celular deste número e escaneie.'
