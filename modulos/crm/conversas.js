@@ -24,6 +24,19 @@ const MODELOS = {
   certificado: 'Claro! Me confirme o nome completo e o CPF do participante que eu emito a 2ª via do certificado.'
 };
 
+/* ── Elemento que está REALMENTE na tela ────────────────────────────────────
+   A casca desenha a mesma tela duas vezes — um corpo de computador e um de
+   celular — e esconde a que não vale por CSS. Então todo `id` existe em
+   duplicata, e `getElementById` devolve sempre a primeira, a de computador.
+   No celular isso significa escrever numa caixa invisível: o texto digitado
+   nunca chegava ao envio, e "Escreva uma mensagem antes de enviar" aparecia
+   com a mensagem escrita na tela. Mesmo critério de largura que a casca usa
+   para decidir onde devolver o foco. */
+function visivel(id) {
+  const todos = [...document.querySelectorAll(`[id="${id}"]`)];
+  return todos.find(e => e.getBoundingClientRect().width > 0) || todos[0] || null;
+}
+
 export async function render(params = {}) {
   const [caixas, conversas, contatos] = await Promise.all([
     dados.listar('crm_caixas'),
@@ -34,18 +47,37 @@ export async function render(params = {}) {
   const varios = caixas.length > 1;
   /* 05/09 (h17): a lista era so filtrada por caixa. Busca e os tres chips do
      topo existiam desenhados na tela, mas nao respondiam a clique nenhum —
-     eram enfeite. Agora filtram de verdade. */
+     eram enfeite. Agora filtram de verdade.
+
+     ── 14/09 (revisão) ────────────────────────────────────────────────────
+     Resolver uma conversa gravava `estado='resolvida'` no banco e a linha
+     continuava idêntica na lista — mesma posição, mesmo contador de não
+     lidas. Quem clicava concluía, com razão, que o botão não funcionava.
+     Agora resolvida SAI da lista de abertas e passa a viver no filtro
+     "Resolvidas". Fechar tem que ser visível, senão não é fechar. */
   const eu = sessao.usuario()?.nome || '';
-  let lista = _caixaAtiva === 'todas' ? conversas : conversas.filter(c => c.caixa_id === _caixaAtiva);
-  if (_filtro === 'minhas')   lista = lista.filter(c => c.responsavel && c.responsavel === eu);
-  if (_filtro === 'sem-dono') lista = lista.filter(c => !c.responsavel);
+  const daCaixa  = (c) => _caixaAtiva === 'todas' || c.caixa_id === _caixaAtiva;
+  const resolvida = (c) => c.estado === 'resolvida';
+  const abertas  = conversas.filter(c => daCaixa(c) && !resolvida(c));
+
+  let lista;
+  if (_filtro === 'resolvidas')    lista = conversas.filter(c => daCaixa(c) && resolvida(c));
+  else if (_filtro === 'minhas')   lista = abertas.filter(c => c.responsavel && c.responsavel === eu);
+  else if (_filtro === 'sem-dono') lista = abertas.filter(c => !c.responsavel);
+  else                             lista = abertas;
+
   if (_busca) {
     const t = _busca.toLowerCase();
     lista = lista.filter(c => [c.nome, c.empresa, c.previa, c.telefone]
       .some(v => (v || '').toLowerCase().includes(t)));
   }
-  _conversaAtiva = params.conversa || _conversaAtiva || lista[0]?.id;
-  const atual   = conversas.find(c => c.id === _conversaAtiva) || lista[0];
+
+  /* A conversa aberta tem de ser uma das que estão na lista. Antes a busca
+     vinha da lista completa: filtrar ou resolver deixava na tela, ao lado de
+     uma lista vazia, uma conversa que não estava mais nela. */
+  if (params.conversa) _conversaAtiva = params.conversa;
+  const atual = lista.find(c => c.id === _conversaAtiva) || lista[0] || null;
+  _conversaAtiva = atual ? atual.id : null;
   const contato = contatos.find(c => c.id === atual?.contato_id);
   /* Mensagens e lead vinculado: sempre da conversa aberta, nunca em bloco —
      mesmo motivo de `mensagensDaConversa` ser por-conversa em dados.js. */
@@ -56,9 +88,9 @@ export async function render(params = {}) {
     <div class="crm-inbox ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}">
       ${varios ? chipsCelular(caixas, conversas) : ''}
       ${varios ? trilhoCaixas(caixas, conversas) : ''}
-      ${colunaLista(lista, caixas, varios)}
+      ${colunaLista(lista, caixas, varios, abertas.length)}
       <div class="crm-mob-sep">${icone('chevrondown','sm')} Ao tocar em uma conversa</div>
-      ${atual ? colunaConversa(atual, caixas, varios, contato, msgs) : ui.vazio({ icone:'inbox', titulo:'Nenhuma conversa' })}
+      ${atual ? colunaConversa(atual, caixas, varios, contato, msgs) : vazioDaLista()}
       ${atual ? colunaContexto(atual, contato, lead) : ''}
     </div>
     ${dados.ehExemplo() ? avisoDemo() : ''}`;
@@ -102,15 +134,27 @@ function chipsCelular(caixas, conversas) {
   </div>`;
 }
 
+/* Tela vazia com a razão certa: sem busca é caixa vazia, com busca é busca
+   sem resultado — e aí o caminho de volta precisa estar à mão. */
+function vazioDaLista() {
+  if (_busca) return ui.vazio({ icone:'search', titulo:`Nada encontrado para "${ui.esc(_busca)}"`,
+    texto:'Tente outro nome, telefone ou trecho da mensagem.' });
+  if (_filtro === 'resolvidas') return ui.vazio({ icone:'check', titulo:'Nenhuma conversa resolvida ainda' });
+  if (_filtro === 'minhas')     return ui.vazio({ icone:'user', titulo:'Nenhuma conversa sua' });
+  if (_filtro === 'sem-dono')   return ui.vazio({ icone:'user', titulo:'Todas as conversas já têm responsável' });
+  return ui.vazio({ icone:'inbox', titulo:'Nenhuma conversa aberta',
+    texto:'Quando chegar uma mensagem no WhatsApp, ela aparece aqui.' });
+}
+
 /* ── lista de conversas ─────────────────────────────────────────────────── */
-function colunaLista(lista, caixas, varios) {
+function colunaLista(lista, caixas, varios, totalAbertas) {
   return `
   <div class="crm-col">
     <div class="crm-col-head">
       <div class="ds-busca" style="max-width:none;margin-bottom:10px">${icone('search','sm')}
         <input type="search" placeholder="Buscar conversa, contato ou telefone" value="${ui.esc(_busca)}" data-acao="crm:buscar-conversa"></div>
       <div style="display:flex;gap:5px;flex-wrap:wrap">
-        ${[['todas', `Todas · ${lista.length}`], ['minhas','Minhas'], ['sem-dono','Sem responsável']]
+        ${[['todas', `Abertas · ${totalAbertas}`], ['minhas','Minhas'], ['sem-dono','Sem responsável'], ['resolvidas','Resolvidas']]
           .map(([id, rot]) => `<span class="ds-selo ${_filtro === id ? '' : 'neutro'}"
             style="cursor:pointer${_filtro === id ? ';background:var(--navy);color:#fff' : ''}"
             data-acao="crm:filtro-conv:${id}">${rot}</span>`).join('')}
@@ -125,6 +169,7 @@ function colunaLista(lista, caixas, varios) {
             <div class="crm-conv-top"><span class="crm-conv-nome">${ui.esc(c.nome)}</span><span class="crm-conv-hora">${c.hora}</span></div>
             <div class="crm-conv-prev">${ui.esc(c.previa)}</div>
             <div class="crm-conv-meta">
+              ${c.estado === 'resolvida' ? `<span class="crm-tag-resolvida">${icone('check','sm')} Resolvida</span>` : ''}
               ${varios && cx ? `<span class="crm-tag-caixa"><i></i> ${ui.esc(cx.nome)}</span>` : ''}
               ${c.empresa ? ui.selo(c.empresa, 'neutro') : ''}
             </div>
@@ -265,16 +310,16 @@ export function acao(nome, valor, redesenhar) {
      inteiro — então abrir a ficha ou pegar um modelo não redesenha nada. */
   if (nome === 'crm:ficha') {
     _fichaAberta = !_fichaAberta;
-    document.querySelector('.crm-inbox')?.classList.toggle('com-ficha', _fichaAberta);
+    document.querySelectorAll('.crm-inbox').forEach(e => e.classList.toggle('com-ficha', _fichaAberta));
     return true;
   }
   if (nome === 'crm:modelos') {
-    const cx = document.getElementById('crmModelos');
+    const cx = visivel('crmModelos');
     if (cx) cx.hidden = !cx.hidden;
     return true;
   }
   if (nome === 'crm:modelo') {
-    const campo = document.getElementById('crmComposerTexto');
+    const campo = visivel('crmComposerTexto');
     const texto = MODELOS[valor];
     if (campo && texto) {
       campo.value = campo.value.trim() ? campo.value.replace(/\s*$/, ' ') + texto : texto;
@@ -282,7 +327,7 @@ export function acao(nome, valor, redesenhar) {
       campo.focus();
       campo.selectionStart = campo.selectionEnd = campo.value.length;
     }
-    const cx = document.getElementById('crmModelos');
+    const cx = visivel('crmModelos');
     if (cx) cx.hidden = true;
     return true;
   }
@@ -296,12 +341,19 @@ export function acao(nome, valor, redesenhar) {
    por isso não há listener a remover. */
 export function depois() {
   if (typeof document === 'undefined') return;
-  const campo = document.getElementById('crmComposerTexto');
+
+  /* 1. A conversa abre na mensagem MAIS NOVA. Sem isto a tela abria no topo,
+        na mensagem mais antiga, e depois de enviar voltava para lá — a própria
+        resposta recém-enviada ficava fora da vista. É o que mais fazia a tela
+        parecer quebrada. Vale para as duas cópias (computador e celular). */
+  document.querySelectorAll('.crm-thread-body').forEach(t => { t.scrollTop = t.scrollHeight; });
+
+  const campo = visivel('crmComposerTexto');
   if (!campo) return;
 
-  /* Cresce com o texto, até cerca de 5 linhas; daí em diante rola por dentro.
-     O teto também está no CSS (max-height), para o campo nunca empurrar a
-     conversa para fora da tela. */
+  /* 2. Cresce com o texto, até cerca de 5 linhas; daí em diante rola por
+        dentro. O teto também está no CSS (max-height), para o campo nunca
+        empurrar a conversa para fora da tela. */
   const crescer = () => {
     campo.style.height = 'auto';
     campo.style.height = Math.min(campo.scrollHeight, 132) + 'px';
@@ -309,9 +361,48 @@ export function depois() {
   campo.addEventListener('input', crescer);
   crescer();
 
+  /* 3. Enter envia. `isComposing` cobre teclados com acentuação por composição;
+        `keyCode 229` cobre parte dos teclados de Android, que não mandam
+        `isComposing`. Enviar no meio de uma palavra sendo composta perde texto. */
   campo.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'Enter' || ev.shiftKey || ev.isComposing) return;
+    if (ev.key !== 'Enter' || ev.shiftKey || ev.isComposing || ev.keyCode === 229) return;
     ev.preventDefault();
-    document.querySelector('.crm-enviar[data-acao^="crm:enviar:"]')?.click();
+    const botao = [...document.querySelectorAll('.crm-enviar[data-acao^="crm:enviar:"]')]
+      .find(b => b.getBoundingClientRect().width > 0);
+    botao?.click();
+  });
+
+  ligarAtalhosGlobais();
+}
+
+/* ── Fechar o que está por cima ─────────────────────────────────────────────
+   A caixa de modelos e a ficha do contato abrem por cima da conversa. Se só
+   fecham pelo mesmo botão que as abriu, quem não descobre isso fica com a
+   coisa presa na tela — foi exatamente o que aconteceu. Esc e clique fora
+   fecham, como em qualquer lugar.
+
+   Registrado UMA vez: `depois()` roda a cada redesenho, e re-registrar
+   empilharia um listener por redesenho. */
+let _globaisLigados = false;
+function ligarAtalhosGlobais() {
+  if (_globaisLigados || typeof document === 'undefined') return;
+  _globaisLigados = true;
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    const aberta = document.querySelector('.crm-modelos:not([hidden])');
+    if (aberta) { aberta.hidden = true; return; }
+    if (_fichaAberta) {
+      _fichaAberta = false;
+      document.querySelectorAll('.crm-inbox').forEach(e => e.classList.remove('com-ficha'));
+    }
+  });
+
+  document.addEventListener('click', (ev) => {
+    const aberta = document.querySelector('.crm-modelos:not([hidden])');
+    if (!aberta) return;
+    if (aberta.contains(ev.target)) return;
+    if (ev.target.closest?.('[data-acao="crm:modelos"]')) return;  // o próprio botão alterna
+    aberta.hidden = true;
   });
 }

@@ -12,7 +12,19 @@ import * as sessao from '../../nucleo/sessao.js';
 import { ESTAGIOS } from '../../nucleo/estagios.js';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const val = (id) => document.getElementById(id)?.value?.trim() ?? '';
+
+/* ── 14/09 ──────────────────────────────────────────────────────────────────
+   A casca desenha a mesma tela duas vezes (corpo de computador e corpo de
+   celular) e esconde uma por CSS. Todo `id` existe em duplicata, e
+   `getElementById` devolve sempre a de computador — invisível no celular.
+   Consequência real: no celular, qualquer formulário deste arquivo lia campo
+   vazio, e o envio de mensagem respondia "Escreva uma mensagem antes de
+   enviar" com a mensagem escrita na tela. Ler sempre a cópia visível. */
+const elVisivel = (id) => {
+  const todos = [...document.querySelectorAll(`[id="${id}"]`)];
+  return todos.find(e => e.getBoundingClientRect().width > 0) || todos[0] || null;
+};
+const val = (id) => elVisivel(id)?.value?.trim() ?? '';
 
 const CAMPO = 'width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none';
 const ROTULO = 'display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:5px';
@@ -38,14 +50,19 @@ function explicar(e) {
   return m;
 }
 
+/* Devolve `true` se gravou. Quem chama precisa saber: limpar o campo de
+   mensagem depois de um envio que FALHOU apaga o texto da pessoa e não envia
+   nada — o pior dos dois mundos. */
 async function gravar(ponte, fn, redesenhar, sucesso) {
   try {
     await fn();
     ponte.fecharModal?.();
     ponte.avisar?.(sucesso, 'success');
     await redesenhar();
+    return true;
   } catch (e) {
     ponte.avisar?.(explicar(e), 'error');
+    return false;
   }
 }
 
@@ -284,30 +301,46 @@ async function moverEtapa(ponte, redesenhar, funilId, etapaId, passo) {
    para bloquear so a acao real "ver a imagem do QR Code", que ainda nao foi
    construida (o modal de conexao hoje mostra um icone decorativo, nao o QR
    de verdade — ver 05-Decisoes, pendencia de UI separada).
-   ── 14/09: `crm:modelo:` saiu daqui. Modelo de mensagem nunca dependeu do
-   gateway: ele só escreve um texto pronto no campo de resposta, e quem envia
-   continua sendo a pessoa. Passou a ser tratado pela própria tela
-   (`conversas.js`), que insere o texto sem redesenhar — redesenhar apagaria o
-   que já estava digitado.
+   ── REVISTO EM 14/09, depois de uma auditoria ação por ação ──────────────
+   A lista estava MENTINDO em oito das catorze entradas. "Vincular a um
+   negócio" não tem nada a ver com WhatsApp — e era o que o Alisson clicava
+   quando recebia a mensagem de que dependia da integração. Editar o nome de
+   um número, ver quem tem acesso, definir horário de atendimento: nada disso
+   passa pelo gateway. `crm:mais:` nem existe mais como botão em tela alguma.
 
-   Ficam so as acoes que de fato ainda dependem de algo nao construido:
-   ligar/reconectar caixa, horarios/respostas rapidas, importar contatos,
-   anexar arquivo, ver quem acessa, vincular a um lead, o menu "mais",
-   editar/remover numero. */
-const DEPENDE_WHATSAPP = ['crm:nova-conversa', 'crm:conversar:', 'crm:ligar:', 'crm:reconectar:',
-  'crm:horarios', 'crm:respostas', 'crm:importar-contatos', 'crm:anexar',
-  'crm:acesso:', 'crm:qr:', 'crm:vincular:',
-  'crm:mais:', 'crm:editar-numero:', 'crm:remover:'];
+   Agora são duas listas, porque são dois motivos diferentes, e dizer o motivo
+   errado é pior do que não dizer nada:
+     · DEPENDE_WHATSAPP — falta capacidade no gateway (mídia, iniciar conversa
+       do zero, que exige janela de 24h e modelo aprovado).
+     · NAO_CONSTRUIDO  — a tela ainda não foi feita, e é só isso.
+   Quem saiu das duas listas ganhou tratador de verdade logo abaixo. */
+const DEPENDE_WHATSAPP = ['crm:anexar', 'crm:nova-conversa', 'crm:conversar:'];
+
+const NAO_CONSTRUIDO = ['crm:respostas', 'crm:importar-contatos', 'crm:horarios',
+  'crm:acesso:', 'crm:qr:', 'crm:reconectar:', 'crm:editar-numero:', 'crm:remover:'];
 
 export default async function acoes(acao, { redesenhar }) {
   const ponte = (typeof window !== 'undefined' && window.__GRID_PONTE) || {};
   if (!ponte.abrirModal) return false;
 
   if (DEPENDE_WHATSAPP.some(p => acao === p || acao.startsWith(p))) {
-    ponte.avisar?.('Esta parte depende da integração com WhatsApp, que ainda não foi construída.', 'error');
+    ponte.avisar?.('Esta parte depende de um recurso do WhatsApp que ainda não foi construído.', 'error');
+    return true;
+  }
+  if (NAO_CONSTRUIDO.some(p => acao === p || acao.startsWith(p))) {
+    ponte.avisar?.('Esta tela ainda não foi construída.', 'error');
     return true;
   }
   const [, resto] = [acao.split(':')[0], acao.split(':').slice(1).join(':')];
+
+  /* Ligar para o contato: o próprio aparelho resolve. Estava bloqueado como
+     se dependesse do gateway, e nunca dependeu. */
+  if (acao.startsWith('crm:ligar:')) {
+    const tel = String(resto.replace('ligar:', '')).replace(/\D/g, '');
+    if (!tel) { ponte.avisar?.('Este contato não tem telefone cadastrado.', 'error'); return true; }
+    window.open(`tel:+${tel.length > 11 ? tel : '55' + tel}`, '_self');
+    return true;
+  }
 
   if (acao === 'crm:novo-lead')     { await formLead(ponte, redesenhar); return true; }
   if (acao === 'crm:nova-atividade'){ await formAtividade(ponte, redesenhar); return true; }
@@ -481,14 +514,44 @@ export default async function acoes(acao, { redesenhar }) {
     return true;
   }
 
-  /* Envia a mensagem digitada no composer da conversa aberta. */
+  /* Envia a mensagem digitada no composer da conversa aberta.
+     O campo só é limpo quando a gravação deu certo. Se o envio falhar, o
+     texto continua lá para a pessoa tentar de novo — antes ele era apagado
+     de qualquer jeito, inclusive no erro. */
   if (acao.startsWith('crm:enviar:')) {
     const conversaId = resto.replace('enviar:', '');
     const texto = val('crmComposerTexto');
     if (!texto) { ponte.avisar?.('Escreva uma mensagem antes de enviar.', 'error'); return true; }
-    await gravar(ponte, () => dados.enviarMensagem(conversaId, texto), redesenhar, 'Mensagem enviada.');
-    const campo = document.getElementById('crmComposerTexto');
-    if (campo) campo.value = '';
+    const ok = await gravar(ponte, () => dados.enviarMensagem(conversaId, texto), redesenhar, 'Mensagem enviada.');
+    if (ok) {
+      const campo = elVisivel('crmComposerTexto');
+      if (campo) { campo.value = ''; campo.style.height = 'auto'; }
+    }
+    return true;
+  }
+
+  /* Vincular a conversa a um negócio do funil. Nunca dependeu do WhatsApp:
+     `crm_conversas.lead_id` já existe, já é lido e já desenha o cartão "Lead
+     ativo" na ficha. Só faltava o caminho de ida. */
+  if (acao.startsWith('crm:vincular:')) {
+    const conversaId = resto.replace('vincular:', '');
+    const leads = await dados.listar('crm_leads').catch(() => []);
+    if (!leads.length) {
+      ponte.avisar?.('Nenhum negócio no funil ainda. Crie um lead primeiro, em Funil de vendas.', 'error');
+      return true;
+    }
+    const rotulo = (l) => `${l.empresa}${(l.item || l.treinamento) ? ' — ' + (l.item || l.treinamento) : ''}`;
+    ponte.abrirModal('Vincular a um negócio', `
+      ${linha('Negócio', `<select id="crmV_lead" style="${CAMPO}">
+        <option value="">Sem vínculo</option>
+        ${leads.map(l => `<option value="${esc(l.id)}">${esc(rotulo(l))}</option>`).join('')}</select>`)}
+      <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+        Vinculado, o negócio aparece na ficha do contato, ao lado da conversa — e o histórico da
+        conversa fica ligado à venda.</div>
+    `, ponte.botoes('Vincular', 'crmVincular'));
+    ponte.aoConfirmar('crmVincular', () => gravar(ponte,
+      () => dados.vincularConversaLead(conversaId, val('crmV_lead') || null),
+      redesenhar, val('crmV_lead') ? 'Conversa vinculada ao negócio.' : 'Vínculo removido.'));
     return true;
   }
 
