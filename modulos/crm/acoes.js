@@ -9,6 +9,7 @@
 
 import * as dados from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
+import * as navegacao from '../../nucleo/navegacao.js';
 import { ESTAGIOS } from '../../nucleo/estagios.js';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -286,6 +287,42 @@ async function moverEtapa(ponte, redesenhar, funilId, etapaId, passo) {
   await gravar(ponte, () => dados.reordenarEtapas(funilId, ids), redesenhar, 'Ordem atualizada.');
 }
 
+/* ── Abrir a conversa recém-criada ─────────────────────────────────────────
+   Duas situações, e as duas precisam terminar com a conversa na frente da
+   pessoa:
+     · já estou na tela de Conversas (cliquei num contato pela aba Contatos)
+       → basta avisar a tela qual conversa abrir e redesenhar;
+     · estou na tela de Contatos do CRM → é navegação de verdade.
+   O `import('./conversas.js')` devolve a MESMA instância que a plataforma
+   carregou (mesmo caminho relativo, sem `?v=`) — é o que permite mexer no
+   estado da tela daqui. Repetir a lição do h16: caminho diferente seria um
+   segundo módulo, com estado próprio, e nada funcionaria. */
+async function abrirAConversa(id, redesenhar) {
+  try {
+    const tela = await import('./conversas.js');
+    tela.abrirConversa?.(id);
+  } catch { /* sem a tela carregada, a navegação abaixo resolve sozinha */ }
+
+  if (navegacao.rotaAtual?.() === 'crm-conversas') { await redesenhar(); return; }
+  await navegacao.tratarAcao('ir:crm-conversas:' + id);
+}
+
+/* Por qual número falar. Com uma caixa só — que é o caso de hoje — não há
+   pergunta a fazer. Com várias, prefere uma conectada e DIZ qual usou, em vez
+   de escolher em silêncio: quem tem dois números precisa saber por qual o
+   cliente vai ver a mensagem chegando. Escolha explícita existe em "Criar
+   novo". */
+async function caixaParaFalar(ponte) {
+  const caixas = await dados.listar('crm_caixas').catch(() => []);
+  if (!caixas.length) {
+    ponte.avisar?.('Nenhum número de WhatsApp cadastrado ainda. Cadastre um em CRM → WhatsApp.', 'error');
+    return null;
+  }
+  const escolhida = caixas.find(c => c.estado === 'conectado') || caixas[0];
+  if (caixas.length > 1) ponte.avisar?.(`Falando pelo número "${escolhida.nome}".`, 'success');
+  return escolhida;
+}
+
 /* ── O ponto de entrada que a plataforma chama ────────────────────────────
    Devolve `true` quando tratou. `false` faz a casca avisar que a acao ainda
    nao existe — melhor do que um clique que nao faz nada e nao diz por que. */
@@ -310,11 +347,31 @@ async function moverEtapa(ponte, redesenhar, funilId, etapaId, passo) {
 
    Agora são duas listas, porque são dois motivos diferentes, e dizer o motivo
    errado é pior do que não dizer nada:
-     · DEPENDE_WHATSAPP — falta capacidade no gateway (mídia, iniciar conversa
-       do zero, que exige janela de 24h e modelo aprovado).
+     · DEPENDE_WHATSAPP — falta capacidade no gateway.
      · NAO_CONSTRUIDO  — a tela ainda não foi feita, e é só isso.
-   Quem saiu das duas listas ganhou tratador de verdade logo abaixo. */
-const DEPENDE_WHATSAPP = ['crm:anexar', 'crm:nova-conversa', 'crm:conversar:'];
+   Quem saiu das duas listas ganhou tratador de verdade logo abaixo.
+
+   ── REVISTO DE NOVO EM 14/09 (madrugada) ─────────────────────────────────
+   `crm:nova-conversa` e `crm:conversar:` SAÍRAM da lista, e a justificativa
+   que estava escrita aqui — "exige janela de 24h e modelo aprovado" — estava
+   errada. Essa regra é da API PAGA do WhatsApp (a Cloud API da Meta). O nosso
+   gateway não usa essa API: ele entra como um aparelho conectado de um
+   WhatsApp comum, e um WhatsApp comum puxa assunto com quem quiser, como
+   qualquer vendedor faz no celular. Eu apliquei a regra da API paga a uma
+   conexão que não é ela, e isso bloqueou por semanas a função que o Alisson
+   mais sentia falta.
+
+   O que continua verdade, e por isso fica: MÍDIA. O gateway hoje só manda
+   texto (`sendMessage({ text })` em index.js, na VPS); anexar arquivo exige
+   subir o arquivo para algum lugar e ensinar o gateway a enviá-lo. É
+   trabalho de verdade, não trava de política.
+
+   Cuidado de operação que vale registrar: WhatsApp comum não tem trava, mas
+   tem antispam. Puxar assunto com um cliente de cada vez é o uso normal;
+   disparo em massa para quem nunca falou com a gente é o caminho mais curto
+   para o número do cliente ser bloqueado. A tela permite um de cada vez, de
+   propósito — não existe "enviar para todos". */
+const DEPENDE_WHATSAPP = ['crm:anexar'];
 
 const NAO_CONSTRUIDO = ['crm:respostas', 'crm:importar-contatos', 'crm:horarios',
   'crm:acesso:', 'crm:qr:', 'crm:reconectar:', 'crm:editar-numero:', 'crm:remover:'];
@@ -324,7 +381,7 @@ export default async function acoes(acao, { redesenhar }) {
   if (!ponte.abrirModal) return false;
 
   if (DEPENDE_WHATSAPP.some(p => acao === p || acao.startsWith(p))) {
-    ponte.avisar?.('Esta parte depende de um recurso do WhatsApp que ainda não foi construído.', 'error');
+    ponte.avisar?.('Enviar arquivo ainda não está pronto: o gateway do WhatsApp hoje só envia texto. Está na fila de entregas.', 'error');
     return true;
   }
   if (NAO_CONSTRUIDO.some(p => acao === p || acao.startsWith(p))) {
@@ -511,6 +568,87 @@ export default async function acoes(acao, { redesenhar }) {
       if (!nome) throw new Error('Dê um nome para este número.');
       await dados.criarCaixaWhatsapp({ nome, horario: val('crmN_horario') || null });
     }, redesenhar, 'Número criado. Assim que o gateway conectar, ele aparece como conectado em WhatsApp.'));
+    return true;
+  }
+
+  /* ── Começar uma conversa (14/09, madrugada) ────────────────────────────
+     Duas portas para a mesma coisa, porque são dois jeitos de pensar:
+       · `crm:conversar:<contatoId>` — "quero falar com o Ricardo": veio da
+         agenda, o número já está cadastrado.
+       · `crm:nova-conversa`         — "quero falar com este número": ainda
+         não está na agenda.
+     As duas terminam em `dados.iniciarConversa`, que é procura-ou-cria: o
+     mesmo número, chamado duas vezes, cai sempre na MESMA conversa, e não em
+     duas linhas com o histórico partido no meio. */
+  if (acao.startsWith('crm:conversar:')) {
+    const contatoId = resto.replace('conversar:', '');
+    const contato = await dados.obter('crm_contatos', contatoId).catch(() => null);
+    if (!contato) { ponte.avisar?.('Contato não encontrado.', 'error'); return true; }
+    if (!contato.telefone) {
+      ponte.avisar?.(`${contato.nome} não tem telefone cadastrado. Abra o contato e informe o número.`, 'error');
+      return true;
+    }
+    const caixa = await caixaParaFalar(ponte);
+    if (!caixa) return true;
+    try {
+      const r = await dados.iniciarConversa({
+        caixaId: caixa.id, telefone: contato.telefone,
+        nome: contato.nome, contatoId: contato.id
+      });
+      await abrirAConversa(r.id, redesenhar);
+    } catch (e) { ponte.avisar?.(explicar(e), 'error'); }
+    return true;
+  }
+
+  if (acao === 'crm:nova-conversa') {
+    const caixas = await dados.listar('crm_caixas').catch(() => []);
+    if (!caixas.length) {
+      ponte.avisar?.('Nenhum número de WhatsApp cadastrado ainda. Cadastre um em CRM → WhatsApp.', 'error');
+      return true;
+    }
+    ponte.abrirModal('Nova conversa', `
+      ${linha('Número de WhatsApp *', `<input id="crmNC_fone" style="${CAMPO}" placeholder="(47) 99999-0000" inputmode="tel">`)}
+      ${linha('Nome (opcional)', `<input id="crmNC_nome" style="${CAMPO}" placeholder="Como esta pessoa aparece na lista">`)}
+      ${caixas.length > 1 ? linha('Falar por qual número', `<select id="crmNC_caixa" style="${CAMPO}">${
+        caixas.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}${c.numero ? ' · ' + esc(c.numero) : ''}</option>`).join('')}</select>`) : ''}
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--text-2);line-height:1.5;margin-bottom:14px">
+        <input type="checkbox" id="crmNC_salvar" checked style="margin-top:2px">
+        <span>Salvar também na agenda de Contatos (só funciona se você preencher o nome)</span></label>
+      <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+        Se já existir conversa com este número, ela é aberta em vez de duplicada.
+        Se o número não tiver WhatsApp, a mensagem fica marcada com erro na conversa.</div>
+    `, ponte.botoes('Abrir conversa', 'crmCriarConversa'));
+
+    ponte.aoConfirmar('crmCriarConversa', async () => {
+      try {
+        const fone = val('crmNC_fone');
+        const nome = val('crmNC_nome');
+        const caixaId = caixas.length > 1 ? val('crmNC_caixa') : caixas[0].id;
+        const querSalvar = !!elVisivel('crmNC_salvar')?.checked;
+
+        let contatoId = null;
+        if (querSalvar && nome) {
+          /* Falhar aqui não pode impedir a conversa: a agenda é comodidade, a
+             conversa é o que a pessoa pediu. */
+          const c = await dados.salvarContato({ nome, telefone: fone, origem: 'WhatsApp' }).catch(() => null);
+          contatoId = c?.id || null;
+        }
+
+        const r = await dados.iniciarConversa({ caixaId, telefone: fone, nome, contatoId });
+        ponte.fecharModal?.();
+        ponte.avisar?.(r.criada ? 'Conversa aberta. Escreva a primeira mensagem.' : 'Já existia uma conversa com este número — abri ela.', 'success');
+        await abrirAConversa(r.id, redesenhar);
+      } catch (e) {
+        ponte.avisar?.(explicar(e), 'error');
+      }
+    });
+    return true;
+  }
+
+  /* Assumir: tira da Fila e põe em Chats, no nome de quem clicou. */
+  if (acao.startsWith('crm:assumir:')) {
+    const id = resto.replace('assumir:', '');
+    await gravar(ponte, () => dados.assumirConversa(id), redesenhar, 'Conversa assumida — ela está agora em Chats.');
     return true;
   }
 

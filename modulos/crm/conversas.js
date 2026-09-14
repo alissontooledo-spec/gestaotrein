@@ -1,14 +1,30 @@
-/* GRID · modulos/crm/conversas.js — caixa de entrada de WhatsApp */
+/* GRID · modulos/crm/conversas.js — atendimento de WhatsApp
+   ───────────────────────────────────────────────────────────────────────────
+   14/09 (madrugada) — reorganizada em TRÊS ABAS, no modelo que o Alisson usa
+   no Digisac e pediu para copiar:
+
+     · Chats    — conversas que alguém já assumiu (em atendimento)
+     · Fila     — conversas sem responsável, numeradas por ordem de espera
+     · Contatos — a agenda inteira + "Criar novo", que é por onde se PUXA
+                  assunto com alguém que ainda não escreveu
+
+   Os quatro chips antigos (Abertas/Minhas/Sem responsável/Resolvidas) diziam
+   a mesma coisa de um jeito que só quem construiu entendia. Quem atende
+   precisa de três perguntas: o que estou atendendo, o que está esperando, e
+   com quem eu quero falar. É isso e nada mais.
+
+   "Resolvidas" não sumiu: virou o botão de filtro ao lado da busca, que é
+   onde o Digisac também guarda o que não é do dia a dia.                    */
 import * as ui from '../../nucleo/ui.js';
 import { icone } from '../../nucleo/icones.js';
 import * as dados from '../../nucleo/dados.js';
-import * as sessao from '../../nucleo/sessao.js';
 import { avisoDemo } from './painel.js';
 
+let _aba = 'chats';           // 'chats' | 'fila' | 'contatos'
 let _caixaAtiva = 'todas';
 let _conversaAtiva = null;
 let _busca = '';
-let _filtro = 'todas';        // 'todas' | 'minhas' | 'sem-dono'
+let _verResolvidas = false;
 /* 14/09: a ficha do contato deixou de ser coluna fixa e virou painel que
    abre por cima da conversa. Ela custava 272px permanentes de uma tela onde
    o que se faz é ler e escrever. Fechada por padrão. */
@@ -37,6 +53,8 @@ function visivel(id) {
   return todos.find(e => e.getBoundingClientRect().width > 0) || todos[0] || null;
 }
 
+const casaBusca = (t, campos) => !t || campos.some(v => (v || '').toLowerCase().includes(t));
+
 export async function render(params = {}) {
   const [caixas, conversas, contatos] = await Promise.all([
     dados.listar('crm_caixas'),
@@ -45,52 +63,59 @@ export async function render(params = {}) {
   ]);
 
   const varios = caixas.length > 1;
-  /* 05/09 (h17): a lista era so filtrada por caixa. Busca e os tres chips do
-     topo existiam desenhados na tela, mas nao respondiam a clique nenhum —
-     eram enfeite. Agora filtram de verdade.
-
-     ── 14/09 (revisão) ────────────────────────────────────────────────────
-     Resolver uma conversa gravava `estado='resolvida'` no banco e a linha
-     continuava idêntica na lista — mesma posição, mesmo contador de não
-     lidas. Quem clicava concluía, com razão, que o botão não funcionava.
-     Agora resolvida SAI da lista de abertas e passa a viver no filtro
-     "Resolvidas". Fechar tem que ser visível, senão não é fechar. */
-  const eu = sessao.usuario()?.nome || '';
-  const daCaixa  = (c) => _caixaAtiva === 'todas' || c.caixa_id === _caixaAtiva;
+  const daCaixa   = (c) => _caixaAtiva === 'todas' || c.caixa_id === _caixaAtiva;
   const resolvida = (c) => c.estado === 'resolvida';
-  const abertas  = conversas.filter(c => daCaixa(c) && !resolvida(c));
+
+  const minhas = conversas.filter(daCaixa);
+  /* As três listas saem de UM critério só, e ele é o que a pessoa vê:
+     tem responsável = está sendo atendida; não tem = está esperando alguém.
+     `estado` não entra aqui de propósito — quem responde vira responsável
+     (ver `enviarMensagem` em dados.js), então os dois nunca divergem. */
+  const emAtendimento = minhas.filter(c => !resolvida(c) && c.responsavel);
+  /* Fila: quem espera há mais tempo aparece em primeiro, como qualquer fila
+     do mundo. A lista geral vem ordenada da mais recente para a mais antiga,
+     então aqui ela é invertida. */
+  const naFila = minhas.filter(c => !resolvida(c) && !c.responsavel).slice().reverse();
+  const resolvidas = minhas.filter(resolvida);
+
+  const t = _busca.trim().toLowerCase();
+  const filtraConversas = (l) => l.filter(c => casaBusca(t, [c.nome, c.empresa, c.previa, c.telefone]));
 
   let lista;
-  if (_filtro === 'resolvidas')    lista = conversas.filter(c => daCaixa(c) && resolvida(c));
-  else if (_filtro === 'minhas')   lista = abertas.filter(c => c.responsavel && c.responsavel === eu);
-  else if (_filtro === 'sem-dono') lista = abertas.filter(c => !c.responsavel);
-  else                             lista = abertas;
+  if (_verResolvidas)       lista = filtraConversas(resolvidas);
+  else if (_aba === 'fila') lista = filtraConversas(naFila);
+  else                      lista = filtraConversas(emAtendimento);
 
-  if (_busca) {
-    const t = _busca.toLowerCase();
-    lista = lista.filter(c => [c.nome, c.empresa, c.previa, c.telefone]
-      .some(v => (v || '').toLowerCase().includes(t)));
-  }
-
-  /* A conversa aberta tem de ser uma das que estão na lista. Antes a busca
-     vinha da lista completa: filtrar ou resolver deixava na tela, ao lado de
-     uma lista vazia, uma conversa que não estava mais nela. */
+  /* Qual conversa fica aberta à direita.
+     Regra: continua aberta enquanto existir e pertencer à caixa selecionada —
+     inclusive enquanto a pessoa navega pelos Contatos ou digita na busca, que
+     é como qualquer atendimento funciona. Só duas coisas a fecham: ela ter
+     sido resolvida (e não estarmos vendo as resolvidas) ou ter sumido. */
   if (params.conversa) _conversaAtiva = params.conversa;
-  const atual = lista.find(c => c.id === _conversaAtiva) || lista[0] || null;
+  if (params.id)       _conversaAtiva = params.id;
+  let atual = minhas.find(c => c.id === _conversaAtiva) || null;
+  if (atual && resolvida(atual) && !_verResolvidas) atual = null;
+  if (!atual && _aba !== 'contatos') atual = lista[0] || null;
   _conversaAtiva = atual ? atual.id : null;
+
   const contato = contatos.find(c => c.id === atual?.contato_id);
   /* Mensagens e lead vinculado: sempre da conversa aberta, nunca em bloco —
      mesmo motivo de `mensagensDaConversa` ser por-conversa em dados.js. */
   const msgs = atual ? await dados.mensagensDaConversa(atual.id) : [];
   const lead = atual?.lead_id ? await dados.obter('crm_leads', atual.lead_id).catch(() => null) : null;
 
+  const listaContatos = contatos.filter(c => casaBusca(t, [c.nome, c.empresa, c.cargo, c.telefone]));
+
   return `
     <div class="crm-inbox ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}">
       ${varios ? chipsCelular(caixas, conversas) : ''}
       ${varios ? trilhoCaixas(caixas, conversas) : ''}
-      ${colunaLista(lista, caixas, varios, abertas.length)}
+      ${colunaLista({
+        lista, listaContatos, caixas, varios,
+        nChats: emAtendimento.length, nFila: naFila.length, nResolvidas: resolvidas.length
+      })}
       <div class="crm-mob-sep">${icone('chevrondown','sm')} Ao tocar em uma conversa</div>
-      ${atual ? colunaConversa(atual, caixas, varios, contato, msgs) : vazioDaLista()}
+      ${atual ? colunaConversa(atual, caixas, varios, contato, msgs) : semConversa()}
       ${atual ? colunaContexto(atual, contato, lead) : ''}
     </div>
     ${dados.ehExemplo() ? avisoDemo() : ''}`;
@@ -134,49 +159,106 @@ function chipsCelular(caixas, conversas) {
   </div>`;
 }
 
-/* Tela vazia com a razão certa: sem busca é caixa vazia, com busca é busca
-   sem resultado — e aí o caminho de volta precisa estar à mão. */
-function vazioDaLista() {
-  if (_busca) return ui.vazio({ icone:'search', titulo:`Nada encontrado para "${ui.esc(_busca)}"`,
-    texto:'Tente outro nome, telefone ou trecho da mensagem.' });
-  if (_filtro === 'resolvidas') return ui.vazio({ icone:'check', titulo:'Nenhuma conversa resolvida ainda' });
-  if (_filtro === 'minhas')     return ui.vazio({ icone:'user', titulo:'Nenhuma conversa sua' });
-  if (_filtro === 'sem-dono')   return ui.vazio({ icone:'user', titulo:'Todas as conversas já têm responsável' });
-  return ui.vazio({ icone:'inbox', titulo:'Nenhuma conversa aberta',
-    texto:'Quando chegar uma mensagem no WhatsApp, ela aparece aqui.' });
-}
+/* ── coluna da esquerda: busca, abas e a lista da aba ───────────────────── */
+function colunaLista({ lista, listaContatos, caixas, varios, nChats, nFila, nResolvidas }) {
+  const aba = (id, rotulo, ic, n) => `
+    <button class="crm-aba ${_aba === id && !_verResolvidas ? 'ativa' : ''}" data-acao="crm:aba:${id}">
+      ${icone(ic,'sm')}<span>${rotulo}</span>${n ? `<span class="crm-aba-n">${n}</span>` : ''}
+    </button>`;
 
-/* ── lista de conversas ─────────────────────────────────────────────────── */
-function colunaLista(lista, caixas, varios, totalAbertas) {
   return `
   <div class="crm-col">
     <div class="crm-col-head">
-      <div class="ds-busca" style="max-width:none;margin-bottom:10px">${icone('search','sm')}
-        <input type="search" placeholder="Buscar conversa, contato ou telefone" value="${ui.esc(_busca)}" data-acao="crm:buscar-conversa"></div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
-        ${[['todas', `Abertas · ${totalAbertas}`], ['minhas','Minhas'], ['sem-dono','Sem responsável'], ['resolvidas','Resolvidas']]
-          .map(([id, rot]) => `<span class="ds-selo ${_filtro === id ? '' : 'neutro'}"
-            style="cursor:pointer${_filtro === id ? ';background:var(--navy);color:#fff' : ''}"
-            data-acao="crm:filtro-conv:${id}">${rot}</span>`).join('')}
+      <div class="crm-busca-linha">
+        <div class="ds-busca" style="max-width:none;margin:0;flex:1">${icone('search','sm')}
+          <input type="search" placeholder="Pesquisar por nome ou número" value="${ui.esc(_busca)}" data-acao="crm:buscar-conversa"></div>
+        <button class="crm-filtro ${_verResolvidas ? 'ativo' : ''}" data-acao="crm:ver-resolvidas"
+          title="${_verResolvidas ? 'Voltar para as conversas abertas' : 'Ver conversas resolvidas'}">${icone('filter','sm')}</button>
       </div>
+      <div class="crm-abas">
+        ${aba('chats','Chats','chat', nChats)}
+        ${aba('fila','Fila','inbox', nFila)}
+        ${aba('contatos','Contatos','users', 0)}
+      </div>
+      ${_verResolvidas ? `<div class="crm-aviso-filtro">
+        ${icone('check','sm')} Mostrando ${nResolvidas} resolvida${nResolvidas === 1 ? '' : 's'} ·
+        <span data-acao="crm:ver-resolvidas" style="cursor:pointer;text-decoration:underline">voltar</span></div>` : ''}
     </div>
     <div class="crm-col-body">
-      ${lista.map(c => {
-        const cx = caixas.find(x => x.id === c.caixa_id);
-        return `<div class="crm-conv ${c.id === _conversaAtiva ? 'ativa' : ''}" data-acao="crm:conversa:${c.id}">
-          <div class="crm-conv-av" style="background:rgba(30,42,74,.08);color:var(--navy)">${ui.fmt.iniciais(c.nome)}</div>
-          <div class="crm-conv-main">
-            <div class="crm-conv-top"><span class="crm-conv-nome">${ui.esc(c.nome)}</span><span class="crm-conv-hora">${c.hora}</span></div>
-            <div class="crm-conv-prev">${ui.esc(c.previa)}</div>
-            <div class="crm-conv-meta">
-              ${c.estado === 'resolvida' ? `<span class="crm-tag-resolvida">${icone('check','sm')} Resolvida</span>` : ''}
-              ${varios && cx ? `<span class="crm-tag-caixa"><i></i> ${ui.esc(cx.nome)}</span>` : ''}
-              ${c.empresa ? ui.selo(c.empresa, 'neutro') : ''}
-            </div>
-          </div>
-          ${c.nao_lidas ? `<span class="crm-conv-nao">${c.nao_lidas}</span>` : ''}
-        </div>`; }).join('')}
+      ${_aba === 'contatos' && !_verResolvidas ? listaDeContatos(listaContatos) : listaDeConversas(lista, caixas, varios)}
     </div>
+  </div>`;
+}
+
+function listaDeConversas(lista, caixas, varios) {
+  if (!lista.length) return vazioDaLista();
+  const naFila = _aba === 'fila' && !_verResolvidas;
+  return lista.map((c, i) => {
+    const cx = caixas.find(x => x.id === c.caixa_id);
+    return `<div class="crm-conv ${c.id === _conversaAtiva ? 'ativa' : ''}" data-acao="crm:conversa:${c.id}">
+      ${naFila ? `<span class="crm-fila-pos" title="Posição na fila">${i + 1}</span>` : ''}
+      <div class="crm-conv-av" style="background:rgba(30,42,74,.08);color:var(--navy)">${ui.fmt.iniciais(c.nome)}</div>
+      <div class="crm-conv-main">
+        <div class="crm-conv-top"><span class="crm-conv-nome">${ui.esc(c.nome)}</span><span class="crm-conv-hora">${c.hora}</span></div>
+        <div class="crm-conv-prev">${ui.esc(c.previa)}</div>
+        <div class="crm-conv-meta">
+          ${c.estado === 'resolvida' ? `<span class="crm-tag-resolvida">${icone('check','sm')} Resolvida</span>` : ''}
+          ${varios && cx ? `<span class="crm-tag-caixa"><i></i> ${ui.esc(cx.nome)}</span>` : ''}
+          ${c.empresa ? ui.selo(c.empresa, 'neutro') : ''}
+          ${!naFila && c.responsavel ? `<span class="crm-tag-dono">${ui.esc(c.responsavel)}</span>` : ''}
+        </div>
+      </div>
+      ${c.nao_lidas ? `<span class="crm-conv-nao">${c.nao_lidas}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ── Contatos: a agenda, e o caminho para puxar assunto ────────────────────
+   Esta aba é a resposta para "não tem botão de chamar uma conversa nova".
+   Clicar num contato abre a conversa com ele — criando-a, se ainda não
+   existir. "Criar novo" é para quem ainda não está na agenda. */
+function listaDeContatos(contatos) {
+  const criar = `
+    <div class="crm-criar" data-acao="crm:nova-conversa">
+      <span>Criar novo</span>
+      <span class="crm-criar-mais">${icone('plus','sm')}</span>
+    </div>`;
+
+  if (!contatos.length) {
+    return criar + ui.vazio(_busca
+      ? { icone:'search', titulo:`Nenhum contato para "${_busca}"`,
+          sub:'Use "Criar novo" para falar com um número que ainda não está na agenda.' }
+      : { icone:'users', titulo:'Nenhum contato cadastrado',
+          sub:'Use "Criar novo" para começar uma conversa por número.' });
+  }
+
+  return criar + contatos.map(c => `
+    <div class="crm-conv" data-acao="crm:conversar:${c.id}">
+      <div class="crm-conv-av" style="background:rgba(30,42,74,.08);color:var(--navy)">${ui.fmt.iniciais(c.nome)}</div>
+      <div class="crm-conv-main">
+        <div class="crm-conv-top"><span class="crm-conv-nome">${ui.esc(c.nome)}</span></div>
+        <div class="crm-conv-prev">${c.telefone ? ui.fmt.telefone(c.telefone) : 'sem telefone cadastrado'}${c.empresa ? ' · ' + ui.esc(c.empresa) : ''}</div>
+      </div>
+      <span class="crm-conv-ir" title="Abrir conversa">${icone('chat','sm')}</span>
+    </div>`).join('');
+}
+
+/* Tela vazia com a razão certa — a lista vazia precisa dizer POR QUE está
+   vazia, senão parece defeito. */
+function vazioDaLista() {
+  if (_busca) return ui.vazio({ icone:'search', titulo:`Nada encontrado para "${_busca}"`,
+    sub:'Tente outro nome, telefone ou trecho da mensagem.' });
+  if (_verResolvidas) return ui.vazio({ icone:'check', titulo:'Nenhuma conversa resolvida ainda' });
+  if (_aba === 'fila') return ui.vazio({ icone:'inbox', titulo:'Fila vazia',
+    sub:'Ninguém esperando. Quando chegar mensagem de alguém novo, ela entra aqui.' });
+  return ui.vazio({ icone:'chat', titulo:'Nenhuma conversa em atendimento',
+    sub:'O que chega fica em Fila até alguém assumir. Para puxar assunto, use a aba Contatos.' });
+}
+
+function semConversa() {
+  return `<div class="crm-col crm-thread crm-thread-vazia">
+    ${ui.vazio({ icone:'chat', titulo:'Selecione uma conversa',
+      sub:'Escolha alguém na lista ao lado — ou abra a aba Contatos para começar uma conversa nova.' })}
   </div>`;
 }
 
@@ -225,6 +307,12 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
     return divisor + corpo;
   }).join('');
 
+  /* Sem responsável = está na fila. O botão de assumir vem primeiro, porque é
+     a única coisa que faz sentido fazer antes de responder. Responder também
+     assume (ver dados.enviarMensagem) — o botão existe para quem quer marcar
+     que pegou sem responder na hora. */
+  const semDono = !c.responsavel;
+
   return `
   <div class="crm-col crm-thread">
     <div class="crm-thread-head">
@@ -235,17 +323,23 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
       </div>
       <div class="crm-thread-selos">
         ${cx ? `<span class="crm-selo-cx">${ui.esc(cx.nome)}</span>` : ''}
-        <span class="crm-selo-dono ${c.responsavel ? '' : 'sem'}">${ui.esc(c.responsavel || 'Sem responsável')}</span>
+        <span class="crm-selo-dono ${semDono ? 'sem' : ''}">${ui.esc(c.responsavel || 'Na fila')}</span>
       </div>
       <div class="crm-thread-acoes">
+        ${semDono ? `<button class="ds-btn pri sm" data-acao="crm:assumir:${c.id}">${icone('user','sm')} Assumir</button>` : ''}
         <button class="ds-btn sec sm" data-acao="crm:vincular:${c.id}">${icone('funnel','sm')} Vincular</button>
-        <button class="ds-btn pri sm" data-acao="crm:resolver:${c.id}">${icone('check','sm')} Resolver</button>
+        ${/* Resolver aparece mesmo sem dono: mensagem errada, propaganda ou
+              engano se fecha de uma vez, sem a pessoa ter de assumir antes
+              algo que não vai atender. Com dono, ele é a ação principal; sem
+              dono, quem manda na tela é "Assumir". */''}
+        <button class="ds-btn ${semDono ? 'sec' : 'pri'} sm" data-acao="crm:resolver:${c.id}">${icone('check','sm')} Resolver</button>
         <button class="ds-icobtn" data-acao="crm:ficha" title="Ficha do contato">${icone('user','sm')}</button>
       </div>
     </div>
     <div class="crm-thread-body">
       ${linhas}
-      ${msgs.length ? '' : ui.vazio({ icone:'chat', titulo:'Sem mensagens nesta conversa' })}
+      ${msgs.length ? '' : ui.vazio({ icone:'chat', titulo:'Sem mensagens nesta conversa',
+        sub:'Escreva abaixo para mandar a primeira.' })}
     </div>
     <div class="crm-composer">
       <div class="crm-modelos" id="crmModelos" hidden>
@@ -281,7 +375,7 @@ function colunaContexto(c, contato, lead) {
       ${linhaCtx('Telefone', ui.fmt.telefone(contato?.telefone || c.telefone))}
       ${linhaCtx('Empresa', contato?.empresa || '—')}
       ${linhaCtx('Origem', contato?.origem || '—')}
-      ${linhaCtx('Responsável', c.responsavel || 'Sem responsável')}
+      ${linhaCtx('Responsável', c.responsavel || 'Na fila, sem responsável')}
     </div>
     ${lead ? `<div class="crm-ctx-bloco">
       <div class="crm-ctx-lbl">Lead ativo</div>
@@ -296,12 +390,30 @@ function colunaContexto(c, contato, lead) {
 
 const linhaCtx = (k, v) => `<div class="crm-ctx-linha"><span class="k">${k}</span><span class="v">${ui.esc(v)}</span></div>`;
 
-/* Troca de caixa e de conversa sem recarregar a tela inteira. */
+/* Troca de aba, de caixa e de conversa sem recarregar a tela inteira. */
 export function acao(nome, valor, redesenhar) {
+  if (nome === 'crm:aba') {
+    _aba = valor || 'chats';
+    /* Trocar de aba desliga o filtro de resolvidas: os dois disputam a mesma
+       lista, e deixar o filtro ligado ao trocar de aba faz a aba nova parecer
+       quebrada. */
+    _verResolvidas = false;
+    redesenhar();
+    return true;
+  }
+  if (nome === 'crm:ver-resolvidas')  { _verResolvidas = !_verResolvidas; redesenhar(); return true; }
   if (nome === 'crm:caixa')           { _caixaAtiva = valor; redesenhar(); return true; }
   if (nome === 'crm:conversa')        { _conversaAtiva = valor; redesenhar(); return true; }
   if (nome === 'crm:buscar-conversa') { _busca = valor || ''; redesenhar(); return true; }
-  if (nome === 'crm:filtro-conv')     { _filtro = valor || 'todas'; redesenhar(); return true; }
+
+  /* Compatibilidade: os chips antigos sumiram da tela, mas um clique guardado
+     em algum lugar não pode virar "ação desconhecida". */
+  if (nome === 'crm:filtro-conv') {
+    _verResolvidas = valor === 'resolvidas';
+    _aba = valor === 'sem-dono' ? 'fila' : 'chats';
+    redesenhar();
+    return true;
+  }
 
   /* ── 14/09 ──────────────────────────────────────────────────────────────
      As três abaixo mexem só no DOM, de propósito: `redesenhar()` remonta a
@@ -332,6 +444,17 @@ export function acao(nome, valor, redesenhar) {
     return true;
   }
   return false;
+}
+
+/* Chamado por acoes.js depois de criar/encontrar a conversa a partir de um
+   contato ou de um número digitado: deixa a tela pronta para mostrá-la. Sem
+   isto, a conversa nova nasceria fora da aba aberta e a pessoa clicaria sem
+   ver nada acontecer. */
+export function abrirConversa(id) {
+  _conversaAtiva = id;
+  _aba = 'chats';
+  _verResolvidas = false;
+  _busca = '';
 }
 
 /* ── Depois de desenhar ─────────────────────────────────────────────────────
