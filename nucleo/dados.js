@@ -160,6 +160,10 @@ const _mapCaixa = (c) => ({
   estado: c.estado,
   abertas: c._abertas || 0,
   equipe: c._equipeNomes || [],
+  /* Os nomes acima são para mostrar; os ids são para gravar. A tela "Quem
+     acessa" precisa dos dois — sem os ids, salvar a equipe significaria
+     procurar usuário por nome, que quebra com dois "João". */
+  equipe_ids: c.equipe || [],
   horario: c.horario,
   desde: c.estado !== 'conectado' ? _horaCurta(c.desde) : null,
   ativa: c.ativa !== false,
@@ -1049,6 +1053,57 @@ export async function criarCaixaWhatsapp(form) {
     .select('id, nome').single();
   if (error) throw error;
   return data;
+}
+
+/* ── Configuração do número (14/09) ────────────────────────────────────────
+   Até agora a tela de Números tinha cinco botões que respondiam "esta tela
+   ainda não foi construída": Reconectar, Editar, Quem acessa, Remover e o QR
+   Code. Com o número caindo às 07:08 e nenhum caminho de volta pela tela,
+   isso deixou de ser pendência e virou impedimento.
+
+   Tudo aqui é escrita comum em `crm_caixas` — nenhuma coluna nova, nenhum
+   acesso à VPS. O gateway lê essa tabela a cada 30 segundos e obedece: é o
+   desenho do PASSO-40 (autoprovisionamento), e é o que permite religar um
+   número sem ninguém entrar no servidor. */
+
+export async function salvarCaixa({ id, nome, horario }) {
+  if (_origem !== 'banco') return _simulado();
+  const limpo = (nome || '').trim();
+  if (!limpo) throw new Error('O número precisa de um nome (ex.: Comercial, Financeiro).');
+  if (limpo.length > 60) throw new Error('O nome precisa ter no máximo 60 caracteres.');
+  const { error } = await _sb.from('crm_caixas')
+    .update({ nome: limpo, horario: (horario || '').trim() || null, atualizado_em: new Date().toISOString() })
+    .eq('org_id', sessao.orgId()).eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+export async function definirEquipeCaixa(id, ids) {
+  if (_origem !== 'banco') return _simulado();
+  const { error } = await _sb.from('crm_caixas')
+    .update({ equipe: Array.isArray(ids) ? ids : [], atualizado_em: new Date().toISOString() })
+    .eq('org_id', sessao.orgId()).eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+/* Liga e desliga o número. `ativa` é o único interruptor que o gateway
+   observa: em `false` ele encerra a sessão daquele cliente no ciclo seguinte
+   e mantém as outras rodando; em `true` ele abre sessão nova.
+
+   NADA é apagado — o histórico de conversas continua no banco. Por isso
+   "Remover" nesta tela desliga, não deleta: deletar a linha levaria junto,
+   por cascata, todas as conversas e mensagens daquele número. */
+export async function definirCaixaAtiva(id, ativa) {
+  if (_origem !== 'banco') return _simulado();
+  const linha = { ativa: !!ativa, atualizado_em: new Date().toISOString() };
+  /* Ao religar, limpa a última reclamação: manter o erro velho na tela depois
+     de reconectar faz parecer que o problema continua. */
+  if (ativa) linha.ultimo_erro = null;
+  const { error } = await _sb.from('crm_caixas')
+    .update(linha).eq('org_id', sessao.orgId()).eq('id', id);
+  if (error) throw error;
+  return true;
 }
 
 /* Enviar: grava a mensagem como pendente e deixa o pedido na fila que o
