@@ -1,26 +1,58 @@
 /* GRID · modulos/crm/numeros.js — configuração dos números de WhatsApp
    Item de menu com mobile:false. No celular a plataforma mostra a tela
-   "isto é do computador"; aqui fica a versão de mesa. */
+   "isto é do computador"; aqui fica a versão de mesa.
+
+   ── 14/09/2026 ────────────────────────────────────────────────────────────
+   Esta tela tinha cinco botões desenhados que respondiam "esta tela ainda não
+   foi construída": Reconectar, Editar, Quem acessa, Remover e Ler QR Code.
+   No dia em que o número caiu às 07:08, o Alisson clicou em Reconectar e não
+   havia caminho de volta pela interface — só por SQL. Botão que está na tela
+   e não faz nada não é pendência: é botão quebrado. Agora os cinco funcionam.
+
+   Como "Reconectar" funciona sem ninguém entrar na VPS: o gateway pergunta ao
+   banco, a cada 30 segundos, quais caixas estão ativas. Desligar e religar a
+   caixa faz ele encerrar a sessão e abrir uma nova — que é exatamente o que
+   "reconectar" significa. O desenho do PASSO-40 já previa isto; faltava o
+   botão.                                                                     */
 import * as ui from '../../nucleo/ui.js';
 import { icone } from '../../nucleo/icones.js';
 import * as dados from '../../nucleo/dados.js';
 import { avisoDemo } from './painel.js';
 
+/* O QR Code expira em segundos e o gateway emite outro enquanto ninguém
+   parear. Acima disto, o que está no banco não serve mais para escanear. */
+const QR_VALIDO_SEGUNDOS = 120;
+
+export const qrAindaVale = (c) => !!c.gateway_qr && !!c.gateway_qr_em
+  && (Date.now() - new Date(c.gateway_qr_em).getTime()) < QR_VALIDO_SEGUNDOS * 1000;
+
 export async function render() {
   const caixas = await dados.listar('crm_caixas');
-  const conectados = caixas.filter(c => c.estado === 'conectado');
-  const fora = caixas.filter(c => c.estado === 'desconectado');
+  const conectados = caixas.filter(c => c.estado === 'conectado' && c.ativa !== false);
+  const fora       = caixas.filter(c => c.estado === 'desconectado' && c.ativa !== false);
+  const desligadas = caixas.filter(c => c.ativa === false);
 
   return `
   ${ui.topo({
     modulo:'CRM · Configuração', moduloIcone:'phone', titulo:'Números de WhatsApp',
     sub:`${caixas.length} ${caixas.length === 1 ? 'número' : 'números'} · ${conectados.length} conectado${conectados.length === 1 ? '' : 's'}`,
+    /* "Horários" e "Respostas rápidas" saíram daqui em 14/09. Os dois eram
+       botões que respondiam "esta tela ainda não foi construída" — a mesma
+       promessa vazia que o "Reconectar" fazia. O horário de atendimento já se
+       edita em cada número, no botão Editar; respostas rápidas configuráveis
+       dependem de tabela nova e voltam ao cabeçalho quando existirem de fato. */
     acoes:[
-      { rotulo:'Horários', icone:'clock', tipo:'sec', acao:'crm:horarios' },
-      { rotulo:'Respostas rápidas', icone:'chat', tipo:'sec', acao:'crm:respostas' },
       { rotulo:'Adicionar número', icone:'plus', tipo:'pri', acao:'crm:add-numero' }
     ]
   })}
+
+  ${/* Caixa desligada é o estado mais perigoso da tela: nada entra, nada sai,
+       e é fácil esquecer que foi você quem desligou. Por isso o aviso vem
+       antes de tudo e traz o botão de religar junto. */''}
+  ${desligadas.map(c => ui.aviso({
+    icone:'wifioff', titulo:`O número "${c.nome}" está DESLIGADO`,
+    texto:'Enquanto estiver desligado, nenhuma mensagem entra nem sai por ele. As conversas antigas continuam guardadas.',
+    acao:{ rotulo:'Religar agora', acao:`crm:religar:${c.id}` } })).join('')}
 
   ${fora.map(c => ui.aviso({
     icone:'wifioff', titulo:`O número do ${c.nome} caiu às ${c.desde || 'pouco tempo atrás'}`,
@@ -39,63 +71,124 @@ export async function render() {
 }
 
 function cartao(c) {
-  const estado = {
-    conectado:     { selo:['Conectado','ok'],       ic:'chat',    cor:'' },
-    desconectado:  { selo:['Desconectado','atencao'],ic:'wifioff', cor:'background:var(--atencao-l);color:var(--atencao)' },
-    aguardando_qr: { selo:['Aguardando QR','atencao'],ic:'qr',     cor:'background:var(--atencao-l);color:var(--atencao)' }
-  }[c.estado] || { selo:[c.estado,'neutro'], ic:'phone', cor:'' };
+  const desligada = c.ativa === false;
+  const estado = desligada
+    ? { selo:['Desligado','neutro'], ic:'wifioff', cor:'background:var(--gray-100);color:var(--text-3)' }
+    : ({
+        conectado:     { selo:['Conectado','ok'],         ic:'chat',    cor:'' },
+        desconectado:  { selo:['Desconectado','atencao'],  ic:'wifioff', cor:'background:var(--atencao-l);color:var(--atencao)' },
+        aguardando_qr: { selo:['Aguardando QR','atencao'], ic:'qr',      cor:'background:var(--atencao-l);color:var(--atencao)' }
+      }[c.estado] || { selo:[c.estado, 'neutro'], ic:'phone', cor:'' });
 
   return `
-  <div class="crm-num-card" ${c.estado !== 'conectado' ? 'style="border-color:rgba(180,83,9,.35)"' : ''}>
+  <div class="crm-num-card" ${c.estado !== 'conectado' || desligada ? 'style="border-color:rgba(180,83,9,.35)"' : ''}>
     <div class="crm-num-top">
       <div class="crm-num-ico" style="${estado.cor}">${icone(estado.ic,'lg')}</div>
       <div style="flex:1;min-width:0">
         <div class="crm-num-nome">${ui.esc(c.nome)}</div>
-        <div class="crm-num-fone">${ui.fmt.telefone(c.numero)}</div>
+        <div class="crm-num-fone">${c.numero ? ui.fmt.telefone(c.numero) : 'número ainda não pareado'}</div>
       </div>
       ${ui.selo(estado.selo[0], estado.selo[1], true)}
     </div>
-    ${c.estado === 'aguardando_qr'
+
+    ${/* A última reclamação da sessão vem do gateway (crm_caixas.ultimo_erro).
+         Mostrar aqui evita ter de abrir o log da VPS para saber o que houve —
+         que era o único jeito até hoje. */''}
+    ${c.ultimo_erro ? `<div class="crm-num-erro">${icone('alert','sm')} ${ui.esc(c.ultimo_erro)}</div>` : ''}
+
+    ${desligada
       ? `<div style="font-size:var(--fs-3);color:var(--text-3);line-height:1.6;margin:4px 0 12px">
-           Número cadastrado, ainda não conectado. Leia o código no celular que usa este número para ativar a caixa.</div>
+           Número desligado. Nada entra nem sai por ele até você religar.</div>
+         <div class="crm-num-acoes">
+           <button class="ds-btn pri sm" data-acao="crm:religar:${c.id}">Religar</button>
+           <button class="ds-btn sec sm" data-acao="crm:editar-numero:${c.id}">Editar</button></div>`
+
+      : c.estado === 'aguardando_qr'
+      ? `<div style="font-size:var(--fs-3);color:var(--text-3);line-height:1.6;margin:4px 0 12px">
+           ${qrAindaVale(c)
+             ? 'Código pronto para leitura. Abra o WhatsApp no celular deste número e escaneie.'
+             : 'Número cadastrado, ainda não conectado. O servidor emite um código novo a cada 30 segundos — clique abaixo para ver o mais recente.'}</div>
          <div class="crm-num-acoes">
            <button class="ds-btn pri sm" data-acao="crm:qr:${c.id}">Ler QR Code</button>
-           <button class="ds-btn sec sm" data-acao="crm:remover:${c.id}">Remover</button></div>`
+           <button class="ds-btn sec sm" data-acao="crm:editar-numero:${c.id}">Editar</button>
+           <button class="ds-btn sec sm" data-acao="crm:remover:${c.id}">Desligar</button></div>`
+
       : `${linha('Equipe com acesso', c.equipe?.length
             ? `<span class="crm-num-equipe">${c.equipe.slice(0,3).map(n => `<span class="crm-av">${ui.fmt.iniciais(n)}</span>`).join('')}
                ${c.equipe.length > 3 ? `<span class="crm-av" style="background:var(--gray-400)">+${c.equipe.length - 3}</span>` : ''}</span>`
-            : '<span style="color:var(--text-3)">ninguém</span>')}
+            : '<span style="color:var(--text-3)">todos da organização</span>')}
          ${linha('Atendimento', ui.esc(c.horario || '—'))}
          ${linha(c.estado === 'desconectado' ? 'Conversas na fila' : 'Conversas abertas',
                  `<span class="num" ${c.estado === 'desconectado' ? 'style="color:var(--atencao-text)"' : ''}>${c.abertas ?? 0}</span>`)}
          <div class="crm-num-acoes">
            ${c.estado === 'desconectado' ? `<button class="ds-btn pri sm" data-acao="crm:reconectar:${c.id}">Reconectar</button>` : ''}
            <button class="ds-btn sec sm" data-acao="crm:editar-numero:${c.id}">Editar</button>
-           <button class="ds-btn sec sm" data-acao="crm:acesso:${c.id}">Quem acessa</button></div>`}
+           <button class="ds-btn sec sm" data-acao="crm:acesso:${c.id}">Quem acessa</button>
+           <button class="ds-btn sec sm" data-acao="crm:remover:${c.id}">Desligar</button></div>`}
   </div>`;
 }
 
 const linha = (k, v) => `<div class="crm-num-linha"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 
-/* Modal de conexão — o passo a passo do QR Code. */
-export function modalConectar(nome) {
+/* ── Modal do QR Code ──────────────────────────────────────────────────────
+   O `gateway_qr` guardado no banco é o TEXTO do código que o WhatsApp manda,
+   não uma imagem. Quem desenha a imagem é o `gerarQRCodeDataURL` que já existe
+   na casca (usado nos certificados desde julho) — por isso o corpo é montado
+   em duas etapas: o modal abre na hora, com um lugar reservado, e a imagem
+   entra quando fica pronta.
+
+   Se a função da casca não existir (demonstração fora do app), o modal
+   explica em vez de mostrar um quadrado vazio. */
+export function modalQR(caixa) {
+  const valido = qrAindaVale(caixa);
+  const idade = caixa.gateway_qr_em
+    ? Math.round((Date.now() - new Date(caixa.gateway_qr_em).getTime()) / 1000)
+    : null;
+
   return {
-    titulo:'Adicionar número de WhatsApp',
-    corpo:`
-      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
-        <div style="width:148px;height:148px;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--navy)">
-          ${icone('qr','lg')}</div>
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:var(--fs-4);font-weight:700;color:var(--text-1);margin-bottom:10px">Caixa "${ui.esc(nome || 'nova')}"</div>
-          <ol style="font-size:var(--fs-4);color:var(--text-2);line-height:1.8;padding-left:18px;margin:0">
-            <li>Abra o WhatsApp no celular deste número</li>
-            <li>Toque em <b>Aparelhos conectados</b></li>
-            <li>Aponte a câmera para o código</li></ol>
-          <div style="margin-top:12px;font-size:var(--fs-2);color:var(--text-3)">O código expira em 45 segundos e é gerado novamente sozinho.</div>
+    titulo: 'Conectar número de WhatsApp',
+    corpo: `
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+      <div id="crmQRAlvo" style="width:188px;height:188px;background:#fff;border:1px solid var(--border-2);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-3);font-size:12px;text-align:center;padding:10px">
+        ${caixa.gateway_qr ? 'Desenhando o código…' : 'Nenhum código emitido ainda'}
+      </div>
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:var(--fs-4);font-weight:700;color:var(--text-1);margin-bottom:10px">${ui.esc(caixa.nome)}</div>
+        <ol style="font-size:var(--fs-4);color:var(--text-2);line-height:1.8;padding-left:18px;margin:0">
+          <li>Abra o WhatsApp no celular <b>deste número</b></li>
+          <li>Toque nos três pontinhos e depois em <b>Aparelhos conectados</b></li>
+          <li>Toque em <b>Conectar um aparelho</b></li>
+          <li>Aponte a câmera para o código ao lado</li>
+        </ol>
+        <div style="margin-top:12px;font-size:var(--fs-2);color:${valido ? 'var(--text-3)' : 'var(--atencao-text)'};line-height:1.6">
+          ${caixa.gateway_qr
+            ? (valido
+                ? `Código gerado há ${idade} segundos. Ele expira rápido — se não funcionar, feche e abra esta janela para pegar o mais recente.`
+                : `<b>Este código já expirou</b> (gerado há ${idade} segundos). O servidor emite um novo a cada 30 segundos: feche esta janela, espere meio minuto e abra de novo.`)
+            : 'O servidor ainda não emitiu nenhum código para este número. Ele tenta a cada 30 segundos — feche e abra esta janela em instantes.'}
         </div>
       </div>
-      ${ui.aviso({ titulo:'Use um número dedicado ao sistema',
-        texto:'A conexão é feita como um aparelho conectado do WhatsApp, e o próprio WhatsApp pode encerrá-la.' })}`,
-    rodape:'<button class="ds-btn sec" data-acao="fechar">Cancelar</button><button class="ds-btn pri" data-acao="crm:qr-lido">Já li o código</button>'
+    </div>
+    ${ui.aviso({ titulo:'Use um número dedicado ao sistema',
+      texto:'A conexão é feita como um aparelho conectado do WhatsApp, e o próprio WhatsApp pode encerrá-la se o aparelho principal ficar muito tempo offline.' })}`
   };
+}
+
+/* Desenha a imagem do QR dentro do modal já aberto. Chamado por acoes.js logo
+   depois de abrir. Silencioso em caso de falha: o modal continua útil com as
+   instruções escritas. */
+export async function pintarQR(textoQR) {
+  if (typeof document === 'undefined') return;
+  const alvo = document.getElementById('crmQRAlvo');
+  if (!alvo || !textoQR) return;
+  try {
+    if (typeof window.gerarQRCodeDataURL !== 'function') {
+      alvo.textContent = 'Não foi possível desenhar o código nesta tela.';
+      return;
+    }
+    const dataUrl = await window.gerarQRCodeDataURL(textoQR);
+    alvo.innerHTML = `<img src="${dataUrl}" alt="QR Code de conexão" style="width:100%;height:100%;object-fit:contain">`;
+  } catch {
+    alvo.textContent = 'Não foi possível desenhar o código. Feche e abra de novo.';
+  }
 }

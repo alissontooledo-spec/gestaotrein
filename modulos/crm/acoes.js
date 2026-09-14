@@ -373,8 +373,21 @@ async function caixaParaFalar(ponte) {
    propósito — não existe "enviar para todos". */
 const DEPENDE_WHATSAPP = ['crm:anexar'];
 
-const NAO_CONSTRUIDO = ['crm:respostas', 'crm:importar-contatos', 'crm:horarios',
-  'crm:acesso:', 'crm:qr:', 'crm:reconectar:', 'crm:editar-numero:', 'crm:remover:'];
+/* ── 14/09 (madrugada), segunda revisão ────────────────────────────────────
+   Cinco entradas saíram desta lista e ganharam tratador de verdade logo
+   abaixo: `crm:acesso:`, `crm:qr:`, `crm:reconectar:`, `crm:editar-numero:` e
+   `crm:remover:`.
+
+   O motivo: o número da TOLEDO SST caiu às 07:08, o Alisson clicou em
+   "Reconectar" e recebeu "esta tela ainda não foi construída". Não havia
+   caminho de volta pela interface — o WhatsApp do cliente ficaria fora do ar
+   até alguém rodar SQL na mão. Um botão desenhado na tela, em destaque, que
+   responde que não existe, é pior do que botão nenhum: ele promete uma saída
+   que não está lá. Estado pendente não pode morar num botão principal.
+
+   Continuam aqui só as três que de fato não têm tela nenhuma por trás, e
+   nenhuma delas bloqueia operação. */
+const NAO_CONSTRUIDO = ['crm:respostas', 'crm:importar-contatos', 'crm:horarios'];
 
 export default async function acoes(acao, { redesenhar }) {
   const ponte = (typeof window !== 'undefined' && window.__GRID_PONTE) || {};
@@ -547,8 +560,9 @@ export default async function acoes(acao, { redesenhar }) {
     return true;
   }
 
-  /* Fecha o modal de conexao (numeros.js/modalConectar). So um "ja li o
-     codigo" local — nunca dependeu do gateway existir. */
+  /* Sobra do modal de conexão antigo, que foi substituído pelo QR de verdade
+     (`crm:qr:`, acima). Fica tratado para um clique guardado em algum lugar
+     não virar "ação desconhecida". */
   if (acao === 'crm:qr-lido') { ponte.fecharModal?.(); return true; }
 
   /* Cria a linha da caixa em crm_caixas. O gateway descobre o numero novo
@@ -568,6 +582,165 @@ export default async function acoes(acao, { redesenhar }) {
       if (!nome) throw new Error('Dê um nome para este número.');
       await dados.criarCaixaWhatsapp({ nome, horario: val('crmN_horario') || null });
     }, redesenhar, 'Número criado. Assim que o gateway conectar, ele aparece como conectado em WhatsApp.'));
+    return true;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     CONFIGURAÇÃO DO NÚMERO DE WHATSAPP (14/09)
+     Tudo aqui é escrita em `crm_caixas`. Ninguém entra na VPS: o gateway lê
+     essa tabela a cada 30 segundos e obedece — é o desenho do PASSO-40.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* Reconectar = desligar e religar a caixa, com a espera no meio.
+     Por que em dois tempos, e não num clique só: o gateway só percebe a
+     mudança na descoberta seguinte, que roda a cada 30 segundos. Religar
+     antes disso não encerra sessão nenhuma — ele nem chegou a ver que a
+     caixa saiu do ar, e o "reconectar" não reconectaria nada.
+
+     A espera é visível e o botão só libera no fim. Se esta janela for fechada
+     no meio, o número fica desligado — e a tela de Números passa a mostrar um
+     aviso vermelho com "Religar agora", que é um clique. Não existe caminho
+     sem saída. */
+  if (acao.startsWith('crm:reconectar:')) {
+    const id = resto.replace('reconectar:', '');
+    const ESPERA = 35; // 30s da descoberta + folga
+
+    ponte.abrirModal('Reconectar número', `
+      <div style="font-size:14px;color:var(--text-2);line-height:1.7">
+        Vou desligar e religar este número. É o mesmo que reiniciar a conexão dele com o WhatsApp.
+      </div>
+      <div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--r-md);
+                  font-size:13px;color:var(--text-2);line-height:1.65">
+        <b style="color:var(--text-1)">O que acontece:</b><br>
+        1. O número é desligado agora.<br>
+        2. O servidor leva até 30 segundos para encerrar a sessão antiga.<br>
+        3. Você clica em <b>Religar agora</b> e ele abre uma conexão nova.<br><br>
+        Nenhuma conversa é apagada. As mensagens que chegarem nesse meio tempo entram assim que voltar.
+      </div>
+      <div id="crmReconectarEstado" style="margin-top:14px;font-size:14px;font-weight:700;color:var(--amber-text, var(--atencao-text))"></div>
+    `, ponte.botoes('Religar agora', 'crmReligarAgora'));
+
+    const mostrar = (t) => { const e = document.getElementById('crmReconectarEstado'); if (e) e.textContent = t; };
+    const botao = () => document.getElementById('crmReligarAgora');
+    if (botao()) botao().disabled = true;
+
+    try {
+      await dados.definirCaixaAtiva(id, false);
+    } catch (e) {
+      ponte.avisar?.(explicar(e), 'error');
+      ponte.fecharModal?.();
+      return true;
+    }
+
+    let resta = ESPERA;
+    mostrar(`Número desligado. Aguarde ${resta} segundos…`);
+    const relogio = setInterval(() => {
+      resta -= 1;
+      if (resta > 0) { mostrar(`Número desligado. Aguarde ${resta} segundos…`); return; }
+      clearInterval(relogio);
+      mostrar('Pronto. Clique em "Religar agora".');
+      if (botao()) botao().disabled = false;
+    }, 1000);
+
+    ponte.aoConfirmar('crmReligarAgora', async () => {
+      clearInterval(relogio);
+      await gravar(ponte, () => dados.definirCaixaAtiva(id, true), redesenhar,
+        'Número religado. Em até 30 segundos ele aparece como conectado — ou pede um QR Code novo.');
+    });
+    return true;
+  }
+
+  /* Religar direto: para quem já está desligado (inclusive se a janela de
+     reconectar foi fechada no meio do caminho). */
+  if (acao.startsWith('crm:religar:')) {
+    const id = resto.replace('religar:', '');
+    await gravar(ponte, () => dados.definirCaixaAtiva(id, true), redesenhar,
+      'Número religado. Em até 30 segundos ele aparece como conectado — ou pede um QR Code novo.');
+    return true;
+  }
+
+  /* Desligar. NÃO apaga: `ativa = false`. Apagar a linha levaria junto, por
+     cascata, todas as conversas e mensagens daquele número. */
+  if (acao.startsWith('crm:remover:')) {
+    const id = resto.replace('remover:', '');
+    const ok = await ponte.confirmar?.(
+      'Desligar este número? Nenhuma mensagem entra nem sai por ele enquanto estiver desligado. '
+      + 'As conversas e o histórico continuam guardados, e você pode religar quando quiser.');
+    if (ok) await gravar(ponte, () => dados.definirCaixaAtiva(id, false), redesenhar, 'Número desligado.');
+    return true;
+  }
+
+  if (acao.startsWith('crm:editar-numero:')) {
+    const id = resto.replace('editar-numero:', '');
+    const caixa = await dados.obter('crm_caixas', id).catch(() => null);
+    if (!caixa) { ponte.avisar?.('Número não encontrado.', 'error'); return true; }
+
+    ponte.abrirModal('Editar número', `
+      ${linha('Nome deste número *', `<input id="crmE_nome" style="${CAMPO}" value="${esc(caixa.nome || '')}" placeholder="Ex.: Comercial, Financeiro, Filial Joinville">`)}
+      ${linha('Horário de atendimento', `<input id="crmE_horario" style="${CAMPO}" value="${esc(caixa.horario || '')}" placeholder="Ex.: Seg a sex · 08h-18h">`)}
+      <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+        O número de telefone em si não se edita aqui: ele é definido no pareamento, quando o WhatsApp
+        do aparelho lê o QR Code. Para trocar de telefone, desligue este número e conecte outro.</div>
+    `, ponte.botoes('Salvar', 'crmSalvarCaixa'));
+
+    ponte.aoConfirmar('crmSalvarCaixa', () => gravar(ponte,
+      () => dados.salvarCaixa({ id, nome: val('crmE_nome'), horario: val('crmE_horario') }),
+      redesenhar, 'Número atualizado.'));
+    return true;
+  }
+
+  /* Quem acessa. Lista vazia = todos da organização veem, que é o
+     comportamento de hoje — e o texto na tela diz isso, em vez de deixar a
+     pessoa adivinhar o que "ninguém" significava. */
+  if (acao.startsWith('crm:acesso:')) {
+    const id = resto.replace('acesso:', '');
+    const [caixa, pessoas] = await Promise.all([
+      dados.obter('crm_caixas', id).catch(() => null),
+      dados.responsaveis().catch(() => [])
+    ]);
+    if (!caixa) { ponte.avisar?.('Número não encontrado.', 'error'); return true; }
+    const atuais = new Set(caixa.equipe || []);
+
+    ponte.abrirModal('Quem acessa este número', `
+      <div style="font-size:13px;color:var(--text-2);line-height:1.65;margin-bottom:14px">
+        Marque quem deve atender por <b>${esc(caixa.nome)}</b>.
+        <b style="color:var(--text-1)">Sem ninguém marcado, todos da organização veem as conversas</b> — que é como está hoje.
+      </div>
+      <div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md);padding:6px">
+        ${pessoas.length ? pessoas.map(p => `
+          <label style="display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;font-size:14px;color:var(--text-1)">
+            <input type="checkbox" class="crmAcessoPessoa" value="${esc(p.id)}" ${atuais.has(p.id) ? 'checked' : ''}>
+            <span>${esc(p.nome)}</span>
+          </label>`).join('')
+        : '<div style="padding:12px;font-size:13px;color:var(--text-3)">Nenhum usuário encontrado nesta organização.</div>'}
+      </div>
+    `, ponte.botoes('Salvar', 'crmSalvarAcesso'));
+
+    ponte.aoConfirmar('crmSalvarAcesso', () => {
+      const ids = [...document.querySelectorAll('.crmAcessoPessoa')]
+        .filter(e => e.checked).map(e => e.value);
+      return gravar(ponte, () => dados.definirEquipeCaixa(id, ids), redesenhar,
+        ids.length ? 'Equipe atualizada.' : 'Acesso liberado para todos da organização.');
+    });
+    return true;
+  }
+
+  /* O QR Code de verdade. O texto do código já vinha sendo gravado em
+     `crm_caixas.gateway_qr` pelo gateway desde 13/09 — o que faltava era a
+     tela mostrar. Até hoje o único jeito de pegar o código era rodar SQL ou
+     abrir o log da VPS. */
+  if (acao.startsWith('crm:qr:')) {
+    const id = resto.replace('qr:', '');
+    const caixa = await dados.obter('crm_caixas', id).catch(() => null);
+    if (!caixa) { ponte.avisar?.('Número não encontrado.', 'error'); return true; }
+    const tela = await import('./numeros.js');
+    const m = tela.modalQR(caixa);
+    ponte.abrirModal(m.titulo, m.corpo,
+      '<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
+    /* Desenhar depois de abrir: a imagem depende de uma biblioteca que a
+       casca carrega sob demanda, e esperar por ela antes de abrir deixaria o
+       clique sem resposta por um tempo. */
+    tela.pintarQR(caixa.gateway_qr);
     return true;
   }
 
