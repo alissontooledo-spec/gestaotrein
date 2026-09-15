@@ -1021,10 +1021,27 @@ export async function salvarContato(form) {
 export async function mensagensDaConversa(conversaId) {
   if (_origem !== 'banco') return (_exemplo.crm_mensagens || {})[conversaId] || [];
   const { data, error } = await _sb.from('crm_mensagens')
-    .select('tipo, texto, criado_em, status, erro, autor:usuarios!crm_mensagens_autor_id_fkey(nome)')
+    .select('tipo, texto, criado_em, status, erro, midia_tipo, midia_path, midia_nome, midia_mime, midia_bytes, midia_duracao, autor:usuarios!crm_mensagens_autor_id_fkey(nome)')
     .eq('org_id', sessao.orgId()).eq('conversa_id', conversaId)
     .order('criado_em');
   if (error) throw error;
+
+  /* ── 15/09: endereços temporários para os anexos ───────────────────────────
+     A área de arquivos é privada — não existe URL fixa, e é assim de
+     propósito: endereço fixo de arquivo de conversa é endereço que vaza em
+     print, em log e em histórico de navegador. A tela pede um endereço
+     assinado, válido por uma hora, no momento de desenhar.
+
+     Todos de uma vez (`createSignedUrls`, no plural): uma conversa com trinta
+     fotos faria trinta idas ao servidor, e a tela abriria devagar por um
+     motivo que ninguém entenderia olhando. */
+  const caminhos = (data || []).map(m => m.midia_path).filter(Boolean);
+  const enderecos = {};
+  if (caminhos.length) {
+    const { data: assinados } = await _sb.storage.from('whatsapp').createSignedUrls(caminhos, 3600);
+    (assinados || []).forEach(a => { if (a?.path && a?.signedUrl) enderecos[a.path] = a.signedUrl; });
+  }
+
   return (data || []).map(m => ({
     tipo: m.tipo,
     texto: m.texto,
@@ -1040,8 +1057,64 @@ export async function mensagensDaConversa(conversaId) {
        que nao foi entregue aparece so com um "!" e ninguem descobre por que —
        foi o caso do numero que nao existia no WhatsApp. */
     erro: m.erro || null,
-    criado_em: m.criado_em || null
+    criado_em: m.criado_em || null,
+    /* `midiaUrl` pode vir nula se a assinatura falhar. A tela desenha o anexo
+       com o nome e sem o link, em vez de sumir com a mensagem. */
+    midia: m.midia_path ? {
+      tipo: m.midia_tipo, nome: m.midia_nome, mime: m.midia_mime,
+      bytes: m.midia_bytes, duracao: m.midia_duracao,
+      url: enderecos[m.midia_path] || null
+    } : null
   }));
+}
+
+/* ── 15/09: subir um arquivo da tela para a área do WhatsApp ───────────────
+   O caminho `<org>/<conversa>/<arquivo>` não é organização, é a fronteira: a
+   proteção de acesso (PASSO-44) compara a PRIMEIRA pasta com a organização de
+   quem está pedindo. Por isso o caminho é montado aqui e não aceita nada vindo
+   de fora — nem o nome original do arquivo, que vira só um dado guardado à
+   parte. Nome de arquivo com `../` dentro é o truque mais velho que existe. */
+export async function subirArquivoWhatsapp(conversaId, arquivo) {
+  if (_origem !== 'banco') return _simulado({ path: 'demo' });
+  if (!arquivo) throw new Error('Nenhum arquivo escolhido.');
+
+  const LIMITE = 16 * 1024 * 1024;
+  if (arquivo.size > LIMITE) {
+    throw new Error(`O arquivo tem ${(arquivo.size / 1048576).toFixed(1)} MB e o limite do WhatsApp é 16 MB.`);
+  }
+
+  const ext = (arquivo.name || '').includes('.')
+    ? arquivo.name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5)
+    : (({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+          'video/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/webm': 'webm',
+          'audio/mpeg': 'mp3', 'application/pdf': 'pdf' })[arquivo.type] || 'bin');
+
+  const path = `${sessao.orgId()}/${conversaId}/${crypto.randomUUID()}.${ext || 'bin'}`;
+  const { error } = await _sb.storage.from('whatsapp')
+    .upload(path, arquivo, { contentType: arquivo.type || 'application/octet-stream', upsert: false });
+  if (error) throw error;
+
+  return {
+    path,
+    nome: (arquivo.name || `arquivo.${ext}`).slice(0, 200),
+    mime: arquivo.type || 'application/octet-stream',
+    bytes: arquivo.size,
+    tipo: tipoDeArquivo(arquivo.type, arquivo.name)
+  };
+}
+
+/* O WhatsApp trata cada família de um jeito (foto abre, áudio toca, documento
+   baixa), então a família precisa ser decidida antes de enviar. */
+export function tipoDeArquivo(mime, nome = '') {
+  const m = String(mime || '').toLowerCase();
+  if (m.startsWith('image/')) return 'imagem';
+  if (m.startsWith('video/')) return 'video';
+  if (m.startsWith('audio/')) return 'audio';
+  const ext = String(nome || '').split('.').pop().toLowerCase();
+  if (['jpg','jpeg','png','webp','gif'].includes(ext)) return 'imagem';
+  if (['mp4','mov','webm'].includes(ext)) return 'video';
+  if (['ogg','mp3','m4a','opus','wav'].includes(ext)) return 'audio';
+  return 'documento';
 }
 
 /* Cria a caixa (o número). É só isto: o gateway na VPS descobre a linha nova
@@ -1113,47 +1186,31 @@ export async function definirCaixaAtiva(id, ativa) {
 /* Enviar: grava a mensagem como pendente e deixa o pedido na fila que o
    gateway já lê. Quem confirma "entregue" é o próprio gateway, atualizando
    `crm_mensagens.status` — esta função só entrega o pedido. */
-export async function enviarMensagem(conversaId, texto) {
+export async function enviarMensagem(conversaId, texto, anexo = null) {
   if (_origem !== 'banco') return _simulado();
   const txt = String(texto || '').trim();
-  if (!txt) throw new Error('Escreva uma mensagem antes de enviar.');
+  if (!txt && !anexo) throw new Error('Escreva uma mensagem ou anexe um arquivo.');
 
-  const { data: conversa, error: e0 } = await _sb.from('crm_conversas')
-    .select('id, caixa_id, telefone, responsavel_id').eq('org_id', sessao.orgId()).eq('id', conversaId).maybeSingle();
-  if (e0) throw e0;
-  if (!conversa) throw new Error('Conversa não encontrada.');
-
-  const { data: msg, error: e1 } = await _sb.from('crm_mensagens').insert({
-    org_id: sessao.orgId(), conversa_id: conversaId, tipo: 'enviada',
-    autor_id: sessao.usuario()?.id || null, texto: txt, status: 'pendente'
-  }).select('id').single();
-  if (e1) throw e1;
-
-  const { error: e2 } = await _sb.from('crm_whatsapp_fila_envio').insert({
-    org_id: sessao.orgId(), caixa_id: conversa.caixa_id, mensagem_id: msg.id,
-    telefone_destino: conversa.telefone, conteudo: txt
+  /* ── 15/09: três gravações viraram uma ────────────────────────────────────
+     Antes isto gravava a mensagem, enfileirava e atualizava a conversa em três
+     idas separadas ao banco, a partir do navegador. Com anexo seriam quatro, e
+     internet que cai no meio deixaria mensagem na fila sem linha na conversa —
+     ou o contrário. `crm_enviar_mensagem` (PASSO-44) faz tudo numa transação:
+     ou acontece inteiro, ou não acontece. */
+  const { data, error } = await _sb.rpc('crm_enviar_mensagem', {
+    p_conversa_id: conversaId,
+    p_texto: txt || null,
+    p_midia_tipo: anexo?.tipo || null,
+    p_midia_path: anexo?.path || null,
+    p_midia_nome: anexo?.nome || null,
+    p_midia_mime: anexo?.mime || null,
+    p_midia_bytes: anexo?.bytes || null,
+    p_midia_duracao: anexo?.duracao || null
   });
-  if (e2) throw e2;
-
-  /* Quem responde ASSUME a conversa — e só quem não tinha dono muda de mãos.
-     14/09: a tela passou a separar "Fila" (sem responsável) de "Chats" (em
-     atendimento). Sem esta linha, responder uma conversa da fila deixava ela
-     na fila para sempre, e duas pessoas atenderiam a mesma pessoa sem saber.
-     O `?? null` importa: sobrescrever o responsável de um colega seria roubar
-     o atendimento dele, então só entra quando o campo está vazio. */
-  const atualizacao = {
-    ultima_mensagem_em: new Date().toISOString(),
-    ultima_mensagem_previa: txt.slice(0, 140),
-    estado: 'respondida'
-  };
-  const eu = sessao.usuario()?.id || null;
-  if (!conversa.responsavel_id && eu) atualizacao.responsavel_id = eu;
-
-  const { error: e3 } = await _sb.from('crm_conversas').update(atualizacao).eq('id', conversaId);
-  if (e3) throw e3;
-
-  return true;
+  if (error) throw error;
+  return data;
 }
+
 
 /* ── Assumir uma conversa da fila (14/09) ──────────────────────────────────
    O equivalente a "pegar o chamado": tira da Fila e põe em Chats, no nome de

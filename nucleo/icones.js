@@ -46,6 +46,8 @@ export const ICO = {
   clipboard:svg(`<path ${S} d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect ${S} x="8" y="2" width="8" height="4" rx="1"/>`),
   clip:svg(`<path ${S} d="M21.4 11.1 12.3 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.1a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.1a1.8 1.8 0 0 1-2.6-2.6l8.5-8.4"/>`),
   send:svg(`<path ${S} d="M4 12 21 4l-8 17-2.5-6.5L4 12Z"/>`),
+  // 15/09: entrou junto com o audio na tela de Conversas.
+  mic:svg(`<rect ${S} x="9" y="2" width="6" height="11" rx="3"/><path ${S} d="M5 11a7 7 0 0 0 14 0M12 18v4M9 22h6"/>`),
   qr:svg(`<rect ${S} x="3" y="3" width="7" height="7" rx="1"/><rect ${S} x="14" y="3" width="7" height="7" rx="1"/><rect ${S} x="3" y="14" width="7" height="7" rx="1"/><path ${S} d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20h1"/>`),
   wifioff:svg(`<path ${S} d="M2 2l20 20"/><path ${S} d="M8.6 16.6a5 5 0 0 1 6.8 0M5 13.1a10 10 0 0 1 3.6-2.3M19 13.1a10 10 0 0 0-4-2.6M1.8 9.6a15 15 0 0 1 4.4-2.8M22.2 9.6a15 15 0 0 0-9.6-3M12 20h.01"/>`),
   inbox:svg(`<path ${S} d="M22 12h-6l-2 3h-4l-2-3H2"/><path ${S} d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1Z"/>`),
