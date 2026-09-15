@@ -819,7 +819,7 @@ export default async function acoes(acao, { redesenhar }) {
 
         const r = await dados.iniciarConversa({ caixaId, telefone: fone, nome, contatoId });
         ponte.fecharModal?.();
-        ponte.avisar?.(r.criada ? 'Conversa aberta. Escreva a primeira mensagem.' : 'Já existia uma conversa com este número — abri ela.', 'success');
+        ponte.avisar?.(r.temHistorico ? 'Já existia uma conversa com este número — abri ela.' : 'Conversa aberta. Escreva a primeira mensagem.', 'success');
         await abrirAConversa(r.id, redesenhar);
       } catch (e) {
         ponte.avisar?.(explicar(e), 'error');
