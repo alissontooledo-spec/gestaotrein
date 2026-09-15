@@ -13573,6 +13573,10 @@ function _avisoBalao(d) {
     <div style="background:#E7FBD9;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:13px;line-height:1.5;color:#111">
       ${_waParaHtml(d.texto)}
     </div>
+    <div style="text-align:right;margin-top:6px">
+      <button type="button" onclick="_avisoEditarModelo('${escapeHtml(d.alvo)}')"
+        style="background:none;border:none;padding:0;font-size:12px;color:var(--navy);cursor:pointer;text-decoration:underline">Editar este texto</button>
+    </div>
   </div>`;
 }
 
@@ -13677,6 +13681,173 @@ async function _avisoEnviar() {
   } catch (e) {
     setBtnModalLoading(false);
     showToast(traduzErroSupabase(e, 'Não foi possível enviar o aviso'), 'error');
+  }
+}
+
+// ── Editor do modelo de mensagem (15/09/2026) ─────────────────────────────
+//
+// Fica dentro da própria prévia do aviso, e não numa tela de configurações
+// escondida. O motivo é o momento: a hora em que alguém percebe que não gosta
+// do texto é a hora em que está lendo o texto. Obrigar essa pessoa a sair,
+// procurar um menu e voltar é como a maioria dos textos ruins sobrevive anos
+// em sistema — dá trabalho demais consertar no instante em que incomoda.
+//
+// Quem preenche o modelo é o banco (`crm_preencher_modelo`), inclusive na
+// prévia ao vivo enquanto se digita. Seria mais rápido fazer a substituição
+// aqui no navegador, e seria o mesmo erro do PASSO-42: duas cópias da mesma
+// regra, que um dia discordam — e a que mente é sempre a prévia.
+
+function _modeloRotulo(alvo) {
+  return alvo === 'cliente' ? 'para a empresa cliente' : 'para o instrutor';
+}
+
+async function _avisoEditarModelo(alvo) {
+  const ctx = window._avisoCtx || {};
+  const chave = alvo === 'cliente' ? 'agendamento_cliente' : 'agendamento_instrutor';
+  try {
+    showLoading('Abrindo o modelo...');
+    const [rModelo, rMarc, rDados] = await Promise.all([
+      sb.rpc('crm_modelo_ler', { p_chave: chave }),
+      sb.rpc('crm_modelo_marcadores'),
+      sb.rpc('crm_agendamento_dados', { p_sessao_id: ctx.agId })
+    ]);
+    hideLoading();
+    if (rModelo.error) throw rModelo.error;
+    if (rMarc.error)   throw rMarc.error;
+    if (rDados.error)  throw rDados.error;
+
+    window._modeloCtx = {
+      chave, alvo,
+      dados: rDados.data || {},
+      marcadores: rMarc.data || [],
+      personalizado: !!rModelo.data?.personalizado
+    };
+    _modeloDesenhar(rModelo.data?.texto || '');
+  } catch (e) {
+    hideLoading();
+    showToast(traduzErroSupabase(e, 'Não foi possível abrir o modelo'), 'error');
+  }
+}
+
+function _modeloDesenhar(texto) {
+  const ctx = window._modeloCtx || {};
+  const chips = (ctx.marcadores || []).map(m =>
+    `<button type="button" onclick="_modeloInserir('${m.marcador}')"
+       title="${escapeHtml(m.descricao)}"
+       style="border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text-2)">${escapeHtml(m.marcador)}</button>`
+  ).join(' ');
+
+  abrirModal(`Modelo da mensagem ${_modeloRotulo(ctx.alvo)}`,
+    `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px">
+       Escreva a mensagem do seu jeito. Onde entrar um dado do agendamento, use um dos campos
+       abaixo — <b>clique nele para inserir</b> onde o cursor estiver.
+     </div>
+
+     <textarea id="modeloTexto" rows="12" oninput="_modeloPrevia()"
+       style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;padding:10px;border:1px solid var(--border);border-radius:8px;resize:vertical;color:var(--text-1);background:var(--surface)">${escapeHtml(texto)}</textarea>
+
+     <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px">${chips}</div>
+     <div style="font-size:11px;color:var(--text-3);margin-bottom:14px">
+       Linha cujo campo estiver vazio some sozinha — se o agendamento não tem local,
+       a linha do local não aparece.
+     </div>
+
+     <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
+       Como fica neste agendamento
+     </div>
+     <div id="modeloPrevia" style="background:#E7FBD9;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;color:#111;min-height:60px"></div>`,
+    `<button class="btn btn-outline" onclick="_modeloRestaurar()" style="margin-right:auto"
+       title="Volta ao texto que vem pronto no sistema">Restaurar padrão</button>
+     <button class="btn btn-outline" onclick="_avisoVoltarDoModelo()">Cancelar</button>
+     <button class="btn btn-navy" id="btnModalSalvar" onclick="_modeloSalvar()">Salvar modelo</button>`,
+    true);
+
+  _modeloPrevia();
+}
+
+function _modeloInserir(marcador) {
+  const ta = document.getElementById('modeloTexto');
+  if (!ta) return;
+  const txt = `{{${marcador}}}`;
+  const i = ta.selectionStart ?? ta.value.length;
+  const f = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0, i) + txt + ta.value.slice(f);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = i + txt.length;
+  _modeloPrevia();
+}
+
+// Espera a pessoa parar de digitar antes de perguntar ao banco. Sem isso seria
+// uma ida ao servidor por tecla.
+function _modeloPrevia() {
+  clearTimeout(window._modeloTimer);
+  window._modeloTimer = setTimeout(async () => {
+    const ta = document.getElementById('modeloTexto');
+    const alvo = document.getElementById('modeloPrevia');
+    if (!ta || !alvo) return;
+    try {
+      const { data, error } = await sb.rpc('crm_preencher_modelo', {
+        p_modelo: ta.value, p_dados: (window._modeloCtx || {}).dados || {}
+      });
+      if (error) throw error;
+      alvo.innerHTML = data
+        ? _waParaHtml(data)
+        : '<span style="color:var(--text-3)">A mensagem ficaria vazia.</span>';
+    } catch (e) {
+      alvo.innerHTML = '<span style="color:var(--red)">Não consegui montar a prévia agora.</span>';
+    }
+  }, 400);
+}
+
+async function _modeloSalvar() {
+  const ta = document.getElementById('modeloTexto');
+  if (!ta) return;
+  try {
+    setBtnModalLoading(true);
+    const { error } = await sb.rpc('crm_modelo_salvar', {
+      p_chave: (window._modeloCtx || {}).chave, p_texto: ta.value
+    });
+    if (error) throw error;
+    showToast('Modelo salvo. As próximas mensagens usam este texto.', 'success');
+    await _avisoVoltarDoModelo();
+  } catch (e) {
+    setBtnModalLoading(false);
+    showToast(traduzErroSupabase(e, 'Não foi possível salvar o modelo'), 'error');
+  }
+}
+
+async function _modeloRestaurar() {
+  const ctx = window._modeloCtx || {};
+  if (!ctx.personalizado) {
+    showToast('Este modelo já é o padrão do sistema.', 'success');
+    return;
+  }
+  const ok = await confirmarAcao(
+    'Isto apaga o texto que você escreveu e volta ao que vem pronto no sistema. Não dá para desfazer.',
+    'Restaurar padrão', true);
+  if (!ok) return;
+  try {
+    showLoading('Restaurando...');
+    const { data, error } = await sb.rpc('crm_modelo_restaurar', { p_chave: ctx.chave });
+    hideLoading();
+    if (error) throw error;
+    window._modeloCtx.personalizado = false;
+    _modeloDesenhar(data?.texto || '');
+    showToast('Texto padrão restaurado.', 'success');
+  } catch (e) {
+    hideLoading();
+    showToast(traduzErroSupabase(e, 'Não foi possível restaurar'), 'error');
+  }
+}
+
+// Volta para a prévia do aviso, já com o texto novo.
+async function _avisoVoltarDoModelo() {
+  try {
+    showLoading('Atualizando a prévia...');
+    await _avisoDesenhar();
+  } catch (e) {
+    hideLoading();
+    showToast(traduzErroSupabase(e, 'Não foi possível voltar para a prévia'), 'error');
   }
 }
 
@@ -27760,7 +27931,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '165';
+  var APP_BUILD = '166';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
