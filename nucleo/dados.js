@@ -1195,34 +1195,43 @@ export function normalizarTelefone(valor) {
   return n;
 }
 
+/* ── 15/09: quem procura a pessoa agora é o banco ──────────────────────────
+   O que estava aqui procurava a conversa SÓ pelo telefone e, não achando,
+   criava uma linha nova. Parecia certo, e era — até 14/09, quando o WhatsApp
+   passou a entregar parte das conversas endereçadas por "LID" em vez do
+   número. Quem já tinha conversa gravada pelo LID não era encontrado por
+   telefone nenhum, e este código abria uma SEGUNDA conversa da mesma pessoa,
+   com o histórico partido ao meio.
+
+   O PASSO-41 ensinou o banco a reconhecer a pessoa por qualquer um dos três
+   endereços e mandou as duas rotas do gateway usarem essa regra. Esta aqui —
+   o botão "Nova conversa" da tela — era a terceira rota, e tinha passado
+   despercebida: a correção estava no ar e continuava sendo possível duplicar
+   pela tela. `crm_iniciar_conversa` (PASSO-42) é a porta oficial dessa regra
+   para o app.
+
+   Fica de lição: quando uma regra de negócio existe em mais de um lugar, o
+   conserto de um lugar não é o conserto do problema. Vale procurar TODAS as
+   portas antes de dizer que acabou. */
 export async function iniciarConversa({ caixaId, telefone, nome = null, contatoId = null } = {}) {
   if (_origem !== 'banco') return _simulado({ id: 'demo' });
-  const fone = normalizarTelefone(telefone);
   if (!caixaId) throw new Error('Escolha por qual número o GRID deve falar.');
+  /* Valida aqui também, e não só no banco, para a pessoa saber do erro de
+     digitação sem esperar a ida e a volta. A regra é a mesma dos dois lados. */
+  const fone = normalizarTelefone(telefone);
 
-  const { data: caixa, error: e0 } = await _sb.from('crm_caixas')
-    .select('id, estado').eq('org_id', sessao.orgId()).eq('id', caixaId).maybeSingle();
-  if (e0) throw e0;
-  if (!caixa) throw new Error('Número (caixa) não encontrado nesta organização.');
-
-  const { data: existente, error: e1 } = await _sb.from('crm_conversas')
-    .select('id').eq('org_id', sessao.orgId())
-    .eq('caixa_id', caixaId).eq('telefone', fone).maybeSingle();
-  if (e1) throw e1;
-  if (existente) return { id: existente.id, criada: false };
-
-  const { data: nova, error: e2 } = await _sb.from('crm_conversas').insert({
-    org_id: sessao.orgId(), caixa_id: caixaId, telefone: fone,
-    contato_id: contatoId || null,
-    nome_exibicao: (nome || '').trim() || null,
-    /* Nasce no nome de quem abriu e já em atendimento: ninguém pôs isto na
-       fila — a conversa foi criada de propósito por alguém que vai falar. */
-    responsavel_id: sessao.usuario()?.id || null,
-    estado: 'respondida',
-    nao_lidas: 0
-  }).select('id').single();
-  if (e2) throw e2;
-  return { id: nova.id, criada: true };
+  const { data, error } = await _sb.rpc('crm_iniciar_conversa', {
+    p_caixa_id: caixaId,
+    p_telefone: fone,
+    p_nome: (nome || '').trim() || null,
+    p_contato_id: contatoId || null
+  });
+  if (error) throw error;
+  if (!data?.id) throw new Error('Não foi possível abrir a conversa.');
+  /* `temHistorico` no lugar de `criada`: o que a tela precisa dizer não é se
+     a LINHA nasceu agora — ela pode já existir, vazia, criada pelo LID — e
+     sim se há conversa para ler quando a pessoa chegar lá. */
+  return { id: data.id, temHistorico: !!data.temHistorico };
 }
 
 /* Resolver: some do "requer atenção" sem apagar nada — a conversa continua
