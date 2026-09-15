@@ -8270,7 +8270,10 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
         <div class="field" style="margin:0"><label>UF</label><input type="text" id="mUsrUfRegistro" value="${escapeHtml(u?.uf_registro||'')}" placeholder="Ex: SC" maxlength="2" style="text-transform:uppercase"></div>
         <div class="field" style="margin:0"><label>Registro</label><input type="text" id="mUsrConselho" value="${escapeHtml(u?.conselho_classe||'')}" placeholder="Ex: 109085-1"></div>
       </div>
-      <div class="field" style="margin:0"><label>CPF</label><input type="text" id="mUsrCpf" value="${escapeHtml(u?.cpf||'')}" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0">
+        <div class="field" style="margin:0"><label>CPF</label><input type="text" id="mUsrCpf" value="${escapeHtml(u?.cpf||'')}" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>
+        <div class="field" style="margin:0"><label>WhatsApp</label><input type="tel" id="mUsrWhats" value="${escapeHtml(u?.whatsapp||'')}" placeholder="(47) 99999-9999"></div>
+      </div>
     </div>
     ${blocoDocumentosInstrutor}
     ${u && u.perfil !== 'provedor' ? `
@@ -8387,6 +8390,7 @@ async function salvarUsuarioOrg() {
   const formacao        = document.getElementById('mUsrFormacao')?.value.trim()||null;
   const uf_registro     = document.getElementById('mUsrUfRegistro')?.value.trim().toUpperCase()||null;
   const cpf             = document.getElementById('mUsrCpf')?.value.trim()||null;
+  const whatsapp        = document.getElementById('mUsrWhats')?.value.trim()||null;
   if (!nome) { showToast('Nome é obrigatório', 'error'); return; }
 
   try {
@@ -8394,7 +8398,7 @@ async function salvarUsuarioOrg() {
     // Correção 2026-08-26: mesma armadilha do _toggleAtivoUsuarioGerenciado —
     // RLS que recusa devolve 0 linhas, não erro. Ver comentário lá.
     const { data: _alterados, error } = await sb.from('usuarios').update({
-      nome, perfil, sigla_conselho, conselho_classe, especialidade, formacao, uf_registro, cpf,
+      nome, perfil, sigla_conselho, conselho_classe, especialidade, formacao, uf_registro, cpf, whatsapp,
     }).eq('id', usuarioId).select('id');
     if (error) throw error;
     if (!_alterados || _alterados.length === 0) {
@@ -8422,6 +8426,7 @@ async function criarUsuarioOrg() {
   const formacao        = document.getElementById('mUsrFormacao')?.value.trim()||null;
   const uf_registro     = document.getElementById('mUsrUfRegistro')?.value.trim().toUpperCase()||null;
   const cpf             = document.getElementById('mUsrCpf')?.value.trim()||null;
+  const whatsapp        = document.getElementById('mUsrWhats')?.value.trim()||null;
   if (!nome||!email||!senha) { showToast('Preencha todos os campos','error'); return; }
   if (senha.length<6) { showToast('Senha deve ter no mínimo 6 caracteres','error'); return; }
   // ── Guard Starter: limite de usuários ativos por plano ──
@@ -8445,8 +8450,8 @@ async function criarUsuarioOrg() {
     const resultado = await res.json();
     if (!res.ok) throw new Error(resultado.error||'Erro ao criar usuário');
     // Salvar campos profissionais diretamente na tabela usuarios
-    if (resultado.userId && (sigla_conselho||conselho_classe||especialidade||formacao||uf_registro||cpf)) {
-      await sb.from('usuarios').update({sigla_conselho,conselho_classe,especialidade,formacao,uf_registro,cpf}).eq('id',resultado.userId);
+    if (resultado.userId && (sigla_conselho||conselho_classe||especialidade||formacao||uf_registro||cpf||whatsapp)) {
+      await sb.from('usuarios').update({sigla_conselho,conselho_classe,especialidade,formacao,uf_registro,cpf,whatsapp}).eq('id',resultado.userId);
     }
     fecharModal(); showToast(`${nome} criado com sucesso!`,'success');
   } catch(e) {
@@ -8743,7 +8748,8 @@ function abrirModalCliente(id=null) {
       <div class="field" style="margin:0"><label>UF</label><input type="text" id="mCliUf" value="${c?.uf||''}" placeholder="SC" maxlength="2" style="text-transform:uppercase"></div>
     </div>
     <div class="field"><label>E-mail</label><input type="email" id="mCliEmail" value="${escapeHtml(c?.email||'')}" placeholder="contato@empresa.com.br"></div>
-    <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${escapeHtml(c?.telefone||'')}" placeholder="(47) 99999-9999"></div>`,
+    <div class="field"><label>Telefone</label><input type="tel" id="mCliTel" value="${escapeHtml(c?.telefone||'')}" placeholder="(47) 99999-9999"></div>
+    <div class="field"><label>WhatsApp <span style="font-weight:400;color:var(--text-3)">(para avisar sobre agendamentos)</span></label><input type="tel" id="mCliWhats" value="${escapeHtml(c?.whatsapp||'')}" placeholder="(47) 99999-9999"><div style="font-size:11px;color:var(--text-3);margin-top:4px">Separado do telefone acima de propósito: o que vem do CNPJ costuma ser fixo, e fixo não recebe WhatsApp.</div></div>`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCliente()">${c?'Salvar':'Cadastrar'}</button>`);
   if (c?.cnae) _atualizarSugestaoNR(c.cnae, c.cnae_descricao||'', c.cnaes_secundarios||[]);
@@ -8767,6 +8773,7 @@ async function salvarCliente() {
     uf: (document.getElementById('mCliUf')?.value.trim()||'').toUpperCase()||null,
     email: _valorCampo('mCliEmail'),
     telefone: _valorCampo('mCliTel'),
+    whatsapp: _valorCampo('mCliWhats'),
     situacao_cadastral: _valorCampo('mCliSituacao'),
     data_situacao_cadastral: _valorCampo('mCliSituacaoData'),
     motivo_situacao_cadastral: _valorCampo('mCliSituacaoMotivo'),
@@ -12219,7 +12226,8 @@ function _tvHtmlTrilha(turmaId, agendamentos, participantes, st) {
 // de turmas e na tela de Organizações — os itens despacham pelos mesmos
 // data-action de sempre, então nenhuma ação nova foi criada.
 function _tvMenuAgendamento(btn, agId, turmaId) {
-  const items = [{action:'editarAgendamento', id:agId, extra:turmaId, label:'Editar agendamento'}];
+  const items = [{action:'avisarAgendamento', id:agId, extra:turmaId, label:'Avisar por WhatsApp'},
+                 {action:'editarAgendamento', id:agId, extra:turmaId, label:'Editar agendamento'}];
   const dados = (window._sessoesEvidCache||{})[agId];
   if (dados && (dados.anotacoes || (dados.evidencias||[]).length)) {
     items.push({action:'toggleEvidenciasSessao', id:agId, label:'Evidências e anotações'});
@@ -12741,6 +12749,7 @@ async function verTurma(id, opts = {}) {
               <div class="tv-agl">${_loc||'—'}</div>
               <div class="tv-agst"><span class="badge ${ag.concluida?'badge-green':'badge-gray'}">${_stTxt}</span></div>
               <div class="tv-agacts">${podeEditar?`<div class="tv-ag-btns">
+                  ${!ag.concluida?`<button class="btn btn-outline btn-sm" data-action="avisarAgendamento" data-id="${ag.id}" data-extra="${id}" title="Avisar a empresa e o instrutor por WhatsApp">Avisar</button>`:``}
                   <button class="btn btn-navy btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
                   <button class="btn btn-outline btn-sm" data-action="excluirAgendamento" data-id="${ag.id}" data-extra="${id}" style="color:var(--red);border-color:var(--red)">Excluir</button>
                 </div>
@@ -13515,6 +13524,160 @@ function menuAgendamento(btn, agId, turmaId) {
     '---',
     {action:'excluirAgendamento', id:agId, extra:turmaId, label:'Excluir agendamento', danger:true},
   ]);
+}
+
+// ── Avisar agendamento por WhatsApp (15/09/2026) ──────────────────────────
+//
+// Quem monta o texto é o banco (`crm_agendamento_texto`, PASSO-42), não esta
+// tela. A prévia abaixo chama a MESMA função que o envio vai chamar, com
+// p_previa = true. Se o texto fosse montado aqui, um dia a prévia mostraria
+// uma coisa e o cliente receberia outra — e ninguém descobriria até alguém
+// reclamar de uma mensagem que "o sistema mandou".
+//
+// Nada aqui dispara sozinho. O aviso sai porque alguém leu e clicou.
+
+// O WhatsApp mostra *isto* em negrito e _isto_ em itálico. A prévia imita
+// para ser fiel ao que o destinatário vê — mostrar os asteriscos crus daria a
+// impressão de que a mensagem vai sair com eles.
+function _waParaHtml(txt) {
+  return escapeHtml(String(txt || ''))
+    .replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+    .replace(/_([^_\n]+)_/g, '<i>$1</i>')
+    .replace(/\n/g, '<br>');
+}
+
+function _avisoBalao(d) {
+  const fone = d.telefone ? `<span style="color:var(--text-3);font-size:11px">· ${escapeHtml(d.telefone)}</span>` : '';
+  const podeEnviar = d.status === 'previa';
+  const rotuloAlvo = d.alvo === 'cliente' ? 'Empresa cliente' : 'Instrutor';
+
+  // Quem não pode receber aparece do mesmo jeito, com o motivo escrito. Some
+  // da tela seria pior: o aviso sairia pela metade e ninguém saberia por quê.
+  if (!podeEnviar) {
+    const cor = d.status === 'ja_avisado' ? 'var(--text-3)' : 'var(--red)';
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;opacity:.75">
+      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">${rotuloAlvo}</div>
+      <div style="font-weight:600;margin:2px 0 6px">${escapeHtml(d.nome || '—')} ${fone}</div>
+      <div style="font-size:12px;color:${cor}">${escapeHtml(d.motivo || '')}</div>
+    </div>`;
+  }
+
+  return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+    <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+      <input type="checkbox" class="avisoAlvo" value="${escapeHtml(d.alvo)}" checked style="margin-top:3px">
+      <span style="flex:1;min-width:0">
+        <span style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;display:block">${rotuloAlvo}</span>
+        <span style="font-weight:600">${escapeHtml(d.nome || '—')}</span> ${fone}
+      </span>
+    </label>
+    <div style="background:#E7FBD9;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:13px;line-height:1.5;color:#111">
+      ${_waParaHtml(d.texto)}
+    </div>
+  </div>`;
+}
+
+async function avisarAgendamento(agId, turmaId) {
+  document.querySelectorAll('.dropdown-menu').forEach(m => m.remove());
+  try {
+    showLoading('Preparando a mensagem...');
+
+    // Por qual número sai. Com uma caixa ativa só, nem se pergunta. Com mais
+    // de uma, o número que aparece para o cliente é escolha de negócio — o
+    // banco recusa adivinhar, e aqui a tela pergunta.
+    const { data: caixas, error: errCaixas } = await sb
+      .from('crm_caixas').select('id,nome,numero,estado')
+      .eq('org_id', usuarioAtual.org_id).eq('ativa', true).order('nome');
+    if (errCaixas) throw errCaixas;
+    if (!caixas || !caixas.length) {
+      hideLoading();
+      showToast('Nenhum número de WhatsApp ativo nesta organização.', 'error');
+      return;
+    }
+
+    window._avisoCtx = { agId, turmaId, caixaId: caixas[0].id, caixas };
+    await _avisoDesenhar();
+  } catch (e) {
+    hideLoading();
+    showToast(traduzErroSupabase(e, 'Não foi possível preparar o aviso'), 'error');
+  }
+}
+
+async function _avisoDesenhar() {
+  const ctx = window._avisoCtx || {};
+  const { data, error } = await sb.rpc('crm_avisar_agendamento', {
+    p_sessao_id: ctx.agId,
+    p_alvos: ['cliente', 'instrutor'],
+    p_caixa_id: ctx.caixaId,
+    p_previa: true
+  });
+  hideLoading();
+  if (error) throw error;
+
+  const destinos = (data && data.destinos) || [];
+  const enviaveis = destinos.filter(d => d.status === 'previa').length;
+
+  const seletor = ctx.caixas.length > 1
+    ? `<div class="field" style="margin-bottom:12px">
+         <label>Enviar pelo número</label>
+         <select id="avisoCaixa" onchange="_avisoTrocarCaixa(this.value)">
+           ${ctx.caixas.map(c => `<option value="${c.id}" ${c.id === ctx.caixaId ? 'selected' : ''}>${escapeHtml(c.nome)}${c.numero ? ' · ' + escapeHtml(c.numero) : ''}${c.estado !== 'conectado' ? ' (desconectado)' : ''}</option>`).join('')}
+         </select>
+       </div>`
+    : '';
+
+  const aviso = enviaveis === 0
+    ? `<div style="background:var(--surface-2);border-radius:8px;padding:12px;font-size:12px;color:var(--text-2)">
+         Não há nada para enviar agora. Cadastre o WhatsApp de quem falta e volte aqui.
+       </div>`
+    : `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px">
+         Confira o texto abaixo. É exatamente o que a pessoa vai receber.
+       </div>`;
+
+  abrirModal('Avisar por WhatsApp',
+    seletor + aviso + destinos.map(_avisoBalao).join(''),
+    enviaveis === 0
+      ? `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`
+      : `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+         <button class="btn btn-navy" id="btnModalSalvar" onclick="_avisoEnviar()">Enviar agora</button>`,
+    true);
+}
+
+async function _avisoTrocarCaixa(id) {
+  window._avisoCtx.caixaId = id;
+  showLoading('Preparando a mensagem...');
+  try { await _avisoDesenhar(); }
+  catch (e) { hideLoading(); showToast(traduzErroSupabase(e, 'Não foi possível preparar o aviso'), 'error'); }
+}
+
+async function _avisoEnviar() {
+  const ctx = window._avisoCtx || {};
+  const alvos = Array.from(document.querySelectorAll('.avisoAlvo:checked')).map(c => c.value);
+  if (!alvos.length) { showToast('Escolha ao menos um destinatário.', 'error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const { data, error } = await sb.rpc('crm_avisar_agendamento', {
+      p_sessao_id: ctx.agId,
+      p_alvos: alvos,
+      p_caixa_id: ctx.caixaId,
+      p_previa: false
+    });
+    if (error) throw error;
+
+    const destinos = (data && data.destinos) || [];
+    const enviados = destinos.filter(d => d.status === 'enviado').length;
+    fecharModal();
+
+    // "Entregue ao WhatsApp para envio" e não "enviado": quem confirma
+    // entrega de verdade é o gateway, não esta tela. Mesma correção de
+    // linguagem feita em 14/09 nos tiques da conversa — dizer mais do que se
+    // sabe é como a mensagem "sumiu" sem ninguém perceber da outra vez.
+    showToast(enviados === 1
+      ? 'Aviso na fila de envio. Acompanhe pela tela de Conversas.'
+      : `${enviados} avisos na fila de envio. Acompanhe pela tela de Conversas.`, 'success');
+  } catch (e) {
+    setBtnModalLoading(false);
+    showToast(traduzErroSupabase(e, 'Não foi possível enviar o aviso'), 'error');
+  }
 }
 
 async function excluirAgendamento(agId, turmaId) {
@@ -22318,6 +22481,7 @@ document.addEventListener('click', function(e) {
     case 'menuAgendamento':  menuAgendamento(el,id,el.getAttribute('data-turma')); break;
     case 'editarAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); abrirModalAgendamento(extra,id); break;
     case 'excluirAgendamento': document.querySelectorAll('.dropdown-menu').forEach(m=>m.remove()); excluirAgendamento(id,extra); break;
+    case 'avisarAgendamento': avisarAgendamento(id,extra); break;
     case 'addParticipante': abrirModalAddParticipante(id, cli); break;
     // Participante
     case 'selecionarPart':        selecionarParticipante(el.getAttribute('data-col')); break;
@@ -27596,7 +27760,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '164';
+  var APP_BUILD = '165';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
