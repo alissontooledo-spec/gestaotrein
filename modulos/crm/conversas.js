@@ -302,6 +302,42 @@ function tiqueEntrega(m) {
   return `<span class="crm-tique ok" title="Entregue ao WhatsApp para envio">✓</span>`;
 }
 
+/* ── anexos (15/09) ───────────────────────────────────────────────────────
+   Foto abre, áudio toca, documento baixa. Cada família precisa do seu próprio
+   elemento: um PDF dentro de <img> não mostra nada, e um áudio como link
+   obriga a baixar para ouvir uma frase de oito segundos.
+
+   Quando o endereço temporário não veio (`url` nula), o anexo aparece assim
+   mesmo, com o nome e sem o link. Sumir com a mensagem porque o arquivo não
+   pôde ser liberado seria repetir, do lado da tela, o defeito que passamos o
+   dia consertando do lado do gateway. */
+function tamanhoLegivel(bytes) {
+  if (!bytes) return '';
+  return bytes >= 1048576
+    ? `${(bytes / 1048576).toFixed(1).replace('.', ',')} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function anexoNaBolha(a) {
+  const nome = ui.esc(a.nome || 'arquivo');
+  if (!a.url) {
+    return `<div class="crm-anexo-erro">${icone('clip','sm')} ${nome}
+      <span>não foi possível abrir este arquivo agora</span></div>`;
+  }
+  if (a.tipo === 'imagem') {
+    return `<a class="crm-anexo-img" href="${ui.esc(a.url)}" target="_blank" rel="noopener"
+              title="Abrir imagem"><img src="${ui.esc(a.url)}" alt="${nome}" loading="lazy"></a>`;
+  }
+  if (a.tipo === 'audio') {
+    return `<audio class="crm-anexo-audio" controls preload="none" src="${ui.esc(a.url)}"></audio>`;
+  }
+  if (a.tipo === 'video') {
+    return `<video class="crm-anexo-video" controls preload="metadata" src="${ui.esc(a.url)}"></video>`;
+  }
+  return `<a class="crm-anexo-doc" href="${ui.esc(a.url)}" target="_blank" rel="noopener" download="${nome}">
+    ${icone('doc','sm')}<span class="n">${nome}</span><span class="t">${tamanhoLegivel(a.bytes)}</span></a>`;
+}
+
 /* ── conversa ───────────────────────────────────────────────────────────── */
 function colunaConversa(c, caixas, varios, contato, msgs) {
   const cx = caixas.find(x => x.id === c.caixa_id);
@@ -314,7 +350,8 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
       ? `<div class="crm-msg sis">${ui.esc(m.texto)}</div>`
       : `<div class="crm-msg ${m.tipo === 'enviada' ? 'env' : 'rec'}">
            ${m.autor ? `<div class="crm-msg-aut">${ui.esc(m.autor)}</div>` : ''}
-           <div class="crm-msg-txt">${ui.esc(m.texto)}</div>
+           ${m.midia ? anexoNaBolha(m.midia) : ''}
+           ${m.texto ? `<div class="crm-msg-txt">${ui.esc(m.texto)}</div>` : ''}
            ${/* O motivo da falha fica VISÍVEL na mensagem, não escondido num
                 title que só aparece com o mouse parado em cima. Quem precisa
                 dessa informação normalmente está no celular, onde title não
@@ -366,12 +403,14 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
       </div>
       <div class="crm-composer-box">
         <div class="crm-composer-icos">
-          <button class="crm-cico" data-acao="crm:anexar" title="Anexar arquivo">${icone('clip','sm')}</button>
+          <button class="crm-cico" data-acao="crm:anexar:${c.id}" title="Anexar arquivo">${icone('clip','sm')}</button>
+          <button class="crm-cico" id="crmMic" data-acao="crm:gravar:${c.id}" title="Gravar áudio">${icone('mic','sm')}</button>
           <button class="crm-cico" data-acao="crm:modelos" title="Modelos de mensagem">${icone('chat','sm')}</button>
         </div>
         <textarea id="crmComposerTexto" rows="1" placeholder="Escreva a resposta"></textarea>
         <button class="crm-enviar" data-acao="crm:enviar:${c.id}" title="Enviar">${icone('send','sm')}</button>
       </div>
+      <div class="crm-anexo-pendente" id="crmAnexoPendente" hidden></div>
       <div class="crm-composer-dica"><kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha</div>
     </div>
   </div>`;

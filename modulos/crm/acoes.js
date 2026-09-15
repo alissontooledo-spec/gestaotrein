@@ -371,7 +371,15 @@ async function caixaParaFalar(ponte) {
    disparo em massa para quem nunca falou com a gente é o caminho mais curto
    para o número do cliente ser bloqueado. A tela permite um de cada vez, de
    propósito — não existe "enviar para todos". */
-const DEPENDE_WHATSAPP = ['crm:anexar'];
+/* ── 15/09: a lista esvaziou ───────────────────────────────────────────────
+   `crm:anexar` era o último morador. O gateway aprendeu a enviar arquivo e a
+   guardar o que chega (PASSO-44 + index.js da VPS), então a trava deixou de
+   ter razão de existir.
+
+   A lista fica, vazia, de propósito: ela é o lugar certo para uma
+   funcionalidade que a tela desenha mas o gateway ainda não faz. O erro que
+   ela evita é o pior de todos — botão que promete e não cumpre. */
+const DEPENDE_WHATSAPP = [];
 
 /* ── 14/09 (madrugada), segunda revisão ────────────────────────────────────
    Cinco entradas saíram desta lista e ganharam tratador de verdade logo
@@ -839,6 +847,87 @@ export default async function acoes(acao, { redesenhar }) {
      O campo só é limpo quando a gravação deu certo. Se o envio falhar, o
      texto continua lá para a pessoa tentar de novo — antes ele era apagado
      de qualquer jeito, inclusive no erro. */
+  /* ── Anexar arquivo (15/09) ──────────────────────────────────────────────
+     O arquivo sobe primeiro e só depois vira mensagem. Podia ser ao contrário
+     — mensagem primeiro, arquivo depois —, e aí uma internet que cai no meio
+     deixaria na conversa uma mensagem apontando para um arquivo que não
+     existe. Preferi o risco inverso: arquivo órfão na área de armazenamento,
+     que não estraga conversa nenhuma. */
+  if (acao.startsWith('crm:anexar:')) {
+    const conversaId = resto.replace('anexar:', '');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip';
+    input.onchange = async () => {
+      const arquivo = input.files?.[0];
+      if (!arquivo) return;
+      try {
+        ponte.avisar?.(`Enviando ${arquivo.name}...`, 'success');
+        const anexo = await dados.subirArquivoWhatsapp(conversaId, arquivo);
+        const legenda = val('crmComposerTexto');
+        await dados.enviarMensagem(conversaId, legenda, anexo);
+        const campo = elVisivel('crmComposerTexto');
+        if (campo) { campo.value = ''; campo.style.height = 'auto'; }
+        ponte.avisar?.('Arquivo na fila de envio.', 'success');
+        redesenhar();
+      } catch (e) {
+        ponte.avisar?.(e?.message || 'Não foi possível enviar o arquivo.', 'error');
+      }
+    };
+    input.click();
+    return true;
+  }
+
+  /* ── Gravar áudio (15/09) ────────────────────────────────────────────────
+     Um clique começa, outro termina e envia. Sem "segure para falar": em
+     computador, segurar o botão por trinta segundos é desconfortável, e no
+     celular a tela apaga.
+
+     O navegador grava em opus dentro de um envelope webm — o WhatsApp espera
+     opus dentro de ogg. Na prática os aparelhos tocam assim mesmo; se algum
+     não tocar, o conserto é converter na VPS (ffmpeg), não aqui. */
+  if (acao.startsWith('crm:gravar:')) {
+    const conversaId = resto.replace('gravar:', '');
+    const botao = elVisivel('crmMic');
+
+    if (window.__crmGravador?.state === 'recording') {
+      window.__crmGravador.stop();
+      return true;
+    }
+    try {
+      const fluxo = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const gravador = new MediaRecorder(fluxo);
+      const pedacos = [];
+      const inicio = Date.now();
+      window.__crmGravador = gravador;
+
+      gravador.ondataavailable = (e) => { if (e.data?.size) pedacos.push(e.data); };
+      gravador.onstop = async () => {
+        fluxo.getTracks().forEach(t => t.stop());
+        window.__crmGravador = null;
+        if (botao) { botao.classList.remove('gravando'); botao.title = 'Gravar áudio'; }
+        const segundos = Math.round((Date.now() - inicio) / 1000);
+        if (segundos < 1) { ponte.avisar?.('Gravação curta demais.', 'error'); return; }
+        try {
+          const blob = new Blob(pedacos, { type: gravador.mimeType || 'audio/webm' });
+          const arquivo = new File([blob], `audio-${Date.now()}.webm`, { type: blob.type });
+          const anexo = await dados.subirArquivoWhatsapp(conversaId, arquivo);
+          await dados.enviarMensagem(conversaId, null, { ...anexo, tipo: 'audio', duracao: segundos });
+          ponte.avisar?.('Áudio na fila de envio.', 'success');
+          redesenhar();
+        } catch (e) {
+          ponte.avisar?.(e?.message || 'Não foi possível enviar o áudio.', 'error');
+        }
+      };
+      gravador.start();
+      if (botao) { botao.classList.add('gravando'); botao.title = 'Clique para parar e enviar'; }
+      ponte.avisar?.('Gravando... clique no microfone de novo para enviar.', 'success');
+    } catch (e) {
+      ponte.avisar?.('Não consegui acessar o microfone. Verifique a permissão do navegador.', 'error');
+    }
+    return true;
+  }
+
   if (acao.startsWith('crm:enviar:')) {
     const conversaId = resto.replace('enviar:', '');
     const texto = val('crmComposerTexto');
