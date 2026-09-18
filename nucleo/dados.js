@@ -1305,6 +1305,32 @@ export async function resolverConversa(id) {
   return true;
 }
 
+/* ── 18/09: conversa aberta na tela é conversa lida ────────────────────────
+   Antes desta função, `nao_lidas` só zerava ao resolver a conversa (acima).
+   Com a tela de Conversas se atualizando sozinha, o contador ao lado de uma
+   conversa ABERTA subiria enquanto a pessoa lê as mensagens chegando — e um
+   contador que mente ensina a ignorá-lo.
+
+   `.gt('nao_lidas', 0)`: sem ele, cada redesenho gravaria zero por cima de
+   zero — uma escrita no banco a cada dez segundos, por pessoa com a tela
+   aberta, para não mudar nada. A lista é ordenada por `ultima_mensagem_em`
+   (não por `atualizado_em`) e não existe gatilho nesta tabela, então a ordem
+   não se mexeria; o problema é só o desperdício, que numa tela que agora
+   roda sozinha o dia inteiro deixa de ser desprezível.
+
+   `estado` não é tocado aqui de propósito: ler não é assumir. Quem assume é
+   quem responde (ver `enviarMensagem`), e essa continua sendo a regra. */
+export async function marcarConversaLida(id) {
+  if (_origem !== 'banco') return _simulado();
+  const { error } = await _sb.from('crm_conversas')
+    .update({ nao_lidas: 0 })
+    .eq('org_id', sessao.orgId())
+    .eq('id', id)
+    .gt('nao_lidas', 0);
+  if (error) throw error;
+  return true;
+}
+
 /* Liga (ou desliga) a conversa a um negócio do funil. A coluna `lead_id` já
    existia em `crm_conversas` desde o PASSO-37 e já era lida para desenhar o
    cartão "Lead ativo" — faltava só o caminho de ida. Sem SQL novo. */
