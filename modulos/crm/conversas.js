@@ -18,7 +18,28 @@
 import * as ui from '../../nucleo/ui.js';
 import { icone } from '../../nucleo/icones.js';
 import * as dados from '../../nucleo/dados.js';
+import * as navegacao from '../../nucleo/navegacao.js';
 import { avisoDemo } from './painel.js';
+
+/* ── 18/09: a tela se atualiza sozinha ──────────────────────────────────────
+   Até aqui, mensagem que chegava só aparecia se a pessoa trocasse de aba ou
+   recarregasse. Quem atende WhatsApp fica com a tela aberta o dia inteiro —
+   e ficava respondendo com atraso sem saber que havia atraso.
+
+   Dez segundos é o intervalo. Não é arbitrário: o gateway roda um ciclo a
+   cada ~30s, então nada chega mais rápido do que isso de qualquer forma;
+   dez segundos garante que a mensagem apareça no primeiro ciclo depois de
+   existir, sem multiplicar consultas ao banco à toa.
+
+   As travas estão em `ligarAtualizacaoAutomatica()`, e cada uma existe por um
+   motivo específico — leia lá antes de mexer no intervalo. */
+const INTERVALO_ATUALIZACAO = 10000;
+let _timerTela = null;
+let _rolagemAntes = null;   // onde cada conversa estava rolada, antes do redesenho
+let _rascunhoAntes = null;  // o que estava escrito no campo, antes do redesenho
+let _naoLidasDaAberta = 0;  // quantas não-lidas a conversa aberta ainda carrega
+let _emAtualizacaoAutomatica = false; // este redesenho foi pedido pelo temporizador?
+let _abertaDeProposito = null;        // id da conversa que a pessoa CLICOU
 
 let _aba = 'chats';           // 'chats' | 'fila' | 'contatos'
 let _caixaAtiva = 'todas';
@@ -54,6 +75,52 @@ function visivel(id) {
 }
 
 const casaBusca = (t, campos) => !t || campos.some(v => (v || '').toLowerCase().includes(t));
+
+/* ── Quem rola, afinal ──────────────────────────────────────────────────────
+   No computador quem rola é a lista de mensagens (`.crm-thread-body`). No
+   CELULAR não: o CSS dá `overflow:visible` a ela dentro de
+   `@media(max-width:767px)`, e quem rola é a casca do app (`#mobileBody`).
+
+   A primeira versão fotografava só `.crm-thread-body`. No computador
+   funcionava; no celular — que é onde se atende WhatsApp — `scrollTop` era
+   sempre 0, e como a casca troca o `innerHTML` a cada redesenho, o navegador
+   jogava a pessoa para o topo da página a cada dez segundos, no meio da
+   leitura. Por isso as duas cascas entram na lista. */
+/* A chave é `#id` para as cascas (que sobrevivem ao redesenho, só o conteúdo
+   delas muda) e a POSIÇÃO para as listas de mensagens (que são elementos
+   novos a cada redesenho — guardar a referência daria um elemento morto). */
+function rolaveis() {
+  const lista = [...document.querySelectorAll('.crm-thread-body')]
+    .map((el, i) => ({ chave: i, el }));
+  for (const id of ['mainBody', 'mobileBody']) {
+    const el = document.getElementById(id);
+    if (el) lista.push({ chave: '#' + id, el });
+  }
+  return lista;
+}
+
+function fotografarRolagem() {
+  return rolaveis().map(({ chave, el }) => ({
+    chave,
+    topo: el.scrollTop,
+    /* 80px de folga: ninguém para a rolagem no pixel exato do fim, e quem
+       está a um dedo do fim quer continuar acompanhando. */
+    noFim: (el.scrollHeight - el.scrollTop - el.clientHeight) < 80
+  }));
+}
+
+function devolverRolagem() {
+  const antes = _rolagemAntes;
+  _rolagemAntes = null;
+  for (const { chave, el } of rolaveis()) {
+    const foto = antes?.find(f => f.chave === chave);
+    /* Sem foto (primeira pintura, ou redesenho que não veio do temporizador)
+       ou estando no fim: vai para a mensagem mais nova. É o comportamento de
+       sempre, e é o certo — a conversa abre na última mensagem. */
+    if (!foto || foto.noFim) el.scrollTop = el.scrollHeight;
+    else el.scrollTop = foto.topo;
+  }
+}
 
 export async function render(params = {}) {
   const [caixas, conversas, contatos] = await Promise.all([
@@ -98,6 +165,11 @@ export async function render(params = {}) {
   if (!atual && _aba !== 'contatos') atual = lista[0] || null;
   _conversaAtiva = atual ? atual.id : null;
 
+  /* 18/09: quantas não-lidas a conversa ABERTA ainda carrega.
+     `depois()` usa isto para zerar o contador — ver `marcarAbertaComoLida()`.
+     Fica guardado aqui porque `depois()` não recebe os dados, só o DOM. */
+  _naoLidasDaAberta = atual?.nao_lidas || 0;
+
   const contato = contatos.find(c => c.id === atual?.contato_id);
   /* Mensagens e lead vinculado: sempre da conversa aberta, nunca em bloco —
      mesmo motivo de `mensagensDaConversa` ser por-conversa em dados.js. */
@@ -106,8 +178,25 @@ export async function render(params = {}) {
 
   const listaContatos = contatos.filter(c => casaBusca(t, [c.nome, c.empresa, c.cargo, c.telefone]));
 
+  /* ── A fotografia é tirada AQUI, e não no temporizador ────────────────────
+     Escrita primeiro lá, antes do `await`. Errado, e `navegacao.js` já
+     documenta exatamente esse erro (h38): `render()` consulta o banco e leva
+     centenas de milissegundos, e nesse intervalo a pessoa continua digitando
+     na tela ANTIGA. A foto tirada antes do await é uma foto velha — devolvê-la
+     depois faria o campo voltar algumas letras atrás a cada dez segundos.
+
+     Aqui é o último instante síncrono antes de a casca trocar o HTML: o que
+     está na tela agora é o que vai ser devolvido. */
+  if (_emAtualizacaoAutomatica) {
+    _emAtualizacaoAutomatica = false;
+    const campoAgora = visivel('crmComposerTexto');
+    _rascunhoAntes = campoAgora ? { conversa: _conversaAtiva, texto: campoAgora.value } : null;
+    _rolagemAntes = fotografarRolagem();
+  }
+
   return `
-    <div class="crm-inbox ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}">
+    <div class="crm-inbox ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}"
+         id="crmConversasVivo">
       ${varios ? chipsCelular(caixas, conversas) : ''}
       ${varios ? trilhoCaixas(caixas, conversas) : ''}
       ${colunaLista({
@@ -459,7 +548,7 @@ export function acao(nome, valor, redesenhar) {
   }
   if (nome === 'crm:ver-resolvidas')  { _verResolvidas = !_verResolvidas; redesenhar(); return true; }
   if (nome === 'crm:caixa')           { _caixaAtiva = valor; redesenhar(); return true; }
-  if (nome === 'crm:conversa')        { _conversaAtiva = valor; redesenhar(); return true; }
+  if (nome === 'crm:conversa')        { _conversaAtiva = valor; _abertaDeProposito = valor; redesenhar(); return true; }
   if (nome === 'crm:buscar-conversa') { _busca = valor || ''; redesenhar(); return true; }
 
   /* Compatibilidade: os chips antigos sumiram da tela, mas um clique guardado
@@ -508,6 +597,7 @@ export function acao(nome, valor, redesenhar) {
    ver nada acontecer. */
 export function abrirConversa(id) {
   _conversaAtiva = id;
+  _abertaDeProposito = id;
   _aba = 'chats';
   _verResolvidas = false;
   _busca = '';
@@ -524,10 +614,37 @@ export function depois() {
   /* 1. A conversa abre na mensagem MAIS NOVA. Sem isto a tela abria no topo,
         na mensagem mais antiga, e depois de enviar voltava para lá — a própria
         resposta recém-enviada ficava fora da vista. É o que mais fazia a tela
-        parecer quebrada. Vale para as duas cópias (computador e celular). */
-  document.querySelectorAll('.crm-thread-body').forEach(t => { t.scrollTop = t.scrollHeight; });
+        parecer quebrada. Vale para as duas cópias (computador e celular).
+
+        18/09: com a tela se atualizando sozinha, esta linha sozinha virava um
+        defeito. A cada dez segundos ela puxaria a pessoa de volta para o fim
+        da conversa no meio da leitura do histórico — e um sistema que rouba
+        a rolagem é insuportável de usar. Agora: quem estava no fim continua
+        no fim (é lá que a mensagem nova aparece); quem tinha subido para ler
+        fica exatamente onde estava. */
+  devolverRolagem();
 
   const campo = visivel('crmComposerTexto');
+
+  /* 2. O rascunho atravessa o redesenho automático.
+        `redesenhar()` já devolve o texto do campo que estava EM FOCO (ver
+        `_guardarFoco` em navegacao.js). Só que ninguém digita sem parar:
+        escreve meia frase, olha o histórico, volta. Nesse intervalo o campo
+        perde o foco, e sem estas três linhas o rascunho sumiria sozinho a
+        cada dez segundos — o pior tipo de defeito, porque a pessoa culpa a
+        própria memória antes de culpar o sistema.
+
+        A conferência de `conversa` importa: restaurar o rascunho de uma
+        conversa dentro de outra seria mandar a frase para a pessoa errada. */
+  if (campo && _rascunhoAntes && _rascunhoAntes.conversa === _conversaAtiva
+      && _rascunhoAntes.texto && !campo.value) {
+    campo.value = _rascunhoAntes.texto;
+  }
+  _rascunhoAntes = null;
+
+  marcarAbertaComoLida();
+  ligarAtualizacaoAutomatica();
+
   if (!campo) return;
 
   /* 2. Cresce com o texto, até cerca de 5 linhas; daí em diante rola por
@@ -552,6 +669,130 @@ export function depois() {
   });
 
   ligarAtalhosGlobais();
+}
+
+/* ── Conversa aberta na tela é conversa lida (18/09) ────────────────────────
+   Até hoje `nao_lidas` só zerava ao RESOLVER a conversa. Passava despercebido
+   porque a tela não se atualizava: a pessoa abria, respondia, resolvia.
+
+   Com a atualização automática isso viraria um defeito visível todo dia: você
+   fica com a conversa aberta, as mensagens vão chegando na sua frente, e o
+   contador ao lado dela sobe para 3, 4, 5 — "não lidas" que você está lendo
+   naquele instante. Contador que mente é contador que a pessoa aprende a
+   ignorar, e aí ele não serve para mais nada.
+
+   Três condições, todas necessárias:
+   · há conversa aberta e ela ainda tem não-lidas — senão não há o que gravar;
+   · a aba está na frente — GRID aberto atrás do WhatsApp não é alguém lendo;
+   · a gravação é solta (sem `await`) e o erro é engolido. Falhar em zerar um
+     contador não pode atrapalhar quem está atendendo; na pior das hipóteses
+     ele zera dez segundos depois, na batida seguinte. */
+function marcarAbertaComoLida() {
+  if (!_conversaAtiva || _naoLidasDaAberta <= 0) return;
+  if (typeof document !== 'undefined' && document.hidden) return;
+  /* `render()` abre a PRIMEIRA da lista quando nada está selecionado. Sem
+     esta trava, só entrar em Conversas já zeraria o contador de uma conversa
+     que ninguém olhou — e no celular ela nem está visível, fica abaixo da
+     lista. Zerar contador de mensagem não lida que a pessoa não leu é perder
+     a mensagem.
+
+     Guarda o ID e não um sim/não: se a conversa escolhida for resolvida e a
+     tela cair de volta na primeira da lista, um sim/não continuaria valendo
+     e zeraria a errada. */
+  if (_abertaDeProposito !== _conversaAtiva) return;
+  const id = _conversaAtiva;
+  _naoLidasDaAberta = 0;   // antes da chamada: impede duas gravações do mesmo
+  dados.marcarConversaLida?.(id)?.catch?.(() => { /* tenta de novo no próximo ciclo */ });
+}
+
+/* ── A atualização automática (18/09) ───────────────────────────────────────
+   Mesmo desenho da tela de Números: UM temporizador, religado a cada
+   redesenho (por isso a primeira linha apaga o anterior — dois temporizadores
+   vivos dobrariam as consultas e ninguém notaria).
+
+   Quatro travas. Nenhuma é preciosismo:
+
+   · SAIU DA TELA — o temporizador morre. Continuar consultando o banco de uma
+     tela que ninguém está vendo é gastar o banco do cliente de graça.
+
+   · ABA NO FUNDO — pula a vez, sem morrer. O celular com o GRID aberto atrás
+     do WhatsApp não precisa consultar nada; quando voltar para a frente, a
+     primeira batida já traz tudo.
+
+   · JANELA ABERTA POR CIMA — pula a vez. Redesenhar por baixo de um modal ou
+     da caixa de modelos tira o chão de quem está no meio de uma escolha.
+
+   · O QUE ESTÁ ESCRITO E ONDE A PESSOA ESTÁ LENDO são fotografados aqui,
+     imediatamente antes de trocar o HTML, e devolvidos em `depois()`.
+     Fotografar aqui e não num lugar guardado entre ciclos é o que evita o
+     erro clássico: a mensagem é enviada, `acoes.js` limpa o campo, e um
+     rascunho velho guardado em outro lugar reapareceria por cima. Aqui a
+     foto e o uso acontecem no mesmo ciclo — não existe foto velha. */
+function ligarAtualizacaoAutomatica() {
+  if (typeof document === 'undefined') return;
+  if (_timerTela) { clearInterval(_timerTela); _timerTela = null; }
+
+  const janelaAberta = () => !!(
+    /* Gravando áudio: o redesenho troca o botão do microfone por um novo, sem
+       a classe `gravando`. A gravação continuaria (o gravador mora em
+       `window`), mas o botão voltaria a parecer desligado — e a pessoa
+       clicaria de novo achando que não tinha começado, o que PARA e envia um
+       áudio pela metade. */
+    window.__crmGravador?.state === 'recording' ||
+    document.querySelector('.crm-modelos:not([hidden])') ||      // caixa de modelos
+    (document.getElementById('modalOverlay')?.style.display || 'none') !== 'none'
+  );
+
+  _timerTela = setInterval(async () => {
+    /* ── POR QUE DUAS CONFERÊNCIAS E NÃO SÓ A ROTA ────────────────────────
+       `navegacao.rotaAtual()` sozinha NÃO basta, e isso quase virou um
+       defeito feio. As telas próprias da casca — Início, Turmas, Agenda,
+       Conta — são desenhadas pelo `switch` do `irPara()` em app.html e nunca
+       passam por `_GRID.abrir()`, que é o único lugar onde `_rotaAtual` é
+       atualizado. Resultado: sair de Conversas para o Início deixava
+       `rotaAtual()` devolvendo 'crm-conversas' para sempre, o temporizador
+       nunca morria, e dez segundos depois as Conversas se pintavam POR CIMA
+       da tela inicial. E de novo a cada dez segundos.
+
+       A sentinela resolve sem depender disso: `setConteudo` troca o
+       `innerHTML` das duas cascas, então o elemento raiz desta tela some no
+       instante em que qualquer outra é desenhada — inclusive as da casca.
+
+       (A causa de fundo — `_rotaAtual` não ser limpo ao ir para tela própria
+       da casca — está anotada no changelog de 18/09. `numeros.js` tem o mesmo
+       problema, e recebeu a mesma sentinela.) */
+    if (!document.getElementById('crmConversasVivo')
+        || navegacao.rotaAtual?.() !== 'crm-conversas') {
+      clearInterval(_timerTela); _timerTela = null; return;
+    }
+    if (document.hidden) return;   // aba no fundo: pula a vez, sem morrer
+    if (janelaAberta()) return;    // não redesenha por baixo do que está aberto
+
+    /* A fotografia do rascunho e da rolagem NÃO é tirada aqui — é tirada no
+       fim de `render()`, depois das consultas ao banco. Ver o comentário lá:
+       tirar antes do `await` devolvia texto velho. Aqui só se avisa que o
+       redesenho é automático. */
+    _emAtualizacaoAutomatica = true;
+
+    try {
+      await navegacao.redesenhar();
+    } catch {
+      _emAtualizacaoAutomatica = false;
+      _rolagemAntes = null;
+      _rascunhoAntes = null;
+    }
+
+    /* A tela pode ter trocado durante o `await`. Se trocou, as fotos não
+       pertencem a desenho nenhum, e ficariam guardadas para serem aplicadas
+       quando a pessoa voltasse às Conversas — colando um rascunho antigo num
+       campo novo. Em condições normais `depois()` já as consumiu e estas
+       linhas não fazem nada. */
+    if (navegacao.rotaAtual?.() !== 'crm-conversas') {
+      _emAtualizacaoAutomatica = false;
+      _rolagemAntes = null;
+      _rascunhoAntes = null;
+    }
+  }, INTERVALO_ATUALIZACAO);
 }
 
 /* ── Fechar o que está por cima ─────────────────────────────────────────────

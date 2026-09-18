@@ -52,6 +52,7 @@ export async function render() {
   const desligadas = caixas.filter(c => c.ativa === false);
 
   return `
+  <div id="crmNumerosVivo" hidden></div>
   ${ui.topo({
     modulo:'CRM · Configuração', moduloIcone:'phone', titulo:'Números de WhatsApp',
     sub:`${caixas.length} ${caixas.length === 1 ? 'número' : 'números'} · ${conectados.length} conectado${conectados.length === 1 ? '' : 's'}`,
@@ -297,7 +298,23 @@ export function depois() {
     document.querySelector('.crmAcessoPessoa'));   // Quem acessa
 
   _timerTela = setInterval(async () => {
-    if (navegacao.rotaAtual?.() !== 'crm-numeros') {
+    /* ── 18/09: a conferência de rota sozinha não bastava ─────────────────
+       `navegacao.rotaAtual()` só é atualizado dentro de `_GRID.abrir()`, e as
+       telas próprias da casca — Início, Turmas, Agenda, Conta — são desenhadas
+       pelo `switch` do `irPara()` em app.html sem passar por lá. Sair desta
+       tela para o Início deixava `rotaAtual()` devolvendo 'crm-numeros' para
+       sempre: o temporizador não morria e, oito segundos depois, a tela de
+       Números se pintava POR CIMA da tela inicial.
+
+       Aqui o estrago era raro porque este temporizador só existe quando há
+       número fora do ar. Mas "raro" quer dizer exatamente nos dias em que
+       algo está errado — que é quando a pessoa mais circula pelo sistema.
+
+       A sentinela não depende de `rotaAtual`: `setConteudo` troca o
+       `innerHTML` das duas cascas, então o elemento some no instante em que
+       qualquer outra tela é desenhada. Mesmo conserto em `conversas.js`. */
+    if (!document.getElementById('crmNumerosVivo')
+        || navegacao.rotaAtual?.() !== 'crm-numeros') {
       clearInterval(_timerTela); _timerTela = null; return;
     }
     if (janelaAberta()) return; // a janela do QR tem o próprio acompanhamento
