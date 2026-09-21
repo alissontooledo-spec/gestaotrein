@@ -1958,6 +1958,33 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
    que já existia no bloco escuro). Título ocupa a linha; botões descem. */
 @media (max-width:768px){.rel2-header > div:first-child > div:first-child{flex:1 1 100%!important}}
 </style>
+<style id="inicio-172">
+/* Início do Administrador · 21/09 — pares lado a lado, gráficos */
+.gi-grid2.gi-par{grid-template-columns:1fr 1fr;align-items:stretch}
+.gi-sub{font-size:11px;color:var(--text-3)}
+.gi-aula{cursor:pointer}
+.gi-aula:hover .gi-main b{color:var(--amber-h)}
+.gi-data small{display:block;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.gi-data{width:58px}
+.gi-instr{font-size:11px;font-weight:600;color:var(--text-2);max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.gi-main b{font-size:12px}
+.gi-main small{font-size:11px}
+.gi-graf{padding:18px 22px 12px}
+.gi-instr-m{display:none}
+#mobileBody .gi-instr{display:none}
+#mobileBody .gi-instr-m{display:inline}
+.gi-pizza{display:flex;align-items:center;gap:26px;padding:18px 22px;flex-wrap:wrap}
+.gi-pizza svg{flex:none}
+.gi-leg{flex:1;min-width:170px;display:flex;flex-direction:column;gap:9px}
+.gi-leg-i{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-1)}
+.gi-leg-i i{width:10px;height:10px;border-radius:3px;flex:none}
+.gi-leg-i .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gi-leg-i b{font-variant-numeric:tabular-nums}
+.gi-leg-i .pc{width:38px;text-align:right;color:var(--text-3);font-variant-numeric:tabular-nums}
+.gi-leg-t{font-size:11px;color:var(--text-3);border-top:1px solid var(--border);padding-top:8px;margin-top:2px}
+@media (max-width:900px){.gi-grid2.gi-par{grid-template-columns:1fr}}
+@media (max-width:768px){.gi-pizza{justify-content:center}.gi-pizza svg{width:130px;height:130px}}
+</style>
 </head>
 <body>
 
@@ -6313,7 +6340,9 @@ async function renderHomeAdmin() {
     // já vinha na consulta de `sessoes` logo abaixo, reaproveitada sem custo extra.
     sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,local,clientes(nome),catalogo(nome),turma_participantes(id)').eq('org_id',oi),
     sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
-    sb.from('sessoes').select('id,turma_id,data,hora_inicio,instrutor_id,concluida,local').order('data',{ascending:true}),
+    // hora_fim/horario_a_confirmar: sem eles _turmaPendencias marcava TODA turma
+    // com aula como "sem horário" (contagem e selo do menu inflados — 21/09).
+    sb.from('sessoes').select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,concluida,cancelada,local,horario_a_confirmar,usuarios!instrutor_id(nome)').order('data',{ascending:true}),
     // Contagens leves (head:true, sem baixar linhas) só pra alimentar o
     // checklist de primeiros passos abaixo — mesma lógica de "já usou esse
     // recurso ao menos uma vez?" do painel de Adoção do Provedor, só que
@@ -6327,7 +6356,7 @@ async function renderHomeAdmin() {
   const cliAll = clientes||[];
   // sessoes não tem org_id — isolar via turma_id pertencente às turmas já filtradas por org acima
   const tAllIds = new Set(tAll.map(t=>t.id));
-  const sesAll = (sessoes||[]).filter(s=>tAllIds.has(s.turma_id));
+  const sesAll = (sessoes||[]).filter(s=>tAllIds.has(s.turma_id) && !s.cancelada);
 
   const {count:certEmitidos} = await sb.from('documentos').select('id',{count:'exact',head:true}).eq('org_id',oi).in('tipo',['certificado_individual','certificado_coletivo']);
   let confResumo = {total:0, vencidos:0, conformes:0, indice:100, colaboradoresTreinados:0, statusPorTreinamento:[], proximos:[]};
@@ -6358,18 +6387,52 @@ async function renderHomeAdmin() {
     const barH = Math.max(v>0?Math.round(60*(v/maxV)):0, v>0?6:0);
     const x = i*40;
     const isLast = i===vals6.length-1;
-    return `<g>
+    return `<g><title>${meses6[i].label}: ${v} turma${v!==1?'s':''}</title>
       <rect x="${x+2}" y="${70-barH}" width="28" height="${barH}" fill="${isLast?'#F47A17':'rgba(244,122,23,.30)'}" rx="3"/>
       ${v>0?`<text x="${x+16}" y="${70-barH-4}" text-anchor="middle" font-size="9" font-weight="600" fill="#172541">${v}</text>`:''}
       <text x="${x+16}" y="88" text-anchor="middle" font-size="9" fill="#8896A4">${meses6[i].label}</text>
     </g>`;
   }).join('');
 
+  // Pizza: aulas (encontros não cancelados) por instrutor, mesmos 6 meses
+  // das barras. Cor segue a PESSOA (ordem alfabética), não o tamanho da
+  // fatia — paleta validada para daltonismo (dataviz, 21/09). Mais de 6
+  // instrutores: os 5 com mais aulas + "Outros".
+  const ini6 = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth()-5, 1));
+  const aulas6 = sesAll.filter(s => s.data >= ini6 && s.data <= dataLocalISO(hoje) && tAllIds.has(s.turma_id));
+  const porInstr = {};
+  aulas6.filter(s => s.instrutor_id).forEach(s => {
+    const o = (porInstr[s.instrutor_id] ||= { nome: s.usuarios?.nome || 'Instrutor', n: 0 });
+    o.n++;
+  });
+  const semInstr6 = aulas6.filter(s => !s.instrutor_id).length;
+  let fatias = Object.values(porInstr);
+  if (fatias.length > 6) {
+    const top = [...fatias].sort((a,b)=>b.n-a.n).slice(0,5);
+    const resto = fatias.filter(x=>!top.includes(x)).reduce((acc,x)=>acc+x.n,0);
+    fatias = [...top.sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')), { nome: 'Outros', n: resto, outros: true }];
+  } else fatias.sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  const PIZZA_CORES = ['#2a78d6','#1baf7a','#eda100','#e87ba4','#4a3aa7','#008300'];
+  const totalPizza = fatias.reduce((acc,x)=>acc+x.n,0);
+  let angAc = -Math.PI/2;
+  const pizzaSvg = fatias.map((x,i) => {
+    const cor = x.outros ? '#9AA3B2' : PIZZA_CORES[i % PIZZA_CORES.length];
+    x.cor = cor;
+    x.pct = totalPizza ? Math.round(x.n/totalPizza*100) : 0;
+    const titulo = `${escapeHtml(x.nome)}: ${x.n} aula${x.n!==1?'s':''} (${x.pct}%)`;
+    if (fatias.length === 1) return `<circle cx="60" cy="60" r="56" fill="${cor}"><title>${titulo}</title></circle>`;
+    const a0 = angAc, a1 = angAc + (x.n/totalPizza)*2*Math.PI; angAc = a1;
+    const p = a => [(60+56*Math.cos(a)).toFixed(2), (60+56*Math.sin(a)).toFixed(2)];
+    const [x0,y0] = p(a0), [x1,y1] = p(a1);
+    return `<path d="M60 60 L${x0} ${y0} A56 56 0 ${a1-a0>Math.PI?1:0} 1 ${x1} ${y1} Z" fill="${cor}" stroke="#fff" stroke-width="2" stroke-linejoin="round"><title>${titulo}</title></path>`;
+  }).join('');
+
   // Próximas sessões (hoje em diante, sem instrutor ou pendentes)
   const hojeStr = dataLocalISO(hoje);
   const proxSessoes = sesAll
     .filter(s=>s.data>=hojeStr && !s.concluida)
-    .slice(0,3);
+    .sort((a,b)=>(a.data+(a.hora_inicio||'')).localeCompare(b.data+(b.hora_inicio||'')))
+    .slice(0,5);
   const tMapHome = {};
   tAll.forEach(t=>{ tMapHome[t.id]=t; });
 
@@ -6488,6 +6551,11 @@ async function renderHomeAdmin() {
       <button class="gi-link" onclick="${onboardingItens.find(i=>!i.done).acao}">${escapeHtml(onboardingItens.find(i=>!i.done).cta)} &rarr;</button>
     </div>`;
 
+  const _diaRot = (() => {
+    const amanhaStr = (() => { const x = new Date(hoje); x.setDate(x.getDate()+1); return dataLocalISO(x); })();
+    return d => d === hojeStr ? 'Hoje' : d === amanhaStr ? 'Amanhã'
+      : new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}).replace('.','');
+  })();
   const mensagemDoDia = await _buscarMensagemDoDia();
   setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${escapeHtml(usuarioAtual.nome)}</div><div class="mh-badge">Administrador</div>`);
   // Badge do menu: turmas com pendência (mesmo dado do alerta acima; a
@@ -6516,7 +6584,6 @@ async function renderHomeAdmin() {
       </div>
       <div class="gi-acoes">
         <button class="gi-btn gi-laranja" data-nav="turmas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Nova turma</button>
-        <button class="gi-btn" data-nav="relatorios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M6 21V11M11 21V5M16 21v-7M21 21v-4"/></svg> Relatórios</button>
         <button class="gi-btn" data-nav="agendaequipe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg> Agenda da equipe</button>
       </div>
     </div>
@@ -6546,20 +6613,23 @@ async function renderHomeAdmin() {
       <div class="gi-kpi gi-sm"><div class="gi-kh">Certificados emitidos</div><span class="gi-n">${(certEmitidos || 0).toLocaleString('pt-BR')}</span><small class="gi-s">desde o início</small></div>
     </div>
 
-    <div class="gi-grid2">
+    <div class="gi-grid2 gi-par">
       <section class="gi-painel">
         <div class="gi-painel-h"><h3>Próximas aulas</h3><button class="gi-link" data-nav="agendaequipe">Ver agenda completa</button></div>
         ${proxSessoes.length === 0
-          ? `<div class="gi-vazio">Nenhuma aula próxima.</div>`
+          ? `<div class="gi-vazio">Nenhuma aula agendada a partir de hoje.</div>`
           : `<div class="gi-corpo">${proxSessoes.map(s => {
               const t = tMapHome[s.turma_id];
-              return `<div class="gi-row">
-                <div class="gi-data"><b>${s.hora_inicio ? s.hora_inicio.slice(0,5) : '--:--'}</b>${formatarData(s.data)}</div>
+              const nomeInstr = s.instrutor_id ? (s.usuarios?.nome || 'Instrutor definido') : '';
+              return `<div class="gi-row gi-aula" data-action="verTurma" data-id="${s.turma_id}">
+                <div class="gi-data"><small>${_diaRot(s.data)}</small><b>${s.hora_inicio ? s.hora_inicio.slice(0,5) : '--:--'}</b></div>
                 <div class="gi-main">
                   <b>${escapeHtml(t?.catalogo?.nome || 'Treinamento')}</b>
-                  <small>${escapeHtml(t?.clientes?.nome || '—')}${s.local ? ' · ' + escapeHtml(s.local) : ''}</small>
+                  <small>${escapeHtml(t?.clientes?.nome || '—')}${s.local ? ' · ' + escapeHtml(s.local) : ''}${s.instrutor_id ? `<span class="gi-instr-m"> · ${escapeHtml(nomeInstr)}</span>` : ''}</small>
                 </div>
-                <span class="gi-badge ${s.instrutor_id ? '' : 'gi-warn'}">${s.instrutor_id ? 'Com instrutor' : 'Sem instrutor'}</span>
+                ${s.instrutor_id
+                  ? `<span class="gi-instr" title="Instrutor">${escapeHtml(nomeInstr)}</span>`
+                  : `<span class="gi-badge gi-red">Sem instrutor</span>`}
               </div>`;
             }).join('')}</div>`}
       </section>
@@ -6569,53 +6639,40 @@ async function renderHomeAdmin() {
       </section>
     </div>
 
-    <div class="gi-grid2">
+    <div class="gi-grid2 gi-par">
       <section class="gi-painel">
-        <div class="gi-painel-h"><h3>Turmas criadas por mês</h3><button class="gi-link" data-nav="relatorios">Ver relatórios</button></div>
-        <div style="padding:18px 18px 10px;overflow-x:auto">
-          <svg viewBox="0 -8 240 103" width="100%" style="min-width:200px;max-width:560px;max-height:132px;display:block">${barsHtml}</svg>
+        <div class="gi-painel-h"><h3>Turmas criadas por mês</h3><span class="gi-sub">últimos 6 meses</span></div>
+        <div class="gi-graf">
+          <svg viewBox="0 -8 240 103" width="100%" role="img" aria-label="Turmas criadas por mês nos últimos 6 meses: ${meses6.map((m,i)=>m.label+' '+vals6[i]).join(', ')}" style="max-height:190px;display:block">${barsHtml}</svg>
         </div>
       </section>
       <section class="gi-painel">
-        <div class="gi-painel-h"><h3>Atividade recente</h3><button class="gi-link" data-nav="turmas">Ver histórico</button></div>
-        ${recentes.length === 0
-          ? `<div class="gi-vazio">Nenhuma turma criada ainda.</div>`
-          : `<div class="gi-corpo">${recentes.map(t => `<div class="gi-row">
-              <div class="gi-main">
-                <b>${escapeHtml(t.catalogo?.nome || 'Turma')}</b>
-                <small>${escapeHtml(t.clientes?.nome || '—')}</small>
+        <div class="gi-painel-h"><h3>Aulas por instrutor</h3><span class="gi-sub">últimos 6 meses</span></div>
+        ${totalPizza === 0
+          ? `<div class="gi-vazio">Nenhuma aula com instrutor nos últimos 6 meses.</div>`
+          : `<div class="gi-pizza">
+              <svg viewBox="0 0 120 120" width="150" height="150" role="img" aria-label="Aulas por instrutor: ${fatias.map(x=>escapeHtml(x.nome)+' '+x.n).join(', ')}">${pizzaSvg}</svg>
+              <div class="gi-leg">${fatias.map(x => `
+                <div class="gi-leg-i"><i style="background:${x.cor}"></i><span class="nm">${escapeHtml(x.nome)}</span><b>${x.n}</b><span class="pc">${x.pct}%</span></div>`).join('')}
+                <div class="gi-leg-t">${totalPizza} aula${totalPizza!==1?'s':''} no período${semInstr6 ? ` · ${semInstr6} sem instrutor` : ''}</div>
               </div>
-              <span class="gi-badge ${t.status === 'concluida' ? '' : t.status === 'em_andamento' ? 'gi-blue' : 'gi-cinza'}">${t.status === 'concluida' ? 'Concluída' : t.status === 'em_andamento' ? 'Ativa' : 'A realizar'}</span>
-            </div>`).join('')}</div>`}
+            </div>`}
       </section>
     </div>
 
     <section class="gi-painel" style="margin-bottom:16px">
-      <div class="gi-painel-h"><h3>Conformidade</h3>${planoAtinge('pro') ? `<button class="gi-link" data-nav="conformidade">Ver detalhes</button>` : `<span class="gi-link" onclick="modalUpgrade('Controle de Conformidade','pro')">Disponível no plano Pro</span>`}</div>
-      <div style="padding:18px">
-        ${planoAtinge('pro') ? `
-          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:${confResumo.statusPorTreinamento.length ? '16px' : '0'}">
-            <span style="font-size:30px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:${confResumo.indice >= 90 ? 'var(--green)' : confResumo.indice >= 70 ? 'var(--amber-h)' : 'var(--red)'}">${confResumo.indice}%</span>
-            <span style="font-size:11px;color:var(--text-3)">índice de conformidade · ${confResumo.vencidos} vencido${confResumo.vencidos !== 1 ? 's' : ''} de ${confResumo.total}</span>
-          </div>
-          ${confResumo.statusPorTreinamento.slice(0,5).map(s => `
-            <div class="gi-barra-l">
-              <span class="nm" title="${escapeHtml(s.nome)}">${escapeHtml(s.nome)}</span>
-              <span class="tr"><i style="width:${s.pct}%;background:${s.pct >= 90 ? 'var(--green)' : s.pct >= 70 ? 'var(--amber)' : 'var(--red)'}"></i></span>
-              <span class="pc">${s.pct}%</span>
-            </div>`).join('')}
-        ` : `
-          <div style="font-size:11.5px;color:var(--text-2);line-height:1.5">Vencimentos por colaborador e índice de conformidade da organização inteira.</div>
-        `}
-      </div>
+      <div class="gi-painel-h"><h3>Atividade recente</h3><button class="gi-link" data-nav="turmas">Ver histórico</button></div>
+      ${recentes.length === 0
+        ? `<div class="gi-vazio">Nenhuma turma criada ainda.</div>`
+        : `<div class="gi-corpo">${recentes.map(t => `<div class="gi-row" data-action="verTurma" data-id="${t.id}" style="cursor:pointer">
+            <div class="gi-main">
+              <b>${escapeHtml(t.catalogo?.nome || 'Turma')}</b>
+              <small>${escapeHtml(t.clientes?.nome || '—')}</small>
+            </div>
+            <span class="gi-badge ${t.status === 'concluida' ? '' : t.status === 'em_andamento' ? 'gi-blue' : 'gi-cinza'}">${t.status === 'concluida' ? 'Concluída' : t.status === 'em_andamento' ? 'Ativa' : 'A realizar'}</span>
+          </div>`).join('')}</div>`}
     </section>
-
-    <div class="gi-atalhos">
-      <button class="gi-atalho" data-nav="clientes"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16M14 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3"/></svg></i><span>Clientes</span></button>
-      <button class="gi-atalho" data-nav="colaboradores"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="8" r="3.2"/><path d="M17 15a4 4 0 0 1 4 4v1M16.5 5.2a3.2 3.2 0 0 1 0 5.6"/></svg></i><span>Colaboradores</span></button>
-      <button class="gi-atalho" data-nav="catalogo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7"/></svg></i><span>Catálogo</span></button>
-      <button class="gi-atalho" data-nav="equipe"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h12v9H3z"/><path d="M9 15v3M6 21h6"/><circle cx="19" cy="6.5" r="2"/><path d="M17 21v-4.5a2 2 0 0 1 4 0V21"/></svg></i><span>Equipe</span></button>
-    </div>`);
+`);
 }
 
 async function renderHomeComercial() {
@@ -28628,7 +28685,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '171';
+  var APP_BUILD = '172';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
