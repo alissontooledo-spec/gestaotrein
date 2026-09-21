@@ -374,3 +374,199 @@
 @keyframes crmPulsa{0%,100%{opacity:1}50%{opacity:.55}}
 
 .crm-anexo-pendente{padding:6px 10px;font-size:12px;color:var(--text-3)}
+
+/* ===== Conversas no conceito (set/2026) =================================
+   Medido no PNG oficial 03-crm-conversas-proposta.png — que foi a escolha
+   do Alisson em 20/09: "o tamanho e as disposições das conversas desta
+   imagem está bem melhor". A especificação completa está em
+   08-Propostas-visuais/conceito-lovable/conversas-medido.md.
+
+   A estrutura do app JÁ é a do modelo: três colunas, ficha de contexto
+   retrátil, abas, compositor. Então aqui é largura, cor e tipografia.
+
+   ATENÇÃO À FAIXA: em 767px para baixo este arquivo desmonta as colunas e
+   ESCONDE a barra de caixas (linha 216). Uma regra solta no fim venceria
+   aquela por vir depois. Por isso tudo que é de computador está dentro de
+   @media (min-width:768px). */
+
+@media (min-width: 768px) {
+
+  /* --- 3. lista de conversas --- */
+  .crm-conv { padding: 13px 14px; gap: 11px }
+  .crm-conv-av { width: 38px; height: 38px; border-radius: 50%; font-size: 11px }
+  .crm-conv-nome { font-size: 11.5px }
+  .crm-conv-hora { font-size: 9.5px; font-weight: 600 }
+  .crm-conv-prev { font-size: 10px; margin-top: 3px }
+  .crm-conv-meta { gap: 5px; margin-top: 6px }
+
+  /* Item ativo — medido no PNG: fundo #FFF4EB e barra laranja à esquerda.
+     Era cinza com barra azul-marinho: a conversa aberta não se destacava
+     das outras numa lista de vinte. */
+  .crm-conv.ativa { background: #FFF4EB; box-shadow: inset 3px 0 0 var(--amber) }
+  .crm-conv.ativa:hover { background: #FFF4EB }
+  .crm-conv-nao { background: var(--amber); font-size: 9.5px }
+
+  .crm-tag-caixa, .crm-tag-dono { font-size: 9px; padding: 2px 8px; font-weight: 700 }
+  .crm-tag-resolvida { font-size: 9px; padding: 2px 8px }
+
+  /* --- 4. abas: sublinhado laranja, não azul-marinho --- */
+  .crm-aba { font-size: 10.5px; padding: 10px 4px }
+  .crm-aba.ativa { color: var(--amber-text); border-bottom-color: var(--amber) }
+  .crm-aba-n { font-size: 9px; background: var(--gray-200); color: var(--text-2) }
+  .crm-aba.ativa .crm-aba-n { background: var(--amber); color: #fff }
+
+  /* --- 5. cabeçalho da conversa: 72px medidos --- */
+  .crm-thread-head { min-height: 72px; padding: 0 16px }
+  .crm-thread-ident .nome { font-size: 12.5px }
+  .crm-thread-ident .meta { font-size: 10px }
+  .crm-selo-cx, .crm-selo-dono { font-size: 9px; padding: 3px 9px }
+
+  /* --- 6. mensagens --- */
+  .crm-msg { font-size: 11.5px; border-radius: 9px; padding: 9px 12px }
+  .crm-msg .h { font-size: 9px }
+  .crm-msg-aut { font-size: 9px }
+  .crm-msg.sis { font-size: 9.5px }
+
+  /* --- 7. compositor: a caixa de digitar tem borda laranja no PNG.
+     É o elemento que o atendente procura ao abrir a conversa. --- */
+  .crm-composer-box { border: 1.5px solid var(--amber); border-radius: 9px }
+  .crm-composer-box:focus-within { border-color: var(--amber-h); box-shadow: 0 0 0 3px rgba(244,122,23,.12) }
+  .crm-composer-box textarea { font-size: 11.5px }
+  .crm-composer-dica { font-size: 9.5px }
+
+  /* --- 8. ficha de contexto --- */
+  .crm-ctx { width: 320px; box-shadow: none; border-left: 1px solid var(--border) }
+  .crm-ctx-lbl { font-size: 9.5px }
+  .crm-ctx-linha { font-size: 10px }
+}
+
+/* No celular a barra de caixas some e as colunas viram uma só — isso não
+   muda. Só a tipografia acompanha. */
+@media (max-width: 767px) {
+  .crm-conv-nome { font-size: 12px }
+  .crm-conv-prev { font-size: 10.5px }
+  .crm-conv.ativa { background: #FFF4EB; box-shadow: inset 3px 0 0 var(--amber) }
+  .crm-conv-nao { background: var(--amber) }
+  .crm-aba.ativa { color: var(--amber-text); border-bottom-color: var(--amber) }
+  .crm-aba.ativa .crm-aba-n { background: var(--amber); color: #fff }
+  .crm-composer-box { border-color: var(--amber) }
+}
+
+/* ===== Conversas v2 — caixas em trilho, conversa maior (20/09) ==========
+   Dois pedidos do Alisson: melhorar a disposição das Caixas de entrada, e
+   não deixar o terminal da conversa pequeno.
+
+   A coluna de caixas gastava ~200px de largura para mostrar três a cinco
+   itens e ficava 80% vazia na vertical. O app JÁ tem um trilho horizontal
+   dessas mesmas caixas (.crm-mob-caixas) — está no HTML, só ficava escondido
+   no computador e só aparecia no celular. Então aqui o trilho passa a
+   aparecer também no computador, a coluna some, e os ~200px que ela ocupava
+   vão inteiros para a conversa. Nenhuma linha de JavaScript muda: o trilho
+   já é desenhado, já tem o clique e já marca a caixa ativa. */
+
+@media (min-width: 768px) {
+  /* duas colunas: lista e conversa. A conversa fica com tudo que sobra. */
+  .crm-inbox { grid-template-columns: 340px minmax(0,1fr) }
+  .crm-inbox.um-numero { grid-template-columns: 340px minmax(0,1fr) }
+  .crm-caixas { display: none }
+
+  /* o trilho das caixas, agora no topo da lista */
+  /* Quebra em duas linhas em vez de rolar: são quatro ou cinco caixas, e
+     uma ficha cortada na borda parece defeito. Rolagem lateral escondida
+     também esconde a caixa que está fora — justo a que a pessoa procura. */
+  /* CONFERIDO no conversas.js (20/09): o trilho é filho DIRETO do grid —
+     chipsCelular() é chamado logo na abertura de .crm-inbox, antes das
+     colunas. Sem esta linha ele viraria uma terceira coluna e desmontaria a
+     tela. Com ela, vira uma faixa na largura inteira, no topo.
+     Testado com conversa longa (24 mensagens): o compositor continua
+     visível e a rolagem fica dentro da conversa. */
+  .crm-inbox > .crm-mob-caixas { grid-column: 1 / -1 }
+
+  /* Com o trilho no grid, a caixa passa a ter duas LINHAS: trilho e
+     colunas. Ela tem altura fixa, e quando a conversa é curta sobra altura
+     — que o navegador divide entre as duas linhas. Resultado, visto no
+     teste: o trilho esticava numa faixa cinza vazia de ~90px embaixo das
+     fichas. Aqui o trilho fica com a altura dele e as colunas com todo o
+     resto.
+     O trilho só é desenhado quando há mais de uma caixa — exatamente quando
+     a classe um-numero NÃO está presente —, então as duas regras andam
+     juntas. */
+  .crm-inbox { grid-template-rows: auto minmax(0,1fr) }
+  .crm-inbox.um-numero { grid-template-rows: minmax(0,1fr) }
+
+
+  .crm-mob-caixas {
+    display: flex; flex-wrap: wrap; gap: 6px; overflow: visible;
+    padding: 11px 14px; border-bottom: 1px solid var(--border);
+    background: var(--gray-50);
+  }
+  .crm-mob-caixa {
+    height: 28px; border-radius: 14px; padding: 0 11px; font-size: 9.5px;
+    font-weight: 700; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-2); white-space: nowrap; flex: none;
+  }
+  .crm-mob-caixa:hover { border-color: var(--border-2) }
+  .crm-mob-caixa.ativa {
+    background: #FFF3E9; border-color: #F8B782; color: #B54B05;
+  }
+  .crm-mob-caixa .n {
+    background: var(--gray-200); color: var(--text-2);
+    font-size: 9px; font-weight: 800; padding: 0 6px; border-radius: 999px;
+  }
+  .crm-mob-caixa.ativa .n { background: var(--amber); color: #fff }
+
+  /* a conversa ganha respiro: as bolhas podem ocupar mais da largura e o
+     corpo deixa de ser uma coluna estreita com muita margem. */
+  .crm-msg { max-width: 62% }
+  .crm-thread-body { padding: 18px 22px }
+  .crm-composer { padding: 12px 22px 14px }
+}
+
+/* Em telas largas a lista pode crescer um pouco sem tirar da conversa. */
+@media (min-width: 1500px) {
+  .crm-inbox, .crm-inbox.um-numero { grid-template-columns: 380px minmax(0,1fr) }
+  .crm-msg { max-width: 58% }
+}
+
+/* No celular nada muda: o trilho já aparecia e as colunas já empilhavam. */
+
+/* ===== Demais telas do CRM no conceito (21/09) ===========================
+   Funil de vendas, Contatos, Atividades, Painel comercial, Números e as
+   configurações do funil. Quase tudo neste arquivo já usa as variáveis de
+   cor do sistema — então essas telas já tinham mudado junto com a pele,
+   sem ninguém mexer. O que faltava eram os DESTAQUES: filtro selecionado,
+   funil ativo, link, botão de criar e seleção de cor, que usavam o azul-
+   marinho cheio. No conceito, o que está selecionado é laranja claro com
+   borda laranja (a mesma ficha da tela de Turmas), e link é laranja.
+   Somente cor; nenhuma medida muda. */
+
+/* fichas de funil e de filtro: selecionada = laranja claro, como Turmas */
+.crm-funil-chip.ativo,
+.crm-filtro.ativo {
+  background: #FFF3E9; border-color: #F8B782; color: #B54B05;
+}
+.crm-funil-chip .pad { background: var(--amber) }
+.crm-filtro:hover { color: var(--text-1); border-color: var(--border-2) }
+
+/* funil em edição, nas configurações: filete laranja, como item ativo */
+.crm-cfg-funil.ativo { border-color: #F8B782; box-shadow: inset 3px 0 0 var(--amber) }
+
+/* link: laranja, como o .link do conceito */
+.crm-link { color: var(--amber-h); border-bottom-color: rgba(210,96,12,.28) }
+.crm-link:hover { border-bottom-color: var(--amber-h) }
+
+/* botão "+" de criar: ação principal, então laranja */
+.crm-criar-mais { background: var(--amber); color: #fff }
+
+/* seleção de cor da etapa */
+.crm-cores input:checked + span { box-shadow: 0 0 0 2px var(--amber) }
+.crm-cores input:focus-visible + span { outline-color: var(--amber) }
+
+/* previsão de fechamento perto do prazo: aviso, então âmbar escuro */
+.crm-lead-prev.perto { color: var(--amber-text); font-weight: 700 }
+
+/* avatar do responsável: o pêssego dos avatares do conceito */
+.crm-av { background: #FFE4C7; color: #A34405 }
+
+/* mensagem enviada: a borda ainda usava o verde antigo */
+.crm-msg.env { border-color: rgba(22,138,89,.28) }
