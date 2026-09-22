@@ -2087,7 +2087,7 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .rel-gc-nm{font-size:11.5px;color:var(--text-2);text-align:center;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rel2-chart .rel-gleg{margin-top:0}
 </style>
-<style id="v179">
+<style id="v179-181">
 /* v179 · Histórico do instrutor com período, totais e exportação */
 .hist3-per{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;margin:0 0 14px}
 .hist3-per .tp-lb{font-size:12.5px;font-weight:700;color:var(--text-2);margin-right:2px}
@@ -2108,6 +2108,9 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .hist3-tab tr.hist3-cancel td{color:var(--text-3)!important}
 .hist3-tab tr.hist3-cancel td:not(:last-child){text-decoration:line-through}
 @media(max-width:768px){
+  .hist3-per .tp-lb{width:100%}
+  .hist3-per .tp-datas{flex-wrap:nowrap;width:100%}
+  .hist3-per .tp-datas input{flex:1;min-width:0}
   .hist3-exp{margin-left:0;width:100%}
   .hist3-exp .btn{flex:1;justify-content:center}
   .hist3-tab .turma-tabela{min-width:0}
@@ -9188,7 +9191,7 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="field" style="margin:0"><label>Forma</label>
           <select id="mUsrValorForma" style="${selSt}">
-            <option value="hora" ${iv?.forma !== 'diaria' ? 'selected' : ''}>Por hora em sala</option>
+            <option value="hora" ${iv?.forma !== 'diaria' ? 'selected' : ''}>Por hora trabalhada (agenda)</option>
             <option value="diaria" ${iv?.forma === 'diaria' ? 'selected' : ''}>Por diária</option>
           </select></div>
         <div class="field" style="margin:0"><label>Valor (R$)</label><input type="text" inputmode="decimal" id="mUsrValor" value="${iv && iv.valor != null ? Number(iv.valor).toFixed(2).replace('.', ',') : ''}" placeholder="Ex: 85,00"></div>
@@ -18544,46 +18547,37 @@ function _agEquipeRenderPendentes() {
 }
 
 // ============================================================
-// HISTÓRICO — INSTRUTOR (v179)
+// HISTÓRICO — INSTRUTOR (v179, ajustado na v180)
 // ============================================================
 // Pedido do Alisson (22/09): o instrutor precisa extrair o que fez num
 // período para contabilizar o custo efetivo. Regras aqui são as MESMAS dos
 // Relatórios do Administrador (_sessaoEntregue, _durSessao,
 // _horasPorSessaoDaTurma), para os dois lados verem o mesmo número:
 //   • Encontro dado = não cancelado E (concluído OU turma concluída).
-//   • Horas em sala = início→fim de cada encontro dado (o que se trabalhou).
-//   • Carga horária rateada = CH da turma dividida entre os encontros dados,
-//     pela duração — precisa dos encontros dos colegas, que o instrutor não
-//     lê direto (RLS); vêm da função sessoes_das_minhas_turmas() (PASSO-46).
+//   • Horas trabalhadas = início→fim de cada encontro dado (hora da agenda).
+//     É a ÚNICA hora mostrada ao instrutor e a base do valor (decisão do
+//     Alisson, 22/09 — v180): duas horas diferentes perto de um valor em
+//     reais geravam dúvida. A CH rateada fica só nos Relatórios do admin.
 //   • Dias trabalhados = datas distintas com encontro dado (base da diária).
 // Antes: só turmas concluídas, e cada turma somava a CH inteira mesmo
 // quando ele tinha dado 1 dos 3 dias.
-window._histPer = window._histPer || { preset: 'este_mes', de: '', ate: '' };
+// v181: período só por intervalo de datas (de/até). Ao entrar na tela o
+// intervalo volta para o mês atual (pedido do Alisson, 22/09).
 window._histAba = window._histAba || 'resumo';
 
 function _histIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+function _histMesAtual() {
+  const h = new Date();
+  return { de: _histIso(new Date(h.getFullYear(), h.getMonth(), 1)), ate: _histIso(new Date(h.getFullYear(), h.getMonth() + 1, 0)) };
+}
+window._histPer = window._histPer || _histMesAtual();
 function _histIntervalo() {
   const p = window._histPer || {};
-  const h = new Date();
-  const MES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-  if (p.preset === 'este_mes') {
-    return { de: _histIso(new Date(h.getFullYear(), h.getMonth(), 1)), ate: _histIso(new Date(h.getFullYear(), h.getMonth() + 1, 0)), label: `${MES[h.getMonth()]} de ${h.getFullYear()}` };
-  }
-  if (p.preset === 'mes_passado') {
-    const i = new Date(h.getFullYear(), h.getMonth() - 1, 1);
-    return { de: _histIso(i), ate: _histIso(new Date(h.getFullYear(), h.getMonth(), 0)), label: `${MES[i.getMonth()]} de ${i.getFullYear()}` };
-  }
-  if (p.preset === 'este_ano') {
-    return { de: `${h.getFullYear()}-01-01`, ate: `${h.getFullYear()}-12-31`, label: String(h.getFullYear()) };
-  }
-  if (p.preset === 'personalizado') {
-    const de = p.de || '', ate = p.ate || '';
-    const label = de && ate ? `${formatarData(de)} a ${formatarData(ate)}` : de ? `a partir de ${formatarData(de)}` : ate ? `até ${formatarData(ate)}` : 'Todo o período';
-    return { de, ate, label };
-  }
-  return { de: '', ate: '', label: 'Todo o período' };
+  const de = p.de || '', ate = p.ate || '';
+  const label = de && ate ? `${formatarData(de)} a ${formatarData(ate)}` : de ? `a partir de ${formatarData(de)}` : ate ? `até ${formatarData(ate)}` : 'Todo o período';
+  return { de, ate, label };
 }
 
 function _histFmtH(h) {
@@ -18597,6 +18591,7 @@ function _histFmtR(v) {
 async function renderHistorico() {
   setMobileHeader(`<div class="mh-greeting">Instrutor</div><div class="mh-name">Histórico</div>`);
   fabOcultar();
+  window._histPer = _histMesAtual();
 
   const { data: minhas, error: erS } = await sb
     .from('sessoes')
@@ -18607,7 +18602,7 @@ async function renderHistorico() {
 
   const turmaIds = [...new Set((minhas || []).map(s => s.turma_id).filter(Boolean))];
   const turmasMap = {};
-  let todas = null, presencas = [];
+  let presencas = [];
   if (turmaIds.length) {
     const { data: td, error: erT } = await sb
       .from('turmas')
@@ -18615,14 +18610,6 @@ async function renderHistorico() {
       .in('id', turmaIds);
     if (erT) throw erT;
     (td || []).forEach(t => { turmasMap[t.id] = t; });
-
-    // Encontros dos colegas nas mesmas turmas (só data/horário/situação) —
-    // sem eles o rateio da CH sai errado. Se o PASSO-46 ainda não rodou, a
-    // tela abre igual e a coluna "CH rateada" mostra "—".
-    try {
-      const { data: rs, error: erR } = await sb.rpc('sessoes_das_minhas_turmas');
-      if (!erR && Array.isArray(rs)) todas = rs;
-    } catch (e) { todas = null; }
 
     try {
       const { data: pr } = await sb
@@ -18645,21 +18632,7 @@ async function renderHistorico() {
     if (!erV && v && Number(v.valor) > 0) valor = { forma: v.forma, valor: Number(v.valor) };
   } catch (e) { valor = null; }
 
-  // CH rateada por encontro (mapa id → horas), calculada sobre TODOS os
-  // encontros de cada turma, independente do período escolhido.
-  let rateio = null;
-  if (todas) {
-    rateio = {};
-    const porTurma = {};
-    todas.forEach(s => { (porTurma[s.turma_id] ||= []).push(s); });
-    Object.keys(porTurma).forEach(tid => {
-      const t = turmasMap[tid];
-      if (!t) return;
-      Object.assign(rateio, _horasPorSessaoDaTurma(t, porTurma[tid]));
-    });
-  }
-
-  window._histDados = { minhas: minhas || [], turmasMap, rateio, presencas, valor };
+  window._histDados = { minhas: minhas || [], turmasMap, presencas, valor };
   _histRender();
 }
 
@@ -18677,8 +18650,7 @@ function _histEncontros() {
     else if (s.data >= hoje) sit = 'a_realizar';
     else sit = 'sem_registro';
     const dur = _durSessao(s);
-    const ch = D.rateio ? (D.rateio[s.id] || 0) : null;
-    return { s, t, sit, dur, ch };
+    return { s, t, sit, dur };
   });
 }
 
@@ -18689,12 +18661,11 @@ function _histMetricas(encs) {
   const alunos = new Set();
   (D.presencas || []).forEach(p => { if (p.presente === true && ids.has(p.sessao_id)) alunos.add(p.colaborador_id); });
   const horasSala = dados.reduce((a, e) => a + (e.dur || 0), 0);
-  const chRateada = D.rateio ? dados.reduce((a, e) => a + (e.ch || 0), 0) : null;
   const diasTrab = new Set(dados.map(e => e.s.data)).size;
   let valorEst = null;
   if (D.valor) valorEst = D.valor.forma === 'diaria' ? diasTrab * D.valor.valor : horasSala * D.valor.valor;
   return {
-    dados: dados.length, diasTrab, horasSala, chRateada, valorEst,
+    dados: dados.length, diasTrab, horasSala, valorEst,
     semHorario: dados.filter(e => e.dur === null).length,
     turmas: new Set(dados.map(e => e.s.turma_id)).size,
     clientes: new Set(dados.map(e => e.t?.cliente_id).filter(Boolean)).size,
@@ -18720,36 +18691,32 @@ function _histRender() {
   const m = _histMetricas(encs);
   const aba = window._histAba || 'resumo';
 
-  const presets = [['este_mes', 'Este mês'], ['mes_passado', 'Mês passado'], ['este_ano', 'Este ano'], ['todos', 'Todo o período'], ['personalizado', 'Intervalo…']];
-  const chips = presets.map(([v, r]) => `<button type="button" class="tp-preset${per.preset === v ? ' on' : ''}" onclick="_histSetPreset('${v}')">${r}</button>`).join('');
-  const datas = per.preset === 'personalizado' ? `<div class="tp-datas">
-      <input type="date" value="${per.de || ''}" onchange="_histSetData('de', this.value)">
+  const datas = `<div class="tp-datas">
+      <input type="date" value="${per.de || ''}" aria-label="Data inicial" onchange="_histSetData('de', this.value)">
       <span>até</span>
-      <input type="date" value="${per.ate || ''}" onchange="_histSetData('ate', this.value)">
-    </div>` : '';
+      <input type="date" value="${per.ate || ''}" aria-label="Data final" onchange="_histSetData('ate', this.value)">
+    </div>`;
 
   const kpi = (n, l, t) => `<div class="h2-kpi" style="cursor:default"${t ? ` title="${escapeHtml(t)}"` : ''}><div class="n">${n}</div><div class="l">${l}</div></div>`;
   const kpiValor = D.valor
-    ? kpi(_histFmtR(m.valorEst), 'Valor estimado', D.valor.forma === 'diaria' ? `${m.diasTrab} dia(s) × ${_histFmtR(D.valor.valor)}` : `${_histFmtH(m.horasSala)} em sala × ${_histFmtR(D.valor.valor)}/h`)
-    : kpi(m.alunos, 'Alunos atendidos');
+    ? kpi(_histFmtR(m.valorEst), 'Valor estimado', D.valor.forma === 'diaria' ? `${m.diasTrab} dia(s) × ${_histFmtR(D.valor.valor)}` : `${_histFmtH(m.horasSala)} × ${_histFmtR(D.valor.valor)} por hora`)
+    : kpi(m.turmas, m.turmas === 1 ? 'Turma' : 'Turmas');
   const kpis = `<div class="kpis5">
       ${kpi(m.diasTrab, 'Dias trabalhados', 'Datas diferentes com pelo menos um encontro dado')}
       ${kpi(m.dados, 'Encontros dados')}
-      ${kpi(_histFmtH(m.horasSala), 'Horas em sala', 'Soma do horário de início ao fim de cada encontro dado')}
-      ${kpi(m.chRateada === null ? '—' : _histFmtH(m.chRateada), 'CH rateada', 'Carga horária do curso dividida entre os encontros — mesma conta dos Relatórios da empresa')}
+      ${kpi(_histFmtH(m.horasSala), 'Horas trabalhadas', 'Soma do horário da agenda, do início ao fim, de cada encontro dado')}
+      ${kpi(m.alunos, 'Alunos atendidos')}
       ${kpiValor}
     </div>`;
 
   const partes = [];
-  partes.push(`${m.turmas} turma${m.turmas !== 1 ? 's' : ''}`);
+  if (D.valor) partes.push(`${m.turmas} turma${m.turmas !== 1 ? 's' : ''}`);
   partes.push(`${m.clientes} cliente${m.clientes !== 1 ? 's' : ''}`);
-  if (D.valor) partes.push(`${m.alunos} aluno${m.alunos !== 1 ? 's' : ''} atendido${m.alunos !== 1 ? 's' : ''}`);
   if (m.aRealizar) partes.push(`${m.aRealizar} a realizar`);
   if (m.cancelados) partes.push(`${m.cancelados} cancelado${m.cancelados !== 1 ? 's' : ''}`);
   const avisos = [];
   if (m.semRegistro) avisos.push(`<b style="color:var(--red)">${m.semRegistro} encontro${m.semRegistro !== 1 ? 's' : ''} sem registro</b> — só contam depois de finalizados`);
-  if (m.semHorario) avisos.push(`${m.semHorario} encontro${m.semHorario !== 1 ? 's' : ''} dado${m.semHorario !== 1 ? 's' : ''} sem horário de fim não entra${m.semHorario !== 1 ? 'm' : ''} nas horas em sala`);
-  if (D.rateio === null) avisos.push('CH rateada ainda não disponível nesta conta');
+  if (m.semHorario) avisos.push(`${m.semHorario} encontro${m.semHorario !== 1 ? 's' : ''} dado${m.semHorario !== 1 ? 's' : ''} sem horário de fim não entra${m.semHorario !== 1 ? 'm' : ''} nas horas trabalhadas`);
   const linhaResumo = `<div class="hist3-linha">${partes.join(' · ')}${avisos.length ? `<br>${avisos.join('<br>')}` : ''}</div>`;
 
   const abas = [['resumo', 'Resumo'], ['encontros', 'Encontros', encs.length], ['turmas', 'Turmas', new Set(encs.map(e => e.s.turma_id)).size]];
@@ -18769,7 +18736,7 @@ function _histRender() {
       <div class="h2-sub">Seus encontros · ${escapeHtml(label)}</div>
     </div>
     <div class="hist3-per">
-      <span class="tp-lb">Período</span><div class="tp-presets">${chips}</div>${datas}
+      <span class="tp-lb">Período</span>${datas}
       <div class="hist3-exp">
         <button class="btn btn-outline btn-sm" onclick="exportarHistoricoCSV()">Planilha</button>
         <button class="btn btn-sm" style="background:var(--amber);color:var(--navy)" onclick="exportarHistoricoPDF()">PDF</button>
@@ -18806,8 +18773,8 @@ function _histHtmlResumo(encs) {
   const pizza = _relFatias(Object.entries(porCli).map(([nome, n]) => ({ nome, n: Math.round(n * 10) / 10 })));
   const trein = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([nome, n]) => ({ nome, n }));
   return `
-    ${_relDupla(porDia ? 'Horas em sala por dia' : 'Horas em sala por mês', _relBarras(colunas, 'h'),
-                'Horas em sala por cliente', _relPizza(pizza, 'Horas em sala por cliente', 'h'))}
+    ${_relDupla(porDia ? 'Horas trabalhadas por dia' : 'Horas trabalhadas por mês', _relBarras(colunas, 'h'),
+                'Horas trabalhadas por cliente', _relPizza(pizza, 'Horas trabalhadas por cliente', 'h'))}
     <div class="rel2-card">
       <div class="rel2-card-title">Encontros dados por treinamento</div>
       ${_relBarrasH(trein, '#F59E0B')}
@@ -18824,8 +18791,7 @@ function _histHtmlEncontros(encs, m) {
     return `<tr data-action="${acao}" data-id="${e.s.turma_id}"${risca}>
       <td><b>${formatarData(e.s.data)}</b></td>
       <td>${hr}</td>
-      <td class="dir" data-l="Em sala">${e.dur === null ? '—' : _histFmtH(e.dur)}</td>
-      <td class="dir${e.sit !== 'dado' || e.ch === null ? ' hist3-vazio' : ''}" data-l="CH rateada">${e.sit !== 'dado' || e.ch === null ? '—' : _histFmtH(e.ch)}</td>
+      <td class="dir" data-l="Horas">${e.dur === null ? '—' : _histFmtH(e.dur)}</td>
       <td class="hist3-nome">${escapeHtml(e.t?.catalogo?.nome || 'Treinamento')}</td>
       <td>${escapeHtml(e.t?.clientes?.nome || '—')}</td>
       <td>${escapeHtml(e.s.local || '—')}</td>
@@ -18835,7 +18801,7 @@ function _histHtmlEncontros(encs, m) {
   return `<div class="turma-tabela-wrap hist3-tab"><table class="turma-tabela">
     <thead><tr>
       <th><span class="th">Data</span></th><th><span class="th">Horário</span></th>
-      <th class="dir"><span class="th thend">Em sala</span></th><th class="dir"><span class="th thend">CH rateada</span></th>
+      <th class="dir"><span class="th thend">Horas</span></th>
       <th><span class="th">Treinamento</span></th><th><span class="th">Cliente</span></th>
       <th><span class="th">Local</span></th><th><span class="th">Situação</span></th>
     </tr></thead>
@@ -18843,7 +18809,6 @@ function _histHtmlEncontros(encs, m) {
     <tfoot><tr>
       <td colspan="2"><b>Total dado</b> · ${m.dados} encontro${m.dados !== 1 ? 's' : ''} · ${m.diasTrab} dia${m.diasTrab !== 1 ? 's' : ''}</td>
       <td class="dir"><b>${_histFmtH(m.horasSala)}</b></td>
-      <td class="dir"><b>${m.chRateada === null ? '—' : _histFmtH(m.chRateada)}</b></td>
       <td colspan="4">${D.valor ? `Valor estimado: <b>${_histFmtR(m.valorEst)}</b>` : ''}</td>
     </tr></tfoot>
   </table></div>`;
@@ -18853,7 +18818,7 @@ function _histHtmlTurmas(encs) {
   const g = {};
   encs.forEach(e => {
     const x = (g[e.s.turma_id] ||= { t: e.t, id: e.s.turma_id, dados: 0, sala: 0, ch: 0, outros: 0, prim: e.s.data, ult: e.s.data });
-    if (e.sit === 'dado') { x.dados++; x.sala += e.dur || 0; x.ch += e.ch || 0; } else x.outros++;
+    if (e.sit === 'dado') { x.dados++; x.sala += e.dur || 0; } else x.outros++;
     if (e.s.data < x.prim) x.prim = e.s.data;
     if (e.s.data > x.ult) x.ult = e.s.data;
   });
@@ -18868,28 +18833,26 @@ function _histHtmlTurmas(encs) {
       <td>${escapeHtml(x.t?.clientes?.nome || '—')}</td>
       <td>${per}</td>
       <td class="dir" data-l="Dados">${x.dados}${x.outros ? ` <small style="color:var(--text-3)">+${x.outros}</small>` : ''}</td>
-      <td class="dir" data-l="Em sala">${_histFmtH(x.sala)}</td>
-      <td class="dir" data-l="CH rateada">${D.rateio ? _histFmtH(x.ch) : '—'}</td>
+      <td class="dir" data-l="Horas">${_histFmtH(x.sala)}</td>
       <td><span class="badge ${cls}">${rot}</span></td>
     </tr>`;
   }).join('');
   return `<div class="turma-tabela-wrap hist3-tab"><table class="turma-tabela">
     <thead><tr>
       <th><span class="th">Treinamento</span></th><th><span class="th">Cliente</span></th><th><span class="th">Seus encontros</span></th>
-      <th class="dir"><span class="th thend">Dados</span></th><th class="dir"><span class="th thend">Em sala</span></th>
-      <th class="dir"><span class="th thend">CH rateada</span></th><th><span class="th">Turma</span></th>
+      <th class="dir"><span class="th thend">Dados</span></th><th class="dir"><span class="th thend">Horas</span></th>
+      <th><span class="th">Turma</span></th>
     </tr></thead>
     <tbody>${linhas}</tbody>
   </table></div>
   <div class="hist3-linha">"+N" são encontros seus no período que ainda não contam: a realizar, sem registro ou cancelados.</div>`;
 }
 
-function _histSetPreset(v) {
-  window._histPer = { ...(window._histPer || {}), preset: v };
-  _histRender();
-}
 function _histSetData(qual, v) {
-  window._histPer = { ...(window._histPer || {}), preset: 'personalizado', [qual]: v };
+  const p = { ...(window._histPer || {}), [qual]: v };
+  // Data inicial depois da final: inverte, em vez de mostrar tela vazia.
+  if (p.de && p.ate && p.de > p.ate) { const x = p.de; p.de = p.ate; p.ate = x; }
+  window._histPer = p;
   _histRender();
 }
 function _histSetAba(a) {
@@ -18912,16 +18875,16 @@ function exportarHistoricoCSV() {
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const n = v => v === null || v === undefined ? '' : String(Math.round(v * 100) / 100).replace('.', ',');
   const SIT = { dado: 'Dado', a_realizar: 'A realizar', sem_registro: 'Sem registro', cancelado: 'Cancelado' };
-  const head = ['Data', 'Início', 'Fim', 'Horas em sala', 'CH rateada', 'Treinamento', 'Cliente', 'Local', 'Situação'];
+  const head = ['Data', 'Início', 'Fim', 'Horas trabalhadas', 'Treinamento', 'Cliente', 'Local', 'Situação'];
   const rows = encs.map(e => [
     formatarData(e.s.data), String(e.s.hora_inicio || '').slice(0, 5), String(e.s.hora_fim || '').slice(0, 5),
-    n(e.dur), e.sit === 'dado' ? n(e.ch) : '', e.t?.catalogo?.nome || '', e.t?.clientes?.nome || '', e.s.local || '', SIT[e.sit],
+    n(e.dur), e.t?.catalogo?.nome || '', e.t?.clientes?.nome || '', e.s.local || '', SIT[e.sit],
   ]);
   const { label } = _histIntervalo();
   const tot = [
     [], ['Instrutor', usuarioAtual?.nome || ''], ['Período', label],
     ['Dias trabalhados', m.diasTrab], ['Encontros dados', m.dados],
-    ['Horas em sala', n(m.horasSala)], ['CH rateada', m.chRateada === null ? 'indisponível' : n(m.chRateada)],
+    ['Horas trabalhadas', n(m.horasSala)],
   ];
   if (D.valor) tot.push([D.valor.forma === 'diaria' ? 'Valor da diária' : 'Valor da hora', n(D.valor.valor)], ['Valor estimado', n(m.valorEst)]);
   // Ponto e vírgula: é o separador que o Excel em português abre direto.
@@ -18965,9 +18928,9 @@ async function exportarHistoricoPDF() {
   const kpis = [
     { l: 'Dias trabalhados', v: m.diasTrab, c: NAVY },
     { l: 'Encontros dados', v: m.dados, c: NAVY },
-    { l: 'Horas em sala', v: fh(m.horasSala), c: GREEN },
-    { l: 'CH rateada', v: m.chRateada === null ? '-' : fh(m.chRateada), c: GREEN },
-    D.valor ? { l: 'Valor estimado', v: s(_histFmtR(m.valorEst)), c: AMBER } : { l: 'Alunos atendidos', v: m.alunos, c: AMBER },
+    { l: 'Horas trabalhadas', v: fh(m.horasSala), c: GREEN },
+    { l: 'Alunos atendidos', v: m.alunos, c: GREEN },
+    D.valor ? { l: 'Valor estimado', v: s(_histFmtR(m.valorEst)), c: AMBER } : { l: 'Turmas', v: m.turmas, c: AMBER },
   ];
   const kw = (W - 28 - (kpis.length - 1) * 4) / kpis.length, kh = 22, ky0 = 50;
   kpis.forEach((k, i) => {
@@ -18981,11 +18944,11 @@ async function exportarHistoricoPDF() {
     doc.text(s(k.l), kx + kw / 2, ky0 + 18, { align: 'center' });
   });
   let nota = `${m.turmas} turma(s)  |  ${m.clientes} cliente(s)  |  ${m.alunos} aluno(s) atendido(s)`;
-  if (D.valor) nota += D.valor.forma === 'diaria' ? `  |  Diaria: ${s(_histFmtR(D.valor.valor))}` : `  |  Valor da hora: ${s(_histFmtR(D.valor.valor))} x horas em sala`;
+  if (D.valor) nota += D.valor.forma === 'diaria' ? `  |  Diaria: ${s(_histFmtR(D.valor.valor))}` : `  |  Valor da hora: ${s(_histFmtR(D.valor.valor))} x horas trabalhadas`;
   doc.setFontSize(7.5); doc.setTextColor(...T2); doc.text(s(nota), 14, 80);
 
-  const colX = [14, 36, 60, 80, 102, 170, 232, 262];
-  const heads = ['Data', 'Horario', 'Em sala', 'CH rateada', 'Treinamento', 'Cliente', 'Local', 'Situacao'];
+  const colX = [14, 36, 60, 80, 152, 222, 262];
+  const heads = ['Data', 'Horario', 'Horas', 'Treinamento', 'Cliente', 'Local', 'Situacao'];
   const cab = y => {
     doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica', 'bold');
     heads.forEach((h, i) => doc.text(h, colX[i], y));
@@ -19007,17 +18970,16 @@ async function exportarHistoricoPDF() {
     doc.text(formatarData(e.s.data), colX[0], ty);
     doc.text(hr, colX[1], ty);
     doc.text(e.dur === null ? '-' : fh(e.dur), colX[2], ty);
-    doc.text(e.sit !== 'dado' || e.ch === null ? '-' : fh(e.ch), colX[3], ty);
-    doc.text(s(e.t?.catalogo?.nome || '-', 42), colX[4], ty);
-    doc.text(s(e.t?.clientes?.nome || '-', 38), colX[5], ty);
-    doc.text(s(e.s.local || '-', 18), colX[6], ty);
-    doc.setTextColor(...cor); doc.setFont('helvetica', 'bold'); doc.text(rot, colX[7], ty);
+    doc.text(s(e.t?.catalogo?.nome || '-', 44), colX[3], ty);
+    doc.text(s(e.t?.clientes?.nome || '-', 42), colX[4], ty);
+    doc.text(s(e.s.local || '-', 24), colX[5], ty);
+    doc.setTextColor(...cor); doc.setFont('helvetica', 'bold'); doc.text(rot, colX[6], ty);
     ty += 6.5;
     doc.setDrawColor(...BORD); doc.setLineWidth(0.1); doc.line(14, ty - 4.2, W - 14, ty - 4.2);
   });
   if (ty > H - 22) { doc.addPage(); ty = 24; }
   doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold');
-  doc.text(`Total dado: ${m.dados} encontro(s), ${m.diasTrab} dia(s), ${fh(m.horasSala)} em sala${m.chRateada === null ? '' : `, ${fh(m.chRateada)} de CH rateada`}${D.valor ? `  |  Valor estimado: ${s(_histFmtR(m.valorEst))}` : ''}`, 14, ty + 2);
+  doc.text(`Total dado: ${m.dados} encontro(s), ${m.diasTrab} dia(s), ${fh(m.horasSala)} trabalhadas${D.valor ? `  |  Valor estimado: ${s(_histFmtR(m.valorEst))}` : ''}`, 14, ty + 2);
 
   const tp = doc.internal.getNumberOfPages();
   for (let p = 1; p <= tp; p++) {
@@ -29342,7 +29304,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '179';
+  var APP_BUILD = '181';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
