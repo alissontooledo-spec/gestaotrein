@@ -2005,10 +2005,6 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .sidebar-search{display:none!important}
 </style>
 <style id="v174">
-/* 21/09 — botão principal: azul-escuro. O âmbar em bloco grande cansava a
-   vista no celular; ele fica como destaque (logo, menu ativo, links). */
-.btn-amber, .gi-btn.gi-laranja { background:var(--navy)!important; border-color:var(--navy)!important; color:#fff!important }
-.btn-amber:hover, .gi-btn.gi-laranja:hover { background:#24365C!important; border-color:#24365C!important; color:#fff!important }
 /* Início do Instrutor */
 .gi-pend-grupo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);padding:14px 0 4px;display:flex;justify-content:space-between;gap:8px}
 .gi-pend-grupo span{text-transform:none;letter-spacing:0;font-weight:600}
@@ -2033,6 +2029,18 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 #mobileBody .gi-today .gi-focus{grid-column:1 / -1}
 #mobileBody .gi-today .gi-kpi .gi-tr{display:none}
 #mobileBody .gi-kpi .gi-kh{white-space:normal}
+</style>
+<style id="v175">
+/* Turmas: quadro de pendências com letras maiores (mesmo componente) */
+.tfx-card .ds-alerta .tx{font-size:15px}
+.tfx-card .ds-alerta .sub{font-size:13px}
+.tfx-card .ds-alerta .num{font-size:17px}
+.tfx-card .tfx-chip{font-size:13px!important;height:32px!important;padding:0 13px!important}
+.tfx-card .tfx-chip .n{font-size:12px!important}
+/* Bloco escuro do Início: o bloco inteiro abre o item (visual igual) */
+.gi-focus{position:relative}
+.gi-focus .gi-go::after{content:'';position:absolute;inset:0;border-radius:7px}
+.gi-focus:hover{background:#1D2D4E}
 </style>
 </head>
 <body>
@@ -5159,12 +5167,12 @@ async function renderHomeProvedor() {
       <div class="gi-lb">${_critico.tipo === 'critico' ? 'Crítico' : 'Precisa de atenção'}</div>
       <h3>${_critico.texto}</h3>
       <p>${alertas.length > 1 ? `Mais ${alertas.length - 1} ${alertas.length - 1 === 1 ? 'alerta' : 'alertas'} na lista ao lado.` : 'É o único alerta em aberto.'}</p>
-      <button class="gi-go" onclick="verOrgProvedor('${_critico.orgId}')">Abrir organização &rarr;</button>`
+      <button class="gi-go" onclick="verOrgProvedor('${_critico.orgId}')">Abrir organização</button>`
     : `
       <div class="gi-lb">Tudo em dia</div>
       <h3>Nenhum alerta em aberto</h3>
       <p>${ativas} organiza${ativas === 1 ? 'ção ativa' : 'ções ativas'} de ${total}, sem pendências sinalizadas.</p>
-      <button class="gi-go" onclick="renderOrgs()">Ver organizações &rarr;</button>`;
+      <button class="gi-go" onclick="renderOrgs()">Ver organizações</button>`;
 
   setConteudo(`
     <div class="gi-page">
@@ -6618,12 +6626,12 @@ async function renderHomeAdmin() {
       <div class="gi-lb">Prioridade de hoje</div>
       <h3>${_foco.n} ${_foco.unidade} ${_foco.texto}</h3>
       <p>${_restam > 0 ? `Mais ${_restam} ${_restam === 1 ? 'ponto' : 'pontos'} de atenção na lista ao lado.` : 'É o único ponto em aberto no momento.'}</p>
-      <button class="gi-go" onclick="${_foco.acao}">${escapeHtml(_foco.label)} &rarr;</button>`
+      <button class="gi-go" onclick="${_foco.acao}">${escapeHtml(_foco.label)}</button>`
     : `
       <div class="gi-lb">Tudo em dia</div>
       <h3>Nenhuma pendência em aberto</h3>
       <p>${proxSessoes.length ? `${proxSessoes.length} aula${proxSessoes.length !== 1 ? 's' : ''} nas próximas datas.` : 'Nenhuma aula agendada para os próximos dias.'}</p>
-      <button class="gi-go" data-nav="turmas">Ver turmas &rarr;</button>`;
+      <button class="gi-go" data-nav="turmas">Ver turmas</button>`;
   setConteudo(`
     <div class="gi-page">
       <div>
@@ -6632,7 +6640,7 @@ async function renderHomeAdmin() {
         <p>${mensagemDoDia ? escapeHtml(mensagemDoDia) : 'O que precisa da sua atenção hoje.'}</p>
       </div>
       <div class="gi-acoes">
-        <button class="gi-btn gi-laranja" data-nav="turmas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Nova turma</button>
+        <button class="gi-btn gi-laranja" data-nav="turmas">Nova turma</button>
         <button class="gi-btn" data-nav="agendaequipe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg> Agenda da equipe</button>
       </div>
     </div>
@@ -6779,12 +6787,12 @@ async function renderHomeComercial() {
           <div class="gi-lb">Prioridade de hoje</div>
           <h3>${nPendencia} turma${nPendencia !== 1 ? 's' : ''} com pendência de cadastro</h3>
           <p>Faltam participantes, local ou instrutor. Turma com pendência não roda no dia.</p>
-          <button class="gi-go" onclick="irParaTurmasComPendencia()">Resolver agora &rarr;</button>
+          <button class="gi-go" onclick="irParaTurmasComPendencia()">Resolver agora</button>
         ` : `
           <div class="gi-lb">Tudo em dia</div>
           <h3>Nenhuma turma com pendência</h3>
           <p>${proximas.length ? `${proximas.length} turma${proximas.length !== 1 ? 's' : ''} com aula marcada nos próximos dias.` : 'Nenhuma turma com aula futura — que tal agendar uma?'}</p>
-          <button class="gi-go" data-nav="turmas">Ver turmas &rarr;</button>
+          <button class="gi-go" data-nav="turmas">Ver turmas</button>
         `}
       </div>
       <div class="gi-kpi" onclick="irParaTurmasFiltradas('agendada')">
@@ -7021,7 +7029,7 @@ async function renderHomeInstrutor() {
       <div class="gi-lb">Próximo compromisso${ehHojeC ? ' · hoje' : ''}</div>
       <h3>${escapeHtml(proximoComp.titulo)}</h3>
       <p>${escapeHtml(tipoC.label)}${proximoComp.hora_inicio ? ' · ' + proximoComp.hora_inicio.slice(0,5) + (proximoComp.hora_fim ? ' – ' + proximoComp.hora_fim.slice(0,5) : '') : ''}${proximoComp.local ? ' · ' + escapeHtml(proximoComp.local) : ''}${ehHojeC ? '' : ' · ' + formatarData(proximoComp.data)}</p>
-      <button class="gi-go" data-action="verCompromisso" data-id="${proximoComp.id}">Abrir compromisso &rarr;</button>`;
+      <button class="gi-go" data-action="verCompromisso" data-id="${proximoComp.id}">Abrir compromisso</button>`;
   } else if (proximo) {
     const st = proximo.turma?.status || 'agendada';
     const ehHoje = proximo.data === hoje;
@@ -7036,13 +7044,13 @@ async function renderHomeInstrutor() {
       <div class="gi-lb">Próximo treinamento${ehHoje ? ' · hoje' : ''}</div>
       <h3>${escapeHtml(proximo.turma?.catalogo?.nome || 'Treinamento')}</h3>
       <p>${escapeHtml(proximo.turma?.clientes?.nome || '—')}${proximo.hora_inicio ? ' · ' + proximo.hora_inicio.slice(0,5) + (proximo.hora_fim ? ' – ' + proximo.hora_fim.slice(0,5) : '') : ''}${localTxt ? ' · ' + escapeHtml(localTxt) : ''}${ehHoje ? '' : ' · ' + formatarData(proximo.data)}</p>
-      <button class="gi-go" data-action="verTurma" data-id="${proximo.turma_id}">${rotulo} &rarr;</button>`;
+      <button class="gi-go" data-action="verTurma" data-id="${proximo.turma_id}">${rotulo}</button>`;
   } else {
     focoHtml = `
       <div class="gi-lb">Agenda livre</div>
       <h3>Nenhum treinamento na fila</h3>
       <p>Quando uma turma for atribuída a você, ela aparece aqui.</p>
-      <button class="gi-go" data-nav="agenda">Ver minha agenda &rarr;</button>`;
+      <button class="gi-go" data-nav="agenda">Ver minha agenda</button>`;
   }
 
   // ── Precisa de você (21/09): UMA linha por turma, não uma por aula.
@@ -11675,7 +11683,7 @@ async function renderTurmas(abaInicial) {
   // usado em outras consultas do arquivo (ex.: geração de certificado).
   // Só leitura — nenhum dado novo é gravado, é só pra mostrar/filtrar/
   // buscar por instrutor na nova visão em lista.
-  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(id,concluida,data,hora_inicio,hora_fim,instrutor_id,usuarios!instrutor_id(nome)),turma_participantes(id)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
+  const {data,error} = await sb.from('turmas').select('*,clientes(nome),catalogo(nome,carga_horaria),sessoes(id,concluida,cancelada,horario_a_confirmar,data,hora_inicio,hora_fim,instrutor_id,usuarios!instrutor_id(nome)),turma_participantes(id)').eq('org_id',usuarioAtual.org_id).order('created_at',{ascending:false});
   if (error) throw error;
   _turmasCache = data||[];
   setMobileHeader(`<div class="mh-greeting">Operação</div><div class="mh-name">Turmas</div>`);
@@ -11764,7 +11772,7 @@ async function renderTurmas(abaInicial) {
       <!-- 2026-08-30: "Nova turma" volta pra esta linha. Na build 150 ele tinha
            ficado sozinho numa faixa própria (~50px) porque as abas saíram e
            não sobrou mais nada ao lado dele. -->
-      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">${ICONS.plus} Nova turma</button>`:''}
+      ${podeCriar?`<button class="btn btn-amber" onclick="abrirModalTurma()" style="flex-shrink:0">Nova turma</button>`:''}
     </div>
     <div id="turmasCorpoEl">${_turmasPainelHtml()}${_turmasResumoHtml()}${_turmasFaixaPendHtml()}${_turmasRenderVisao(_turmasCache, abaAtiva, podeCriar)}</div>`);
   _turmasAtualizarBotoesVisao();
@@ -12589,16 +12597,17 @@ function _turmasFaixaPendHtml() {
      uma faixa tinta propria, com icone, fundo e borda coloridos — o formato
      que saiu do Inicio e do Painel comercial. Os chips continuam iguais: eles
      nao sao decoracao, sao o filtro; entram no bloco `abaixo` do componente. */
-  return _alertaLista([{
+  return '<div class="tfx-card">' + _alertaLista([{
     n: q,
     unidade: q > 1 ? 'turmas' : 'turma',
     texto: q > 1 ? 'não estão prontas para rodar' : 'não está pronta para rodar',
-    sub: 'Toque no que falta para ver quais são.',
+    sub: (() => { const tot = Object.values(conta).reduce((s, n) => s + n, 0);
+      return tot > q ? `Somam ${tot} pendências: uma turma pode ter mais de uma. Toque no que falta para ver quais são.` : 'Toque no que falta para ver quais são.'; })(),
     abaixo: chip('todas', 'Todas', q) + tipos.map(p => chip(p.id, p.curto, conta[p.id])).join(''),
     acaoHtml: ligado
       ? `<button type="button" class="ds-btn-sair tfx-sair" onclick="_turmasFiltrarPend('')">Mostrar todas as turmas</button>`
       : ''
-  }]);
+  }]) + '</div>';
 }
 
 function _turmasSetFiltro(campo, valor) {
@@ -12813,7 +12822,8 @@ const CATALOGO_PENDENCIAS_TURMA = [
 // cancelada é histórico, não "pendência de configuração" mais.
 function _turmaPendencias(t, sessoesDaTurma) {
   if (t.status !== 'agendada' && t.status !== 'em_andamento') return [];
-  const sessoes = sessoesDaTurma || t.sessoes || [];
+  // 21/09: encontro cancelado não é encontro.
+  const sessoes = (sessoesDaTurma || t.sessoes || []).filter(s => !s.cancelada);
   return CATALOGO_PENDENCIAS_TURMA
     .filter(p => p.detectar(t, sessoes))
     .sort((a,b) => a.prioridade - b.prioridade);
@@ -28770,7 +28780,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '174';
+  var APP_BUILD = '175';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
