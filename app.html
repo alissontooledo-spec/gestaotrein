@@ -2087,6 +2087,39 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .rel-gc-nm{font-size:11.5px;color:var(--text-2);text-align:center;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rel2-chart .rel-gleg{margin-top:0}
 </style>
+<style id="v179">
+/* v179 · Histórico do instrutor com período, totais e exportação */
+.hist3-per{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;margin:0 0 14px}
+.hist3-per .tp-lb{font-size:12.5px;font-weight:700;color:var(--text-2);margin-right:2px}
+.hist3-per .tp-presets{display:flex;gap:6px;flex-wrap:wrap}
+.hist3-per .tp-preset{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:600;font-family:inherit;color:var(--text-2);cursor:pointer;line-height:1.3}
+.hist3-per .tp-preset:hover{border-color:var(--border-2);color:var(--text-1)}
+.hist3-per .tp-preset.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.hist3-per .tp-datas{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.hist3-per .tp-datas span{font-size:12px;color:var(--text-3)}
+.hist3-per .tp-datas input{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 9px;font-size:12.5px;font-family:inherit;color:var(--text-1)}
+.hist3-tab .badge{white-space:nowrap}
+.hist3-exp{display:flex;gap:6px;margin-left:auto}
+.hist3-linha{font-size:12.5px;color:var(--text-2);line-height:1.6;margin:-4px 0 14px}
+.hist3-tab .turma-tabela{min-width:900px}
+.hist3-tab .turma-tabela tbody td{font-size:13px!important}
+.hist3-tab .turma-tabela tfoot td{padding:12px 14px;background:var(--gray-50);border-top:1px solid var(--border);font-size:13px;color:var(--text-1)}
+.hist3-tab .turma-tabela td.dir{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hist3-tab tr.hist3-cancel td{color:var(--text-3)!important}
+.hist3-tab tr.hist3-cancel td:not(:last-child){text-decoration:line-through}
+@media(max-width:768px){
+  .hist3-exp{margin-left:0;width:100%}
+  .hist3-exp .btn{flex:1;justify-content:center}
+  .hist3-tab .turma-tabela{min-width:0}
+  .hist3-tab .turma-tabela tbody tr{display:flex;flex-wrap:wrap;gap:2px 12px;align-items:center}
+  .hist3-tab .turma-tabela tbody td{display:block;padding:1px 0!important}
+  .hist3-tab .turma-tabela tbody td.hist3-nome{flex-basis:100%;font-weight:700;color:var(--text-1)}
+  .hist3-tab .turma-tabela td[data-l]::before{content:attr(data-l) ' ';color:var(--text-3);font-size:11.5px}
+  .hist3-tab .turma-tabela td.hist3-vazio{display:none!important}
+  .hist3-tab .turma-tabela tfoot tr{display:block;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 13px}
+  .hist3-tab .turma-tabela tfoot td{display:inline;padding:0 10px 0 0;background:none;border:0}
+}
+</style>
 </head>
 <body>
 
@@ -9139,6 +9172,31 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
     </div>`;
   }
 
+  // v179: valor pago ao instrutor (tabela instrutor_valores, PASSO-46).
+  // Fica fora de `usuarios` porque essa tabela é lida pela organização toda.
+  let blocoValorInstrutor = '';
+  if (u && u.perfil === 'instrutor' && ['administrador','provedor'].includes(usuarioAtual.perfil)) {
+    let iv = null;
+    try {
+      const { data: ivd, error: ivErr } = await sb.from('instrutor_valores').select('forma,valor').eq('usuario_id', u.id).maybeSingle();
+      if (!ivErr) iv = ivd;
+    } catch(e) { iv = null; }
+    const selSt = 'width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none';
+    blocoValorInstrutor = `
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Valor pago ao instrutor <span style="font-weight:400;text-transform:none">(só o próprio instrutor vê, no Histórico dele)</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field" style="margin:0"><label>Forma</label>
+          <select id="mUsrValorForma" style="${selSt}">
+            <option value="hora" ${iv?.forma !== 'diaria' ? 'selected' : ''}>Por hora em sala</option>
+            <option value="diaria" ${iv?.forma === 'diaria' ? 'selected' : ''}>Por diária</option>
+          </select></div>
+        <div class="field" style="margin:0"><label>Valor (R$)</label><input type="text" inputmode="decimal" id="mUsrValor" value="${iv && iv.valor != null ? Number(iv.valor).toFixed(2).replace('.', ',') : ''}" placeholder="Ex: 85,00"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:6px">Deixe em branco para não mostrar valor. Usado só para o valor estimado do período.</div>
+    </div>`;
+  }
+
   const campoSenha = u ? '' : `
     <div class="field"><label>Senha provisória *</label><input type="password" id="mUsrSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O usuário poderá alterar após o primeiro acesso.</div></div>`;
 
@@ -9168,6 +9226,7 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
       </div>
     </div>
     ${blocoDocumentosInstrutor}
+    ${blocoValorInstrutor}
     ${u && u.perfil !== 'provedor' ? `
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Segurança</div>
@@ -9298,12 +9357,39 @@ async function salvarUsuarioOrg() {
       showToast('O servidor recusou esta alteração: você não tem permissão para editar este usuário.','error');
       return;
     }
+    await _salvarValorInstrutor(usuarioId);
     fecharModal();
     showToast('Usuário atualizado com sucesso!', 'success');
     await verUsuarioEquipe(usuarioId);
   } catch(e) {
     setBtnModalLoading(false);
     showToast(traduzErroSupabase(e, 'Erro ao salvar usuário'), 'error');
+  }
+}
+
+// v179: grava/limpa o valor pago ao instrutor. Não bloqueia o resto do
+// cadastro: se falhar (ex.: PASSO-46 ainda não rodado), só avisa.
+async function _salvarValorInstrutor(usuarioId) {
+  const elV = document.getElementById('mUsrValor');
+  if (!elV) return;
+  const orgId = _modalCurrentId || usuarioAtual.org_id;
+  const bruto = elV.value.trim().replace(/\./g, '').replace(',', '.');
+  const forma = document.getElementById('mUsrValorForma')?.value === 'diaria' ? 'diaria' : 'hora';
+  try {
+    if (!bruto) {
+      const { error } = await sb.from('instrutor_valores').delete().eq('usuario_id', usuarioId).eq('org_id', orgId);
+      if (error) throw error;
+      return;
+    }
+    const valor = Number(bruto);
+    if (!Number.isFinite(valor) || valor < 0) { showToast('Valor do instrutor inválido — não foi salvo', 'error'); return; }
+    const { data, error } = await sb.from('instrutor_valores')
+      .upsert({ usuario_id: usuarioId, org_id: orgId, forma, valor: Math.round(valor * 100) / 100, atualizado_em: new Date().toISOString() }, { onConflict: 'usuario_id' })
+      .select('usuario_id');
+    if (error) throw error;
+    if (!data || !data.length) showToast('O servidor recusou o valor do instrutor.', 'error');
+  } catch(e) {
+    showToast('Valor do instrutor não foi salvo: ' + traduzErroSupabase(e, 'erro ao salvar'), 'error');
   }
 }
 
@@ -18458,148 +18544,492 @@ function _agEquipeRenderPendentes() {
 }
 
 // ============================================================
-// HISTÓRICO — INSTRUTOR
+// HISTÓRICO — INSTRUTOR (v179)
 // ============================================================
+// Pedido do Alisson (22/09): o instrutor precisa extrair o que fez num
+// período para contabilizar o custo efetivo. Regras aqui são as MESMAS dos
+// Relatórios do Administrador (_sessaoEntregue, _durSessao,
+// _horasPorSessaoDaTurma), para os dois lados verem o mesmo número:
+//   • Encontro dado = não cancelado E (concluído OU turma concluída).
+//   • Horas em sala = início→fim de cada encontro dado (o que se trabalhou).
+//   • Carga horária rateada = CH da turma dividida entre os encontros dados,
+//     pela duração — precisa dos encontros dos colegas, que o instrutor não
+//     lê direto (RLS); vêm da função sessoes_das_minhas_turmas() (PASSO-46).
+//   • Dias trabalhados = datas distintas com encontro dado (base da diária).
+// Antes: só turmas concluídas, e cada turma somava a CH inteira mesmo
+// quando ele tinha dado 1 dos 3 dias.
+window._histPer = window._histPer || { preset: 'este_mes', de: '', ate: '' };
+window._histAba = window._histAba || 'resumo';
+
+function _histIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function _histIntervalo() {
+  const p = window._histPer || {};
+  const h = new Date();
+  const MES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  if (p.preset === 'este_mes') {
+    return { de: _histIso(new Date(h.getFullYear(), h.getMonth(), 1)), ate: _histIso(new Date(h.getFullYear(), h.getMonth() + 1, 0)), label: `${MES[h.getMonth()]} de ${h.getFullYear()}` };
+  }
+  if (p.preset === 'mes_passado') {
+    const i = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+    return { de: _histIso(i), ate: _histIso(new Date(h.getFullYear(), h.getMonth(), 0)), label: `${MES[i.getMonth()]} de ${i.getFullYear()}` };
+  }
+  if (p.preset === 'este_ano') {
+    return { de: `${h.getFullYear()}-01-01`, ate: `${h.getFullYear()}-12-31`, label: String(h.getFullYear()) };
+  }
+  if (p.preset === 'personalizado') {
+    const de = p.de || '', ate = p.ate || '';
+    const label = de && ate ? `${formatarData(de)} a ${formatarData(ate)}` : de ? `a partir de ${formatarData(de)}` : ate ? `até ${formatarData(ate)}` : 'Todo o período';
+    return { de, ate, label };
+  }
+  return { de: '', ate: '', label: 'Todo o período' };
+}
+
+function _histFmtH(h) {
+  const v = Math.round((h || 0) * 10) / 10;
+  return `${String(v).replace('.', ',')}h`;
+}
+function _histFmtR(v) {
+  return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 async function renderHistorico() {
   setMobileHeader(`<div class="mh-greeting">Instrutor</div><div class="mh-name">Histórico</div>`);
   fabOcultar();
 
-  // Buscar todas as sessões deste instrutor — a filtragem por "concluído"
-  // de verdade acontece abaixo, por turma.status='concluida' (turmasMap),
-  // não pelo flag de cada sessão isolada. Uma turma pode ser marcada
-  // concluída sem que cada sessão tenha o flag `concluida` atualizado
-  // (ex.: finalização feita por outra via que não a tela padrão do
-  // instrutor) — exigir os dois deixava turmas concluídas de fora do
-  // histórico.
-  const {data:sessoes, error:erS} = await sb
+  const { data: minhas, error: erS } = await sb
     .from('sessoes')
-    .select('id,turma_id,data,hora_inicio,hora_fim,local,concluida')
+    .select('id,turma_id,data,hora_inicio,hora_fim,local,concluida,cancelada')
     .eq('instrutor_id', usuarioAtual.id)
-    .order('data', {ascending:false});
+    .order('data', { ascending: true });
   if (erS) throw erS;
 
-  // Buscar turmas concluídas vinculadas
-  const turmaIds = [...new Set((sessoes||[]).map(s=>s.turma_id).filter(Boolean))];
-  let turmasMap = {};
+  const turmaIds = [...new Set((minhas || []).map(s => s.turma_id).filter(Boolean))];
+  const turmasMap = {};
+  let todas = null, presencas = [];
   if (turmaIds.length) {
-    const {data:td} = await sb
+    const { data: td, error: erT } = await sb
       .from('turmas')
-      .select('id,status,catalogo_id,cliente_id,observacoes,clientes(nome),catalogo(nome,carga_horaria),turma_participantes(id)')
-      .in('id', turmaIds)
-      .eq('status','concluida');
-    (td||[]).forEach(t=>{ turmasMap[t.id]=t; });
-  }
+      .select('id,status,cliente_id,catalogo_id,carga_horaria_real,clientes(nome),catalogo(nome,carga_horaria)')
+      .in('id', turmaIds);
+    if (erT) throw erT;
+    (td || []).forEach(t => { turmasMap[t.id] = t; });
 
-  // Certificados individuais dessas turmas — base de "Alunos treinados"
-  // (correção 2026-09-02; antes o card somava MATRÍCULA). Consulta própria,
-  // não embutida no select de turmas, para a tela não depender de resolução
-  // de relacionamento e continuar abrindo mesmo se esta consulta falhar.
-  let _certHistPorTurma = {};
-  if (turmaIds.length) {
+    // Encontros dos colegas nas mesmas turmas (só data/horário/situação) —
+    // sem eles o rateio da CH sai errado. Se o PASSO-46 ainda não rodou, a
+    // tela abre igual e a coluna "CH rateada" mostra "—".
     try {
-      const {data:_docsHist} = await sb
-        .from('documentos')
-        .select('turma_id,tipo,colaborador_id,revogado_em')
+      const { data: rs, error: erR } = await sb.rpc('sessoes_das_minhas_turmas');
+      if (!erR && Array.isArray(rs)) todas = rs;
+    } catch (e) { todas = null; }
+
+    try {
+      const { data: pr } = await sb
+        .from('presencas')
+        .select('sessao_id,colaborador_id,presente')
         .in('turma_id', turmaIds);
-      _certHistPorTurma = _certPorTurmaMap(_docsHist);
-    } catch(e) { _certHistPorTurma = {}; }
+      presencas = pr || [];
+    } catch (e) { presencas = []; }
   }
 
-  // Agrupar sessões por turma (apenas turmas concluídas)
-  const grupos = {};
-  (sessoes||[]).forEach(s=>{
-    const t = turmasMap[s.turma_id];
-    if (!t) return;
-    if (!grupos[s.turma_id]) grupos[s.turma_id] = {turma:t, sessoes:[]};
-    grupos[s.turma_id].sessoes.push(s);
+  // Valor combinado com a organização (Equipe → editar instrutor). Só o
+  // próprio registro é legível (RLS do PASSO-46).
+  let valor = null;
+  try {
+    const { data: v, error: erV } = await sb
+      .from('instrutor_valores')
+      .select('forma,valor')
+      .eq('usuario_id', usuarioAtual.id)
+      .maybeSingle();
+    if (!erV && v && Number(v.valor) > 0) valor = { forma: v.forma, valor: Number(v.valor) };
+  } catch (e) { valor = null; }
+
+  // CH rateada por encontro (mapa id → horas), calculada sobre TODOS os
+  // encontros de cada turma, independente do período escolhido.
+  let rateio = null;
+  if (todas) {
+    rateio = {};
+    const porTurma = {};
+    todas.forEach(s => { (porTurma[s.turma_id] ||= []).push(s); });
+    Object.keys(porTurma).forEach(tid => {
+      const t = turmasMap[tid];
+      if (!t) return;
+      Object.assign(rateio, _horasPorSessaoDaTurma(t, porTurma[tid]));
+    });
+  }
+
+  window._histDados = { minhas: minhas || [], turmasMap, rateio, presencas, valor };
+  _histRender();
+}
+
+// Encontros do instrutor no período + situação de cada um.
+function _histEncontros() {
+  const D = window._histDados || {};
+  const { de, ate } = _histIntervalo();
+  const hoje = _histIso(new Date());
+  const ord = (D.minhas || []).slice().sort((x, y) => (x.data + (x.hora_inicio || '')).localeCompare(y.data + (y.hora_inicio || '')));
+  return ord.filter(s => (!de || s.data >= de) && (!ate || s.data <= ate)).map(s => {
+    const t = D.turmasMap[s.turma_id];
+    let sit;
+    if (s.cancelada === true) sit = 'cancelado';
+    else if (_sessaoEntregue(s, t)) sit = 'dado';
+    else if (s.data >= hoje) sit = 'a_realizar';
+    else sit = 'sem_registro';
+    const dur = _durSessao(s);
+    const ch = D.rateio ? (D.rateio[s.id] || 0) : null;
+    return { s, t, sit, dur, ch };
   });
-  const lista = Object.values(grupos).sort((a,b)=>{
-    const da = a.sessoes[0]?.data||'';
-    const db = b.sessoes[0]?.data||'';
-    return db.localeCompare(da);
-  });
+}
 
-  window._historicoLista = lista;
-  const totalTurmas   = lista.length;
-  // Alunos treinados = pessoas DISTINTAS com certificado individual emitido
-  // e não revogado nessas turmas — não matrícula, e sem contar a mesma
-  // pessoa duas vezes se ela fez mais de um treinamento (correção 2026-09-02).
-  const totalAlunos   = _pessoasTreinadas(lista.map(g => g.turma), _certHistPorTurma);
-  const totalHoras    = lista.reduce((acc,g)=>{
-    const ch = g.turma.catalogo?.carga_horaria||0;
-    return acc + ch; // carga_horaria ja e o total do treinamento
-  },0);
-  const hoje = new Date();
-  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-  const turmasMes = lista.filter(g=>g.sessoes.some(s=>s.data?.startsWith(mesAtual))).length;
-  const clientesUnicos = new Set(lista.map(g=>g.turma.cliente_id).filter(Boolean)).size;
+function _histMetricas(encs) {
+  const D = window._histDados || {};
+  const dados = encs.filter(e => e.sit === 'dado');
+  const ids = new Set(dados.map(e => e.s.id));
+  const alunos = new Set();
+  (D.presencas || []).forEach(p => { if (p.presente === true && ids.has(p.sessao_id)) alunos.add(p.colaborador_id); });
+  const horasSala = dados.reduce((a, e) => a + (e.dur || 0), 0);
+  const chRateada = D.rateio ? dados.reduce((a, e) => a + (e.ch || 0), 0) : null;
+  const diasTrab = new Set(dados.map(e => e.s.data)).size;
+  let valorEst = null;
+  if (D.valor) valorEst = D.valor.forma === 'diaria' ? diasTrab * D.valor.valor : horasSala * D.valor.valor;
+  return {
+    dados: dados.length, diasTrab, horasSala, chRateada, valorEst,
+    semHorario: dados.filter(e => e.dur === null).length,
+    turmas: new Set(dados.map(e => e.s.turma_id)).size,
+    clientes: new Set(dados.map(e => e.t?.cliente_id).filter(Boolean)).size,
+    alunos: alunos.size,
+    semRegistro: encs.filter(e => e.sit === 'sem_registro').length,
+    aRealizar: encs.filter(e => e.sit === 'a_realizar').length,
+    cancelados: encs.filter(e => e.sit === 'cancelado').length,
+  };
+}
 
-  // Filtros ativos
-  const clientesSet = [...new Set(lista.map(g=>g.turma.clientes?.nome).filter(Boolean))].sort();
-  const treinamentosSet = [...new Set(lista.map(g=>g.turma.catalogo?.nome).filter(Boolean))].sort();
-  // Anos com treinamentos concluídos — referência é a sessão mais recente de
-  // cada turma (mesmo campo usado na ordenação padrão da lista), para que o
-  // filtro de ano seja coerente com "mais recentes primeiro".
-  const anosSet = [...new Set(lista.map(g=>(g.sessoes[0]?.data||'').slice(0,4)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+const _HIST_SIT = {
+  dado:         ['Dado', 'badge-green'],
+  a_realizar:   ['A realizar', 'badge-blue'],
+  sem_registro: ['Sem registro', 'badge-red'],
+  cancelado:    ['Cancelado', 'badge-gray'],
+};
 
-  const cliOpts = clientesSet.map(n=>`<option value="${n}">${n}</option>`).join('');
-  const catOpts = treinamentosSet.map(n=>`<option value="${n}">${n}</option>`).join('');
-  const anoOpts = anosSet.map(a=>`<option value="${a}">${a}</option>`).join('');
+function _histRender() {
+  const D = window._histDados || {};
+  const per = window._histPer || {};
+  const { label } = _histIntervalo();
+  const encs = _histEncontros();
+  const m = _histMetricas(encs);
+  const aba = window._histAba || 'resumo';
 
-  // Página/ordenação resetam a cada entrada na tela; tamanho de página fica
-  // como preferência do usuário entre visitas (mesmo padrão de Catálogo/Organizações).
-  _paginaHistorico = 1;
-  _historicoOrdem = 'desc';
-  const listaOrdenada = lista.slice().sort((a,b)=>{
-    const da = a.sessoes[0]?.data||'', db = b.sessoes[0]?.data||'';
-    return _historicoOrdem==='asc' ? da.localeCompare(db) : db.localeCompare(da);
-  });
-  const { itens: itensPagina, totalPaginas, paginaAtual, total } = _paginarLista(listaOrdenada, _paginaHistorico, _porPaginaHistorico);
-  _paginaHistorico = paginaAtual;
+  const presets = [['este_mes', 'Este mês'], ['mes_passado', 'Mês passado'], ['este_ano', 'Este ano'], ['todos', 'Todo o período'], ['personalizado', 'Intervalo…']];
+  const chips = presets.map(([v, r]) => `<button type="button" class="tp-preset${per.preset === v ? ' on' : ''}" onclick="_histSetPreset('${v}')">${r}</button>`).join('');
+  const datas = per.preset === 'personalizado' ? `<div class="tp-datas">
+      <input type="date" value="${per.de || ''}" onchange="_histSetData('de', this.value)">
+      <span>até</span>
+      <input type="date" value="${per.ate || ''}" onchange="_histSetData('ate', this.value)">
+    </div>` : '';
 
-  const htmlItems = lista.length===0
-    ? `<div class="card"><div class="empty" style="padding:40px 20px"><div class="empty-icon"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></div><div class="empty-title">Nenhum treinamento concluído</div><div class="empty-sub">Seu histórico aparecerá aqui após finalizar os primeiros treinamentos.</div></div></div>`
-    : _htmlHistoricoAgrupado(itensPagina, listaOrdenada);
+  const kpi = (n, l, t) => `<div class="h2-kpi" style="cursor:default"${t ? ` title="${escapeHtml(t)}"` : ''}><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  const kpiValor = D.valor
+    ? kpi(_histFmtR(m.valorEst), 'Valor estimado', D.valor.forma === 'diaria' ? `${m.diasTrab} dia(s) × ${_histFmtR(D.valor.valor)}` : `${_histFmtH(m.horasSala)} em sala × ${_histFmtR(D.valor.valor)}/h`)
+    : kpi(m.alunos, 'Alunos atendidos');
+  const kpis = `<div class="kpis5">
+      ${kpi(m.diasTrab, 'Dias trabalhados', 'Datas diferentes com pelo menos um encontro dado')}
+      ${kpi(m.dados, 'Encontros dados')}
+      ${kpi(_histFmtH(m.horasSala), 'Horas em sala', 'Soma do horário de início ao fim de cada encontro dado')}
+      ${kpi(m.chRateada === null ? '—' : _histFmtH(m.chRateada), 'CH rateada', 'Carga horária do curso dividida entre os encontros — mesma conta dos Relatórios da empresa')}
+      ${kpiValor}
+    </div>`;
 
-  const htmlPag = (lista.length===0) ? '' : _htmlPaginacao({
-    totalPaginas, paginaAtual, porPagina: _porPaginaHistorico, total,
-    onPageChange: '_historicoIrPagina', onPageSizeChange: '_historicoAlterarPorPagina',
-    opcoesPorPagina: [10, 20, 50]
-  });
+  const partes = [];
+  partes.push(`${m.turmas} turma${m.turmas !== 1 ? 's' : ''}`);
+  partes.push(`${m.clientes} cliente${m.clientes !== 1 ? 's' : ''}`);
+  if (D.valor) partes.push(`${m.alunos} aluno${m.alunos !== 1 ? 's' : ''} atendido${m.alunos !== 1 ? 's' : ''}`);
+  if (m.aRealizar) partes.push(`${m.aRealizar} a realizar`);
+  if (m.cancelados) partes.push(`${m.cancelados} cancelado${m.cancelados !== 1 ? 's' : ''}`);
+  const avisos = [];
+  if (m.semRegistro) avisos.push(`<b style="color:var(--red)">${m.semRegistro} encontro${m.semRegistro !== 1 ? 's' : ''} sem registro</b> — só contam depois de finalizados`);
+  if (m.semHorario) avisos.push(`${m.semHorario} encontro${m.semHorario !== 1 ? 's' : ''} dado${m.semHorario !== 1 ? 's' : ''} sem horário de fim não entra${m.semHorario !== 1 ? 'm' : ''} nas horas em sala`);
+  if (D.rateio === null) avisos.push('CH rateada ainda não disponível nesta conta');
+  const linhaResumo = `<div class="hist3-linha">${partes.join(' · ')}${avisos.length ? `<br>${avisos.join('<br>')}` : ''}</div>`;
+
+  const abas = [['resumo', 'Resumo'], ['encontros', 'Encontros', encs.length], ['turmas', 'Turmas', new Set(encs.map(e => e.s.turma_id)).size]];
+  const abasHtml = `<div class="rel-abas-wrap"><div class="turmas-viewtoggle rel-abas" role="tablist">${abas.map(([id, l, n]) => `
+    <button type="button" role="tab" aria-selected="${id === aba}" class="${id === aba ? 'on' : ''}" onclick="_histSetAba('${id}')">${l}${n === undefined ? '' : `<span class="n">${n}</span>`}</button>`).join('')}</div></div>`;
+
+  let corpo;
+  if (!encs.length) {
+    corpo = `<div class="card"><div class="empty" style="padding:36px 20px"><div class="empty-title">Nenhum encontro neste período</div><div class="empty-sub">Escolha outro período acima.</div></div></div>`;
+  } else if (aba === 'encontros') corpo = _histHtmlEncontros(encs, m);
+  else if (aba === 'turmas') corpo = _histHtmlTurmas(encs);
+  else corpo = _histHtmlResumo(encs);
 
   setConteudo(`
     <div class="h2-hero" style="padding:16px 18px">
       <div class="h2-greet" style="font-size:16px">Histórico</div>
-      <div class="h2-sub">Treinamentos concluídos por você</div>
+      <div class="h2-sub">Seus encontros · ${escapeHtml(label)}</div>
     </div>
-    <div class="kpis5">
-      <div class="h2-kpi" style="cursor:default"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 4 2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.5 2.7 3 6 3s6-1.5 6-3v-5.5"/></svg></div><div class="n">${totalTurmas}</div><div class="l">Treinamentos</div></div>
-      <div class="h2-kpi" style="cursor:default"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="8" r="3.2"/><path d="M17 15a4 4 0 0 1 4 4v1M16.5 5.2a3.2 3.2 0 0 1 0 5.6"/></svg></div><div class="n">${totalAlunos}</div><div class="l">Alunos treinados</div></div>
-      <div class="h2-kpi" style="cursor:default"><div class="ic">⏱</div><div class="n">${totalHoras}</div><div class="l">Horas ministradas</div></div>
-      <div class="h2-kpi" style="cursor:default"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></div><div class="n">${turmasMes}</div><div class="l">Este mês</div></div>
-      <div class="h2-kpi" style="cursor:default"><div class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16M14 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3"/></svg></div><div class="n">${clientesUnicos}</div><div class="l">Clientes</div></div>
+    <div class="hist3-per">
+      <span class="tp-lb">Período</span><div class="tp-presets">${chips}</div>${datas}
+      <div class="hist3-exp">
+        <button class="btn btn-outline btn-sm" onclick="exportarHistoricoCSV()">Planilha</button>
+        <button class="btn btn-sm" style="background:var(--amber);color:var(--navy)" onclick="exportarHistoricoPDF()">PDF</button>
+      </div>
     </div>
-
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-      <select id="filtHistCli" class="rel4-select" style="flex:1;min-width:140px" onchange="filtrarHistorico()">
-        <option value="">Todos os clientes</option>${cliOpts}
-      </select>
-      <select id="filtHistCat" class="rel4-select" style="flex:1;min-width:140px" onchange="filtrarHistorico()">
-        <option value="">Todos os treinamentos</option>${catOpts}
-      </select>
-      <select id="filtHistAno" class="rel4-select" style="min-width:120px" onchange="filtrarHistorico()">
-        <option value="">Todos os anos</option>${anoOpts}
-      </select>
-      <select id="filtHistOrdem" class="rel4-select" style="min-width:180px" onchange="_historicoAlternarOrdem()">
-        <option value="desc" selected>Mais recentes primeiro</option>
-        <option value="asc">Mais antigas primeiro</option>
-      </select>
-      <button class="btn btn-outline btn-sm" onclick="limparFiltrosHistorico()">Limpar</button>
-    </div>
-
-    <div id="listaHistorico">${htmlItems}</div>
-    <div id="paginacaoHistorico">${htmlPag}</div>
+    ${kpis}
+    ${linhaResumo}
+    ${abasHtml}
+    ${corpo}
   `);
+}
+
+function _histHtmlResumo(encs) {
+  const dados = encs.filter(e => e.sit === 'dado');
+  const porCli = {}, porCat = {}, porMes = {};
+  dados.forEach(e => {
+    const c = e.t?.clientes?.nome || 'Sem cliente';
+    porCli[c] = (porCli[c] || 0) + (e.dur || 0);
+    const k = e.t?.catalogo?.nome || 'Treinamento';
+    porCat[k] = (porCat[k] || 0) + 1;
+  });
+  // Colunas por mês; num período de um mês só, por dia.
+  const meses = new Set(encs.map(e => e.s.data.slice(0, 7)));
+  const porDia = meses.size <= 1;
+  dados.forEach(e => {
+    const k = porDia ? e.s.data : e.s.data.slice(0, 7);
+    porMes[k] = (porMes[k] || 0) + (e.dur || 0);
+  });
+  const MES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const colunas = Object.keys(porMes).sort().map(k => ({
+    nome: porDia ? `${k.slice(8, 10)}/${k.slice(5, 7)}` : `${MES[Number(k.slice(5, 7)) - 1]}/${k.slice(2, 4)}`,
+    n: Math.round(porMes[k] * 10) / 10,
+  }));
+  const pizza = _relFatias(Object.entries(porCli).map(([nome, n]) => ({ nome, n: Math.round(n * 10) / 10 })));
+  const trein = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([nome, n]) => ({ nome, n }));
+  return `
+    ${_relDupla(porDia ? 'Horas em sala por dia' : 'Horas em sala por mês', _relBarras(colunas, 'h'),
+                'Horas em sala por cliente', _relPizza(pizza, 'Horas em sala por cliente', 'h'))}
+    <div class="rel2-card">
+      <div class="rel2-card-title">Encontros dados por treinamento</div>
+      ${_relBarrasH(trein, '#F59E0B')}
+    </div>`;
+}
+
+function _histHtmlEncontros(encs, m) {
+  const D = window._histDados || {};
+  const linhas = encs.map(e => {
+    const [rot, cls] = _HIST_SIT[e.sit];
+    const hr = e.s.hora_inicio ? `${String(e.s.hora_inicio).slice(0, 5)}–${e.s.hora_fim ? String(e.s.hora_fim).slice(0, 5) : '?'}` : '—';
+    const acao = e.t?.status === 'concluida' ? 'verHistoricoTurma' : 'verTurma';
+    const risca = e.sit === 'cancelado' ? ' class="hist3-cancel"' : '';
+    return `<tr data-action="${acao}" data-id="${e.s.turma_id}"${risca}>
+      <td><b>${formatarData(e.s.data)}</b></td>
+      <td>${hr}</td>
+      <td class="dir" data-l="Em sala">${e.dur === null ? '—' : _histFmtH(e.dur)}</td>
+      <td class="dir${e.sit !== 'dado' || e.ch === null ? ' hist3-vazio' : ''}" data-l="CH rateada">${e.sit !== 'dado' || e.ch === null ? '—' : _histFmtH(e.ch)}</td>
+      <td class="hist3-nome">${escapeHtml(e.t?.catalogo?.nome || 'Treinamento')}</td>
+      <td>${escapeHtml(e.t?.clientes?.nome || '—')}</td>
+      <td>${escapeHtml(e.s.local || '—')}</td>
+      <td><span class="badge ${cls}">${rot}</span></td>
+    </tr>`;
+  }).join('');
+  return `<div class="turma-tabela-wrap hist3-tab"><table class="turma-tabela">
+    <thead><tr>
+      <th><span class="th">Data</span></th><th><span class="th">Horário</span></th>
+      <th class="dir"><span class="th thend">Em sala</span></th><th class="dir"><span class="th thend">CH rateada</span></th>
+      <th><span class="th">Treinamento</span></th><th><span class="th">Cliente</span></th>
+      <th><span class="th">Local</span></th><th><span class="th">Situação</span></th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr>
+      <td colspan="2"><b>Total dado</b> · ${m.dados} encontro${m.dados !== 1 ? 's' : ''} · ${m.diasTrab} dia${m.diasTrab !== 1 ? 's' : ''}</td>
+      <td class="dir"><b>${_histFmtH(m.horasSala)}</b></td>
+      <td class="dir"><b>${m.chRateada === null ? '—' : _histFmtH(m.chRateada)}</b></td>
+      <td colspan="4">${D.valor ? `Valor estimado: <b>${_histFmtR(m.valorEst)}</b>` : ''}</td>
+    </tr></tfoot>
+  </table></div>`;
+}
+
+function _histHtmlTurmas(encs) {
+  const g = {};
+  encs.forEach(e => {
+    const x = (g[e.s.turma_id] ||= { t: e.t, id: e.s.turma_id, dados: 0, sala: 0, ch: 0, outros: 0, prim: e.s.data, ult: e.s.data });
+    if (e.sit === 'dado') { x.dados++; x.sala += e.dur || 0; x.ch += e.ch || 0; } else x.outros++;
+    if (e.s.data < x.prim) x.prim = e.s.data;
+    if (e.s.data > x.ult) x.ult = e.s.data;
+  });
+  const D = window._histDados || {};
+  const ST = { agendada: ['A realizar', 'badge-blue'], em_andamento: ['Em andamento', 'badge-navy'], concluida: ['Concluída', 'badge-green'], cancelada: ['Cancelada', 'badge-gray'] };
+  const linhas = Object.values(g).sort((a, b) => a.prim.localeCompare(b.prim)).map(x => {
+    const [rot, cls] = ST[x.t?.status] || [x.t?.status || '—', 'badge-gray'];
+    const acao = x.t?.status === 'concluida' ? 'verHistoricoTurma' : 'verTurma';
+    const per = x.prim === x.ult ? formatarData(x.prim) : `${formatarData(x.prim)} a ${formatarData(x.ult)}`;
+    return `<tr data-action="${acao}" data-id="${x.id}">
+      <td><b>${escapeHtml(x.t?.catalogo?.nome || 'Treinamento')}</b></td>
+      <td>${escapeHtml(x.t?.clientes?.nome || '—')}</td>
+      <td>${per}</td>
+      <td class="dir" data-l="Dados">${x.dados}${x.outros ? ` <small style="color:var(--text-3)">+${x.outros}</small>` : ''}</td>
+      <td class="dir" data-l="Em sala">${_histFmtH(x.sala)}</td>
+      <td class="dir" data-l="CH rateada">${D.rateio ? _histFmtH(x.ch) : '—'}</td>
+      <td><span class="badge ${cls}">${rot}</span></td>
+    </tr>`;
+  }).join('');
+  return `<div class="turma-tabela-wrap hist3-tab"><table class="turma-tabela">
+    <thead><tr>
+      <th><span class="th">Treinamento</span></th><th><span class="th">Cliente</span></th><th><span class="th">Seus encontros</span></th>
+      <th class="dir"><span class="th thend">Dados</span></th><th class="dir"><span class="th thend">Em sala</span></th>
+      <th class="dir"><span class="th thend">CH rateada</span></th><th><span class="th">Turma</span></th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+  </table></div>
+  <div class="hist3-linha">"+N" são encontros seus no período que ainda não contam: a realizar, sem registro ou cancelados.</div>`;
+}
+
+function _histSetPreset(v) {
+  window._histPer = { ...(window._histPer || {}), preset: v };
+  _histRender();
+}
+function _histSetData(qual, v) {
+  window._histPer = { ...(window._histPer || {}), preset: 'personalizado', [qual]: v };
+  _histRender();
+}
+function _histSetAba(a) {
+  window._histAba = a;
+  _histRender();
+}
+
+function _histNomeArquivo(ext) {
+  const { de, ate } = _histIntervalo();
+  const nome = (usuarioAtual?.nome || 'instrutor').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-').toLowerCase();
+  const faixa = de || ate ? `${de || 'inicio'}_a_${ate || 'hoje'}` : 'todo-periodo';
+  return `historico-${nome}-${faixa}.${ext}`;
+}
+
+function exportarHistoricoCSV() {
+  const encs = _histEncontros();
+  if (!encs.length) { showToast('Nenhum encontro neste período', 'info'); return; }
+  const D = window._histDados || {};
+  const m = _histMetricas(encs);
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const n = v => v === null || v === undefined ? '' : String(Math.round(v * 100) / 100).replace('.', ',');
+  const SIT = { dado: 'Dado', a_realizar: 'A realizar', sem_registro: 'Sem registro', cancelado: 'Cancelado' };
+  const head = ['Data', 'Início', 'Fim', 'Horas em sala', 'CH rateada', 'Treinamento', 'Cliente', 'Local', 'Situação'];
+  const rows = encs.map(e => [
+    formatarData(e.s.data), String(e.s.hora_inicio || '').slice(0, 5), String(e.s.hora_fim || '').slice(0, 5),
+    n(e.dur), e.sit === 'dado' ? n(e.ch) : '', e.t?.catalogo?.nome || '', e.t?.clientes?.nome || '', e.s.local || '', SIT[e.sit],
+  ]);
+  const { label } = _histIntervalo();
+  const tot = [
+    [], ['Instrutor', usuarioAtual?.nome || ''], ['Período', label],
+    ['Dias trabalhados', m.diasTrab], ['Encontros dados', m.dados],
+    ['Horas em sala', n(m.horasSala)], ['CH rateada', m.chRateada === null ? 'indisponível' : n(m.chRateada)],
+  ];
+  if (D.valor) tot.push([D.valor.forma === 'diaria' ? 'Valor da diária' : 'Valor da hora', n(D.valor.valor)], ['Valor estimado', n(m.valorEst)]);
+  // Ponto e vírgula: é o separador que o Excel em português abre direto.
+  const csv = [head, ...rows, ...tot].map(r => r.map(q).join(';')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = _histNomeArquivo('csv');
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  showToast('Planilha gerada', 'success');
+}
+
+async function exportarHistoricoPDF() {
+  const encs = _histEncontros();
+  if (!encs.length) { showToast('Nenhum encontro neste período', 'info'); return; }
+  try { await _garantirJsPDF(); } catch (e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.', 'error'); return; }
+  const D = window._histDados || {};
+  const m = _histMetricas(encs);
+  const { label } = _histIntervalo();
+  const { jsPDF } = window.jspdf;
+  const W = 297, H = 210;
+  const NAVY = [30, 42, 74], AMBER = [245, 158, 11], WHITE = [255, 255, 255], GREEN = [5, 150, 105];
+  const T2 = [71, 85, 105], T3 = [148, 163, 184], BORD = [220, 228, 240], GRAY = [244, 246, 250], RED = [180, 49, 46];
+  const s = (v, max) => pdfSafe(v, max);
+  const fh = h => _histFmtH(h);
+  const SIT = { dado: ['Dado', GREEN], a_realizar: ['A realizar', NAVY], sem_registro: ['Sem registro', RED], cancelado: ['Cancelado', T3] };
+
+  const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  doc.setFillColor(...NAVY); doc.rect(0, 0, W, 40, 'F');
+  doc.setFillColor(...AMBER); doc.rect(0, 40, W, 2.5, 'F');
+  desenharLogoOrg(doc, usuarioAtual.orgNome || 'Toledo Labs', 14, 10, 48, 15, undefined, imgLogoOrg);
+  doc.setFontSize(13); doc.setTextColor(...WHITE); doc.setFont('helvetica', 'bold');
+  doc.text('HISTORICO DO INSTRUTOR', W - 14, 18, { align: 'right' });
+  doc.setFontSize(11); doc.setTextColor(...AMBER);
+  doc.text(s(usuarioAtual.nome), W - 14, 26, { align: 'right' });
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...T3);
+  doc.text(`${s(label)}  |  Gerado em ${new Date().toLocaleDateString('pt-BR')}`, W - 14, 34, { align: 'right' });
+
+  const kpis = [
+    { l: 'Dias trabalhados', v: m.diasTrab, c: NAVY },
+    { l: 'Encontros dados', v: m.dados, c: NAVY },
+    { l: 'Horas em sala', v: fh(m.horasSala), c: GREEN },
+    { l: 'CH rateada', v: m.chRateada === null ? '-' : fh(m.chRateada), c: GREEN },
+    D.valor ? { l: 'Valor estimado', v: s(_histFmtR(m.valorEst)), c: AMBER } : { l: 'Alunos atendidos', v: m.alunos, c: AMBER },
+  ];
+  const kw = (W - 28 - (kpis.length - 1) * 4) / kpis.length, kh = 22, ky0 = 50;
+  kpis.forEach((k, i) => {
+    const kx = 14 + i * (kw + 4);
+    doc.setFillColor(...GRAY); doc.rect(kx, ky0, kw, kh, 'F');
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.rect(kx, ky0, kw, kh, 'S');
+    doc.setDrawColor(...k.c); doc.setLineWidth(1.8); doc.line(kx, ky0, kx, ky0 + kh);
+    doc.setFontSize(14); doc.setTextColor(...k.c); doc.setFont('helvetica', 'bold');
+    doc.text(String(k.v), kx + kw / 2, ky0 + 12, { align: 'center' });
+    doc.setFontSize(7); doc.setTextColor(...T3); doc.setFont('helvetica', 'normal');
+    doc.text(s(k.l), kx + kw / 2, ky0 + 18, { align: 'center' });
+  });
+  let nota = `${m.turmas} turma(s)  |  ${m.clientes} cliente(s)  |  ${m.alunos} aluno(s) atendido(s)`;
+  if (D.valor) nota += D.valor.forma === 'diaria' ? `  |  Diaria: ${s(_histFmtR(D.valor.valor))}` : `  |  Valor da hora: ${s(_histFmtR(D.valor.valor))} x horas em sala`;
+  doc.setFontSize(7.5); doc.setTextColor(...T2); doc.text(s(nota), 14, 80);
+
+  const colX = [14, 36, 60, 80, 102, 170, 232, 262];
+  const heads = ['Data', 'Horario', 'Em sala', 'CH rateada', 'Treinamento', 'Cliente', 'Local', 'Situacao'];
+  const cab = y => {
+    doc.setFontSize(7); doc.setTextColor(...T2); doc.setFont('helvetica', 'bold');
+    heads.forEach((h, i) => doc.text(h, colX[i], y));
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.2); doc.line(14, y + 2, W - 14, y + 2);
+  };
+  cab(88);
+  let ty = 94;
+  encs.forEach(e => {
+    if (ty > H - 16) {
+      doc.addPage();
+      doc.setFillColor(...NAVY); doc.rect(0, 0, W, 14, 'F');
+      doc.setFontSize(9); doc.setTextColor(...WHITE); doc.setFont('helvetica', 'bold');
+      doc.text(`HISTORICO DO INSTRUTOR - ${s(usuarioAtual.nome)} (continuacao)`, 14, 9);
+      cab(22); ty = 28;
+    }
+    const [rot, cor] = SIT[e.sit];
+    const hr = e.s.hora_inicio ? `${String(e.s.hora_inicio).slice(0, 5)}-${e.s.hora_fim ? String(e.s.hora_fim).slice(0, 5) : '?'}` : '-';
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...NAVY);
+    doc.text(formatarData(e.s.data), colX[0], ty);
+    doc.text(hr, colX[1], ty);
+    doc.text(e.dur === null ? '-' : fh(e.dur), colX[2], ty);
+    doc.text(e.sit !== 'dado' || e.ch === null ? '-' : fh(e.ch), colX[3], ty);
+    doc.text(s(e.t?.catalogo?.nome || '-', 42), colX[4], ty);
+    doc.text(s(e.t?.clientes?.nome || '-', 38), colX[5], ty);
+    doc.text(s(e.s.local || '-', 18), colX[6], ty);
+    doc.setTextColor(...cor); doc.setFont('helvetica', 'bold'); doc.text(rot, colX[7], ty);
+    ty += 6.5;
+    doc.setDrawColor(...BORD); doc.setLineWidth(0.1); doc.line(14, ty - 4.2, W - 14, ty - 4.2);
+  });
+  if (ty > H - 22) { doc.addPage(); ty = 24; }
+  doc.setFontSize(8); doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold');
+  doc.text(`Total dado: ${m.dados} encontro(s), ${m.diasTrab} dia(s), ${fh(m.horasSala)} em sala${m.chRateada === null ? '' : `, ${fh(m.chRateada)} de CH rateada`}${D.valor ? `  |  Valor estimado: ${s(_histFmtR(m.valorEst))}` : ''}`, 14, ty + 2);
+
+  const tp = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= tp; p++) {
+    doc.setPage(p);
+    doc.setFillColor(...NAVY); doc.rect(0, H - 9, W, 9, 'F');
+    doc.setFontSize(6.5); doc.setTextColor(...AMBER); doc.setFont('helvetica', 'bold');
+    doc.text(`${s(usuarioAtual?.orgNome || '')}  |  toledolabs.com.br`, W / 2, H - 3.5, { align: 'center' });
+    doc.setTextColor(...T3); doc.setFont('helvetica', 'normal');
+    doc.text(`${p} / ${tp}`, W - 14, H - 3.5, { align: 'right' });
+  }
+  doc.save(_histNomeArquivo('pdf'));
+  showToast('PDF gerado', 'success');
 }
 
 // Item da lista de histórico — extraído em função própria para ser reutilizado
@@ -28912,7 +29342,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '178';
+  var APP_BUILD = '179';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
