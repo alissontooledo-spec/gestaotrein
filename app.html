@@ -2042,6 +2042,51 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .gi-focus .gi-go::after{content:'';position:absolute;inset:0;border-radius:7px}
 .gi-focus:hover{background:#1D2D4E}
 </style>
+<style id="v176">
+/* 22/09 — Relatórios: barras horizontais (mesma paleta e tipografia do sistema) */
+.rel-hb{display:flex;flex-direction:column;gap:12px;padding:6px 0 4px}
+.rel-hb-row{display:grid;grid-template-columns:minmax(0,190px) 1fr 34px;align-items:center;gap:12px}
+.rel-hb-nm{font-size:13px;font-weight:600;color:var(--navy);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rel-hb-nm small{display:block;font-size:11.5px;font-weight:400;color:var(--text-3);margin-top:1px}
+.rel-hb-tr{height:12px;background:var(--gray-100);border-radius:4px;overflow:hidden}
+.rel-hb-tr i{display:block;height:100%;background:var(--navy);border-radius:4px}
+.rel-hb-v{font-size:13px;color:var(--navy);text-align:right;font-variant-numeric:tabular-nums}
+.rel2-card .gi-pizza{padding:6px 0 4px}
+@media (max-width:768px){.rel-hb-row{grid-template-columns:minmax(0,120px) 1fr 30px}}
+</style>
+<style id="v177">
+/* 22/09 — Relatórios: abas (mesmo seletor de Turmas) */
+.rel-abas-wrap{overflow-x:auto;margin:2px 0 14px;-webkit-overflow-scrolling:touch}
+.rel-abas{margin-left:0!important;display:inline-flex!important}
+.rel-abas button{height:34px!important;padding:0 14px!important;font-size:13px!important;white-space:nowrap}
+.rel-abas button.on{background:var(--surface);color:var(--navy);box-shadow:var(--shadow)}
+.rel-abas button .n{margin-left:6px;font-size:11.5px;font-weight:700;color:var(--text-3);font-variant-numeric:tabular-nums}
+.rel-abas button.on .n{color:var(--navy)}
+.rel-abas button .n.alerta{color:#fff;background:var(--red);border-radius:9px;padding:1px 7px}
+/* 22/09 — barras verticais */
+.rel-vb{display:flex;align-items:flex-end;gap:14px;height:210px;padding:8px 4px 0}
+.rel-vb-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;height:100%}
+.rel-vb-area{flex:1;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;border-bottom:1px solid var(--border)}
+.rel-vb-area b{font-size:13px;color:var(--navy);margin-bottom:4px;font-variant-numeric:tabular-nums}
+.rel-vb-area i{display:block;width:min(46px,70%);background:var(--navy);border-radius:4px 4px 0 0}
+.rel-vb-nm{font-size:11.5px;color:var(--text-2);text-align:center;margin-top:7px;line-height:1.3;height:30px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+@media (max-width:768px){.rel-vb{gap:8px;height:190px}.rel-vb-nm{font-size:10.5px}}
+</style>
+<style id="v178">
+/* 22/09 — colunas agrupadas (Evolução mensal, Performance dos instrutores) */
+.rel-gleg{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-2);margin:2px 0 10px}
+.rel-gleg span{display:inline-flex;align-items:center;gap:6px}
+.rel-gleg i{width:10px;height:10px;border-radius:3px}
+.rel-gc-wrap{overflow-x:auto}
+.rel-gc{display:flex;align-items:stretch;gap:10px;height:220px}
+.rel-gc-col{flex:1;min-width:0;display:flex;flex-direction:column}
+.rel-gc-area{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:3px;border-bottom:1px solid var(--border)}
+.rel-gc-bar{flex:1;max-width:26px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+.rel-gc-bar span{font-size:10.5px;font-weight:700;color:var(--text-2);margin-bottom:3px;font-variant-numeric:tabular-nums;min-height:13px}
+.rel-gc-bar i{display:block;width:100%;border-radius:3px 3px 0 0}
+.rel-gc-nm{font-size:11.5px;color:var(--text-2);text-align:center;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rel2-chart .rel-gleg{margin-top:0}
+</style>
 </head>
 <body>
 
@@ -20817,7 +20862,8 @@ async function renderRelatorios() {
     })(),
   };
   window._relConfData = confData;
-  window._relPeriodo = 6; // padrão: 6 meses
+  window._relPeriodo = 1200; // 22/09: a tela mostra todo o histórico
+  window._relPeriodoCustom = null; window._relComparativo = false;
   window._relComparativo = false; // comparativo desligado por padrão
 
   _renderRelatorioView();
@@ -20971,10 +21017,88 @@ function _relFiltrarPorPeriodo(turmas, sessoes, meses) {
   return { tFilt, sFilt };
 }
 
+// ── Gráficos dos Relatórios (22/09) — mesmo desenho da pizza do Início ──
+// Cor segue o NOME (ordem alfabética), nunca a posição no ranking; paleta
+// validada para daltonismo. Mais de 6 fatias: as 5 maiores + "Outros".
+const _REL_CORES = ['#2a78d6','#1baf7a','#eda100','#e87ba4','#4a3aa7','#008300'];
+function _relFatias(itens) {
+  let f = itens.filter(x => x.n > 0);
+  if (f.length > 6) {
+    const top = [...f].sort((a, b) => b.n - a.n).slice(0, 5);
+    const resto = f.filter(x => !top.includes(x)).reduce((s, x) => s + x.n, 0);
+    f = [...top.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), { nome: 'Outros', n: resto, outros: true }];
+  } else f = [...f].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  f.forEach((x, i) => { x.cor = x.outros ? '#9AA3B2' : _REL_CORES[i % _REL_CORES.length]; });
+  return f;
+}
+function _relPizza(fatias, rotulo, unidade) {
+  const u = unidade || '';
+  const fat = fatias.filter(x => x.n > 0);
+  const tot = fat.reduce((s, x) => s + x.n, 0);
+  if (!tot) return `<div class="gi-vazio">Nenhum dado no período.</div>`;
+  let ang = -Math.PI / 2;
+  const svg = fat.map(x => {
+    x.pct = Math.round(x.n / tot * 100);
+    const tit = `${escapeHtml(x.nome)}: ${x.n}${u} (${x.pct}%)`;
+    if (fat.length === 1) return `<circle cx="60" cy="60" r="56" fill="${x.cor}"><title>${tit}</title></circle>`;
+    const a0 = ang, a1 = ang + x.n / tot * 2 * Math.PI; ang = a1;
+    const pt = a => [(60 + 56 * Math.cos(a)).toFixed(2), (60 + 56 * Math.sin(a)).toFixed(2)];
+    const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+    return `<path d="M60 60 L${x0} ${y0} A56 56 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1} ${y1} Z" fill="${x.cor}" stroke="#fff" stroke-width="2" stroke-linejoin="round"><title>${tit}</title></path>`;
+  }).join('');
+  return `<div class="gi-pizza">
+    <svg viewBox="0 0 120 120" width="150" height="150" role="img" aria-label="${escapeHtml(rotulo)}: ${fat.map(x => escapeHtml(x.nome) + ' ' + x.n + u).join(', ')}">${svg}</svg>
+    <div class="gi-leg">${fat.map(x => `<div class="gi-leg-i"><i style="background:${x.cor}"></i><span class="nm">${escapeHtml(x.nome)}</span><b>${x.n}${u}</b><span class="pc">${x.pct}%</span></div>`).join('')}
+      <div class="gi-leg-t">${tot}${u} no período</div></div>
+  </div>`;
+}
+function _relBarras(itens, unidade) {
+  // 22/09: colunas (barras verticais), valor em cima e nome embaixo.
+  const u = unidade || '';
+  if (!itens.length) return `<div class="gi-vazio">Nenhum dado no período.</div>`;
+  const max = Math.max(...itens.map(x => x.n), 1);
+  return `<div class="rel-vb">${itens.map(x => `
+    <div class="rel-vb-col" title="${escapeHtml(x.nome)}: ${x.n}${u}${x.sub ? ' · ' + escapeHtml(x.sub) : ''}">
+      <div class="rel-vb-area"><b>${x.n}${u}</b><i style="height:${Math.max(3, Math.round(x.n / max * 100))}%"></i></div>
+      <span class="rel-vb-nm">${escapeHtml(x.nome)}</span>
+    </div>`).join('')}</div>`;
+}
+
+const _relDupla = (t1, h1, t2, h2) => `<div class="rel2-rankings">
+  <div class="rel2-card" style="margin-bottom:0"><div class="rel2-card-title">${t1}</div>${h1}</div>
+  <div class="rel2-card" style="margin-bottom:0"><div class="rel2-card-title">${t2}</div>${h2}</div>
+</div>`;
+
+// Colunas agrupadas (22/09): várias séries lado a lado em cada categoria,
+// com legenda. Um eixo só (todas as séries são quantidades).
+function _relGrupo(cats, series) {
+  const max = Math.max(1, ...series.flatMap(s => s.vals));
+  const tem = series.some(s => s.vals.some(v => v > 0));
+  if (!tem) return `<div class="gi-vazio">Nenhum dado no período.</div>`;
+  return `<div class="rel-gleg">${series.map(s => `<span><i style="background:${s.cor}"></i>${escapeHtml(s.nome)}</span>`).join('')}</div>
+    <div class="rel-gc-wrap"><div class="rel-gc" style="min-width:${cats.length * series.length * 22}px">${cats.map((c, i) => `
+      <div class="rel-gc-col">
+        <div class="rel-gc-area">${series.map(s => `<div class="rel-gc-bar" title="${escapeHtml(c)} · ${escapeHtml(s.nome)}: ${s.vals[i]}"><span>${s.vals[i] || ''}</span><i style="height:${s.vals[i] ? Math.max(3, Math.round(s.vals[i] / max * 100)) : 0}%;background:${s.cor}"></i></div>`).join('')}</div>
+        <span class="rel-gc-nm">${escapeHtml(c)}</span>
+      </div>`).join('')}</div></div>`;
+}
+// Barras deitadas (22/09): para listas de nomes longos, como treinamentos.
+function _relBarrasH(itens, cor, unidade) {
+  const u = unidade || '';
+  if (!itens.length) return `<div class="gi-vazio">Nenhum dado no período.</div>`;
+  const max = Math.max(...itens.map(x => x.n), 1);
+  return `<div class="rel-hb">${itens.map(x => `
+    <div class="rel-hb-row" title="${escapeHtml(x.nome)}: ${x.n}${u}">
+      <span class="rel-hb-nm">${escapeHtml(x.nome)}${x.sub ? `<small>${escapeHtml(x.sub)}</small>` : ''}</span>
+      <span class="rel-hb-tr"><i style="width:${Math.max(2, Math.round(x.n / max * 100))}%;background:${cor}"></i></span>
+      <b class="rel-hb-v">${x.n}${u}</b>
+    </div>`).join('')}</div>`;
+}
 function _renderRelatorioView() {
   setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
   const { turmas: tAll, clientes: cliAll, sessoes: sesAll, usuarios: usrAll, participantes: partAll, certPorTurma } = window._relRaw;
-  const meses = window._relPeriodo || 6;
+  const meses = window._relPeriodo || 1200;
+  const mesesGraf = 12; // evolução mensal: últimos 12 meses
 
   const { tFilt, sFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
 
@@ -21016,7 +21140,7 @@ function _renderRelatorioView() {
   // ── Gráfico: evolução nos últimos N meses ──
   const hoje = new Date();
   const mesesLabel = [];
-  for (let i = meses - 1; i >= 0; i--) {
+  for (let i = mesesGraf - 1; i >= 0; i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     mesesLabel.push({
       label: d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
@@ -21124,12 +21248,33 @@ function _renderRelatorioView() {
     </button>`;
   }).join('');
 
+  const pizzaStatus = _relPizza([
+    { nome: 'Concluídas',   n: tConcluidas, cor: '#168A59' },
+    { nome: 'Em andamento', n: tAtivas,     cor: '#F59E0B' },
+    { nome: 'A realizar',   n: tAgendadas,  cor: '#2A78D6' },
+    { nome: 'Canceladas',   n: tCanceladas, cor: '#9AA3B2' },
+  ], 'Turmas por status');
+  const pizzaInst = _relPizza(_relFatias(rankInst.filter(r => r.sessoes > 0).map(r => ({ nome: r.nome, n: r.sessoes }))), 'Aulas concluídas por instrutor');
+  const barrasCli = _relBarras(rankCli.map(r => ({ nome: r.nome, n: r.turmas, sub: `${r.pessoas} pessoa${r.pessoas !== 1 ? 's' : ''} · ${r.horas}h` })));
+  const graficoEvol = _relGrupo(mesesLabel.map(m => m.label), [
+    { nome: 'Turmas criadas',    cor: '#172541', vals: dadosTurmas },
+    { nome: 'Aulas concluídas',  cor: '#F59E0B', vals: dadosSessoes },
+    { nome: 'Pessoas treinadas', cor: '#168A59', vals: dadosPart },
+  ]);
+  const instPerf = rankInst.filter(r => r.sessoes > 0 || r.turmas > 0);
+  const graficoPerf = _relGrupo(instPerf.map(r => r.nome.split(' ')[0]), [
+    { nome: 'Aulas concluídas', cor: '#172541', vals: instPerf.map(r => r.sessoes) },
+    { nome: 'Turmas',           cor: '#F59E0B', vals: instPerf.map(r => r.turmas) },
+  ]);
+  const barrasCatH = _relBarrasH(rankCat.map(r => ({ nome: r.nome, n: r.n, sub: `${r.horas}h totais` })), '#F59E0B');
+  const barrasCat = _relBarras(rankCat.map(r => ({ nome: r.nome, n: r.n, sub: `${r.horas}h totais` })));
+
   setConteudo(`
     <div class="rel2-header">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:0">
           <div class="rel2-title">Relatórios</div>
-          <div class="rel2-sub" id="relSubtitle">Últimos ${meses} meses · Atualizado agora</div>
+          <div class="rel2-sub" id="relSubtitle">Todo o histórico · Atualizado agora</div>
         </div>
         <div class="rel2-export" style="flex-shrink:0">
           <button class="rel2-export-btn" onclick="exportarRelatorioCSV()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> CSV</button>
@@ -21139,12 +21284,7 @@ function _renderRelatorioView() {
           }
         </div>
       </div>
-      <div class="rel2-period">
-        <button class="rel2-chip${meses===1?' active':''}" onclick="relSetPeriodo(1,this)">Este mês</button>
-        <button class="rel2-chip${meses===3?' active':''}" onclick="relSetPeriodo(3,this)">3 meses</button>
-        <button class="rel2-chip${meses===6?' active':''}" onclick="relSetPeriodo(6,this)">6 meses</button>
-        <button class="rel2-chip${meses===12?' active':''}" onclick="relSetPeriodo(12,this)">Este ano</button>
-      </div>
+
     </div>
 
     <div class="rel4-filtros">
@@ -21156,10 +21296,7 @@ function _renderRelatorioView() {
         <option value="">Todos os clientes</option>
         ${(() => { const atual = _getElVisible('relFiltroCliente')?.value || ''; return [...new Set((window._relRaw?.turmas||[]).map(t=>t.clientes?.nome).filter(Boolean))].sort().map(n=>`<option value="${n}"${n===atual?' selected':''}>${n}</option>`).join(''); })()}
       </select>
-      <div class="rel4-comp" onclick="relToggleComparativo()">
-        <span class="lbl">Comparar com período anterior</span>
-        <div class="sw" style="background:${window._relComparativo?'var(--green)':'var(--gray-300)'}"><i style="${window._relComparativo?'right:2px':'left:2px'}"></i></div>
-      </div>
+
     </div>
 
     ${_relFaixaDestinosHtml('geral')}
@@ -21191,44 +21328,30 @@ function _renderRelatorioView() {
       </div>`;
     })()}
 
-    <div class="gh-sec"><div class="dot"></div><span>Evolução mensal</span><div class="line"></div></div>
+    <div class="gh-sec"><div class="dot"></div><span>Evolução mensal · últimos 12 meses</span><div class="line"></div></div>
     <div class="rel2-chart">
-      <div class="rel2-chart-header">
-        <div id="relLegLabel" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3)">
-          <span style="width:10px;height:10px;border-radius:2px;background:#172541;display:inline-block"></span>Turmas criadas
-        </div>
-        <div class="rel2-toggle">
-          <button class="rel2-tbtn active" id="rt-turmas" onclick="relToggle(this,'turmas','Turmas criadas','#172541')">Turmas</button>
-          <button class="rel2-tbtn" id="rt-sessoes" onclick="relToggle(this,'sessoes','Aulas concluídas','#F59E0B')">Aulas</button>
-          <button class="rel2-tbtn" id="rt-participantes" onclick="relToggle(this,'participantes','Pessoas treinadas','#168A59')">Pessoas</button>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <svg id="relSvg" viewBox="0 ${meses <= 6 ? '-8 240 103' : '-8 320 103'}" width="100%" style="min-width:200px;max-width:640px;max-height:136px;display:block">
-          ${_buildRelBars(dadosTurmas, '#172541', mesesLabel)}
-        </svg>
-      </div>
+      ${graficoEvol}
     </div>
 
-    <div class="gh-sec"><div class="dot navy"></div><span>Rankings do período</span><div class="line"></div></div>
+    <div class="gh-sec"><div class="dot navy"></div><span>Distribuição do período</span><div class="line"></div></div>
+    <div class="rel2-rankings">
+      <div class="rel2-card" style="margin-bottom:0">
+        <div class="rel2-card-title">Turmas por status</div>
+        ${pizzaStatus}
+      </div>
+      <div class="rel2-card" style="margin-bottom:0">
+        <div class="rel2-card-title">Performance dos instrutores</div>
+        ${graficoPerf}
+      </div>
+    </div>
     <div class="rel2-rankings">
       <div class="rel2-card" style="margin-bottom:0">
         <div class="rel2-card-title">Top clientes por turmas</div>
-        ${rankCliHtml}
+        ${barrasCli}
       </div>
       <div class="rel2-card" style="margin-bottom:0">
         <div class="rel2-card-title">Top treinamentos</div>
-        ${rankCatHtml}
-      </div>
-    </div>
-    <div class="rel2-rankings">
-      <div class="rel2-card" style="margin-bottom:0">
-        <div class="rel2-card-title">Performance instrutores — aulas concluídas</div>
-        ${instHtml}
-      </div>
-      <div class="rel2-card" style="margin-bottom:0">
-        <div class="rel2-card-title">Relatório por cliente — clique para detalhes</div>
-        ${cliListHtml || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
+        ${barrasCatH}
       </div>
     </div>
 
@@ -21473,7 +21596,7 @@ function relIrParaDestino(destino) {
 function _relFaixaDestinosHtml(ativo) {
   const raw = window._relRaw || {};
   const meses = window._relPeriodo || 6;
-  const { tFilt } = _relFiltrarPorPeriodo(raw.turmas || [], raw.sessoes || [], meses);
+  const { tFilt } = _relFiltrarPorPeriodo(raw.turmas || [], raw.sessoes || [], window._relPeriodo || 1200);
   const nInstrutores  = new Set((raw.usuarios || []).filter(u => u.perfil === 'instrutor').map(u => u.id)).size;
   const nClientes     = new Set(tFilt.map(t => t.cliente_id).filter(Boolean)).size;
   const nTreinamentos = new Set(tFilt.map(t => t.catalogo_id).filter(Boolean)).size;
@@ -21487,12 +21610,11 @@ function _relFaixaDestinosHtml(ativo) {
     { id: 'auditoria',    n: nCanceladas,   l: 'Auditoria' },
     { id: 'documentos',   n: nDocs,         l: 'Documentos', alerta: nDocs > 0 },
   ];
-  return `<div class="rel3-faixa">${itens.map(it => `
-    <div class="rel3-dcard${it.id === ativo ? ' active' : ''}${it.alerta ? ' alert' : ''}" onclick="relIrParaDestino('${it.id}')">
-      <div class="rel3-dn">${it.n}</div>
-      <div class="rel3-dl">${escapeHtml(it.l)}</div>
-    </div>`).join('')}</div>`;
+  // 22/09: abas — o mesmo seletor da tela Turmas (Lista / Kanban).
+  return `<div class="rel-abas-wrap"><div class="turmas-viewtoggle rel-abas" role="tablist">${itens.map(it => `
+    <button type="button" role="tab" aria-selected="${it.id === ativo}" class="${it.id === ativo ? 'on' : ''}" onclick="relIrParaDestino('${it.id}')">${escapeHtml(it.l)}${it.id === 'geral' ? '' : `<span class="n${it.alerta ? ' alerta' : ''}">${it.n}</span>`}</button>`).join('')}</div></div>`;
 }
+
 
 // ── "Recentes" — guardado no navegador por usuário, sem tabela nova ──
 // Correção de segurança (2026-08-16): a chave incluía só o usuário, não a
@@ -21543,20 +21665,13 @@ function _relHeaderNovo(subtitulo, semPersonalizado) {
   const custom = window._relPeriodoCustom;
   const label = custom
     ? `${formatarData(custom.inicio)} – ${formatarData(custom.fim)}`
-    : (meses === 1 ? 'Este mês' : `Últimos ${meses} meses`);
+    : 'Todo o histórico';
   return `<div class="rel2-header">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
       <div style="flex:1;min-width:0">
         <div class="rel2-title">Relatórios</div>
         <div class="rel2-sub">${escapeHtml(subtitulo)} · ${escapeHtml(label)}</div>
       </div>
-    </div>
-    <div class="rel2-period">
-      <button class="rel2-chip${!custom && meses === 1 ? ' active' : ''}" onclick="relSetPeriodo2(1)">Este mês</button>
-      <button class="rel2-chip${!custom && meses === 3 ? ' active' : ''}" onclick="relSetPeriodo2(3)">3 meses</button>
-      <button class="rel2-chip${!custom && meses === 6 ? ' active' : ''}" onclick="relSetPeriodo2(6)">6 meses</button>
-      <button class="rel2-chip${!custom && meses === 12 ? ' active' : ''}" onclick="relSetPeriodo2(12)">Este ano</button>
-      ${semPersonalizado ? '' : `<button class="rel2-chip${custom ? ' active' : ''}" onclick="_relAbrirPeriodoPersonalizado()">Personalizado</button>`}
     </div>
   </div>`;
 }
@@ -21619,6 +21734,8 @@ function _renderRelatorioInstrutoresLista() {
     ${_relHeaderNovo('Instrutores')}
     ${_relFaixaDestinosHtml('instrutores')}
     ${_relRecentesHtml()}
+    ${_relDupla('Horas ministradas por instrutor', _relPizza(_relFatias(porInstrutor.map(i => ({ nome: i.nome, n: i.horas }))), 'Horas ministradas por instrutor', 'h'),
+                'Dias ministrados por instrutor', _relBarras(porInstrutor.filter(i => i.dias > 0).slice(0, 8).map(i => ({ nome: i.nome, n: i.dias, sub: `${i.turmas} turma${i.turmas !== 1 ? 's' : ''} · ${i.clientes} cliente${i.clientes !== 1 ? 's' : ''}` }))))}
     <div class="rel2-card">
       <div class="rel2-card-title">Instrutores no período — clique para o relatório completo</div>
       ${lista || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum instrutor com atividade no período</div>'}
@@ -21953,6 +22070,8 @@ function _renderRelatorioTreinamentosLista() {
     ${_relHeaderNovo('Treinamentos')}
     ${_relFaixaDestinosHtml('treinamentos')}
     ${_relRecentesHtml()}
+    ${_relDupla('Turmas por treinamento', _relPizza(_relFatias(Object.values(catMap).map(v => ({ nome: v.nome, n: v.n }))), 'Turmas por treinamento'),
+                'Horas por treinamento', _relBarras(Object.values(catMap).filter(v => v.horas > 0).sort((a, b) => b.horas - a.horas).slice(0, 8).map(v => ({ nome: v.nome, n: v.horas, sub: `${v.n} turma${v.n !== 1 ? 's' : ''}` })), 'h'))}
     <div class="rel2-card">
       <div class="rel2-card-title">Treinamentos no período — clique para detalhes</div>
       ${lista || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum treinamento no período</div>'}
@@ -22037,6 +22156,8 @@ function _renderRelatorioClientesLista() {
     ${_relHeaderNovo('Clientes', true)}
     ${_relFaixaDestinosHtml('clientes')}
     ${_relRecentesHtml()}
+    ${_relDupla('Turmas por cliente', _relPizza(_relFatias(Object.values(cliMap).map(v => ({ nome: v.nome, n: v.turmas }))), 'Turmas por cliente'),
+                'Horas de treinamento por cliente', _relBarras(Object.values(cliMap).filter(v => v.horas > 0).sort((a, b) => b.horas - a.horas).slice(0, 8).map(v => ({ nome: v.nome, n: v.horas, sub: `${v.turmas} turma${v.turmas !== 1 ? 's' : ''}` })), 'h'))}
     <div class="rel2-card">
       <div class="rel2-card-title">Clientes no período — clique para detalhes</div>
       ${lista || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum cliente com turmas no período</div>'}
@@ -22103,6 +22224,17 @@ async function _renderRelatorioAuditoria() {
       <div class="rel2-kpi" style="border-left:3px solid var(--red)"><div class="rel2-kpi-val">${canceladasLista.length}</div><div class="rel2-kpi-lbl">Cancelamentos</div></div>
       <div class="rel2-kpi" style="border-left:3px solid var(--navy)"><div class="rel2-kpi-val">${tFilt.length}</div><div class="rel2-kpi-lbl">Total no período</div></div>
     </div>
+    ${(() => {
+      const porCli = {};
+      canceladasLista.forEach(t => { const k = t.clientes?.nome || '—'; porCli[k] = (porCli[k] || 0) + 1; });
+      return _relDupla('Turmas do período por situação', _relPizza([
+          { nome: 'Concluídas',   n: tFilt.filter(t => t.status === 'concluida').length,    cor: '#168A59' },
+          { nome: 'Em andamento', n: tFilt.filter(t => t.status === 'em_andamento').length, cor: '#F59E0B' },
+          { nome: 'A realizar',   n: tFilt.filter(t => t.status === 'agendada').length,     cor: '#2A78D6' },
+          { nome: 'Canceladas',   n: canceladasLista.length,                                 cor: '#9AA3B2' },
+        ], 'Turmas do período por situação'),
+        'Cancelamentos por cliente', _relBarras(Object.entries(porCli).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([nome, n]) => ({ nome, n }))));
+    })()}
     ${painelLogHtml}
     <div class="rel2-card">
       <div class="rel2-card-title">Treinamentos cancelados no período</div>
@@ -22153,7 +22285,7 @@ async function exportarRelatorioExecutivoPDF() {
   const { turmas: tAll, participantes: partAll, sessoes: sesAll, usuarios: usrAll, clientes: cliAll, pendencias: pendAll, certPorTurma } = raw;
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
 
-  const meses     = window._relPeriodo || 6;
+  const meses     = 6; // PDF: período fixo de 6 meses (a tela mostra tudo)
   const { tFilt, sFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
   const { jsPDF } = window.jspdf;
 
@@ -28632,7 +28764,7 @@ function _buildKpiGrid({tAtivas,tConcluidas,tConcluidasAnt,partUnicos,partUnicos
       <div class="rel2-kpi-val">${val}</div>
       <div class="rel2-kpi-lbl">${lbl}</div>
       ${comp && spark ? _sparkline(spark, color) : ''}
-      ${comp && delta ? delta : `<div class="rel2-kpi-delta">${meses===1?'Este mês':`Últimos ${meses}m`}</div>`}
+      ${comp && delta ? delta : `<div class="rel2-kpi-delta">${meses>=1200?'Todo o período':meses===1?'Este mês':`Últimos ${meses}m`}</div>`}
     </div>`;
   return `<div class="rel2-kpis">
     ${_kpi('<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 4 2 9l10 5 10-5z"/><path d="M6 11.5V17c0 1.5 2.7 3 6 3s6-1.5 6-3v-5.5"/></svg>', tAtivas, 'Turmas ativas', '', 'var(--navy)', null, "irParaTurmasFiltradas('em_andamento')")}
@@ -28651,7 +28783,7 @@ async function exportarRelatorioComparativoPDF() {
   if (!planoAtinge('pro')) { modalUpgrade('Relatório Comparativo em PDF', 'pro'); return; }
   const { turmas: tAll, participantes: partAll, sessoes: sesAll, certPorTurma } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
-  const meses = window._relPeriodo || 6;
+  const meses = 6; // PDF: compara os últimos 6 meses com os 6 anteriores
   const { tFilt } = _relFiltrarPorPeriodo(tAll, sesAll, meses);
   const hoje = new Date();
   const corteAnt    = new Date(hoje.getFullYear(), hoje.getMonth() - meses * 2 + 1, 1);
@@ -28780,7 +28912,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '175';
+  var APP_BUILD = '178';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
