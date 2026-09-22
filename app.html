@@ -14517,7 +14517,8 @@ function menuAgendamento(btn, agId, turmaId) {
 // uma coisa e o cliente receberia outra — e ninguém descobriria até alguém
 // reclamar de uma mensagem que "o sistema mandou".
 //
-// Nada aqui dispara sozinho. O aviso sai porque alguém leu e clicou.
+// O botão continua manual: sai porque alguém leu e clicou. O envio
+// automático (PASSO-47, v182) é configurado à parte, em _avisoAutoAbrir.
 
 // O WhatsApp mostra *isto* em negrito e _isto_ em itálico. A prévia imita
 // para ser fiel ao que o destinatário vê — mostrar os asteriscos crus daria a
@@ -14603,6 +14604,21 @@ async function _avisoDesenhar() {
   const destinos = (data && data.destinos) || [];
   const enviaveis = destinos.filter(d => d.status === 'previa').length;
 
+  // v182: estado do aviso automático (PASSO-47). Se o banco ainda não tem a
+  // função, a linha simplesmente não aparece.
+  let linhaAuto = '';
+  try {
+    const { data: cfg, error: eCfg } = await sb.rpc('crm_aviso_auto_ler');
+    if (!eCfg && cfg) {
+      window._avisoAutoCfg = cfg;
+      const ligado = cfg.aposAgendar || cfg.vespera;
+      linhaAuto = `<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:12px;color:var(--text-2);min-width:0"><b style="color:var(--text-1)">Envio automático:</b> <span style="color:${ligado ? 'var(--green)' : 'var(--text-3)'}">${escapeHtml(_avisoAutoResumo(cfg))}</span></div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="_avisoAutoAbrir()">Configurar</button>
+      </div>`;
+    }
+  } catch (e) { linhaAuto = ''; }
+
   const seletor = ctx.caixas.length > 1
     ? `<div class="field" style="margin-bottom:12px">
          <label>Enviar pelo número</label>
@@ -14621,7 +14637,7 @@ async function _avisoDesenhar() {
        </div>`;
 
   abrirModal('Avisar por WhatsApp',
-    seletor + aviso + destinos.map(_avisoBalao).join(''),
+    linhaAuto + seletor + aviso + destinos.map(_avisoBalao).join(''),
     enviaveis === 0
       ? `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`
       : `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
@@ -14681,12 +14697,14 @@ async function _avisoEnviar() {
 // regra, que um dia discordam — e a que mente é sempre a prévia.
 
 function _modeloRotulo(alvo) {
-  return alvo === 'cliente' ? 'para a empresa cliente' : 'para o instrutor';
+  const lemb = (window._modeloCtx || {}).tipo === 'lembrete' ? 'do lembrete ' : '';
+  return lemb + (alvo === 'cliente' ? 'para a empresa cliente' : 'para o instrutor');
 }
 
-async function _avisoEditarModelo(alvo) {
+async function _avisoEditarModelo(alvo, tipo) {
   const ctx = window._avisoCtx || {};
-  const chave = alvo === 'cliente' ? 'agendamento_cliente' : 'agendamento_instrutor';
+  const lembrete = tipo === 'lembrete';
+  const chave = (lembrete ? 'lembrete_' : 'agendamento_') + (alvo === 'cliente' ? 'cliente' : 'instrutor');
   try {
     showLoading('Abrindo o modelo...');
     const [rModelo, rMarc, rDados] = await Promise.all([
@@ -14700,7 +14718,7 @@ async function _avisoEditarModelo(alvo) {
     if (rDados.error)  throw rDados.error;
 
     window._modeloCtx = {
-      chave, alvo,
+      chave, alvo, tipo: lembrete ? 'lembrete' : 'agendamento', voltarAuto: lembrete,
       dados: rDados.data || {},
       marcadores: rMarc.data || [],
       personalizado: !!rModelo.data?.personalizado
@@ -14825,12 +14843,131 @@ async function _modeloRestaurar() {
 
 // Volta para a prévia do aviso, já com o texto novo.
 async function _avisoVoltarDoModelo() {
+  // v182: quem abriu o modelo do lembrete veio da configuração automática.
+  if ((window._modeloCtx || {}).voltarAuto) {
+    window._modeloCtx.voltarAuto = false;
+    return _avisoAutoAbrir();
+  }
   try {
     showLoading('Atualizando a prévia...');
     await _avisoDesenhar();
   } catch (e) {
     hideLoading();
     showToast(traduzErroSupabase(e, 'Não foi possível voltar para a prévia'), 'error');
+  }
+}
+
+
+// ── Aviso automático por WhatsApp (22/09/2026, PASSO-47) ──────────────────
+//
+// Configuração por organização: confirmação automática N minutos depois de
+// agendar e lembrete na véspera a partir de um horário fixo. Quem envia é a
+// rotina do banco (a cada 5 minutos, só entre 08h e 20h); esta tela só lê e
+// grava a configuração. O botão Avisar continua existindo e funcionando igual.
+function _avisoAutoResumo(cfg) {
+  if (!cfg || (!cfg.aposAgendar && !cfg.vespera)) return 'Desligado';
+  const p = [];
+  if (cfg.aposAgendar) p.push(`${cfg.aposMinutos} min depois de agendar`);
+  if (cfg.vespera) p.push(`lembrete na véspera às ${cfg.vesperaHora}`);
+  return 'Ligado: ' + p.join(' · ');
+}
+
+async function _avisoAutoAbrir() {
+  const ctx = window._avisoCtx || {};
+  try {
+    showLoading('Abrindo a configuração...');
+    const { data, error } = await sb.rpc('crm_aviso_auto_ler');
+    hideLoading();
+    if (error) throw error;
+    window._avisoAutoCfg = data || {};
+    _avisoAutoDesenhar();
+  } catch (e) {
+    hideLoading();
+    showToast(traduzErroSupabase(e, 'Não foi possível abrir a configuração. Confira se o PASSO-47 foi aplicado.'), 'error');
+  }
+}
+
+function _avisoAutoDesenhar() {
+  const ctx = window._avisoCtx || {};
+  const c = window._avisoAutoCfg || {};
+  const alvos = c.alvos || ['cliente', 'instrutor'];
+  const podeEditar = ['administrador', 'comercial', 'provedor'].includes(usuarioAtual.perfil);
+  const sel = 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1)';
+  const optMin = [5, 10, 15, 30, 60].map(n => `<option value="${n}" ${Number(c.aposMinutos || 10) === n ? 'selected' : ''}>${n} minutos</option>`).join('');
+  const horas = []; for (let h = 8; h <= 19; h++) horas.push(`${String(h).padStart(2, '0')}:00`);
+  if (c.vesperaHora && !horas.includes(c.vesperaHora)) horas.push(c.vesperaHora);
+  const optHora = horas.sort().map(h => `<option value="${h}" ${(c.vesperaHora || '14:00') === h ? 'selected' : ''}>${h}</option>`).join('');
+  const caixas = ctx.caixas || [];
+  const seletorCaixa = caixas.length > 1 ? `<div class="field" style="margin-top:12px"><label>Enviar pelo número</label>
+      <select id="autoCaixa" style="${sel}">
+        <option value="">Escolha o número</option>
+        ${caixas.map(x => `<option value="${x.id}" ${x.id === c.caixaId ? 'selected' : ''}>${escapeHtml(x.nome)}${x.numero ? ' · ' + escapeHtml(x.numero) : ''}</option>`).join('')}
+      </select></div>` : '';
+  const pend = (c.pendencias || []);
+  const pendHtml = pend.length ? `<div style="margin-top:14px;border:1px solid #F5C2C0;background:#FEF4F3;border-radius:8px;padding:10px 12px">
+      <div style="font-size:12px;font-weight:700;color:#B4312E;margin-bottom:6px">Não foi possível avisar</div>
+      ${pend.map(p => `<div style="font-size:12px;color:var(--text-2);line-height:1.5">${p.data ? `<b>${escapeHtml(p.data)}</b> · ` : ''}${p.curso ? escapeHtml(p.curso) + ' · ' : ''}${escapeHtml(p.nome || '')}${p.nome ? ': ' : ''}${escapeHtml(p.motivo || '')}</div>`).join('')}
+      <div style="font-size:11px;color:var(--text-3);margin-top:6px">Cadastre o WhatsApp que falta e o aviso sai na próxima rodada (a cada 5 minutos).</div>
+    </div>` : '';
+  const bloco = (id, marcado, titulo, sub, campo) => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
+      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" id="${id}" ${marcado ? 'checked' : ''} ${podeEditar ? '' : 'disabled'} style="margin-top:3px">
+        <span style="flex:1;min-width:0"><b style="font-size:13px;color:var(--text-1)">${titulo}</b>
+          <span style="display:block;font-size:12px;color:var(--text-3);margin-top:2px">${sub}</span></span>
+      </label>
+      <div style="margin:10px 0 0 26px">${campo}</div>
+    </div>`;
+
+  abrirModal('Aviso automático por WhatsApp', `
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:12px">
+      O sistema envia sozinho, entre 08h e 20h. O botão Avisar continua disponível para enviar na hora.
+    </div>
+    ${bloco('autoApos', c.aposAgendar, 'Confirmar depois de agendar',
+      'Envia a confirmação alguns minutos depois de o encontro ser criado. Vale para agendamentos feitos a partir de agora.',
+      `<select id="autoMin" style="${sel};max-width:200px" ${podeEditar ? '' : 'disabled'}>${optMin}</select>`)}
+    ${bloco('autoVesp', c.vespera, 'Lembrete na véspera',
+      'No dia anterior ao encontro, a partir do horário escolhido.',
+      `<select id="autoHora" style="${sel};max-width:200px" ${podeEditar ? '' : 'disabled'}>${optHora}</select>
+       <div style="margin-top:8px;font-size:12px">Texto do lembrete:
+         <button type="button" onclick="_avisoEditarModelo('cliente','lembrete')" style="background:none;border:none;padding:0 4px;font-size:12px;color:var(--navy);cursor:pointer;text-decoration:underline">para a empresa</button>
+         <button type="button" onclick="_avisoEditarModelo('instrutor','lembrete')" style="background:none;border:none;padding:0 4px;font-size:12px;color:var(--navy);cursor:pointer;text-decoration:underline">para o instrutor</button>
+       </div>`)}
+    <div style="font-size:12px;font-weight:700;color:var(--text-2);margin:14px 0 6px">Quem recebe</div>
+    <label style="display:inline-flex;gap:6px;align-items:center;margin-right:16px;font-size:13px;cursor:pointer"><input type="checkbox" class="autoAlvo" value="cliente" ${alvos.includes('cliente') ? 'checked' : ''} ${podeEditar ? '' : 'disabled'}> Empresa cliente</label>
+    <label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" class="autoAlvo" value="instrutor" ${alvos.includes('instrutor') ? 'checked' : ''} ${podeEditar ? '' : 'disabled'}> Instrutor</label>
+    ${seletorCaixa}
+    ${pendHtml}`,
+    `<button class="btn btn-outline" onclick="_avisoVoltarDoModelo()">Voltar</button>
+     ${podeEditar ? '<button class="btn btn-navy" id="btnModalSalvar" onclick="_avisoAutoSalvar()">Salvar</button>' : ''}`,
+    true);
+}
+
+async function _avisoAutoSalvar() {
+  const alvos = Array.from(document.querySelectorAll('.autoAlvo:checked')).map(x => x.value);
+  if (!alvos.length) { showToast('Escolha quem recebe: empresa cliente, instrutor ou os dois.', 'error'); return; }
+  const elCaixa = document.getElementById('autoCaixa');
+  const caixaId = elCaixa ? (elCaixa.value || null) : null;
+  const apos = !!document.getElementById('autoApos')?.checked;
+  const vesp = !!document.getElementById('autoVesp')?.checked;
+  if (elCaixa && !caixaId && (apos || vesp)) { showToast('Escolha por qual número o aviso automático sai.', 'error'); return; }
+  try {
+    setBtnModalLoading(true);
+    const { data, error } = await sb.rpc('crm_aviso_auto_salvar', {
+      p_apos_agendar: apos,
+      p_apos_minutos: Number(document.getElementById('autoMin')?.value || 10),
+      p_vespera: vesp,
+      p_vespera_hora: document.getElementById('autoHora')?.value || '14:00',
+      p_alvos: alvos,
+      p_caixa_id: caixaId,
+    });
+    if (error) throw error;
+    window._avisoAutoCfg = data || {};
+    showToast((apos || vesp) ? 'Aviso automático ligado.' : 'Aviso automático desligado.', 'success');
+    await _avisoVoltarDoModelo();
+  } catch (e) {
+    setBtnModalLoading(false);
+    showToast(traduzErroSupabase(e, 'Não foi possível salvar'), 'error');
   }
 }
 
@@ -29304,7 +29441,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '181';
+  var APP_BUILD = '182';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
