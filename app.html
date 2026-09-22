@@ -11,8 +11,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GRID">
-<meta name="description" content="GRID — gestão de treinamentos de segurança do trabalho: turmas, certificados, conformidade e agenda de instrutores.">
-<title>GRID — Treinamentos</title>
+<meta name="description" content="GRID: gestão de treinamentos de segurança do trabalho: turmas, certificados, conformidade e agenda de instrutores.">
+<title>GRID</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
@@ -2003,6 +2003,36 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .tt-mais{font-size:12.5px!important}
 /* 21/09 — sai o campo "Buscar no menu" */
 .sidebar-search{display:none!important}
+</style>
+<style id="v174">
+/* 21/09 — botão principal: azul-escuro. O âmbar em bloco grande cansava a
+   vista no celular; ele fica como destaque (logo, menu ativo, links). */
+.btn-amber, .gi-btn.gi-laranja { background:var(--navy)!important; border-color:var(--navy)!important; color:#fff!important }
+.btn-amber:hover, .gi-btn.gi-laranja:hover { background:#24365C!important; border-color:#24365C!important; color:#fff!important }
+/* Início do Instrutor */
+.gi-pend-grupo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);padding:14px 0 4px;display:flex;justify-content:space-between;gap:8px}
+.gi-pend-grupo span{text-transform:none;letter-spacing:0;font-weight:600}
+.gi-pend{cursor:pointer;min-height:58px}
+.gi-pend-n{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none;font-variant-numeric:tabular-nums}
+.gi-pend-n.gi-red{background:#FEE8E7;color:#B4312E}
+.gi-pend-n.gi-doc{width:8px;height:8px;border-radius:50%;margin:0 11px}
+.gi-pend-n.gi-warn{background:var(--amber)}
+.gi-pend-n.gi-blue{background:#36588D}
+.gi-pend-ac{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;color:var(--navy);flex:none}
+.gi-pend-ac svg{width:14px;height:14px}
+.gi-pend:hover .gi-main b{text-decoration:underline}
+.gi-pend-mais{font-size:12px;color:var(--text-3);padding:8px 0 12px}
+.gi-ag-dia{padding:10px 0 4px;border-bottom:1px solid var(--border)}
+.gi-ag-dia:last-child{border-bottom:0}
+.gi-ag-d{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);margin-bottom:4px}
+.gi-ag-item{display:flex;align-items:center;gap:12px;padding:7px 0;cursor:pointer}
+.gi-ag-h{width:46px;flex:none;font-size:14px;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums}
+.gi-ag-item:hover .gi-main b{text-decoration:underline}
+/* Celular: indicadores do Início lado a lado, destaque ocupa a linha */
+#mobileBody .gi-today{grid-template-columns:1fr 1fr}
+#mobileBody .gi-today .gi-focus{grid-column:1 / -1}
+#mobileBody .gi-today .gi-kpi .gi-tr{display:none}
+#mobileBody .gi-kpi .gi-kh{white-space:normal}
 </style>
 </head>
 <body>
@@ -7015,27 +7045,63 @@ async function renderHomeInstrutor() {
       <button class="gi-go" data-nav="agenda">Ver minha agenda &rarr;</button>`;
   }
 
-  // ── O que precisa de você: atrasados primeiro, depois documentos. ──
-  const precisaItens = [
-    ...atrasadas.map(s => _linhaSessao(s, '<span class="gi-badge gi-red">Atrasado</span>')),
-    ...pendenciasDocs.map(({turma: t, motivo}) => `
-      <div class="gi-row" data-action="abrirDocumentos" data-id="${t.id}">
-        <div class="gi-main">
-          <b>${escapeHtml(t.catalogo?.nome || 'Treinamento')}</b>
-          <small>${escapeHtml(t.clientes?.nome || '—')} · ${motivo === 'gerar' ? 'documentos incompletos' : 'gerado, falta enviar por e-mail'}</small>
-        </div>
-        <span class="gi-badge gi-warn">${motivo === 'gerar' ? 'Gerar' : 'Enviar'}</span>
-      </div>`),
-  ];
+  // ── Precisa de você (21/09): UMA linha por turma, não uma por aula.
+  //    Antes: 23 linhas "Atrasado" repetindo a mesma turma. Agora:
+  //    "3 aulas sem registro · desde 29/08" e a ação ao lado. ──
+  const _dataCurta = d => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+  const atrasPorTurma = {};
+  atrasadas.forEach(s => {
+    const o = (atrasPorTurma[s.turma_id] ||= { turma: s.turma, turma_id: s.turma_id, n: 0, desde: s.data });
+    o.n++; if (s.data < o.desde) o.desde = s.data;
+  });
+  const gruposAtraso = Object.values(atrasPorTurma).sort((x, y) => x.desde.localeCompare(y.desde));
+  const _linhaPend = (n, tom, titulo, sub, acao, attrs) => `
+    <div class="gi-row gi-pend" ${attrs}>
+      <span class="gi-pend-n ${tom}">${n}</span>
+      <div class="gi-main"><b>${titulo}</b><small>${sub}</small></div>
+      <span class="gi-pend-ac">${acao}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+    </div>`;
+  const LIM = 5;
+  const blocoAtraso = gruposAtraso.length ? `
+    <div class="gi-pend-grupo">Aulas sem registro <span>${atrasadas.length} ${atrasadas.length === 1 ? 'aula' : 'aulas'} em ${gruposAtraso.length} ${gruposAtraso.length === 1 ? 'turma' : 'turmas'}</span></div>
+    ${gruposAtraso.slice(0, LIM).map(o => _linhaPend(o.n, 'gi-red',
+        escapeHtml(o.turma?.catalogo?.nome || 'Treinamento'),
+        `${escapeHtml(o.turma?.clientes?.nome || '—')} · ${o.n === 1 ? 'aula de' : 'desde'} ${_dataCurta(o.desde)}`,
+        'Registrar', `data-action="verTurma" data-id="${o.turma_id}"`)).join('')}
+    ${gruposAtraso.length > LIM ? `<div class="gi-pend-mais">e mais ${gruposAtraso.length - LIM} ${gruposAtraso.length - LIM === 1 ? 'turma' : 'turmas'} no Histórico</div>` : ''}` : '';
+  const blocoDocs = pendenciasDocs.length ? `
+    <div class="gi-pend-grupo">Documentos <span>${pendenciasDocs.length} ${pendenciasDocs.length === 1 ? 'turma' : 'turmas'}</span></div>
+    ${pendenciasDocs.slice(0, LIM).map(({turma: tt, motivo}) => _linhaPend('', motivo === 'gerar' ? 'gi-warn gi-doc' : 'gi-blue gi-doc',
+        escapeHtml(tt.catalogo?.nome || 'Treinamento'),
+        `${escapeHtml(tt.clientes?.nome || '—')} · ${motivo === 'gerar' ? 'faltam documentos' : 'prontos, falta enviar ao cliente'}`,
+        motivo === 'gerar' ? 'Gerar' : 'Enviar', `data-action="abrirDocumentos" data-id="${tt.id}"`)).join('')}
+    ${pendenciasDocs.length > LIM ? `<div class="gi-pend-mais">e mais ${pendenciasDocs.length - LIM} no Histórico</div>` : ''}` : '';
+  const totalPend = gruposAtraso.length + pendenciasDocs.length;
 
-  // ── Agenda da semana: o que vem depois do destaque, sem repetir o item
-  //    que já está no bloco escuro. Mesmos dados, nenhuma consulta nova. ──
+  // ── Agenda da semana (21/09): agrupada por dia — "Hoje", "Amanhã",
+  //    "qua 23/09" — em vez de uma lista solta com data em cada linha. ──
   const sessoesRestantes = futuras.filter(s => !(proximoTipo === 'sessao' && proximo && s.id === proximo.id));
   const compsRestantes = compsFuturos.filter(x => !(proximoTipo === 'comp' && proximoComp && x.id === proximoComp.id));
+  const _amanha = (() => { const x = new Date(); x.setDate(x.getDate() + 1); return dataLocalISO(x); })();
+  const _lim7 = (() => { const x = new Date(); x.setDate(x.getDate() + 7); return dataLocalISO(x); })();
+  const _rotDia = d => d === hoje ? 'Hoje' : d === _amanha ? 'Amanhã'
+    : new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'2-digit'});
   const semanaItens = [
-    ...sessoesRestantes.map(s => ({chave: s.data + (s.hora_inicio || ''), html: _linhaSessao(s, `<span class="gi-badge ${s.data === hoje ? 'gi-warn' : 'gi-cinza'}">${s.data === hoje ? 'Hoje' : 'Agendada'}</span>`)})),
-    ...compsRestantes.map(x => ({chave: x.data + (x.hora_inicio || ''), html: _linhaCompromisso(x)})),
-  ].sort((a, b) => a.chave.localeCompare(b.chave)).slice(0, 5);
+    ...sessoesRestantes.map(s => ({ data: s.data, chave: s.data + (s.hora_inicio || ''), html: `
+      <div class="gi-ag-item" data-action="verTurma" data-id="${s.turma_id}">
+        <span class="gi-ag-h">${s.hora_inicio ? s.hora_inicio.slice(0,5) : '--:--'}</span>
+        <div class="gi-main"><b>${escapeHtml(s.turma?.catalogo?.nome || 'Treinamento')}</b><small>${escapeHtml(s.turma?.clientes?.nome || '—')}${s.local ? ' · ' + escapeHtml(s.local) : ''}</small></div>
+      </div>` })),
+    ...compsRestantes.map(x => ({ data: x.data, chave: x.data + (x.hora_inicio || ''), html: `
+      <div class="gi-ag-item" data-action="verCompromisso" data-id="${x.id}">
+        <span class="gi-ag-h">${x.hora_inicio ? x.hora_inicio.slice(0,5) : '--:--'}</span>
+        <div class="gi-main"><b>${escapeHtml(x.titulo)}</b><small>${escapeHtml(_compTipo(x.tipo).label)}${x.local ? ' · ' + escapeHtml(x.local) : ''}</small></div>
+        <span class="gi-badge gi-blue">Compromisso</span>
+      </div>` })),
+  ].filter(it => it.data <= _lim7).sort((a, b) => a.chave.localeCompare(b.chave)).slice(0, 8);
+  const diasSemana = [];
+  semanaItens.forEach(it => { let d = diasSemana.find(x => x.data === it.data); if (!d) diasSemana.push(d = { data: it.data, itens: [] }); d.itens.push(it.html); });
+  const proxDepois = [...sessoesRestantes].find(s => s.data > _lim7);
 
   const mensagemDoDia = await _buscarMensagemDoDia();
   setConteudo(`
@@ -7072,18 +7138,18 @@ async function renderHomeInstrutor() {
       <div class="gi-kpi gi-sm"><div class="gi-kh">Horas no mês</div><span class="gi-n">${horasMes}</span><small class="gi-s">de carga horária ministrada</small></div>
     </div>
 
-    <div class="gi-grid2">
+    <div class="gi-grid2 gi-par gi-inst">
       <section class="gi-painel">
-        <div class="gi-painel-h"><h3>Agenda da semana</h3><button class="gi-link" data-nav="agenda">Minha agenda</button></div>
-        ${semanaItens.length
-          ? `<div class="gi-corpo">${semanaItens.map(it => it.html).join('')}</div>`
-          : `<div class="gi-vazio">Nada mais agendado por enquanto.</div>`}
+        <div class="gi-painel-h"><h3>Precisa de você</h3>${totalPend ? `<span class="gi-badge ${gruposAtraso.length ? 'gi-red' : 'gi-warn'}">${totalPend} ${totalPend === 1 ? 'turma' : 'turmas'}</span>` : `<span class="gi-badge">Em dia</span>`}</div>
+        ${totalPend
+          ? `<div class="gi-corpo">${blocoAtraso}${blocoDocs}</div>`
+          : `<div class="gi-vazio">Tudo em dia: nenhuma aula sem registro e nenhum documento pendente.</div>`}
       </section>
       <section class="gi-painel">
-        <div class="gi-painel-h"><h3>Precisa de você</h3>${precisaItens.length ? `<span class="gi-badge ${atrasadas.length ? 'gi-red' : 'gi-warn'}">${precisaItens.length} ${precisaItens.length === 1 ? 'item' : 'itens'}</span>` : `<span class="gi-badge">Em dia</span>`}</div>
-        ${precisaItens.length
-          ? `<div class="gi-corpo">${precisaItens.join('')}</div>`
-          : `<div class="gi-vazio">Nenhum treinamento atrasado e nenhum documento pendente.</div>`}
+        <div class="gi-painel-h"><h3>Próximos 7 dias</h3><button class="gi-link" data-nav="agenda">Minha agenda</button></div>
+        ${diasSemana.length
+          ? `<div class="gi-corpo gi-ag">${diasSemana.map(d => `<div class="gi-ag-dia"><div class="gi-ag-d">${_rotDia(d.data)}</div>${d.itens.join('')}</div>`).join('')}</div>`
+          : `<div class="gi-vazio">Nenhuma aula nos próximos 7 dias.${proxDepois ? ` A próxima é em ${_dataCurta(proxDepois.data)}.` : ''}</div>`}
       </section>
     </div>`);
 }
@@ -28704,7 +28770,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '173';
+  var APP_BUILD = '174';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
