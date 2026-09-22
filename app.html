@@ -3126,6 +3126,17 @@ async function iniciarModoSuporte(orgId) {
     _suporteLogId   = log.id;
     _suporteAcoes   = [];
 
+    // v184: carrega os módulos contratados pela organização atendida (CRM).
+    // Antes o Provedor entrava sem módulo nenhum, porque os módulos são lidos
+    // no login, e o login do Provedor não tem organização.
+    _GRID = null;
+    _modulosAtivos = [];
+    try {
+      _plataformaCarregando = _iniciarPlataforma();
+      await _plataformaCarregando;
+    } catch (e) { console.warn('[suporte] módulos não carregaram:', e?.message || e); }
+    _injetarMenuDosModulos();
+
     // Reconfigurar navegação para o perfil administrador
     configurarNavegacao();
     _suporteMostrarBanner();
@@ -3174,6 +3185,12 @@ async function encerrarModoSuporte(silencioso = false) {
   _suporteAcoes   = [];
   window._suporteProvedorState = null;
 
+  // v184: o CRM carregado para a organização atendida guarda dados dela em
+  // memória. Sair do suporte recarrega a página, para não sobrar nada.
+  const _tinhaModulo = !!_GRID || (_modulosAtivos || []).length > 0;
+  _GRID = null;
+  _modulosAtivos = [];
+
   // Remover banner e devolver .screen/.sidebar para top:0
   const banner = document.getElementById('_suporteBanner');
   if (banner) banner.remove();
@@ -3181,6 +3198,12 @@ async function encerrarModoSuporte(silencioso = false) {
   document.documentElement.style.removeProperty('--suporte-h');
 
   if (silencioso) return;
+
+  if (_tinhaModulo) {
+    location.hash = '#home';
+    location.reload();
+    return;
+  }
 
   // Reconfigurar navegação para Provedor e voltar ao painel
   configurarNavegacao();
@@ -4530,7 +4553,7 @@ async function _carregarModulosDaOrg() {
       .select('modulo').eq('org_id', usuarioAtual.org_id).eq('ativo', true);
     if (error) throw error;
     const ids = (data || []).map(m => m.modulo);
-    _guardarModulosEmCache(ids);
+    if (!_suporteAtivo) _guardarModulosEmCache(ids);
     console.info('[modulos] contratados:', ids);
     return ids;
   } catch (e) {
@@ -14632,7 +14655,7 @@ async function _avisoDesenhar() {
   // função, a linha simplesmente não aparece.
   let linhaAuto = '';
   try {
-    const { data: cfg, error: eCfg } = await sb.rpc('crm_aviso_auto_ler');
+    const { data: cfg, error: eCfg } = await sb.rpc('crm_aviso_auto_ler', { p_org_id: usuarioAtual.org_id });
     if (!eCfg && cfg) {
       window._avisoAutoCfg = cfg;
       const ligado = _avisoAutoResumo(cfg) !== 'Desligado';
@@ -14732,7 +14755,7 @@ async function _avisoEditarModelo(alvo, tipo) {
   try {
     showLoading('Abrindo o modelo...');
     const [rModelo, rMarc, rDados] = await Promise.all([
-      sb.rpc('crm_modelo_ler', { p_chave: chave }),
+      sb.rpc('crm_modelo_ler', { p_chave: chave, p_org_id: usuarioAtual.org_id }),
       sb.rpc('crm_modelo_marcadores'),
       ctx.agId
         ? sb.rpc('crm_agendamento_dados', { p_sessao_id: ctx.agId })
@@ -14832,7 +14855,7 @@ async function _modeloSalvar() {
   try {
     setBtnModalLoading(true);
     const { error } = await sb.rpc('crm_modelo_salvar', {
-      p_chave: (window._modeloCtx || {}).chave, p_texto: ta.value
+      p_chave: (window._modeloCtx || {}).chave, p_texto: ta.value, p_org_id: usuarioAtual.org_id
     });
     if (error) throw error;
     showToast('Modelo salvo. As próximas mensagens usam este texto.', 'success');
@@ -14855,7 +14878,7 @@ async function _modeloRestaurar() {
   if (!ok) return;
   try {
     showLoading('Restaurando...');
-    const { data, error } = await sb.rpc('crm_modelo_restaurar', { p_chave: ctx.chave });
+    const { data, error } = await sb.rpc('crm_modelo_restaurar', { p_chave: ctx.chave, p_org_id: usuarioAtual.org_id });
     hideLoading();
     if (error) throw error;
     window._modeloCtx.personalizado = false;
@@ -14925,7 +14948,7 @@ async function renderConfiguracoes() {
   fabOcultar();
   let cfg = null, caixas = [], erroCfg = null;
   try {
-    const r = await sb.rpc('crm_aviso_auto_ler');
+    const r = await sb.rpc('crm_aviso_auto_ler', { p_org_id: usuarioAtual.org_id });
     if (r.error) throw r.error;
     cfg = r.data || {};
   } catch (e) { erroCfg = e; }
@@ -15022,7 +15045,7 @@ async function _cfgSalvar() {
   const btns = document.querySelectorAll('#btnCfgSalvar');
   btns.forEach(b => { b.disabled = true; b.textContent = 'Salvando...'; });
   try {
-    const { data, error } = await sb.rpc('crm_aviso_auto_salvar_v2', { p_cliente: cli, p_instrutor: ins, p_caixa_id: caixaId });
+    const { data, error } = await sb.rpc('crm_aviso_auto_salvar_v2', { p_cliente: cli, p_instrutor: ins, p_caixa_id: caixaId, p_org_id: usuarioAtual.org_id });
     if (error) throw error;
     window._cfgEstado.cfg = data || window._cfgEstado.cfg;
     showToast('Configurações salvas.', 'success');
@@ -29510,7 +29533,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '183';
+  var APP_BUILD = '184';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
