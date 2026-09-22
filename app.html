@@ -2123,6 +2123,29 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
   .hist3-tab .turma-tabela tfoot td{display:inline;padding:0 10px 0 0;background:none;border:0}
 }
 </style>
+<style id="v183">
+/* v183 · Configurações */
+.cfg-sec{padding:18px}
+.cfg-sec-h h3{font-size:15px;font-weight:700;color:var(--text-1);margin:0 0 4px}
+.cfg-sec-h p{font-size:13px;color:var(--text-2);line-height:1.55;margin:0 0 14px;max-width:62em}
+.cfg-dest{margin-bottom:0}
+.cfg-dest-h{border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:6px}
+.cfg-dest-h b{display:block;font-size:14px;color:var(--text-1)}
+.cfg-dest-h small{display:block;font-size:12px;color:var(--text-3);margin-top:2px}
+.cfg-op{display:flex;gap:10px;align-items:flex-start;cursor:pointer;padding-top:12px}
+.cfg-op input{margin-top:3px;width:16px;height:16px;flex:none}
+.cfg-op b{display:block;font-size:13px;color:var(--text-1)}
+.cfg-op small{display:block;font-size:12px;color:var(--text-3);margin-top:2px;line-height:1.45}
+.cfg-campo{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 4px 26px}
+.cfg-link{background:none;border:none;padding:0;font-size:12.5px;font-family:inherit;color:var(--navy);cursor:pointer;text-decoration:underline}
+.cfg-dica{font-size:12.5px;color:var(--text-3);margin:-2px 0 14px}
+.cfg-linha{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:var(--text-1)}
+.cfg-pend{border:1px solid #F5C2C0;background:#FEF4F3;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--text-2);line-height:1.55}
+.cfg-pend>b{display:block;color:#B4312E;margin-bottom:4px}
+.cfg-pend small{display:block;font-size:11.5px;color:var(--text-3);margin-top:6px}
+.cfg-rodape{display:flex;justify-content:flex-end;border-top:1px solid var(--border);padding-top:14px}
+@media(max-width:768px){.cfg-sec{padding:14px}.cfg-rodape .btn{width:100%;justify-content:center}}
+</style>
 </head>
 <body>
 
@@ -4442,7 +4465,7 @@ async function fazerLogout() {
 // ============================================================
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'logs',l:'Logs / Auditoria',icon:'filesheet'},{id:'conta',l:'Minha conta',icon:'user'}],
-  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'cap'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'company'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'cap'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'company'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{id:'configuracoes',l:'Configurações',icon:'settings'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   // 2026-08: adicionado 'relatorios' — já estava referenciado em
   // NAV_BOTTOM.comercial (atalho do rodapé mobile) mas não existia aqui,
   // então o item nunca aparecia de verdade e o Comercial não conseguia
@@ -4484,7 +4507,7 @@ let _plataformaCarregando = null;   // promessa de _iniciarPlataforma (ver irPar
    e de modulo sem perguntar ao modulo — que pode ainda nao ter carregado. */
 const TITULOS_NATIVOS = new Set(['home','orgs','financeiro','adocao','logs','clientes',
   'colaboradores','catalogo','conformidade','turmas','agendaequipe','equipe','agenda',
-  'historico','relatorios','conta']);
+  'historico','relatorios','conta','configuracoes']);
 let _modulosAtivos = [];
 
 // A lista de modulos contratados muda raramente (uma venda, uma renovacao).
@@ -4775,7 +4798,7 @@ function _perfilTemAcesso(pagina) {
 // Clientes, Catálogo…) é o módulo de Treinamentos, ainda que ele não seja um
 // módulo de verdade no código — é a leitura correta do ponto de vista de quem
 // usa, e é o que o mockup mostra.
-const MENU_CONFIG_IDS = ['equipe', 'conta'];
+const MENU_CONFIG_IDS = ['equipe', 'configuracoes', 'conta'];
 
 // Os nomes de icone dos modulos (nucleo/icones.js) nao sao os do app (ICONS).
 // Este mapa e a traducao — pequeno de proposito: icone novo sem traducao cai
@@ -5039,7 +5062,7 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
+const TITULOS = {configuracoes:'Configurações',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
 
 async function irPara(pagina, params={}) {
   // Bloqueia navegação para telas fora do menu do perfil atual (ver
@@ -5104,6 +5127,7 @@ async function irPara(pagina, params={}) {
       case 'turmas':        await renderTurmas(); break;
       case 'agendaequipe':  await renderAgendaEquipe(); break;
       case 'equipe':        await renderEquipe(); break;
+      case 'configuracoes': await renderConfiguracoes(); break;
       case 'agenda':        await renderAgenda(); break;
       case 'historico':     await renderHistorico(); break;
       case 'relatorios':    await renderRelatorios(); break;
@@ -14611,7 +14635,7 @@ async function _avisoDesenhar() {
     const { data: cfg, error: eCfg } = await sb.rpc('crm_aviso_auto_ler');
     if (!eCfg && cfg) {
       window._avisoAutoCfg = cfg;
-      const ligado = cfg.aposAgendar || cfg.vespera;
+      const ligado = _avisoAutoResumo(cfg) !== 'Desligado';
       linhaAuto = `<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px">
         <div style="font-size:12px;color:var(--text-2);min-width:0"><b style="color:var(--text-1)">Envio automático:</b> <span style="color:${ligado ? 'var(--green)' : 'var(--text-3)'}">${escapeHtml(_avisoAutoResumo(cfg))}</span></div>
         <button type="button" class="btn btn-outline btn-sm" onclick="_avisoAutoAbrir()">Configurar</button>
@@ -14710,7 +14734,9 @@ async function _avisoEditarModelo(alvo, tipo) {
     const [rModelo, rMarc, rDados] = await Promise.all([
       sb.rpc('crm_modelo_ler', { p_chave: chave }),
       sb.rpc('crm_modelo_marcadores'),
-      sb.rpc('crm_agendamento_dados', { p_sessao_id: ctx.agId })
+      ctx.agId
+        ? sb.rpc('crm_agendamento_dados', { p_sessao_id: ctx.agId })
+        : Promise.resolve({ data: { ..._CFG_EXEMPLO, organizacao: usuarioAtual.orgNome || 'Sua empresa' }, error: null })
     ]);
     hideLoading();
     if (rModelo.error) throw rModelo.error;
@@ -14718,7 +14744,7 @@ async function _avisoEditarModelo(alvo, tipo) {
     if (rDados.error)  throw rDados.error;
 
     window._modeloCtx = {
-      chave, alvo, tipo: lembrete ? 'lembrete' : 'agendamento', voltarAuto: lembrete,
+      chave, alvo, tipo: lembrete ? 'lembrete' : 'agendamento',
       dados: rDados.data || {},
       marcadores: rMarc.data || [],
       personalizado: !!rModelo.data?.personalizado
@@ -14754,7 +14780,7 @@ function _modeloDesenhar(texto) {
      </div>
 
      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
-       Como fica neste agendamento
+       ${(window._avisoCtx || {}).agId ? 'Como fica neste agendamento' : 'Como fica (com dados de exemplo)'}
      </div>
      <div id="modeloPrevia" style="background:#E7FBD9;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;color:#111;min-height:60px"></div>`,
     `<button class="btn btn-outline" onclick="_modeloRestaurar()" style="margin-right:auto"
@@ -14843,10 +14869,11 @@ async function _modeloRestaurar() {
 
 // Volta para a prévia do aviso, já com o texto novo.
 async function _avisoVoltarDoModelo() {
-  // v182: quem abriu o modelo do lembrete veio da configuração automática.
-  if ((window._modeloCtx || {}).voltarAuto) {
-    window._modeloCtx.voltarAuto = false;
-    return _avisoAutoAbrir();
+  // v183: quem abriu o modelo pela tela Configurações volta para ela.
+  if ((window._avisoCtx || {}).deConfig) {
+    window._avisoCtx.deConfig = false;
+    fecharModal();
+    return;
   }
   try {
     showLoading('Atualizando a prévia...');
@@ -14858,117 +14885,159 @@ async function _avisoVoltarDoModelo() {
 }
 
 
-// ── Aviso automático por WhatsApp (22/09/2026, PASSO-47) ──────────────────
-//
-// Configuração por organização: confirmação automática N minutos depois de
-// agendar e lembrete na véspera a partir de um horário fixo. Quem envia é a
-// rotina do banco (a cada 5 minutos, só entre 08h e 20h); esta tela só lê e
-// grava a configuração. O botão Avisar continua existindo e funcionando igual.
+
+// ============================================================
+// CONFIGURAÇÕES (v183, 22/09/2026)
+// ============================================================
+// Tela única de configurações da organização. Começa com as mensagens
+// automáticas por WhatsApp (PASSO-47/48) e vai receber, depois, permissões
+// e perfis. A configuração vale para a organização inteira: todas as
+// empresas clientes e todos os instrutores.
+const _CFG_EXEMPLO = {
+  curso: 'NR-35 · Trabalho em Altura', empresa: 'Empresa Exemplo Ltda',
+  dia_semana: 'Quinta-feira', data_curta: '24/09/2026', data: 'Quinta-feira, 24/09/2026',
+  horario: '08:00 às 17:00', hora_inicio: '08:00', hora_fim: '17:00', local: 'Sede do cliente',
+  modalidade: 'Presencial', instrutor: 'Nome do Instrutor', instrutor_primeiro_nome: 'Nome',
+  carga_horaria: '8h', organizacao: '',
+};
+
 function _avisoAutoResumo(cfg) {
-  if (!cfg || (!cfg.aposAgendar && !cfg.vespera)) return 'Desligado';
-  const p = [];
-  if (cfg.aposAgendar) p.push(`${cfg.aposMinutos} min depois de agendar`);
-  if (cfg.vespera) p.push(`lembrete na véspera às ${cfg.vesperaHora}`);
-  return 'Ligado: ' + p.join(' · ');
+  if (!cfg) return 'Desligado';
+  const parte = (x, rot) => {
+    if (!x || (!x.apos && !x.vespera)) return null;
+    const p = [];
+    if (x.apos) p.push(`${x.minutos} min após agendar`);
+    if (x.vespera) p.push(`véspera ${x.hora}`);
+    return `${rot}: ${p.join(' e ')}`;
+  };
+  const r = [parte(cfg.cliente, 'Empresa'), parte(cfg.instrutor, 'Instrutor')].filter(Boolean);
+  return r.length ? r.join(' · ') : 'Desligado';
 }
 
-async function _avisoAutoAbrir() {
-  const ctx = window._avisoCtx || {};
+// O botão "Configurar" da janela Avisar agora leva para a tela Configurações.
+function _avisoAutoAbrir() {
+  fecharModal();
+  irPara('configuracoes');
+}
+
+async function renderConfiguracoes() {
+  setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Configurações</div>`);
+  fabOcultar();
+  let cfg = null, caixas = [], erroCfg = null;
   try {
-    showLoading('Abrindo a configuração...');
-    const { data, error } = await sb.rpc('crm_aviso_auto_ler');
-    hideLoading();
-    if (error) throw error;
-    window._avisoAutoCfg = data || {};
-    _avisoAutoDesenhar();
-  } catch (e) {
-    hideLoading();
-    showToast(traduzErroSupabase(e, 'Não foi possível abrir a configuração. Confira se o PASSO-47 foi aplicado.'), 'error');
+    const r = await sb.rpc('crm_aviso_auto_ler');
+    if (r.error) throw r.error;
+    cfg = r.data || {};
+  } catch (e) { erroCfg = e; }
+  try {
+    const { data } = await sb.from('crm_caixas').select('id,nome,numero,estado')
+      .eq('org_id', usuarioAtual.org_id).eq('ativa', true).order('nome');
+    caixas = data || [];
+  } catch (e) { caixas = []; }
+  window._cfgEstado = { cfg, caixas };
+  _cfgRender(erroCfg);
+}
+
+function _cfgBlocoDestino(alvo, x) {
+  const rot = alvo === 'cliente' ? 'Empresa cliente' : 'Instrutor';
+  const sub = alvo === 'cliente' ? 'Contato de WhatsApp cadastrado na ficha de cada empresa.' : 'WhatsApp cadastrado em Equipe, no cadastro de cada instrutor.';
+  const sel = 'padding:8px 30px 8px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1)';
+  const optMin = [5, 10, 15, 20, 30, 45, 60, 90, 120].map(n => `<option value="${n}" ${Number(x.minutos || 10) === n ? 'selected' : ''}>${n} minutos</option>`).join('');
+  const horas = []; for (let h = 8; h <= 19; h++) { horas.push(`${String(h).padStart(2, '0')}:00`); horas.push(`${String(h).padStart(2, '0')}:30`); }
+  const optHora = horas.map(h => `<option value="${h}" ${(x.hora || '14:00') === h ? 'selected' : ''}>${h}</option>`).join('');
+  const link = (tipo, txt) => `<button type="button" class="cfg-link" onclick="_cfgEditarTexto('${alvo}','${tipo}')">${txt}</button>`;
+  return `<div class="rel2-card cfg-dest">
+    <div class="cfg-dest-h"><b>${rot}</b><small>${sub}</small></div>
+    <label class="cfg-op">
+      <input type="checkbox" id="cfg-${alvo}-apos" ${x.apos ? 'checked' : ''}>
+      <span><b>Confirmação depois de agendar</b><small>Sai depois do tempo escolhido, contado a partir do agendamento.</small></span>
+    </label>
+    <div class="cfg-campo"><select id="cfg-${alvo}-min" style="${sel}">${optMin}</select>${link('agendamento', 'Editar texto da confirmação')}</div>
+    <label class="cfg-op">
+      <input type="checkbox" id="cfg-${alvo}-vesp" ${x.vespera ? 'checked' : ''}>
+      <span><b>Lembrete na véspera</b><small>No dia anterior ao encontro, a partir do horário escolhido.</small></span>
+    </label>
+    <div class="cfg-campo"><select id="cfg-${alvo}-hora" style="${sel}">${optHora}</select>${link('lembrete', 'Editar texto do lembrete')}</div>
+  </div>`;
+}
+
+function _cfgRender(erro) {
+  const { cfg, caixas } = window._cfgEstado || {};
+  let corpo;
+  if (erro || !cfg) {
+    corpo = `<div class="card"><div class="empty" style="padding:32px 20px"><div class="empty-title">Não foi possível carregar</div>
+      <div class="empty-sub">${escapeHtml(traduzErroSupabase(erro, 'Confira se o PASSO-48 foi aplicado no banco.'))}</div></div></div>`;
+  } else {
+    const semNumero = !caixas.length;
+    const seletorCaixa = caixas.length > 1 ? `<div class="cfg-linha"><label for="cfg-caixa"><b>Enviar pelo número</b></label>
+        <select id="cfg-caixa" class="rel4-select" style="max-width:320px">
+          <option value="">Escolha o número</option>
+          ${caixas.map(x => `<option value="${x.id}" ${x.id === cfg.caixaId ? 'selected' : ''}>${escapeHtml(x.nome)}${x.numero ? ' · ' + escapeHtml(x.numero) : ''}</option>`).join('')}
+        </select></div>` : '';
+    const pend = cfg.pendencias || [];
+    const pendHtml = pend.length ? `<div class="cfg-pend">
+        <b>Não foi possível avisar</b>
+        ${pend.map(p => `<div>${p.data ? `<b>${escapeHtml(p.data)}</b> · ` : ''}${p.curso ? escapeHtml(p.curso) + ' · ' : ''}${p.alvo ? (p.alvo === 'cliente' ? 'Empresa' : 'Instrutor') + ' ' : ''}${escapeHtml(p.nome || '')}${p.nome ? ': ' : ''}${escapeHtml(p.motivo || '')}</div>`).join('')}
+        <small>Cadastre o WhatsApp que falta e o aviso sai na próxima rodada, a cada 5 minutos.</small>
+      </div>` : '';
+    corpo = `
+      <div class="card cfg-sec">
+        <div class="cfg-sec-h">
+          <div><h3>Mensagens automáticas por WhatsApp</h3>
+            <p>Vale para todas as empresas clientes e todos os instrutores. Os envios acontecem sozinhos, só entre 08h e 20h. O botão Avisar, dentro da turma, continua disponível para mandar na hora.</p></div>
+        </div>
+        ${semNumero ? `<div class="cfg-pend"><b>Nenhum número de WhatsApp ativo.</b><small>Conecte um número no CRM para as mensagens poderem sair.</small></div>` : ''}
+        <div class="rel2-rankings">
+          ${_cfgBlocoDestino('cliente', cfg.cliente || {})}
+          ${_cfgBlocoDestino('instrutor', cfg.instrutor || {})}
+        </div>
+        <div class="cfg-dica">Use horários diferentes para empresa e instrutor, assim as mensagens não saem todas juntas.</div>
+        ${seletorCaixa}
+        ${pendHtml}
+        <div class="cfg-rodape">
+          <button class="btn btn-navy" id="btnCfgSalvar" onclick="_cfgSalvar()">Salvar</button>
+        </div>
+      </div>`;
   }
+  setConteudo(corpo);
 }
 
-function _avisoAutoDesenhar() {
-  const ctx = window._avisoCtx || {};
-  const c = window._avisoAutoCfg || {};
-  const alvos = c.alvos || ['cliente', 'instrutor'];
-  const podeEditar = ['administrador', 'comercial', 'provedor'].includes(usuarioAtual.perfil);
-  const sel = 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1)';
-  const optMin = [5, 10, 15, 30, 60].map(n => `<option value="${n}" ${Number(c.aposMinutos || 10) === n ? 'selected' : ''}>${n} minutos</option>`).join('');
-  const horas = []; for (let h = 8; h <= 19; h++) horas.push(`${String(h).padStart(2, '0')}:00`);
-  if (c.vesperaHora && !horas.includes(c.vesperaHora)) horas.push(c.vesperaHora);
-  const optHora = horas.sort().map(h => `<option value="${h}" ${(c.vesperaHora || '14:00') === h ? 'selected' : ''}>${h}</option>`).join('');
-  const caixas = ctx.caixas || [];
-  const seletorCaixa = caixas.length > 1 ? `<div class="field" style="margin-top:12px"><label>Enviar pelo número</label>
-      <select id="autoCaixa" style="${sel}">
-        <option value="">Escolha o número</option>
-        ${caixas.map(x => `<option value="${x.id}" ${x.id === c.caixaId ? 'selected' : ''}>${escapeHtml(x.nome)}${x.numero ? ' · ' + escapeHtml(x.numero) : ''}</option>`).join('')}
-      </select></div>` : '';
-  const pend = (c.pendencias || []);
-  const pendHtml = pend.length ? `<div style="margin-top:14px;border:1px solid #F5C2C0;background:#FEF4F3;border-radius:8px;padding:10px 12px">
-      <div style="font-size:12px;font-weight:700;color:#B4312E;margin-bottom:6px">Não foi possível avisar</div>
-      ${pend.map(p => `<div style="font-size:12px;color:var(--text-2);line-height:1.5">${p.data ? `<b>${escapeHtml(p.data)}</b> · ` : ''}${p.curso ? escapeHtml(p.curso) + ' · ' : ''}${escapeHtml(p.nome || '')}${p.nome ? ': ' : ''}${escapeHtml(p.motivo || '')}</div>`).join('')}
-      <div style="font-size:11px;color:var(--text-3);margin-top:6px">Cadastre o WhatsApp que falta e o aviso sai na próxima rodada (a cada 5 minutos).</div>
-    </div>` : '';
-  const bloco = (id, marcado, titulo, sub, campo) => `
-    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
-      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
-        <input type="checkbox" id="${id}" ${marcado ? 'checked' : ''} ${podeEditar ? '' : 'disabled'} style="margin-top:3px">
-        <span style="flex:1;min-width:0"><b style="font-size:13px;color:var(--text-1)">${titulo}</b>
-          <span style="display:block;font-size:12px;color:var(--text-3);margin-top:2px">${sub}</span></span>
-      </label>
-      <div style="margin:10px 0 0 26px">${campo}</div>
-    </div>`;
-
-  abrirModal('Aviso automático por WhatsApp', `
-    <div style="font-size:12px;color:var(--text-3);margin-bottom:12px">
-      O sistema envia sozinho, entre 08h e 20h. O botão Avisar continua disponível para enviar na hora.
-    </div>
-    ${bloco('autoApos', c.aposAgendar, 'Confirmar depois de agendar',
-      'Envia a confirmação alguns minutos depois de o encontro ser criado. Vale para agendamentos feitos a partir de agora.',
-      `<select id="autoMin" style="${sel};max-width:200px" ${podeEditar ? '' : 'disabled'}>${optMin}</select>`)}
-    ${bloco('autoVesp', c.vespera, 'Lembrete na véspera',
-      'No dia anterior ao encontro, a partir do horário escolhido.',
-      `<select id="autoHora" style="${sel};max-width:200px" ${podeEditar ? '' : 'disabled'}>${optHora}</select>
-       <div style="margin-top:8px;font-size:12px">Texto do lembrete:
-         <button type="button" onclick="_avisoEditarModelo('cliente','lembrete')" style="background:none;border:none;padding:0 4px;font-size:12px;color:var(--navy);cursor:pointer;text-decoration:underline">para a empresa</button>
-         <button type="button" onclick="_avisoEditarModelo('instrutor','lembrete')" style="background:none;border:none;padding:0 4px;font-size:12px;color:var(--navy);cursor:pointer;text-decoration:underline">para o instrutor</button>
-       </div>`)}
-    <div style="font-size:12px;font-weight:700;color:var(--text-2);margin:14px 0 6px">Quem recebe</div>
-    <label style="display:inline-flex;gap:6px;align-items:center;margin-right:16px;font-size:13px;cursor:pointer"><input type="checkbox" class="autoAlvo" value="cliente" ${alvos.includes('cliente') ? 'checked' : ''} ${podeEditar ? '' : 'disabled'}> Empresa cliente</label>
-    <label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" class="autoAlvo" value="instrutor" ${alvos.includes('instrutor') ? 'checked' : ''} ${podeEditar ? '' : 'disabled'}> Instrutor</label>
-    ${seletorCaixa}
-    ${pendHtml}`,
-    `<button class="btn btn-outline" onclick="_avisoVoltarDoModelo()">Voltar</button>
-     ${podeEditar ? '<button class="btn btn-navy" id="btnModalSalvar" onclick="_avisoAutoSalvar()">Salvar</button>' : ''}`,
-    true);
+function _cfgLerDestino(alvo) {
+  const v = id => _getElVisible(`cfg-${alvo}-${id}`);
+  return {
+    apos: !!v('apos')?.checked,
+    minutos: Number(v('min')?.value || 10),
+    vespera: !!v('vesp')?.checked,
+    hora: v('hora')?.value || '14:00',
+  };
 }
 
-async function _avisoAutoSalvar() {
-  const alvos = Array.from(document.querySelectorAll('.autoAlvo:checked')).map(x => x.value);
-  if (!alvos.length) { showToast('Escolha quem recebe: empresa cliente, instrutor ou os dois.', 'error'); return; }
-  const elCaixa = document.getElementById('autoCaixa');
+async function _cfgSalvar() {
+  const cli = _cfgLerDestino('cliente'), ins = _cfgLerDestino('instrutor');
+  const elCaixa = _getElVisible('cfg-caixa');
   const caixaId = elCaixa ? (elCaixa.value || null) : null;
-  const apos = !!document.getElementById('autoApos')?.checked;
-  const vesp = !!document.getElementById('autoVesp')?.checked;
-  if (elCaixa && !caixaId && (apos || vesp)) { showToast('Escolha por qual número o aviso automático sai.', 'error'); return; }
-  try {
-    setBtnModalLoading(true);
-    const { data, error } = await sb.rpc('crm_aviso_auto_salvar', {
-      p_apos_agendar: apos,
-      p_apos_minutos: Number(document.getElementById('autoMin')?.value || 10),
-      p_vespera: vesp,
-      p_vespera_hora: document.getElementById('autoHora')?.value || '14:00',
-      p_alvos: alvos,
-      p_caixa_id: caixaId,
-    });
-    if (error) throw error;
-    window._avisoAutoCfg = data || {};
-    showToast((apos || vesp) ? 'Aviso automático ligado.' : 'Aviso automático desligado.', 'success');
-    await _avisoVoltarDoModelo();
-  } catch (e) {
-    setBtnModalLoading(false);
-    showToast(traduzErroSupabase(e, 'Não foi possível salvar'), 'error');
+  if (elCaixa && !caixaId && (cli.apos || cli.vespera || ins.apos || ins.vespera)) {
+    showToast('Escolha por qual número as mensagens automáticas saem.', 'error'); return;
   }
+  const btns = document.querySelectorAll('#btnCfgSalvar');
+  btns.forEach(b => { b.disabled = true; b.textContent = 'Salvando...'; });
+  try {
+    const { data, error } = await sb.rpc('crm_aviso_auto_salvar_v2', { p_cliente: cli, p_instrutor: ins, p_caixa_id: caixaId });
+    if (error) throw error;
+    window._cfgEstado.cfg = data || window._cfgEstado.cfg;
+    showToast('Configurações salvas.', 'success');
+    _cfgRender();
+  } catch (e) {
+    showToast(traduzErroSupabase(e, 'Não foi possível salvar'), 'error');
+    btns.forEach(b => { b.disabled = false; b.textContent = 'Salvar'; });
+  }
+}
+
+// Abre o mesmo editor de modelo da janela Avisar, com dados de exemplo na
+// prévia (aqui não há um agendamento específico).
+async function _cfgEditarTexto(alvo, tipo) {
+  window._avisoCtx = { ...(window._avisoCtx || {}), agId: null, deConfig: true };
+  await _avisoEditarModelo(alvo, tipo);
 }
 
 async function excluirAgendamento(agId, turmaId) {
@@ -29441,7 +29510,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '182';
+  var APP_BUILD = '183';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
