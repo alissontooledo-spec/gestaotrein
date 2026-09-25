@@ -19548,6 +19548,7 @@ async function _cacheExecSalvar(turmaId, dados) {
     const tx = db.transaction(CACHE_EXEC_STORE, 'readwrite');
     tx.objectStore(CACHE_EXEC_STORE).put({
       turmaId, t: dados.t, ultimaSessaoId: dados.sessaoAtivaId||null, porSessao,
+      resumoEnc: dados.resumoEnc || existente?.resumoEnc || null,
       salvo_em:new Date().toISOString(),
     });
     tx.oncomplete = () => resolve();
@@ -19667,46 +19668,37 @@ async function _enviarAnotacoes(reg) {
   if (error) throw error;
 }
 
-// Reenvia a finalização de uma sessão da fila — mesma lógica de
-// finalizarTurma no caminho online: marca a sessão concluída e, se todas as
-// sessões da turma já estiverem concluídas, marca a turma como concluída e
-// atualiza o cache de conformidade.
+// Reenvia a finalização de um encontro da fila — mesma função usada online
+// por finalizarTurma.
+//
+// v186 (25/09/2026): a finalização passou para o banco
+// (turma_finalizar_encontro, PASSO-50). Antes o app lia "todos os encontros
+// da turma" COM A PERMISSÃO DO INSTRUTOR, e o instrutor só enxerga os
+// encontros dele (policy sessoes_instrutor). Numa turma com dois instrutores
+// o primeiro via 2 de 4 encontros, todos concluídos, e concluía a turma
+// inteira (NR-05 da IW8, Avanteseg). Agora o banco:
+//   · finaliza só o encontro pedido (e só se for de quem pediu, ou se quem
+//     pediu for administrador/comercial/provedor);
+//   · olha a turma INTEIRA e só a conclui quando não sobra encontro pendente;
+//   · grava a carga horária confirmada junto, na mesma operação.
+// Além disso, uma trava no banco impede qualquer caminho de concluir turma
+// com encontro pendente.
 async function _enviarFinalizarSessao(reg) {
-  // .select('id') depois do update é o que permite conferir se a gravação
-  // realmente afetou alguma linha — o Supabase NÃO trata "0 linhas
-  // atualizadas" como erro, então sem essa checagem o código seguia adiante
-  // como se a sessão tivesse sido finalizada mesmo quando não foi (bug real
-  // encontrado em produção: turma marcada como concluída e conformidade
-  // gravada com a sessão continuando concluida=false no banco).
-  const {data:sessaoAtualizada, error:errSessao} = await sb.from('sessoes')
-    .update({concluida:true}).eq('id', reg.sessaoId).select('id');
-  if (errSessao) throw errSessao;
-  if (!sessaoAtualizada || !sessaoAtualizada.length) {
-    throw new Error('Não foi possível marcar a aula como concluída (nenhum registro encontrado). Tente novamente ou avise o suporte.');
+  const {data:r, error} = await sb.rpc('turma_finalizar_encontro', {
+    p_sessao_id: reg.sessaoId,
+    p_carga_horaria_real: reg.cargaHorariaReal || null,
+  });
+  if (error) {
+    if (error.code === 'PGRST202') throw new Error('O banco ainda não recebeu a atualização PASSO-50. Avise o administrador.');
+    throw error;
   }
-  const {data:todasSessoes} = await sb.from('sessoes').select('id,concluida,data').eq('turma_id', reg.turmaId);
-  // Só considera "todas concluídas" com base no estado real do banco —
-  // antes havia um "ou é a sessão que acabamos de tentar finalizar" que
-  // mascarava exatamente essa falha silenciosa.
-  const todasConcluidas = (todasSessoes||[]).length > 0 && (todasSessoes||[]).every(s => s.concluida);
-  if (todasConcluidas) {
-    const {error:errTurma} = await sb.from('turmas').update({status:'concluida'}).eq('id', reg.turmaId);
-    if (errTurma) throw errTurma;
-    // Ajuste 1 (2026-09-01): grava a carga horária confirmada pelo
-    // instrutor. Best-effort de propósito, igual à conformidade logo
-    // abaixo — nunca desfaz nem bloqueia a finalização (já concluída
-    // acima) se falhar, inclusive se a coluna ainda não existir neste
-    // banco (migration PASSO-27 pendente de execução pelo Alisson).
-    if (reg.cargaHorariaReal) {
-      try {
-        const {data:_chGravada, error:errCh} = await sb.from('turmas')
-          .update({carga_horaria_real: reg.cargaHorariaReal}).eq('id', reg.turmaId).select('id');
-        if (errCh || !_chGravada?.length) console.warn('Carga horária real não gravada:', errCh?.message || '0 linhas afetadas');
-      } catch(e) { console.warn('Carga horária real: falha ao gravar', e.message); }
-    }
-    try { await _atualizarConformidadeTurma(reg.turmaId, todasSessoes); } catch(e) {}
+  const concluida = !!r?.turma_concluida;
+  if (concluida) {
+    // Conformidade com TODOS os encontros da turma (vêm do banco): exige
+    // presença em todos os dias, não só nos do instrutor que fechou.
+    try { await _atualizarConformidadeTurma(reg.turmaId, r.sessoes || []); } catch(e) {}
   }
-  return todasConcluidas;
+  return {concluida, pendentes: Number(r?.pendentes || 0)};
 }
 
 let _sincronizandoFila = false;
@@ -19787,7 +19779,7 @@ async function abrirExecucaoSessao(turmaId, sessaoId) {
 async function abrirExecucao(turmaId, sessaoIdParam) {
   showLoading('Carregando execução...');
   try {
-    let t, presencas, evidencias, sessaoAtiva, deCache = false;
+    let t, presencas, evidencias, sessaoAtiva, deCache = false, resumoEnc = null;
     let catFlags = {exige_art:false, exige_avaliacao:false}, artTurma = null, avaliacoes = [];
     window._execSemCacheDoEncontro = false;
     const hoje = dataLocalISO();
@@ -19843,7 +19835,15 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
       artTurma   = _rArt?.data || null;
       avaliacoes = _rAval?.data || [];
 
-      try { await _cacheExecSalvar(turmaId, {t, sessaoAtivaId: sessaoIdAtiva, presencas, evidencias, catFlags, artTurma, avaliacoes}); } catch(e) {}
+      // v186: encontros da turma INTEIRA, inclusive os de outros instrutores
+      // (t.sessoes só traz os do instrutor logado). Sem o PASSO-50, fica null
+      // e a tela assume que este encontro NÃO fecha a turma.
+      try {
+        const rRes = await sb.rpc('turma_encontros_resumo', {p_turma_id: turmaId});
+        if (!rRes.error) resumoEnc = rRes.data || null;
+      } catch(e) {}
+
+      try { await _cacheExecSalvar(turmaId, {t, sessaoAtivaId: sessaoIdAtiva, presencas, evidencias, catFlags, artTurma, avaliacoes, resumoEnc}); } catch(e) {}
 
     } catch(erroRede) {
       const snap = await _cacheExecCarregar(turmaId).catch(()=>null);
@@ -19873,6 +19873,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
       catFlags   = snap.catFlags   || {exige_art:false, exige_avaliacao:false};
       artTurma   = snap.artTurma   || null;
       avaliacoes = snap.avaliacoes || [];
+      resumoEnc  = snap.resumoEnc  || null;
       deCache = true;
     }
 
@@ -19925,8 +19926,21 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
     const nomeC = t.clientes?.nome||'';
     const totalSessoes    = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id).length;
     const concluidasSessoes = (t.sessoes||[]).filter(s => s.instrutor_id === usuarioAtual.id && s.concluida).length;
+
+    // v186: este encontro fecha a turma? Decide pela turma INTEIRA (resumo do
+    // banco). Sem resumo (offline sem retrato), assume que NÃO fecha — o
+    // banco decide de verdade na hora de gravar.
+    const _encTurma   = (resumoEnc?.sessoes || null) && resumoEnc.sessoes.filter(s => !s.cancelada);
+    const _pendDemais = _encTurma ? _encTurma.filter(s => !s.concluida && s.id !== sessaoAtiva?.id) : null;
+    const _fechaTurma = !!sessaoAtiva && !sessaoAtiva.concluida && !!_pendDemais && _pendDemais.length === 0;
+    const _pendOutroInstr = _pendDemais ? _pendDemais.filter(s => !s.minha).length : 0;
+    window._execFechaTurma = _fechaTurma;
+    const _posTurma = _encTurma && sessaoAtiva ? _encTurma.findIndex(s => s.id === sessaoAtiva.id) + 1 : 0;
+
     const infoSessao = sessaoAtiva
-      ? `${formatarData(sessaoAtiva.data)}${totalSessoes > 1 ? ` · Dia ${concluidasSessoes + 1} de ${totalSessoes}` : ''}`
+      ? `${formatarData(sessaoAtiva.data)}${_posTurma > 0 && _encTurma.length > 1
+          ? ` · Encontro ${_posTurma} de ${_encTurma.length}`
+          : (totalSessoes > 1 ? ` · Dia ${concluidasSessoes + 1} de ${totalSessoes}` : '')}`
       : '';
 
     // Jornada em Etapas Guiadas (2026-08-20) — contadores calculados uma vez
@@ -20092,7 +20106,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
                   <span style="font-size:14px;font-weight:600;color:${_artCompleta(artTurma)?'var(--green-text)':'var(--amber-text)'}">${_artResumoTexto(artTurma)}</span>
                 </div>` : ''}
               </div>
-              ${(!sessaoAtiva?.concluida && (t.sessoes||[]).filter(s=>s.id!==sessaoAtiva?.id).every(s=>s.concluida)) ? `
+              ${_fechaTurma ? `
               <div style="border:1.5px dashed var(--amber);background:var(--amber-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px">
                 <label for="execCargaHorariaReal" style="display:block;font-size:11px;font-weight:700;color:var(--amber-text);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Carga horária do treinamento</label>
                 <input type="number" id="execCargaHorariaReal" min="0.5" step="0.5" value="${t.carga_horaria_real ?? t.catalogo?.carga_horaria ?? ''}" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;font-weight:700;color:var(--text-1)">
@@ -20104,12 +20118,14 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
               </div>` : `
               <div style="background:var(--amber-l);border:1px solid #fde68a;border-radius:var(--r-md);padding:12px 14px;margin-bottom:20px;font-size:13px;line-height:1.5">
                 <div style="font-weight:600;margin-bottom:4px">⚠️ Atenção</div>
-                ${(t.sessoes||[]).filter(s=>s.id!==sessaoAtiva?.id).every(s=>s.concluida)
-                  ? 'Ao finalizar, o status da turma será alterado para <strong>Concluída</strong>. Os documentos ficarão disponíveis para geração.'
-                  : 'Isso finaliza apenas o encontro de hoje. A turma só fica <strong>Concluída</strong> (com documentos liberados) depois que todos os encontros forem finalizados.'}
+                ${_fechaTurma
+                  ? 'Este é o último encontro da turma. Ao finalizar, o status da turma será alterado para <strong>Concluída</strong> e os documentos ficarão disponíveis para geração.'
+                  : `Isso finaliza apenas este encontro. A turma continua em andamento${_pendDemais && _pendDemais.length
+                      ? ` — ainda falta${_pendDemais.length > 1 ? 'm' : ''} <strong>${_pendDemais.length} encontro${_pendDemais.length > 1 ? 's' : ''}</strong>${_pendOutroInstr ? `, ${_pendOutroInstr === _pendDemais.length ? '' : `${_pendOutroInstr} `}de outro instrutor` : ''}`
+                      : ''}. Ela só fica <strong>Concluída</strong> (com documentos liberados) quando todos os encontros forem finalizados.`}
               </div>
               <div class="exec-footer"><button class="btn btn-navy" onclick="finalizarTurma('${turmaId}')">
-                ✓ Finalizar treinamento
+                ${_fechaTurma ? '✓ Finalizar treinamento' : '✓ Finalizar este encontro'}
               </button></div>`}
             </div>
           </div>
@@ -21252,7 +21268,9 @@ async function finalizarTurma(turmaId) {
     }
   }
 
-  const okFinalizar = await confirmarAcao('Confirma a finalização desta etapa do treinamento?', 'Finalizar', false);
+  const okFinalizar = await confirmarAcao(window._execFechaTurma
+    ? 'Este é o último encontro da turma. Ao finalizar, a turma fica Concluída e os documentos são liberados. Confirma?'
+    : 'Confirma a finalização deste encontro? A turma continua em andamento até o último encontro ser finalizado.', 'Finalizar', false);
   if (!okFinalizar) return;
 
   const sessaoId = window._execSessaoId;
@@ -21262,14 +21280,16 @@ async function finalizarTurma(turmaId) {
   try {
     showLoading('Finalizando...');
     if (!navigator.onLine) throw new Error('__offline__');
-    const todasConcluidas = await _enviarFinalizarSessao(reg);
-    showToast(todasConcluidas ? 'Treinamento concluído! Todos os dias finalizados.' : 'Etapa finalizada! Retorne na próxima data para continuar.', 'success');
+    const res = await _enviarFinalizarSessao(reg);
+    showToast(res.concluida
+      ? 'Treinamento concluído! Todos os encontros da turma foram finalizados.'
+      : `Encontro finalizado! A turma continua em andamento${res.pendentes ? ` (falta${res.pendentes > 1 ? 'm' : ''} ${res.pendentes} encontro${res.pendentes > 1 ? 's' : ''})` : ''}.`, 'success');
     await verTurma(turmaId);
   } catch(e) {
     if (e.message === '__offline__' || _erroDeRede(e)) {
       try {
         await _filaAdicionar(reg);
-        showToast('Sem conexão — finalização guardada e será processada automaticamente quando a internet voltar (o status muda para Concluída na hora da sincronização).','info',7000);
+        showToast('Sem conexão — a finalização deste encontro foi guardada e será enviada automaticamente quando a internet voltar.','info',7000);
         _atualizarBadgeFilaOffline();
       } catch(e2) {
         showToast('Não foi possível guardar a finalização neste dispositivo: '+(e2.message||''),'error');
@@ -29557,7 +29577,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '185';
+  var APP_BUILD = '186';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
