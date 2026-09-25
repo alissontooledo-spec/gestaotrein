@@ -13802,7 +13802,7 @@ async function verTurma(id, opts = {}) {
               <div class="tv-agi">${_instr}</div>
               <div class="tv-agl">${_loc||'—'}</div>
               <div class="tv-agst"><span class="badge ${ag.concluida?'badge-green':'badge-gray'}">${_stTxt}</span></div>
-              <div class="tv-agacts">${podeEditar?`<div class="tv-ag-btns">
+              <div class="tv-agacts">${podeEditar && !ag.concluida?`<div class="tv-ag-btns">
                   ${!ag.concluida?`<button class="btn btn-outline btn-sm" data-action="avisarAgendamento" data-id="${ag.id}" data-extra="${id}" title="Avisar a empresa e o instrutor por WhatsApp">Avisar</button>`:``}
                   <button class="btn btn-navy btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
                   <button class="btn btn-outline btn-sm" data-action="excluirAgendamento" data-id="${ag.id}" data-extra="${id}" style="color:var(--red);border-color:var(--red)">Excluir</button>
@@ -14265,6 +14265,14 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
   if (agendamentoId) {
     const {data} = await sb.from('sessoes').select('*').eq('id', agendamentoId).single();
     ag = data;
+  }
+  // v187 (25/09/2026): encontro concluído é registro do que aconteceu, com
+  // presenças assinadas. Não se muda data, horário, instrutor ou local
+  // (o banco também trava, PASSO-51).
+  if (ag?.concluida) {
+    window._agendamentoEditId = null;
+    showToast('Este encontro já foi concluído e não pode ser alterado.', 'error');
+    return;
   }
   if (ag?.hora_fim) window._agHoraFimManual = true;
 
@@ -15089,6 +15097,12 @@ async function _cfgEditarTexto(alvo, tipo) {
 
 async function excluirAgendamento(agId, turmaId) {
   if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { showToast('Você não tem permissão para excluir agendamentos','error'); return; }
+  // v187: encontro concluído não se exclui — as presenças (assinaturas) e as
+  // evidências daquele dia seriam apagadas junto (o banco também trava, PASSO-51).
+  try {
+    const {data:_agEx} = await sb.from('sessoes').select('concluida').eq('id', agId).maybeSingle();
+    if (_agEx?.concluida) { showToast('Este encontro já foi concluído e não pode ser excluído: as presenças e as evidências dele seriam apagadas junto.', 'error'); return; }
+  } catch(e) {}
   const ok = await confirmarAcao('Deseja excluir este agendamento?', 'Excluir', true);
   if (!ok) return;
   const {error} = await sb.from('sessoes').delete().eq('id',agId);
@@ -29577,7 +29591,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '186';
+  var APP_BUILD = '187';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
