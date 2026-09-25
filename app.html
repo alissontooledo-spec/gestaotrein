@@ -1916,6 +1916,47 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
   height: 36px; padding: 0 32px 0 34px; border-radius: 6px;
   border: 1px solid var(--border); font-size: 11px; font-weight: 700;
 }
+
+/* ── Minha Agenda em lista (v188) — letra grande, botões grandes ── */
+.ag3-seg{display:flex;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:14px}
+.ag3-seg button{flex:1;min-height:44px;border:0;border-radius:9px;background:transparent;font:inherit;font-size:15px;font-weight:700;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.ag3-seg button.on{background:var(--navy);color:#fff}
+.ag3-resumo{background:var(--navy);color:#fff;border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.ag3-hoje-txt{font-size:17px;font-weight:700;margin-bottom:12px}
+.ag3-contas{display:flex;gap:10px}
+.ag3-contas>div{flex:1;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 12px}
+.ag3-contas b{display:block;font-size:26px;line-height:1.1;color:var(--amber)}
+.ag3-contas>div+div b{color:#fff}
+.ag3-contas span{font-size:13px;color:rgba(255,255,255,.75)}
+.ag3-dia{margin-bottom:18px}
+.ag3-dia-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:4px 2px 10px;border-bottom:2px solid var(--border);margin-bottom:10px}
+.ag3-dia-h b{font-size:20px;color:var(--text-1)}
+.ag3-dia-h span{font-size:15px;color:var(--text-2)}
+.ag3-dia.hoje .ag3-dia-h{border-bottom-color:var(--amber)}
+.ag3-dia.atraso .ag3-dia-h{border-bottom-color:var(--red)}
+.ag3-dia.atraso .ag3-dia-h b{color:var(--red)}
+.ag3-card{background:var(--surface);border:1px solid var(--border);border-left:5px solid var(--border-2,#cbd5e1);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.ag3-card.hoje{border-left-color:var(--amber);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.ag3-card.atraso{border-left-color:var(--red)}
+.ag3-card.comp{border-left-color:var(--navy)}
+.ag3-topo{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.ag3-hora{display:flex;align-items:baseline;gap:8px}
+.ag3-h1{font-size:24px;font-weight:800;color:var(--text-1);line-height:1.1}
+.ag3-h2{font-size:16px;font-weight:600;color:var(--text-2)}
+.ag3-selo{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.ag3-selo.ok{background:var(--green-l);color:var(--green-text)}
+.ag3-selo.atraso{background:var(--red-l,#FEF2F2);color:var(--red)}
+.ag3-selo.comp{background:rgba(42,60,100,.10);color:var(--navy)}
+.ag3-curso{font-size:17px;font-weight:700;color:var(--text-1);line-height:1.3;margin-bottom:4px}
+.ag3-emp{font-size:15px;font-weight:600;color:var(--text-2);margin-bottom:4px}
+.ag3-local{font-size:14px;color:var(--text-2);line-height:1.4}
+.ag3-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.ag3-btn{flex:1 1 0;min-width:0;line-height:1.2;text-align:center;min-height:50px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;font:inherit;font-size:15px;font-weight:700;text-decoration:none;cursor:pointer;padding:0 14px}
+.ag3-btn-pri{background:var(--amber);color:var(--navy);border:0}
+.ag3-btn-sec{background:var(--surface);color:var(--navy);border:1.5px solid var(--border-2,#cbd5e1)}
+.ag3-vazio{background:var(--surface);border:1px dashed var(--border-2,#cbd5e1);border-radius:12px;padding:24px;text-align:center;font-size:15px;color:var(--text-2)}
+.ag3-mais{width:100%;min-height:50px;border-radius:12px;border:1.5px solid var(--border-2,#cbd5e1);background:var(--surface);font:inherit;font-size:15px;font-weight:700;color:var(--navy);cursor:pointer;margin-bottom:20px}
+.ag3-painel-lista{max-width:760px}
 </style>
 <style id="conceito-telas-finais">
 /* ── Tons do conceito para as cores de apoio (21/09) ──────────────────────
@@ -7067,10 +7108,14 @@ async function renderHomeInstrutor() {
 
   // ── Indicadores resumidos ──
   const mesAtual = hoje.slice(0,7);
-  const turmaIdsConcluidasMes = new Set(
-    sessoesValidas.filter(s=>s.concluida && s.data?.startsWith(mesAtual)).map(s=>s.turma_id)
-  );
-  const horasMes = [...turmaIdsConcluidasMes].reduce((acc,id)=>acc+(tMap[id]?.catalogo?.carga_horaria||0),0);
+  // v188 (25/09): mesma regra do Histórico (v180, "hora da agenda"). Antes
+  // somava a carga horária INTEIRA do curso de cada turma em que ele deu
+  // pelo menos um encontro: numa turma de 12h dividida com outro
+  // instrutor, ele recebia as 12h. Agora são as horas dos encontros DELE
+  // finalizados no mês.
+  const _encMes = sessoesValidas.filter(s=>s.concluida && s.data?.startsWith(mesAtual));
+  const turmaIdsConcluidasMes = new Set(_encMes.map(s=>s.turma_id));
+  const horasMes = Math.round(_encMes.reduce((acc,s)=>acc+(_durSessao(s)||0),0)*10)/10;
 
   // ── Pendências: turmas concluídas nos últimos 60 dias com documentos
   // incompletos (lista de presença, certificado coletivo ou individuais) ──
@@ -7294,8 +7339,8 @@ async function renderHomeInstrutor() {
     </div>
 
     <div class="gi-kpirow gi-2">
-      <div class="gi-kpi gi-sm"><div class="gi-kh">Turmas no mês</div><span class="gi-n">${turmaIdsConcluidasMes.size}</span><small class="gi-s">concluídas por você</small></div>
-      <div class="gi-kpi gi-sm"><div class="gi-kh">Horas no mês</div><span class="gi-n">${horasMes}</span><small class="gi-s">de carga horária ministrada</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Turmas no mês</div><span class="gi-n">${turmaIdsConcluidasMes.size}</span><small class="gi-s">em que você deu aula</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Horas no mês</div><span class="gi-n">${horasMes.toLocaleString('pt-BR')}</span><small class="gi-s">nos seus encontros finalizados</small></div>
     </div>
 
     <div class="gi-grid2 gi-par gi-inst">
@@ -13371,7 +13416,7 @@ function _tvHtmlLista() {
       <div class="tv-pcpf">${escapeHtml(p.cpf||'—')}</div>
       <div class="tv-pemp">${escapeHtml([p.empresa, p.cargo].filter(Boolean).join(' · ')||'—')}</div>
       <div class="tv-ppres"><span class="badge ${p.assinou?'badge-green':'badge-gray'}">${p.assinou?'Assinou':'Pendente'}</span></div>
-      <div>${st.podeEditar?`<button class="tv-px" data-action="removerParticipante" data-id="${p.id}" data-turma="${st.turmaId}" title="Remover ${escapeHtml(p.nome)} da turma">✕</button>`:''}</div>
+      <div>${st.podeEditar && !p.assinou?`<button class="tv-px" data-action="removerParticipante" data-id="${p.id}" data-turma="${st.turmaId}" title="Remover ${escapeHtml(p.nome)} da turma">✕</button>`:''}</div>
     </div>`;
   }).join('');
 
@@ -13473,8 +13518,18 @@ async function _tvRemoverIds(ids, modo) {
   if (!ids || !ids.length) { showToast('Nenhum participante para remover.','info'); return; }
 
   const lista = st.lista || [];
+  // v188: quem já tem presença não sai da turma (PASSO-52). Sai do pedido
+  // antes da confirmação, e a mensagem avisa quantos ficaram.
+  const ficam = lista.filter(p => ids.includes(p.id) && p.assinou);
+  ids = ids.filter(id => !ficam.some(p => p.id === id));
+  if (!ids.length) {
+    showToast(ficam.length === 1
+      ? 'Este participante já tem presença registrada e não pode ser removido.'
+      : 'Todos os selecionados já têm presença registrada e não podem ser removidos.', 'error');
+    return;
+  }
   const alvo  = lista.filter(p => ids.includes(p.id));
-  const assinaram = alvo.filter(p => p.assinou);
+  const assinaram = ficam;
   const nomes = alvo.slice(0,5).map(p => p.nome).filter(Boolean).join(', ');
   const resto = alvo.length > 5 ? ` e mais ${alvo.length-5}` : '';
 
@@ -13483,7 +13538,7 @@ async function _tvRemoverIds(ids, modo) {
     : `Remover ${alvo.length} participante${alvo.length!==1?'s':''} desta turma?`;
   msg += `\n\n${nomes}${resto}.`;
   if (assinaram.length) {
-    msg += `\n\nATENÇÃO: ${assinaram.length} deles já assinaram a presença. O vínculo com a turma sai, mas a assinatura já coletada continua registrada — a lista de presença desses encontros deixará de bater com a lista de inscritos.`;
+    msg += `\n\n${assinaram.length} ${assinaram.length === 1 ? 'participante já tem' : 'participantes já têm'} presença registrada e ${assinaram.length === 1 ? 'continua' : 'continuam'} na turma.`;
   }
 
   const ok = await confirmarAcao(msg, `Remover ${alvo.length}`, true);
@@ -13598,8 +13653,10 @@ async function verTurma(id, opts = {}) {
       const _sids = agendamentos.map(a => a.id);
       if (_sids.length) {
         const {data:_prs} = await sb.from('presencas')
-          .select('colaborador_id,assinatura_path').in('sessao_id', _sids);
-        (_prs||[]).forEach(pr => { if (pr.assinatura_path) _tvPresencas[pr.colaborador_id] = true; });
+          .select('colaborador_id,assinatura_path,presente').in('sessao_id', _sids);
+        // v188: presença marcada sem assinatura também conta — é o que o
+        // banco usa para travar a remoção (PASSO-52).
+        (_prs||[]).forEach(pr => { if (pr.assinatura_path || pr.presente === true) _tvPresencas[pr.colaborador_id] = true; });
       }
     } catch(e) { _tvPresencas = {}; }
     const st           = t.status||'agendada';
@@ -15114,6 +15171,9 @@ async function excluirAgendamento(agId, turmaId) {
 // ---- Participantes ----
 async function removerParticipante(presencaId, turmaId) {
   if (!['administrador','comercial'].includes(usuarioAtual.perfil)) { showToast('Você não tem permissão para remover participantes','error'); return; }
+  // v188: quem já tem presença não sai da turma (o banco também trava, PASSO-52).
+  const _pRem = ((window._tvPart||{}).lista||[]).find(p => p.id === presencaId);
+  if (_pRem?.assinou) { showToast('Este participante já tem presença registrada e não pode ser removido.','error'); return; }
   const ok = await confirmarAcao('Deseja remover este participante da turma?', 'Remover', true);
   if (!ok) return;
   // 2026-08-29 — antes era um delete sem .select(): se o banco recusasse a
@@ -16117,13 +16177,184 @@ async function _socWsConfirmarImportacao() {
   }
 }
 
+
+// ============================================================
+// MINHA AGENDA EM LISTA (v188, 25/09/2026)
+// ============================================================
+// Pedido do Alisson: instrutor com pouca experiência no celular tinha
+// dificuldade para ler a agenda (régua da semana cortada, linha do tempo de
+// um dia só, "Próximos" limitado a 6 itens e calendário com números de
+// 11px). A lista mostra tudo em ordem, dia a dia, com letra grande:
+//   · "Precisa registrar": aulas que já passaram e não foram finalizadas;
+//   · depois, cada dia com aula, a partir de hoje (Hoje / Amanhã / dia da
+//     semana por extenso), com horário, curso, empresa, endereço e botões
+//     grandes ("Abrir treinamento", "Abrir no mapa").
+// O modo "Calendário" (a tela anterior) continua disponível no seletor do
+// topo; a escolha fica guardada neste aparelho.
+
+const _AG3_DIAS_PASSO = 30;
+
+function _ag3LerModo() {
+  try { return localStorage.getItem('gridAgendaModo') === 'calendario' ? 'calendario' : 'lista'; }
+  catch (e) { return 'lista'; }
+}
+
+function _ag3Modo(modo) {
+  window._agendaModo = modo === 'calendario' ? 'calendario' : 'lista';
+  try { localStorage.setItem('gridAgendaModo', window._agendaModo); } catch (e) {}
+  _ag3AplicarModo();
+}
+
+function _ag3AplicarModo() {
+  const lista = (window._agendaModo || 'lista') === 'lista';
+  document.querySelectorAll('.ag3-painel-lista').forEach(el => { el.style.display = lista ? '' : 'none'; });
+  document.querySelectorAll('.ag3-painel-cal').forEach(el => { el.style.display = lista ? 'none' : ''; });
+  document.querySelectorAll('.ag3-seg button').forEach(b => b.classList.toggle('on', b.dataset.modo === (lista ? 'lista' : 'calendario')));
+}
+
+function _ag3DataExtenso(dataStr) {
+  const [a, m, d] = dataStr.split('-').map(Number);
+  const dt = new Date(a, m - 1, d);
+  const dows = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+  const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  return { dow: dows[dt.getDay()], txt: `${d} de ${meses[m - 1]}` };
+}
+
+// "Curso NR-11 — Capacitação..." → "NR-11 — Capacitação...": o "Curso" na
+// frente não ajuda a reconhecer a aula e empurra o resto para outra linha.
+function _ag3NomeCurso(nome) {
+  return String(nome || 'Treinamento').replace(/^\s*curso\s+/i, '');
+}
+
+function _ag3Horario(s) {
+  if (s.horario_a_confirmar) return '<span class="ag3-h1">Horário a confirmar</span>';
+  if (!s.hora_inicio) return '<span class="ag3-h1">Sem horário</span>';
+  return `<span class="ag3-h1">${s.hora_inicio.slice(0, 5)}</span>${s.hora_fim ? `<span class="ag3-h2">às ${s.hora_fim.slice(0, 5)}</span>` : ''}`;
+}
+
+function _ag3LinkMapa(local) {
+  if (!local) return '';
+  return `<a class="ag3-btn ag3-btn-sec" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(local)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+    Abrir no mapa</a>`;
+}
+
+function _ag3CardSessao(s, hoje) {
+  const t = s.turma || {};
+  const concl = s.concluida === true;
+  const ehHoje = s.data === hoje;
+  const localTxt = t.local && s.local ? `${t.local} · ${s.local}` : (t.local || s.local || '');
+  const selo = concl
+    ? '<span class="ag3-selo ok">Finalizada</span>'
+    : (s.data < hoje ? '<span class="ag3-selo atraso">Não registrada</span>' : '');
+  const rotulo = s.data < hoje && !concl ? 'Registrar aula'
+    : ehHoje && !concl ? (t.status === 'em_andamento' ? 'Continuar treinamento' : 'Abrir treinamento')
+    : 'Ver detalhes';
+  const principal = ehHoje || s.data < hoje;
+  return `<div class="ag3-card${ehHoje && !concl ? ' hoje' : ''}${s.data < hoje && !concl ? ' atraso' : ''}" data-action="verTurma" data-id="${s.turma_id}">
+    <div class="ag3-topo"><div class="ag3-hora">${_ag3Horario(s)}</div>${selo}</div>
+    <div class="ag3-curso">${escapeHtml(_ag3NomeCurso(t.catalogo?.nome))}</div>
+    <div class="ag3-emp">${escapeHtml(t.clientes?.nome || '—')}</div>
+    ${localTxt ? `<div class="ag3-local">${escapeHtml(localTxt)}</div>` : ''}
+    <div class="ag3-acoes">
+      <button type="button" class="ag3-btn ${principal ? 'ag3-btn-pri' : 'ag3-btn-sec'}" data-action="verTurma" data-id="${s.turma_id}">${rotulo}</button>
+      ${_ag3LinkMapa(localTxt)}
+    </div>
+  </div>`;
+}
+
+function _ag3CardCompromisso(x) {
+  const b = _compParaBloco(x);
+  const tp = _compTipo(b.tipo);
+  return `<div class="ag3-card comp" data-action="verCompromisso" data-id="${b._compId}">
+    <div class="ag3-topo"><div class="ag3-hora">${_ag3Horario(b)}</div><span class="ag3-selo comp">Compromisso</span></div>
+    <div class="ag3-curso">${tp.icone} ${escapeHtml(b.titulo || tp.label)}</div>
+    <div class="ag3-emp">${escapeHtml(tp.label)}</div>
+    ${b.local ? `<div class="ag3-local">${escapeHtml(b.local)}</div>` : ''}
+    <div class="ag3-acoes">
+      <button type="button" class="ag3-btn ag3-btn-sec" data-action="verCompromisso" data-id="${b._compId}">Ver detalhes</button>
+      ${_ag3LinkMapa(b.local)}
+    </div>
+  </div>`;
+}
+
+function _ag3MaisDias() {
+  window._ag3Dias = (window._ag3Dias || _AG3_DIAS_PASSO) + _AG3_DIAS_PASSO;
+  _agendaRenderLista();
+}
+
+function _agendaRenderLista() {
+  const hoje = window._agendaHoje || dataLocalISO();
+  const dias = window._ag3Dias || _AG3_DIAS_PASSO;
+  const limite = _agendaSomarDias(hoje, dias - 1);
+  const amanha = _agendaSomarDias(hoje, 1);
+  const sess = (window._agendaSessoes || []).filter(s => s.cancelada !== true);
+  const comps = (window._agendaCompromissos || []).filter(x => !x.cancelado);
+  const ordem = (a, b) => a.data.localeCompare(b.data) || (a.hora_inicio || '99').localeCompare(b.hora_inicio || '99');
+
+  // Aulas que já passaram sem registro (mesma regra da tela Início).
+  const atrasadas = sess.filter(s => s.data < hoje && !s.concluida && s.turma?.status !== 'concluida').sort(ordem);
+
+  // Hoje: tudo do dia (inclusive o que já foi finalizado, para ele ver que
+  // deu certo). Dias seguintes: só o que ainda vai acontecer.
+  const itens = [
+    ...sess.filter(s => s.data === hoje || (s.data > hoje && s.data <= limite && !s.concluida && s.turma?.status !== 'concluida'))
+      .map(s => ({ tipo: 's', data: s.data, hora_inicio: s.hora_inicio, s })),
+    ...comps.filter(x => x.data >= hoje && x.data <= limite && !x.concluido)
+      .map(x => ({ tipo: 'c', data: x.data, hora_inicio: x.hora_inicio, x })),
+  ].sort(ordem);
+  const temDepois = sess.some(s => s.data > limite && !s.concluida && s.turma?.status !== 'concluida')
+    || comps.some(x => x.data > limite && !x.concluido);
+
+  const nHoje = itens.filter(i => i.data === hoje && (i.tipo === 'c' || !i.s.concluida)).length;
+  const fim7 = _agendaSomarDias(hoje, 6);
+  const n7 = itens.filter(i => i.data > hoje && i.data <= fim7).length;
+  const ext = _ag3DataExtenso(hoje);
+
+  let html = `<div class="ag3-resumo">
+      <div class="ag3-hoje-txt">Hoje é ${ext.dow}, ${ext.txt}</div>
+      <div class="ag3-contas">
+        <div><b>${nHoje}</b><span>${nHoje === 1 ? 'aula hoje' : 'aulas hoje'}</span></div>
+        <div><b>${n7}</b><span>nos próximos 7 dias</span></div>
+      </div>
+    </div>`;
+
+  if (atrasadas.length) {
+    html += `<div class="ag3-dia atraso"><div class="ag3-dia-h"><b>Precisa registrar</b><span>${atrasadas.length} ${atrasadas.length === 1 ? 'aula que já passou e não foi finalizada' : 'aulas que já passaram e não foram finalizadas'}</span></div>`;
+    html += atrasadas.map(s => _ag3CardSessao(s, hoje)).join('') + '</div>';
+  }
+
+  if (!itens.length) {
+    html += `<div class="ag3-vazio">Nenhuma aula marcada ${dias > _AG3_DIAS_PASSO ? `nos próximos ${dias} dias` : 'nos próximos 30 dias'}.</div>`;
+  } else {
+    let diaAtual = null;
+    itens.forEach(i => {
+      if (i.data !== diaAtual) {
+        if (diaAtual !== null) html += '</div>';
+        diaAtual = i.data;
+        const e = _ag3DataExtenso(i.data);
+        const rot = i.data === hoje ? 'Hoje' : i.data === amanha ? 'Amanhã' : e.dow.charAt(0).toUpperCase() + e.dow.slice(1);
+        const sub = (i.data === hoje || i.data === amanha) ? `${e.dow}, ${e.txt}` : e.txt;
+        html += `<div class="ag3-dia${i.data === hoje ? ' hoje' : ''}"><div class="ag3-dia-h"><b>${rot}</b><span>${sub}</span></div>`;
+      }
+      html += i.tipo === 's' ? _ag3CardSessao(i.s, hoje) : _ag3CardCompromisso(i.x);
+    });
+    html += '</div>';
+  }
+
+  if (temDepois) {
+    html += `<button type="button" class="ag3-mais" onclick="_ag3MaisDias()">Mostrar mais ${_AG3_DIAS_PASSO} dias</button>`;
+  }
+  _setElBoth('agendaLista', html);
+}
+
 async function renderAgenda() {
   // Consulta idêntica à versão anterior — sessões do instrutor + turmas não
   // canceladas. O redesenho "Semana em Foco" (2026-08-15) muda só a
   // apresentação: régua semanal + linha do tempo do dia + mini-calendário.
   const {data:sessoes} = await sb
     .from('sessoes')
-    .select('id,turma_id,data,hora_inicio,hora_fim,local,modalidade,concluida')
+    .select('id,turma_id,data,hora_inicio,hora_fim,local,modalidade,concluida,cancelada,horario_a_confirmar')
     .eq('instrutor_id', usuarioAtual.id)
     .order('data', {ascending:true});
 
@@ -16174,6 +16405,16 @@ async function renderAgenda() {
   const nComp = (window._agendaCompromissos||[]).filter(x=>x.data>=dSem && x.data<=fimSem).length;
 
   setConteudo(`
+    <div class="ag3-seg" role="tablist" aria-label="Forma de ver a agenda">
+      <button type="button" data-modo="lista" onclick="_ag3Modo('lista')">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Lista</button>
+      <button type="button" data-modo="calendario" onclick="_ag3Modo('calendario')">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+        Calendário</button>
+    </div>
+    <div class="ag3-painel-lista"><div id="agendaLista"></div></div>
+    <div class="ag3-painel-cal">
     <div class="h2-hero" style="padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div>
@@ -16221,9 +16462,15 @@ async function renderAgenda() {
         </div>
       </div>
     </div>
+    </div>
   `);
 
   _agendaRenderTudo();
+  // v188: lista (padrão) ou calendário, conforme a última escolha neste aparelho.
+  window._agendaModo = _ag3LerModo();
+  window._ag3Dias = _AG3_DIAS_PASSO;
+  _agendaRenderLista();
+  _ag3AplicarModo();
 }
 
 // ── Helpers de data (strings YYYY-MM-DD, sem fuso) ──
@@ -29591,7 +29838,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '187';
+  var APP_BUILD = '188';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
