@@ -6559,6 +6559,22 @@ function _alertaLista(itens) {
   }).join('')}</div>`;
 }
 
+// v191: lê uma consulta inteira em partes de 1000. O banco (PostgREST)
+// entrega no máximo 1000 linhas por leitura; sem isto a conta simplesmente
+// para de crescer quando a organização passa desse volume, sem erro nenhum.
+// `montar` devolve a consulta já com filtros e com uma ordem estável
+// (terminando em id), para as partes não se sobreporem.
+async function _lerTudo(montar) {
+  const tudo = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await montar().range(de, de + 999);
+    if (error) return { data: tudo.length ? tudo : null, error };
+    (data || []).forEach(r => tudo.push(r));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: tudo, error: null };
+}
+
 async function renderHomeAdmin() {
   const oi = usuarioAtual.org_id;
   const hoje = new Date();
@@ -6568,11 +6584,14 @@ async function renderHomeAdmin() {
     // local/turma_participantes(id): 2026-08, adicionados só pra alimentar
     // o alerta de pendências abaixo (_turmaPendencias) — sessoes(instrutor_id)
     // já vinha na consulta de `sessoes` logo abaixo, reaproveitada sem custo extra.
-    sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,local,clientes(nome),catalogo(nome),turma_participantes(id)').eq('org_id',oi),
-    sb.from('clientes').select('id,nome,ativo').eq('org_id',oi),
+    _lerTudo(() => sb.from('turmas').select('id,status,created_at,cliente_id,catalogo_id,local,clientes(nome),catalogo(nome),turma_participantes(id)').eq('org_id',oi).order('id')),
+    _lerTudo(() => sb.from('clientes').select('id,nome,ativo').eq('org_id',oi).order('id')),
     // hora_fim/horario_a_confirmar: sem eles _turmaPendencias marcava TODA turma
     // com aula como "sem horário" (contagem e selo do menu inflados — 21/09).
-    sb.from('sessoes').select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,concluida,cancelada,local,horario_a_confirmar,usuarios!instrutor_id(nome)').order('data',{ascending:true}),
+    // v191: filtro de organização também no banco (sessoes tem org_id) e
+    // leitura em partes. Antes vinha sem filtro: no Modo Suporte o Provedor
+    // recebia os encontros de TODAS as organizações, cortados em 1000.
+    _lerTudo(() => sb.from('sessoes').select('id,turma_id,data,hora_inicio,hora_fim,instrutor_id,concluida,cancelada,local,horario_a_confirmar,usuarios!instrutor_id(nome)').eq('org_id',oi).order('data',{ascending:true}).order('id')),
     // Contagens leves (head:true, sem baixar linhas) só pra alimentar o
     // checklist de primeiros passos abaixo — mesma lógica de "já usou esse
     // recurso ao menos uma vez?" do painel de Adoção do Provedor, só que
@@ -6863,8 +6882,17 @@ async function renderHomeAdmin() {
     <div class="gi-kpirow">
       <div class="gi-kpi gi-sm" onclick="irPara('clientes')"><div class="gi-kh">Clientes ativos</div><span class="gi-n">${cliAtivos}</span><small class="gi-s">na organização</small></div>
       <div class="gi-kpi gi-sm" onclick="irParaTurmasFiltradas('concluida')"><div class="gi-kh">Concluídas</div><span class="gi-n">${concluidas.toLocaleString('pt-BR')}</span><small class="gi-s">ver histórico</small></div>
-      <div class="gi-kpi gi-sm" onclick="irPara('conformidade')"><div class="gi-kh">Pessoas certificadas</div><span class="gi-n">${pessoasCertificadas === null ? '—' : pessoasCertificadas.toLocaleString('pt-BR')}</span><small class="gi-s">${(confResumo.colaboradoresTreinados||0).toLocaleString('pt-BR')} com vencimento acompanhado</small></div>
-      <div class="gi-kpi gi-sm"><div class="gi-kh">Certificados emitidos</div><span class="gi-n">${(certEmitidos || 0).toLocaleString('pt-BR')}</span><small class="gi-s">individuais${certColetivos ? ` · mais ${certColetivos.toLocaleString('pt-BR')} coletivo${certColetivos !== 1 ? 's' : ''}` : ''}</small></div>
+      ${(() => {
+        // v191: os dois cartões explicam a relação entre eles. Uma pessoa
+        // pode ter vários certificados individuais (um por curso), e o
+        // coletivo vale um por turma — por isso os números não "batem".
+        const nPes = pessoasCertificadas, nInd = certEmitidos || 0, nCol = certColetivos || 0;
+        const media = nPes ? (nInd / nPes).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) : null;
+        const fmt = n => n.toLocaleString('pt-BR');
+        return `
+      <div class="gi-kpi gi-sm" onclick="irPara('conformidade')" title="Pessoas diferentes com pelo menos um certificado individual válido. Cada pessoa conta uma vez, mesmo tendo feito vários cursos."><div class="gi-kh">Pessoas certificadas</div><span class="gi-n">${nPes === null ? '—' : fmt(nPes)}</span><small class="gi-s">${nPes ? `receberam ${fmt(nInd)} certificado${nInd !== 1 ? 's' : ''} individua${nInd !== 1 ? 'is' : 'l'} · média de ${media} por pessoa` : 'pessoas com certificado individual'}</small></div>
+      <div class="gi-kpi gi-sm" title="Individual: 1 certificado por pessoa em cada curso. Coletivo: 1 certificado por turma, com todos os participantes."><div class="gi-kh">Certificados emitidos</div><span class="gi-n">${fmt(nInd)}</span><small class="gi-s">individuais · 1 por pessoa em cada curso</small>${nCol ? `<small class="gi-s">+ ${fmt(nCol)} coletivo${nCol !== 1 ? 's' : ''} · 1 por turma</small>` : ''}</div>`;
+      })()}
     </div>
 
     <div class="gi-grid2 gi-par">
@@ -10641,9 +10669,10 @@ const STATUS_EXCECAO_LABEL = {
 async function calcConformidade() {
   const oi = usuarioAtual.org_id;
   const [{data:rows, error}, {data:catalogoAll}] = await Promise.all([
-    sb.from('conformidade_status')
+    // v191: em partes de 1000 (ver _lerTudo).
+    _lerTudo(() => sb.from('conformidade_status')
       .select('id,colaborador_id,cliente_id,data_vencimento,status_excecao,motivo_excecao,origem,instituicao_externa,instrutor_externo,colaboradores(nome),catalogo(id,nome,carga_horaria,tipo_curso,curso_relacionado_id),clientes(id,nome)')
-      .eq('org_id', oi),
+      .eq('org_id', oi).order('id')),
     sb.from('catalogo').select('id,nome,tipo_curso,curso_relacionado_id').eq('org_id', oi),
   ]);
   if (error) throw error;
@@ -29855,7 +29884,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '190';
+  var APP_BUILD = '191';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
