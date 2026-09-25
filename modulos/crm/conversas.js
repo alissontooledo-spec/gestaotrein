@@ -99,6 +99,40 @@ function rolaveis() {
   return lista;
 }
 
+/* ── 25/09: a lista da esquerda guarda a posição em QUALQUER redesenho ─────
+   O Alisson abria o 30º da Fila e a lista voltava para o topo: todo clique
+   numa conversa reconstrói a tela inteira, e a lista nasce de novo rolada
+   no zero. Com 48 esperando, atender em ordem virava rolar tudo de novo a
+   cada conversa.
+
+   Não entra em `rolaveis()` de propósito. Lá a regra é "sem foto, vai para o
+   fim", que é a certa para as mensagens (conversa abre na última) e errada
+   para uma lista. E lá a foto só é tirada no redesenho do temporizador; aqui
+   ela precisa valer também para o clique, que é justamente o caso relatado.
+
+   A foto só é devolvida se a tela continua mostrando a MESMA lista (mesma
+   aba, caixa, busca e filtro de resolvidas). Trocou de aba, é outra lista:
+   começa do topo, como deve. */
+let _chaveListaNaTela = null;
+let _rolagemLista = null;
+
+const chaveDaLista = () =>
+  [_verResolvidas ? 'resolvidas' : _aba, _caixaAtiva, _busca.trim().toLowerCase()].join('|');
+
+function fotografarLista() {
+  const topos = [...document.querySelectorAll('.crm-lista-rolavel')].map(el => el.scrollTop);
+  _rolagemLista = topos.length ? { chave: _chaveListaNaTela, topos } : null;
+  _chaveListaNaTela = chaveDaLista();
+}
+
+function devolverLista() {
+  const foto = _rolagemLista;
+  _rolagemLista = null;
+  if (!foto || foto.chave !== _chaveListaNaTela) return;
+  document.querySelectorAll('.crm-lista-rolavel')
+    .forEach((el, i) => { if (foto.topos[i]) el.scrollTop = foto.topos[i]; });
+}
+
 function fotografarRolagem() {
   return rolaveis().map(({ chave, el }) => ({
     chave,
@@ -193,6 +227,7 @@ export async function render(params = {}) {
     _rascunhoAntes = campoAgora ? { conversa: _conversaAtiva, texto: campoAgora.value } : null;
     _rolagemAntes = fotografarRolagem();
   }
+  fotografarLista();
 
   return `
     <div class="crm-inbox ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}"
@@ -273,7 +308,7 @@ function colunaLista({ lista, listaContatos, caixas, varios, nChats, nFila, nRes
         ${icone('check','sm')} Mostrando ${nResolvidas} resolvida${nResolvidas === 1 ? '' : 's'} ·
         <span data-acao="crm:ver-resolvidas" style="cursor:pointer;text-decoration:underline">voltar</span></div>` : ''}
     </div>
-    <div class="crm-col-body">
+    <div class="crm-col-body crm-lista-rolavel">
       ${_aba === 'contatos' && !_verResolvidas ? listaDeContatos(listaContatos) : listaDeConversas(lista, caixas, varios)}
     </div>
   </div>`;
@@ -623,6 +658,7 @@ export function depois() {
         no fim (é lá que a mensagem nova aparece); quem tinha subido para ler
         fica exatamente onde estava. */
   devolverRolagem();
+  devolverLista();
 
   const campo = visivel('crmComposerTexto');
 
