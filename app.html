@@ -6543,7 +6543,31 @@ async function renderHomeAdmin() {
   const tAllIds = new Set(tAll.map(t=>t.id));
   const sesAll = (sessoes||[]).filter(s=>tAllIds.has(s.turma_id) && !s.cancelada);
 
-  const {count:certEmitidos} = await sb.from('documentos').select('id',{count:'exact',head:true}).eq('org_id',oi).in('tipo',['certificado_individual','certificado_coletivo']);
+  // v185 (22/09): antes somava individual + coletivo, tudo junto (717 na
+  // Avanteseg = 644 individuais + 73 coletivos). Coletivo vale 1 por turma e
+  // individual 1 por pessoa: unidades diferentes. Agora:
+  //   · Certificados emitidos = individuais não revogados (644);
+  //   · coletivos aparecem à parte, na legenda (73);
+  //   · Pessoas certificadas = pessoas diferentes com certificado individual
+  //     válido (455). Lido em páginas de 1000: o banco devolve no máximo
+  //     1000 linhas por consulta, e a conta passaria a mentir sem aviso.
+  const [{count:certEmitidos}, {count:certColetivos}] = await Promise.all([
+    sb.from('documentos').select('id',{count:'exact',head:true}).eq('org_id',oi).eq('tipo','certificado_individual').is('revogado_em',null),
+    sb.from('documentos').select('id',{count:'exact',head:true}).eq('org_id',oi).eq('tipo','certificado_coletivo').is('revogado_em',null),
+  ]);
+  let pessoasCertificadas = null;
+  try {
+    const ids = new Set();
+    for (let de = 0; ; de += 1000) {
+      const { data: pg, error: ePg } = await sb.from('documentos').select('colaborador_id')
+        .eq('org_id', oi).eq('tipo','certificado_individual').is('revogado_em', null)
+        .order('id').range(de, de + 999);
+      if (ePg) throw ePg;
+      (pg || []).forEach(r => { if (r.colaborador_id) ids.add(r.colaborador_id); });
+      if (!pg || pg.length < 1000) break;
+    }
+    pessoasCertificadas = ids.size;
+  } catch (e) { console.warn('Pessoas certificadas indisponível:', e?.message || e); }
   let confResumo = {total:0, vencidos:0, conformes:0, indice:100, colaboradoresTreinados:0, statusPorTreinamento:[], proximos:[]};
   try { confResumo = await calcConformidade(); } catch(e) { console.warn('Conformidade indisponível:', e.message); }
 
@@ -6794,8 +6818,8 @@ async function renderHomeAdmin() {
     <div class="gi-kpirow">
       <div class="gi-kpi gi-sm" onclick="irPara('clientes')"><div class="gi-kh">Clientes ativos</div><span class="gi-n">${cliAtivos}</span><small class="gi-s">na organização</small></div>
       <div class="gi-kpi gi-sm" onclick="irParaTurmasFiltradas('concluida')"><div class="gi-kh">Concluídas</div><span class="gi-n">${concluidas.toLocaleString('pt-BR')}</span><small class="gi-s">ver histórico</small></div>
-      <div class="gi-kpi gi-sm"><div class="gi-kh">Colaboradores treinados</div><span class="gi-n">${(confResumo.colaboradoresTreinados||0).toLocaleString('pt-BR')}</span><small class="gi-s">com treinamento registrado</small></div>
-      <div class="gi-kpi gi-sm"><div class="gi-kh">Certificados emitidos</div><span class="gi-n">${(certEmitidos || 0).toLocaleString('pt-BR')}</span><small class="gi-s">desde o início</small></div>
+      <div class="gi-kpi gi-sm" onclick="irPara('conformidade')"><div class="gi-kh">Pessoas certificadas</div><span class="gi-n">${pessoasCertificadas === null ? '—' : pessoasCertificadas.toLocaleString('pt-BR')}</span><small class="gi-s">${(confResumo.colaboradoresTreinados||0).toLocaleString('pt-BR')} com vencimento acompanhado</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Certificados emitidos</div><span class="gi-n">${(certEmitidos || 0).toLocaleString('pt-BR')}</span><small class="gi-s">individuais${certColetivos ? ` · mais ${certColetivos.toLocaleString('pt-BR')} coletivo${certColetivos !== 1 ? 's' : ''}` : ''}</small></div>
     </div>
 
     <div class="gi-grid2 gi-par">
@@ -29533,7 +29557,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '184';
+  var APP_BUILD = '185';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
