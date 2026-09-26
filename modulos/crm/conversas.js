@@ -415,7 +415,12 @@ function rotuloDia(iso) {
 
    Agora é um tique só, com o texto certo. No dia em que o gateway passar a
    ouvir a confirmação de entrega do WhatsApp (`messages.update`), aí sim
-   caberá o segundo tique — e ele vai querer dizer alguma coisa. */
+   caberá o segundo tique — e ele vai querer dizer alguma coisa.
+
+   25/09 (PASSO-54): esse dia chegou. O gateway ouve `messages.update` e o
+   banco só grava "entregue"/"lida" quando o WhatsApp confirma. As mensagens
+   antigas que tinham "entregue" sem confirmação voltaram para "ok" no próprio
+   PASSO-54 — o ✓✓ daqui em diante é sempre verdade. */
 function tiqueEntrega(m) {
   if (m.tipo !== 'enviada') return '';
   const s = String(m.status || '').toLowerCase();
@@ -423,7 +428,9 @@ function tiqueEntrega(m) {
   if (s === 'erro' || s === 'falha' || s === 'falhou') {
     return `<span class="crm-tique erro" title="${ui.esc(m.erro || 'Não foi possível enviar')}">!</span>`;
   }
-  return `<span class="crm-tique ok" title="Entregue ao WhatsApp para envio">✓</span>`;
+  if (s === 'lida')     return `<span class="crm-tique lida" title="Lida pelo cliente">✓✓</span>`;
+  if (s === 'entregue') return `<span class="crm-tique ok" title="Entregue no celular do cliente">✓✓</span>`;
+  return `<span class="crm-tique ok" title="Enviada ao WhatsApp">✓</span>`;
 }
 
 /* ── anexos (15/09) ───────────────────────────────────────────────────────
@@ -473,7 +480,10 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
     const corpo = m.tipo === 'sistema'
       ? `<div class="crm-msg sis">${ui.esc(m.texto)}</div>`
       : `<div class="crm-msg ${m.tipo === 'enviada' ? 'env' : 'rec'}">
-           ${m.autor ? `<div class="crm-msg-aut">${ui.esc(m.autor)}</div>` : ''}
+           ${m.autor ? `<div class="crm-msg-aut">${ui.esc(m.autor)}</div>`
+             /* 25/09: resposta dada pelo celular do número, trazida pela VPS.
+                Sem autor no GRID — o rótulo diz de onde veio. */
+             : m.peloCelular ? `<div class="crm-msg-aut">Pelo celular</div>` : ''}
            ${m.midia ? anexoNaBolha(m.midia) : ''}
            ${m.texto ? `<div class="crm-msg-txt">${ui.esc(m.texto)}</div>` : ''}
            ${/* O motivo da falha fica VISÍVEL na mensagem, não escondido num
@@ -515,6 +525,7 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
       </div>
     </div>
     <div class="crm-thread-body">
+      ${msgs.temMaisAntigas ? `<div class="crm-dia">Mostrando as 500 mensagens mais recentes</div>` : ''}
       ${linhas}
       ${msgs.length ? '' : ui.vazio({ icone:'chat', titulo:'Sem mensagens nesta conversa',
         sub:'Escreva abaixo para mandar a primeira.' })}

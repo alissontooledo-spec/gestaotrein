@@ -818,16 +818,28 @@ export default async function acoes(acao, { redesenhar }) {
         const querSalvar = !!elVisivel('crmNC_salvar')?.checked;
 
         let contatoId = null;
+        /* 25/09: se a agenda falhar, a pessoa precisa SABER. Antes o erro era
+           engolido (`.catch(() => null)`): a conversa abria, o contato não
+           era salvo, e depois ninguém o achava na agenda — uma das causas do
+           "criei o contato e ele não aparece". Continua certo não impedir a
+           conversa: a agenda é comodidade, a conversa é o que foi pedido. */
+        let avisoAgenda = '';
         if (querSalvar && nome) {
-          /* Falhar aqui não pode impedir a conversa: a agenda é comodidade, a
-             conversa é o que a pessoa pediu. */
-          const c = await dados.salvarContato({ nome, telefone: fone, origem: 'WhatsApp' }).catch(() => null);
-          contatoId = c?.id || null;
+          try {
+            const c = await dados.salvarContato({ nome, telefone: fone, origem: 'WhatsApp' });
+            contatoId = c?.id || null;
+          } catch (e) {
+            avisoAgenda = `O contato NÃO foi salvo na agenda: ${explicar(e)}`;
+          }
+        } else if (querSalvar && !nome) {
+          avisoAgenda = 'O contato não foi salvo na agenda porque ficou sem nome.';
         }
 
         const r = await dados.iniciarConversa({ caixaId, telefone: fone, nome, contatoId });
         ponte.fecharModal?.();
-        ponte.avisar?.(r.temHistorico ? 'Já existia uma conversa com este número — abri ela.' : 'Conversa aberta. Escreva a primeira mensagem.', 'success');
+        const abriu = r.temHistorico ? 'Já existia uma conversa com este número — abri ela.' : 'Conversa aberta. Escreva a primeira mensagem.';
+        if (avisoAgenda) ponte.avisar?.(`${abriu} ${avisoAgenda}`, 'error');
+        else ponte.avisar?.(abriu, 'success');
         await abrirAConversa(r.id, redesenhar);
       } catch (e) {
         ponte.avisar?.(explicar(e), 'error');

@@ -76,7 +76,12 @@ function tabela(contatos) {
       { campo:'situacao', rotulo:'Situação', ordenavel:false, render:(c) => ui.selo(...situacao(c.situacao)) },
       { campo:'ultimo', rotulo:'Último contato', dir:true, render:(c) => ui.fmt.desde(c.ultimo) },
       { campo:'acoes', rotulo:'', ordenavel:false, dir:true,
-        render:(c) => `<button class="ds-icobtn" title="Editar contato" data-acao="crm:contato:${c.id}">${icone('tool','sm')}</button>` }
+        /* 25/09: no computador não havia como falar com o contato a partir
+           daqui — o botão de conversa só existia na lista do celular. Quem
+           criava um contato ficava sem caminho para a conversa. Mesmo botão e
+           mesma ação da versão de celular. */
+        render:(c) => `<button class="ds-icobtn pri" title="Abrir conversa no WhatsApp" data-acao="crm:conversar:${c.id}">${icone('chat','sm')}</button>
+          <button class="ds-icobtn" title="Editar contato" data-acao="crm:contato:${c.id}">${icone('tool','sm')}</button>` }
     ],
     linhas,
     rodape: ui.paginacao({ total: linhas.length, porPagina: linhas.length, rotulo:'contatos' })
