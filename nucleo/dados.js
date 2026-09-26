@@ -112,6 +112,13 @@ const _mapContato = (c) => ({
   id: c.id, nome: c.nome, cargo: c.cargo, telefone: c.telefone, email: c.email,
   empresa: c.cliente?.nome || null, cliente_id: c.cliente_id,
   origem: c.origem, principal: c.principal,
+  /* 26/09 (v196): a ficha do contato na conversa edita o MESMO cadastro da
+     tela Contatos — estes campos precisam chegar às duas. `etiquetas` nasce
+     no PASSO-58; antes dele a coluna não existe e vem undefined → []. */
+  observacoes: c.observacoes || '',
+  etiquetas: Array.isArray(c.etiquetas) ? c.etiquetas : [],
+  automatico: c.criado_por == null && /^Cadastrado automaticamente/.test(c.observacoes || ''),
+  atualizado_em: c.atualizado_em || null,
   // 'cliente' quando ja compra; 'lead' quando ainda esta em negociacao. A tela
   // usa isso para o selo — e a informacao vem do vinculo, nao de um campo que
   // alguem teria que manter na mao.
@@ -179,6 +186,7 @@ const _mapConversa = (c) => ({
   lead_id: c.lead_id,
   telefone: c.telefone,
   nome: c.contato?.nome || c.nome_exibicao || c.telefone,
+  nome_exibicao: c.nome_exibicao || null,   // v196: a ficha sugere este nome ao cadastrar
   empresa: c.contato?.cliente?.nome || null,
   previa: c.ultima_mensagem_previa || '',
   hora: _horaCurta(c.ultima_mensagem_em) || '',
@@ -685,7 +693,11 @@ export async function salvarLead(form) {
     responsavel_id: ausente(form.responsavel_id),
     catalogo_id: ausente(form.catalogo_id),
     treinamento_livre: ausente(form.treinamento_livre),
-    observacoes: ausente(form.observacoes)
+    observacoes: ausente(form.observacoes),
+    /* 26/09 (v196): "Novo negócio" nasce da ficha do contato já ligado a ele
+       e à empresa dele. Colunas do CRM-FASE-A1; undefined = não toca. */
+    contato_id: ausente(form.contato_id),
+    cliente_id: ausente(form.cliente_id)
   };
   /* `titulo` (PASSO-32) e o que o negocio esta vendendo, em texto livre. Ate
      aqui isso so podia ser um curso do catalogo ou `treinamento_livre` — o que
@@ -1004,7 +1016,24 @@ export async function concluirAtividade(id, concluir = true) {
 }
 
 export async function salvarContato(form) {
-  if (_origem !== 'banco') return _simulado();
+  /* Modo demonstração: grava na memória, para a ficha e a tela Contatos
+     mostrarem a mesma alteração também na página de demonstração. */
+  if (_origem !== 'banco') {
+    const lista = (_exemplo.crm_contatos ||= []);
+    if (form.id) {
+      const c = lista.find(x => x.id === form.id);
+      if (c) for (const k of ['nome','cargo','telefone','email','cliente_id','origem','observacoes','etiquetas'])
+        if (form[k] !== undefined) c[k] = form[k];
+      if (c && form.cliente_id !== undefined)
+        c.empresa = (_exemplo.clientes || []).find(e => e.id === form.cliente_id)?.nome || c.empresa || null;
+      return { id: form.id, _naoGravado: true };
+    }
+    const novo = { id: 'demo-c' + Date.now(), nome: form.nome, cargo: form.cargo || '', telefone: form.telefone || '',
+      email: form.email || '', origem: form.origem || '', observacoes: form.observacoes || '',
+      etiquetas: form.etiquetas || [], cliente_id: form.cliente_id || null, situacao: 'lead' };
+    lista.push(novo);
+    return { id: novo.id, _naoGravado: true };
+  }
 
   const linha = {
     org_id: form.id ? undefined : sessao.orgId(),
@@ -1013,14 +1042,39 @@ export async function salvarContato(form) {
     telefone: _ausente(form.telefone),
     email: _ausente(form.email),
     cliente_id: _ausente(form.cliente_id),
-    origem: _ausente(form.origem)
+    origem: _ausente(form.origem),
+    observacoes: _ausente(form.observacoes),
+    etiquetas: Array.isArray(form.etiquetas) ? form.etiquetas : undefined
   };
   if (!form.id && !linha.nome) throw new Error('Informe o nome.');
   if (form.id && linha.nome === '') throw new Error('Informe o nome.');
-  const q = form.id
-    ? _sb.from('contatos').update(_soInformados(linha)).eq('id', form.id).select('id').single()
-    : _sb.from('contatos').insert(linha).select('id').single();
-  const { data, error } = await q;
+  const enviar = (l) => form.id
+    ? _sb.from('contatos').update(_soInformados(l)).eq('id', form.id).select('id').single()
+    : _sb.from('contatos').insert(l).select('id').single();
+  let { data, error } = await enviar(linha);
+  /* App novo publicado antes do PASSO-58: a coluna `etiquetas` ainda não
+     existe. Grava o resto e avisa — perder o nome ou o e-mail que a pessoa
+     acabou de corrigir por causa das etiquetas seria pior. */
+  if (_semColuna(error) && linha.etiquetas !== undefined) {
+    const { etiquetas, ...semEtiquetas } = linha;
+    ({ data, error } = await enviar(semEtiquetas));
+    if (!error && etiquetas.length)
+      throw new Error('Os dados foram salvos, mas as etiquetas só passam a funcionar depois do PASSO-58 (SQL).');
+  }
+  if (error) throw error;
+  return data;
+}
+
+/* Liga a conversa a um contato (ou desliga, com contatoId nulo). A regra de
+   quem pode e de qual contato serve fica no banco (PASSO-58). */
+export async function vincularConversaContato(conversaId, contatoId) {
+  if (_origem !== 'banco') {
+    const c = (_exemplo.crm_conversas || []).find(x => x.id === conversaId);
+    if (c) c.contato_id = contatoId || null;
+    return { conversaId, contatoId, _naoGravado: true };
+  }
+  const { data, error } = await _sb.rpc('crm_conversa_vincular_contato',
+    { p_conversa_id: conversaId, p_contato_id: contatoId || null });
   if (error) throw error;
   return data;
 }
@@ -1472,7 +1526,11 @@ export async function marcarConversaLida(id) {
    existia em `crm_conversas` desde o PASSO-37 e já era lida para desenhar o
    cartão "Lead ativo" — faltava só o caminho de ida. Sem SQL novo. */
 export async function vincularConversaLead(conversaId, leadId) {
-  if (_origem !== 'banco') return _simulado();
+  if (_origem !== 'banco') {
+    const c = (_exemplo.crm_conversas || []).find(x => x.id === conversaId);
+    if (c) c.lead_id = leadId || null;
+    return _simulado();
+  }
   const { error } = await _sb.from('crm_conversas')
     .update({ lead_id: leadId || null })
     .eq('org_id', sessao.orgId()).eq('id', conversaId);

@@ -36,6 +36,10 @@ export const fmt = {
     const s = String(t || '').replace(/\D/g, '');
     if (s.length === 13) return `+${s.slice(0,2)} ${s.slice(2,4)} ${s.slice(4,9)}-${s.slice(9)}`;
     if (s.length === 11) return `(${s.slice(0,2)}) ${s.slice(2,7)}-${s.slice(7)}`;
+    /* 26/09: números de WhatsApp antigos chegam com 12 dígitos (55 + DDD +
+       8, sem o nono dígito) e apareciam crus: "554789190653". */
+    if (s.length === 12 && s.startsWith('55')) return `+55 ${s.slice(2,4)} ${s.slice(4,8)}-${s.slice(8)}`;
+    if (s.length === 10) return `(${s.slice(0,2)}) ${s.slice(2,6)}-${s.slice(6)}`;
     return t || '';
   },
   // "há quanto tempo", em português, sem biblioteca
