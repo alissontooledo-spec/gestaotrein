@@ -184,7 +184,10 @@ const _mapConversa = (c) => ({
   hora: _horaCurta(c.ultima_mensagem_em) || '',
   nao_lidas: c.nao_lidas || 0,
   estado: c.estado,
-  responsavel: c.responsavel?.nome || null
+  responsavel: c.responsavel?.nome || null,
+  /* 26/09: o id entra para o filtro "Minhas" comparar pessoa, e não nome
+     (dois atendentes com o mesmo nome não podem ver as conversas um do outro). */
+  responsavel_id: c.responsavel_id || null
 });
 
 export const origem   = () => _origem;
@@ -1096,6 +1099,110 @@ export async function mensagensDaConversa(conversaId) {
   // A tela usa isto para dizer "mostrando as 500 mais recentes".
   lista.temMaisAntigas = (recentes || []).length >= LIMITE_MSGS;
   return lista;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ATENDER EM EQUIPE — 26/09/2026 (PASSO-56)
+   Nota interna, transferir, equipe e respostas rápidas. Tudo passa por
+   funções do banco que conferem organização e perfil; o `p_org_id` é o da
+   organização aberta na tela, e o banco só o respeita para o Provedor em
+   Modo Suporte (crm_org_efetiva). Em modo exemplo, guardam em memória, para
+   a página de demonstração funcionar inteira.
+   ══════════════════════════════════════════════════════════════════════════ */
+const _nomeLogado = () => sessao.usuario()?.nome || 'Você';
+const _agoraCurta = () => new Date().toTimeString().slice(0, 5);
+
+export async function notaInterna(conversaId, texto) {
+  if (_origem !== 'banco') {
+    const lista = ((_exemplo.crm_mensagens ||= {})[conversaId] ||= []);
+    lista.push({ tipo: 'nota', texto: String(texto || '').trim(), autor: _nomeLogado(), hora: _agoraCurta() });
+    return _simulado();
+  }
+  const { data, error } = await _sb.rpc('crm_nota_interna', { p_conversa_id: conversaId, p_texto: texto });
+  if (error) throw error;
+  return data;
+}
+
+/* `paraId` nulo = devolver para a Fila. */
+export async function transferirConversa(conversaId, paraId, recado = null) {
+  if (_origem !== 'banco') {
+    const c = (_exemplo.crm_conversas || []).find(x => x.id === conversaId);
+    const p = paraId ? (await equipeAtendimento()).find(x => x.id === paraId) : null;
+    if (c) { c.responsavel = p?.nome || null; c.responsavel_id = paraId || null; }
+    const linha = `${_nomeLogado()} ${p ? 'transferiu para ' + p.nome : 'devolveu para a Fila'}${recado ? ' · “' + recado + '”' : ''}`;
+    ((_exemplo.crm_mensagens ||= {})[conversaId] ||= []).push({ tipo: 'sistema', texto: linha, hora: _agoraCurta() });
+    return _simulado({ responsavel: p?.nome || null });
+  }
+  const { data, error } = await _sb.rpc('crm_transferir_conversa', {
+    p_conversa_id: conversaId, p_para: paraId || null, p_recado: (recado || '').trim() || null
+  });
+  if (error) throw error;
+  return data;
+}
+
+/* Quem pode receber conversa, e com quantas está agora. */
+export async function equipeAtendimento() {
+  if (_origem !== 'banco') {
+    const abertas = (_exemplo.crm_conversas || []).filter(c => c.estado !== 'resolvida');
+    const nomes = [...new Set([...(_exemplo.crm_equipe || []), ...abertas.map(c => c.responsavel).filter(Boolean)])];
+    return nomes.map((nome, i) => ({ id: 'u' + i, nome, perfil: i ? 'comercial' : 'administrador',
+      emAtendimento: abertas.filter(c => c.responsavel === nome).length }));
+  }
+  const { data, error } = await _sb.rpc('crm_equipe_atendimento', { p_org_id: sessao.orgId() });
+  if (error) throw error;
+  return data || [];
+}
+
+/* Respostas rápidas. A tela de Conversas se redesenha a cada 10 s; sem este
+   guarda-volumes seriam seis consultas por minuto, por pessoa, para uma lista
+   que quase nunca muda. Salvar ou excluir limpa na hora. */
+let _respostasCache = null; // { org, quando, lista }
+let _respostasDemo = null;
+const _RESPOSTAS_PADRAO = [
+  { id: 'r1', atalho: 'proposta', titulo: 'Enviar proposta', texto: 'Olá, {nome}! Já estou montando sua proposta e te envio ainda hoje.' },
+  { id: 'r2', atalho: 'datas', titulo: 'Sugerir datas', texto: 'Tenho estas datas disponíveis para a turma: ' },
+  { id: 'r3', atalho: 'certificado', titulo: 'Certificado 2ª via', texto: 'Claro! Me confirme o nome completo e o CPF do participante que eu emito a 2ª via do certificado.' }
+];
+
+export async function respostasRapidas({ fresco = false } = {}) {
+  if (_origem !== 'banco') return (_respostasDemo ||= _RESPOSTAS_PADRAO.map(r => ({ ...r }))).slice();
+  const org = sessao.orgId();
+  if (!fresco && _respostasCache && _respostasCache.org === org && Date.now() - _respostasCache.quando < 60000) {
+    return _respostasCache.lista;
+  }
+  const { data, error } = await _sb.rpc('crm_respostas_listar', { p_org_id: org });
+  if (error) throw error;
+  _respostasCache = { org, quando: Date.now(), lista: data || [] };
+  return _respostasCache.lista;
+}
+
+export async function salvarResposta({ id = null, atalho, titulo, texto }) {
+  if (_origem !== 'banco') {
+    const lista = (_respostasDemo ||= _RESPOSTAS_PADRAO.map(r => ({ ...r })));
+    const a = String(atalho || '').replace(/^\/+/, '').trim().toLowerCase();
+    if (!/^[a-z0-9_-]{1,30}$/.test(a)) throw new Error('Atalho inválido. Use só letras minúsculas, números, - ou _, sem espaço (até 30).');
+    if (lista.some(r => r.atalho === a && r.id !== id)) throw new Error(`Já existe uma resposta com o atalho /${a}.`);
+    if (id) Object.assign(lista.find(r => r.id === id) || {}, { atalho: a, titulo, texto });
+    else lista.push({ id: 'r' + Date.now(), atalho: a, titulo, texto });
+    return _simulado({ atalho: a });
+  }
+  const { data, error } = await _sb.rpc('crm_resposta_salvar', {
+    p_atalho: atalho, p_titulo: titulo, p_texto: texto, p_id: id || null, p_org_id: sessao.orgId()
+  });
+  _respostasCache = null;
+  if (error) throw error;
+  return data;
+}
+
+export async function excluirResposta(id) {
+  if (_origem !== 'banco') {
+    _respostasDemo = (_respostasDemo || []).filter(r => r.id !== id);
+    return _simulado();
+  }
+  const { error } = await _sb.rpc('crm_resposta_excluir', { p_id: id, p_org_id: sessao.orgId() });
+  _respostasCache = null;
+  if (error) throw error;
+  return true;
 }
 
 /* ── 15/09: subir um arquivo da tela para a área do WhatsApp ───────────────
