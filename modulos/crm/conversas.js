@@ -258,7 +258,12 @@ export async function render(params = {}) {
   if (_fichaAberta && atual) {
     const [clientes, leadsContato, ativs] = await Promise.all([
       dados.clientes().catch(() => []),
-      contato ? dados.listar('crm_leads', { contato_id: contato.id, funil_id: null }).catch(() => []) : [],
+      /* 26/09 (v197) — DEFEITO CORRIGIDO: o filtro ia no lugar errado
+         (`listar(c, { contato_id })` em vez de `{ filtro: { contato_id } }`)
+         e era ignorado — "Outros negócios de Fulano" mostrava negócios de
+         OUTRAS pessoas. Agora vai em `filtro` e ainda é conferido aqui. */
+      contato ? dados.listar('crm_leads', { filtro: { contato_id: contato.id, funil_id: null } })
+        .then(l => l.filter(x => x.contato_id === contato.id)).catch(() => []) : [],
       dados.listar('crm_atividades').catch(() => [])
     ]);
     const atividades = ativs

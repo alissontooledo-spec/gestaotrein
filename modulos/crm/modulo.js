@@ -52,7 +52,10 @@ export default {
       alternativa:{ rotulo:'Ver status dos números', acao:'ir:crm-numeros-status' },
       rota:() => import('./numeros.js') },
 
-    { id:'crm-empresa',     rotulo:'Empresas', icone:'company',
+    /* 26/09 (v197): "Empresas" → "Contas". É o mesmo cadastro de Clientes
+       (Treinamentos), visto pelo lado comercial — o nome antigo sugeria um
+       segundo cadastro de empresa. A rota continua crm-empresa. */
+    { id:'crm-empresa',     rotulo:'Contas', icone:'company',
       perfis:['administrador','comercial'], mobile:true,
       rota:() => import('./empresa.js') },
 

@@ -70,7 +70,22 @@ async function gravar(ponte, fn, redesenhar, sucesso) {
 }
 
 async function formLead(ponte, redesenhar, lead = null, pre = null) {
-  const [resps, cursos] = await Promise.all([dados.responsaveis(), dados.listar('catalogo')]);
+  const [resps, cursos, clientes] = await Promise.all([
+    dados.responsaveis(), dados.listar('catalogo'), dados.clientes().catch(() => [])]);
+  /* 26/09 (v197) — Empresa do negócio busca no cadastro de Clientes (decisão
+     de 05/09, que ficou só no papel). Escolher da lista liga o negócio ao
+     cliente (`cliente_id`); o que não estiver na lista continua valendo como
+     texto — prospecção começa antes do cadastro — e vira cliente depois, em
+     Contas, conferindo o CNPJ. O rótulo leva o CNPJ porque matriz e filial
+     têm o mesmo nome (ex.: BELA TEXTIL, WILLRICH). */
+  const rotuloCliente = (c) => c.cnpj ? `${c.nome} — ${ui.fmt.cnpj(c.cnpj)}` : c.nome;
+  const porRotulo = new Map();
+  for (const c of clientes) porRotulo.set(rotuloCliente(c), c);
+  const idOriginal = lead?.cliente_id || pre?.cliente_id || null;
+  const clienteAtual = clientes.find(c => c.id === idOriginal);
+  // a lista mostra os ativos (e o atual, mesmo inativo); a correspondência vale para todos
+  const rotulosDaLista = clientes.filter(c => c.ativo !== false || c.id === idOriginal).map(rotuloCliente);
+  const empresaInicial = clienteAtual ? rotuloCliente(clienteAtual) : (lead?.empresa || pre?.empresa || '');
   /* O rotulo do que se vende vem do funil, nao do codigo. Uma organizacao que
      vende servico ve "Serviço"; quem vende curso continua vendo "Treinamento".
      Sem isso o CRM so servia para quem vende treinamento — que era a critica. */
@@ -81,7 +96,11 @@ async function formLead(ponte, redesenhar, lead = null, pre = null) {
     lista.map(o => `<option value="${esc(o.id)}" ${String(o.id) === String(sel) ? 'selected' : ''}>${esc(o.nome)}</option>`).join('');
 
   ponte.abrirModal(lead ? 'Editar lead' : (pre ? 'Novo negócio' : 'Novo lead'), `
-    ${linha('Empresa *', `<input id="crmF_empresa" style="${CAMPO}" value="${esc(lead?.empresa || pre?.empresa || '')}" placeholder="Nome da empresa">`)}
+    ${linha('Empresa *', `<input id="crmF_empresa" list="crmF_clientes" autocomplete="off" style="${CAMPO}" value="${esc(empresaInicial)}" placeholder="Digite para buscar em Clientes">
+      <datalist id="crmF_clientes">${rotulosDaLista.map(r => `<option value="${esc(r)}">`).join('')}</datalist>
+      <div id="crmF_empresaDica" style="font-size:12px;color:var(--text-3);margin-top:5px;line-height:1.5">${clienteAtual
+        ? 'Ligado ao cadastro de Clientes.'
+        : 'Escolha da lista para ligar ao cadastro de Clientes. Se não estiver lá, digite o nome — dá para cadastrar depois, em Contas.'}</div>`)}
     ${duas(
       linha('Etapa', `<select id="crmF_estagio" style="${CAMPO}">${ESTAGIOS.map(e => `<option value="${e.id}" ${e.id === (lead?.estagio || 'novo') ? 'selected' : ''}>${esc(e.rotulo)}</option>`).join('')}</select>`),
       linha('Responsável', `<select id="crmF_resp" style="${CAMPO}">${opc(resps, lead?.responsavel_id, 'Sem responsável')}</select>`)
@@ -100,16 +119,30 @@ async function formLead(ponte, redesenhar, lead = null, pre = null) {
     ${linha('Observações', `<textarea id="crmF_obs" rows="3" style="${CAMPO}">${esc(lead?.observacoes || '')}</textarea>`)}
   `, ponte.botoes('Salvar lead', 'crmSalvarLead'));
 
+  /* A dica embaixo do campo diz, enquanto digita, se vai ligar ou não. */
+  const campoEmp = elVisivel('crmF_empresa');
+  campoEmp?.addEventListener('input', () => {
+    const d = elVisivel('crmF_empresaDica');
+    if (d) d.textContent = porRotulo.has(campoEmp.value.trim())
+      ? 'Ligado ao cadastro de Clientes.'
+      : 'Não está na lista: fica como texto. Dá para cadastrar depois, em Contas.';
+  });
+
   ponte.aoConfirmar('crmSalvarLead', () => gravar(ponte, async () => {
+    const txtEmp = val('crmF_empresa');
+    const cliEscolhido = porRotulo.get(txtEmp) || null;
     const salvo = await dados.salvarLead({
-      id: lead?.id, empresa: val('crmF_empresa'), estagio: val('crmF_estagio'),
+      id: lead?.id, empresa: cliEscolhido ? cliEscolhido.nome : txtEmp, estagio: val('crmF_estagio'),
       titulo: val('crmF_titulo'),
       responsavel_id: val('crmF_resp') || null, catalogo_id: val('crmF_curso') || null,
       treinamento_livre: val('crmF_livre') || null, vagas: val('crmF_vagas'),
       valor: val('crmF_valor'), origem: val('crmF_origem'), observacoes: val('crmF_obs'),
       previsao: val('crmF_previsao') || null,
-      // v196: vindo da ficha do contato, o negócio nasce ligado à pessoa e à empresa dela
-      ...(pre ? { contato_id: pre.contato_id || null, cliente_id: pre.cliente_id || null } : {})
+      // v196: vindo da ficha do contato, o negócio nasce ligado à pessoa
+      ...(pre ? { contato_id: pre.contato_id || null } : {}),
+      // v197: escolheu da lista → ligado ao cliente; texto livre → sem cliente
+      // (sem mexer no campo, o vínculo que já existia fica — mesmo que a lista não tenha carregado)
+      cliente_id: cliEscolhido ? cliEscolhido.id : (idOriginal && txtEmp === empresaInicial ? idOriginal : null)
     });
     if (pre?.conversaId && salvo?.id) await dados.vincularConversaLead(pre.conversaId, salvo.id);
     pre?.antes?.();
@@ -530,6 +563,62 @@ export default async function acoes(acao, { redesenhar }) {
     const conv = await import('./conversas.js');
     await formAtividade(ponte, async () => { conv.preservarNoProximoDesenho(); await redesenhar(); },
       'contato:' + resto.replace('nova-atividade-contato:', ''));
+    return true;
+  }
+
+  /* ── Contas (v197): conta sem cadastro → Clientes ──────────────────────── */
+  if (acao.startsWith('crm:conta-cadastrar:') || acao.startsWith('crm:conta-ligar:')) {
+    const ligar = acao.startsWith('crm:conta-ligar:');
+    const ref = resto.replace(ligar ? 'conta-ligar:' : 'conta-cadastrar:', '');
+    const f = await dados.fichaEmpresa(ref).catch(() => null);
+    if (!f) { ponte.avisar?.('Conta não encontrada.', 'error'); return true; }
+    const leads = f.negocios.filter(n => !n.cliente_id).map(n => n.id);
+    const cnpjDosNegocios = f.negocios.map(n => n.cnpj).find(Boolean) || '';
+    const chave = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const irParaConta = async (id) => { ponte.fecharModal?.(); if (id) await navegacao.tratarAcao('ir:crm-empresa:' + id); else await redesenhar(); };
+
+    if (!ligar) {
+      ponte.abrirModal('Cadastrar em Clientes', `
+        ${linha('Nome da empresa *', `<input id="crmCC_nome" style="${CAMPO}" value="${esc(f.cliente.nome)}">`)}
+        ${linha('CNPJ', `<input id="crmCC_cnpj" style="${CAMPO}" value="${esc(cnpjDosNegocios)}" placeholder="00.000.000/0000-00" inputmode="numeric">`)}
+        <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+          Se esse CNPJ já estiver em Clientes (inclusive vindo do SOC), a conta é ligada ao cadastro que existe —
+          nada é duplicado. Endereço, CNAE e os outros dados são completados em Clientes, no Treinamentos.
+          ${leads.length ? `<br><b style="color:var(--text-2)">${leads.length} negócio${leads.length > 1 ? 's' : ''}</b> desta conta passa${leads.length > 1 ? 'm' : ''} a apontar para o cadastro.` : ''}</div>
+      `, ponte.botoes('Cadastrar', 'crmContaCadastrar'));
+      ponte.aoConfirmar('crmContaCadastrar', async () => {
+        try {
+          const r = await dados.cadastrarConta({ nome: val('crmCC_nome'), cnpj: val('crmCC_cnpj'), leads });
+          ponte.avisar?.(r?.criado === false
+            ? `Esse CNPJ já estava em Clientes como "${r.nome}". A conta foi ligada a ele — nada foi duplicado.`
+            : 'Empresa cadastrada em Clientes e ligada aos negócios.', 'success');
+          await irParaConta(r?.clienteId);
+        } catch (e) { ponte.avisar?.(explicar(e), 'error'); }
+      });
+      return true;
+    }
+
+    const clientes = await dados.clientes().catch(() => []);
+    const alvo = chave(f.cliente.nome);
+    const parecidos = clientes.filter(c => alvo && (chave(c.nome).includes(alvo) || alvo.includes(chave(c.nome))));
+    const opc = (lista) => lista.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}${c.cnpj ? ' — ' + esc(ui.fmt.cnpj(c.cnpj)) : ''}${c.ativo === false ? ' (inativo)' : ''}</option>`).join('');
+    ponte.abrirModal('Ligar a um cliente que já existe', `
+      ${linha('Cliente', `<select id="crmCL_cliente" style="${CAMPO}"><option value="">Escolha…</option>
+        ${parecidos.length ? `<optgroup label="Parecidos com &quot;${esc(f.cliente.nome)}&quot;">${opc(parecidos)}</optgroup>` : ''}
+        <optgroup label="Todos os clientes">${opc(clientes)}</optgroup></select>`)}
+      <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+        ${leads.length} negócio${leads.length === 1 ? '' : 's'} desta conta passa${leads.length === 1 ? '' : 'm'} a apontar para o cliente escolhido.
+        O cadastro do cliente não é alterado.</div>
+    `, ponte.botoes('Ligar', 'crmContaLigar'));
+    ponte.aoConfirmar('crmContaLigar', async () => {
+      const id = val('crmCL_cliente');
+      if (!id) { ponte.avisar?.('Escolha o cliente.', 'error'); return; }
+      try {
+        const r = await dados.ligarConta(id, leads);
+        ponte.avisar?.(`${r?.negociosLigados ?? leads.length} negócio(s) ligado(s) ao cliente.`, 'success');
+        await irParaConta(id);
+      } catch (e) { ponte.avisar?.(explicar(e), 'error'); }
+    });
     return true;
   }
 

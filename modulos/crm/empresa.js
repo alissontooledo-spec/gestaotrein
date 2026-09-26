@@ -8,6 +8,11 @@
 
    Sem tabela nova: junta pelo vínculo formal (`cliente_id`) e pelo nome, para
    que o histórico anterior à conversão não fique invisível.
+
+   26/09 (v197): a tela passou a se chamar CONTAS. Toda conta é uma linha do
+   cadastro de Clientes (Treinamentos) — ou um negócio digitado que ainda não
+   virou cliente. Não existe cadastro de empresa do CRM: ver
+   05-Decisoes/2026-09-26-cadastro-unico-de-empresas.md.
    ══════════════════════════════════════════════════════════════════════════ */
 import * as ui from '../../nucleo/ui.js';
 import { icone } from '../../nucleo/icones.js';
@@ -16,7 +21,7 @@ import { rotuloEstagio, etapa, ehGanho, ehAberta } from '../../nucleo/estagios.j
 
 export async function render(params = {}) {
   if (dados.ehExemplo()) {
-    return `${ui.topo({ voltar:{ rotulo:'Funil de vendas', acao:'ir:crm-funil' }, titulo:'Empresas' })}
+    return `${ui.topo({ voltar:{ rotulo:'Funil de vendas', acao:'ir:crm-funil' }, titulo:'Contas' })}
       ${ui.vazio({ icone:'company', titulo:'Disponível com o banco ligado',
         sub:'A ficha da empresa reúne negócios, contatos e atividades da conta — precisa dos dados reais.' })}`;
   }
@@ -24,20 +29,28 @@ export async function render(params = {}) {
   if (!params.id) return listaDeEmpresas();
 
   const f = await dados.fichaEmpresa(params.id);
-  if (!f) return ui.vazio({ titulo:'Empresa não encontrada', sub:'Ela pode ter sido removida.' });
+  if (!f) return ui.vazio({ titulo:'Conta não encontrada', sub:'Ela pode ter sido removida ou juntada a outro cadastro.' });
 
   const { cliente, negocios, contatos, atividades, resumo } = f;
   const abertos = negocios.filter(n => ehAberta(n.estagio));
+  /* Conta sem cadastro: dá para cadastrar em Clientes (conferindo o CNPJ) ou
+     ligar a um cliente que já existe. Conta cadastrada: os dados cadastrais
+     são editados em Clientes, que é o dono do cadastro. */
+  const acoesTopo = cliente.naoCadastrada
+    ? [{ rotulo:'Ligar a um cliente', icone:'link', tipo:'sec', acao:`crm:conta-ligar:${params.id}` },
+       { rotulo:'Cadastrar em Clientes', icone:'plus', tipo:'pri', acao:`crm:conta-cadastrar:${params.id}` }]
+    : [{ rotulo:'Abrir em Clientes', icone:'building', tipo:'sec', acao:'ir:clientes' },
+       { rotulo:'Novo negócio', icone:'plus', tipo:'pri', acao:'crm:novo-lead' }];
 
   return `
   ${ui.topo({
-    voltar:{ rotulo:'Empresas', acao:'ir:crm-empresa' },
+    voltar:{ rotulo:'Contas', acao:'ir:crm-empresa' },
     titulo: cliente.nome,
     sub: [cliente.naoCadastrada ? 'Ainda não cadastrada em Clientes' : (cliente.cnpj ? 'CNPJ ' + ui.esc(ui.fmt.cnpj(cliente.cnpj)) : 'sem CNPJ'),
           cliente.cidade || null,
           resumo.primeiroContato ? 'primeiro negócio em ' + ui.fmt.data(resumo.primeiroContato) : null]
          .filter(Boolean).join(' · '),
-    acoes:[{ rotulo:'Novo negócio', icone:'plus', tipo:'pri', acao:'crm:novo-lead' }]
+    acoes: acoesTopo
   })}
 
   ${ui.kpis([
@@ -60,7 +73,7 @@ export async function render(params = {}) {
     </div>
 
     <div style="display:flex;flex-direction:column;gap:12px">
-      ${ui.cartao(`<div class="ds-card-titulo" style="margin-bottom:12px">Dados da empresa</div>
+      ${ui.cartao(`<div class="ds-card-titulo" style="margin-bottom:12px">Dados da empresa${cliente.naoCadastrada ? '' : ' <span style="font-weight:500;color:var(--text-3);font-size:12px">· do cadastro de Clientes</span>'}</div>
         ${dado('Razão social', cliente.nome)}
         ${dado('CNPJ', ui.fmt.cnpj(cliente.cnpj))}
         ${dado('Cidade', cliente.cidade)}
@@ -79,8 +92,8 @@ export async function render(params = {}) {
           : ui.vazio({ icone:'user', titulo:'Nenhuma pessoa cadastrada' })), { plano:true })}
 
       ${cliente.naoCadastrada ? ui.aviso({ tipo:'info', icone:'company',
-          titulo:'Empresa ainda não cadastrada em Clientes',
-          texto:'O histórico comercial aparece aqui pelo nome. O cadastro é feito em Clientes, no Treinamentos — o CRM não cria empresa sozinho.' }) : ''}
+          titulo:'Conta ainda não cadastrada em Clientes',
+          texto:'"Cadastrar em Clientes" confere o CNPJ antes: se a empresa já existir, liga a ela.' }) : ''}
 
       ${abertos.length ? ui.aviso({ tipo:'info', icone:'info',
           titulo:`${abertos.length} negócio${abertos.length>1?'s':''} em aberto`,
@@ -109,6 +122,7 @@ async function listaDeEmpresas() {
   if (_situacao === 'clientes') lista = lista.filter(e => e.ganhos > 0);
   if (_situacao === 'sem-cnpj') lista = lista.filter(e => !e.cnpj && !e.naoCadastrada);
   if (_situacao === 'nao-cadastradas') lista = lista.filter(e => e.naoCadastrada);
+  if (_situacao === 'sem-negocio') lista = lista.filter(e => !e.negocios);
   /* Faltava aplicar: o filtro de cidade tinha estado, tinha select e tinha
      tratador — e não filtrava. Achado testando com "Joinville" e vendo o total
      continuar em 57. Declarar o estado não é implementar o filtro. */
@@ -138,12 +152,13 @@ async function listaDeEmpresas() {
   const semCidade = todas.filter(e => !e.cidade).length;
 
   return `
-  ${ui.topo({ modulo:'CRM', moduloIcone:'building', titulo:'Empresas',
-    sub: `${todas.length} ${todas.length === 1 ? 'empresa' : 'empresas'} com negócio registrado`,
+  ${ui.topo({ modulo:'CRM', moduloIcone:'building', titulo:'Contas',
+    sub: `${todas.length} ${todas.length === 1 ? 'conta' : 'contas'} · mesmo cadastro de Clientes (Treinamentos)`,
     acoes:[{ rotulo:'Novo negócio', icone:'plus', tipo:'pri', acao:'crm:novo-lead' }] })}
 
   ${ui.kpis([
-    { rotulo:'Empresas',        icone:'company', valor: todas.length },
+    { rotulo:'Contas',          icone:'company', valor: todas.length,
+      nota: `${todas.filter(e => e.naoCadastrada).length} ainda sem cadastro` },
     { rotulo:'Com negócio aberto', icone:'funnel', valor: todas.filter(e => e.abertos > 0).length },
     { rotulo:'Já compraram',    icone:'check',    valor: todas.filter(e => e.ganhos > 0).length },
     { rotulo:'Valor em carteira', icone:'trend',  valor: ui.fmt.moeda(todas.reduce((s,e) => s + (e.valor||0), 0)) }
@@ -153,11 +168,12 @@ async function listaDeEmpresas() {
     busca:{ id:'crmBuscaEmpresa', valor:_busca, placeholder:'Buscar por nome, CNPJ ou cidade', acao:'crm:buscar-empresa' },
     selects:[
       { id:'crmEmpSituacao', acao:'crm:emp-situacao', valor:_situacao, opcoes:[
-        { v:'', r:'Todas as empresas' },
+        { v:'', r:'Todas as contas' },
         { v:'abertos',  r:'Com negócio em aberto' },
         { v:'clientes', r:'Que já compraram' },
         { v:'sem-cnpj',    r:'Sem CNPJ cadastrado' },
-        { v:'nao-cadastradas', r:'Ainda não cadastradas em Clientes' }
+        { v:'nao-cadastradas', r:'Ainda não cadastradas em Clientes' },
+        { v:'sem-negocio', r:'Sem negócio no CRM' }
       ] },
       { id:'crmEmpCidade', acao:'crm:emp-cidade', valor:_cidade,
         opcoes:[{ v:'', r:'Todas as cidades' }, ...cidades.map(c => ({ v:c, r:c }))] }
@@ -166,13 +182,13 @@ async function listaDeEmpresas() {
 
   ${_cidade && semCidade ? ui.aviso({ tipo:'info', icone:'info',
     titulo:'Filtro de cidade alcança só empresas cadastradas',
-    texto:`${semCidade} ${semCidade === 1 ? 'conta ainda não cadastrada em Clientes ficou' : 'contas ainda não cadastradas em Clientes ficaram'} de fora: cidade só existe no cadastro.` }) : ''}
+    texto:`${semCidade} ${semCidade === 1 ? 'conta sem cidade no cadastro ficou' : 'contas sem cidade no cadastro ficaram'} de fora.` }) : ''}
 
   ${lista.length ? ui.tabela({
     ordem: _ordem,
     acaoLinha: (e) => `ir:crm-empresa:${e.chaveConta}`,
     colunas:[
-      { campo:'nome', rotulo:'Empresa',
+      { campo:'nome', rotulo:'Conta',
         render:(e) => `<div class="prim">${ui.esc(e.nome)}</div>
           <div class="sub">${e.naoCadastrada
             ? '<span style="color:var(--text-3)">ainda não cadastrada em Clientes</span>'
@@ -187,12 +203,12 @@ async function listaDeEmpresas() {
         render:(e) => e.ultimo ? ui.fmt.desde(e.ultimo) : '—' }
     ],
     linhas: naPagina,
-    rodape: ui.paginacao({ pagina, paginas, total: lista.length, porPagina: POR_PAGINA, rotulo:'empresas' })
+    rodape: ui.paginacao({ pagina, paginas, total: lista.length, porPagina: POR_PAGINA, rotulo:'contas' })
   }) : ui.vazio({ icone:'company',
-      titulo: _busca || _situacao || _cidade ? 'Nenhuma empresa encontrada' : 'Nenhuma empresa com negócio',
+      titulo: _busca || _situacao || _cidade ? 'Nenhuma conta encontrada' : 'Nenhuma conta ainda',
       sub: _busca || _situacao || _cidade
         ? 'Ajuste a busca ou os filtros acima.'
-        : 'As empresas aparecem aqui quando um negócio é criado para elas.' })}`;
+        : 'Toda empresa cadastrada em Clientes aparece aqui, e também quem tem negócio digitado no funil.' })}`;
 }
 
 /* Estado da lista. Mora no módulo porque a tela é redesenhada inteira a cada
