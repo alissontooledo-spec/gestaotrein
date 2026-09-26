@@ -930,6 +930,12 @@ export async function empresasDoCrm() {
     .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
   const porNome = new Map(cli.map(c => [chave(c.nome), c]));
   const contagem = new Map();
+  /* 26/09 (v197, "Contas"): TODO cliente do cadastro é uma conta, mesmo sem
+     negócio — a empresa que comprou pelo Treinamentos, fora do funil, também
+     é conta do comercial. Antes a lista só mostrava quem tinha negócio. */
+  for (const c of cli) {
+    contagem.set(c.id, { ...c, chaveConta: c.id, negocios: 0, valor: 0, abertos: 0, ganhos: 0, perdidos: 0, ultimo: null, leadIds: [] });
+  }
   for (const l of leads) {
     let c = (l.cliente_id && cli.find(x => x.id === l.cliente_id)) || porNome.get(chave(l.empresa));
     /* Sem cadastro: a conta existe assim mesmo, identificada pelo nome. */
@@ -937,8 +943,9 @@ export async function empresasDoCrm() {
                                chaveNome: chave(l.empresa), naoCadastrada: true };
     if (!c) continue;
     const chaveConta = c.id || ('nome:' + chave(c.nome));
-    const r = contagem.get(chaveConta) || { ...c, chaveConta, negocios: 0, valor: 0, abertos: 0, ganhos: 0, perdidos: 0, ultimo: null };
+    const r = contagem.get(chaveConta) || { ...c, chaveConta, negocios: 0, valor: 0, abertos: 0, ganhos: 0, perdidos: 0, ultimo: null, leadIds: [] };
     r.negocios++;
+    if (!l.cliente_id) r.leadIds.push(l.id);   // os que ainda não apontam para um cliente
     r.valor += (l.valor || 0);
     if (estagios.ehAberta(l.estagio))  r.abertos++;
     if (estagios.ehGanho(l.estagio))   r.ganhos++;
@@ -949,7 +956,28 @@ export async function empresasDoCrm() {
     if (quando && (!r.ultimo || new Date(quando) > new Date(r.ultimo))) r.ultimo = quando;
     contagem.set(chaveConta, r);
   }
-  return [...contagem.values()].sort((a, b) => b.valor - a.valor);
+  return [...contagem.values()].sort((a, b) => (b.valor - a.valor) || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+}
+
+/* ── Contas → Clientes (v197, PASSO-60) ───────────────────────────────────
+   A conta "ainda não cadastrada" vira cliente pelo CRM. O banco procura o
+   CNPJ antes: se a empresa já está em Clientes (inclusive vinda do SOC), usa
+   a existente — nada é duplicado. Os negócios daquela conta passam a apontar
+   para o cliente. Nenhuma das duas funções altera cliente que já existe. */
+export async function cadastrarConta({ nome, cnpj = null, leads = [] }) {
+  if (_origem !== 'banco') return _simulado({ clienteId: null, criado: true, negociosLigados: leads.length });
+  const { data, error } = await _sb.rpc('crm_conta_cadastrar',
+    { p_nome: nome, p_cnpj: cnpj || null, p_leads: leads.length ? leads : null, p_org_id: sessao.orgId() });
+  if (error) throw error;
+  return data;
+}
+
+export async function ligarConta(clienteId, leads = []) {
+  if (_origem !== 'banco') return _simulado({ clienteId, negociosLigados: leads.length });
+  const { data, error } = await _sb.rpc('crm_conta_ligar',
+    { p_cliente_id: clienteId, p_leads: leads, p_org_id: sessao.orgId() });
+  if (error) throw error;
+  return data;
 }
 
 /* A trilha real de um negocio: quem mudou o que, e quando. O gatilho do banco
