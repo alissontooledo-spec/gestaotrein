@@ -11,6 +11,7 @@ import * as dados from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
 import * as navegacao from '../../nucleo/navegacao.js';
 import { ESTAGIOS } from '../../nucleo/estagios.js';
+import { icone } from '../../nucleo/icones.js';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -395,7 +396,8 @@ const DEPENDE_WHATSAPP = [];
 
    Continuam aqui só as três que de fato não têm tela nenhuma por trás, e
    nenhuma delas bloqueia operação. */
-const NAO_CONSTRUIDO = ['crm:respostas', 'crm:importar-contatos', 'crm:horarios'];
+/* 26/09: `crm:respostas` saiu — a tela de respostas rápidas existe (PASSO-56). */
+const NAO_CONSTRUIDO = ['crm:importar-contatos', 'crm:horarios'];
 
 export default async function acoes(acao, { redesenhar }) {
   const ponte = (typeof window !== 'undefined' && window.__GRID_PONTE) || {};
@@ -949,6 +951,113 @@ export default async function acoes(acao, { redesenhar }) {
       const campo = elVisivel('crmComposerTexto');
       if (campo) { campo.value = ''; campo.style.height = 'auto'; }
     }
+    return true;
+  }
+
+  /* ── 26/09: nota interna ────────────────────────────────────────────────
+     Mesmo campo da resposta; o que muda é o destino. `crm_nota_interna` não
+     toca na fila de envio — a nota não tem caminho para chegar ao cliente. */
+  if (acao.startsWith('crm:nota:')) {
+    const conversaId = resto.replace('nota:', '');
+    const texto = val('crmComposerTexto');
+    if (!texto) { ponte.avisar?.('Escreva a nota antes de salvar.', 'error'); return true; }
+    const ok = await gravar(ponte, () => dados.notaInterna(conversaId, texto), redesenhar, 'Nota salva. Só a equipe vê.');
+    if (ok) {
+      const campo = elVisivel('crmComposerTexto');
+      if (campo) { campo.value = ''; campo.style.height = 'auto'; }
+    }
+    return true;
+  }
+
+  /* ── 26/09: transferir ─────────────────────────────────────────────────
+     Escolhe a pessoa (com quantas conversas está agora) ou devolve para a
+     Fila. O recado fica na conversa como linha do sistema; o cliente não
+     recebe nada. Quem pode receber vem do banco (crm_equipe_atendimento):
+     administradores e comerciais ativos da empresa. */
+  if (acao.startsWith('crm:transferir:')) {
+    const conversaId = resto.replace('transferir:', '');
+    let equipe = [], conversa = null;
+    try {
+      [equipe, conversa] = await Promise.all([
+        dados.equipeAtendimento(),
+        dados.listar('crm_conversas').then(l => l.find(c => c.id === conversaId) || null)
+      ]);
+    } catch (e) { ponte.avisar?.(explicar(e), 'error'); return true; }
+    const atualId = conversa?.responsavel_id || null;
+    const atualNome = conversa?.responsavel || null;
+    const ehAtual = (p) => atualId ? p.id === atualId : (!!atualNome && p.nome === atualNome);
+    const plural = (n) => `${n} em atendimento`;
+    const linhaPessoa = (p) => `
+      <div class="ds-linha" data-para="${esc(p.id)}">
+        <span class="ds-av">${esc(String(p.nome || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase())}</span>
+        <div class="ds-linha-main"><div class="ds-linha-tit">${esc(p.nome)}${ehAtual(p) ? ' <span style="font-weight:500;color:var(--text-3)">(atual)</span>' : ''}</div>
+          <div class="ds-linha-sub">${p.perfil === 'administrador' ? 'Administrador' : 'Comercial'} · ${plural(p.emAtendimento || 0)}</div></div>
+        <div class="ds-linha-fim"><span class="ok">${icone('check','sm')}</span></div>
+      </div>`;
+    ponte.abrirModal('Transferir conversa', `
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">Conversa com <b>${esc(conversa?.nome || 'o cliente')}</b>. ${atualNome ? `Hoje está com <b>${esc(atualNome)}</b>.` : 'Hoje está na Fila.'}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Para quem</div>
+      <div class="crm-transf" id="crmT_lista">
+        <div class="ds-card flat" style="padding:4px">
+          ${equipe.map(linhaPessoa).join('') || '<div style="padding:12px;color:var(--text-3);font-size:13px">Ninguém da equipe pode receber conversas agora.</div>'}
+          ${atualNome ? `
+          <div class="ds-linha" data-para="">
+            <span class="ds-av" style="background:var(--gray-100);color:var(--text-3)">—</span>
+            <div class="ds-linha-main"><div class="ds-linha-tit">Devolver para a Fila</div><div class="ds-linha-sub">Fica sem responsável até alguém assumir</div></div>
+            <div class="ds-linha-fim"><span class="ok">${icone('check','sm')}</span></div>
+          </div>` : ''}
+        </div>
+      </div>
+      ${linha('Recado para quem recebe (opcional)', `<textarea id="crmT_recado" rows="3" maxlength="500" style="${CAMPO}" placeholder="Ex.: cliente quer orçamento para 12 pessoas"></textarea>`)}
+      <div style="font-size:12px;color:var(--text-3);line-height:1.6">O recado fica registrado na conversa para a equipe. O cliente não vê a transferência.</div>
+    `, ponte.botoes('Transferir', 'crmTransferir'));
+    /* Seleção: um clique marca a linha. Fica guardada no próprio contêiner
+       (as duas cópias da tela existem; vale a visível). */
+    document.querySelectorAll('#crmT_lista').forEach(caixa => {
+      caixa.addEventListener('click', (ev) => {
+        const l = ev.target.closest('.ds-linha[data-para]');
+        if (!l) return;
+        caixa.querySelectorAll('.ds-linha').forEach(x => x.classList.remove('sel'));
+        l.classList.add('sel');
+        caixa.dataset.escolha = l.dataset.para;
+        caixa.dataset.nome = l.querySelector('.ds-linha-tit')?.childNodes[0]?.textContent?.trim() || '';
+      });
+    });
+    ponte.aoConfirmar('crmTransferir', () => {
+      const caixa = elVisivel('crmT_lista');
+      if (!caixa || caixa.dataset.escolha === undefined) {
+        ponte.avisar?.('Escolha para quem transferir.', 'error');
+        return;
+      }
+      const para = caixa.dataset.escolha || null;
+      return gravar(ponte, () => dados.transferirConversa(conversaId, para, val('crmT_recado')), redesenhar,
+        para ? `Conversa transferida para ${caixa.dataset.nome}.` : 'Conversa devolvida para a Fila.');
+    });
+    return true;
+  }
+
+  /* ── 26/09: respostas rápidas — cadastro ───────────────────────────────── */
+  if (acao === 'crm:respostas') { await navegacao.tratarAcao('ir:crm-respostas'); return true; }
+  if (acao === 'crm:nova-resposta' || acao.startsWith('crm:editar-resposta:')) {
+    const id = acao.startsWith('crm:editar-resposta:') ? resto.replace('editar-resposta:', '') : null;
+    const r = id ? (await dados.respostasRapidas({ fresco: true })).find(x => String(x.id) === id) : null;
+    if (id && !r) { ponte.avisar?.('Esta resposta não existe mais. A lista foi atualizada.', 'error'); await redesenhar(); return true; }
+    ponte.abrirModal(r ? 'Editar resposta rápida' : 'Nova resposta rápida', `
+      ${linha('Atalho *', `<input id="crmR_atalho" style="${CAMPO}" value="${esc(r ? '/' + r.atalho : '/')}" placeholder="/proposta" autocomplete="off">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">É o que se digita depois da barra na conversa. Sem espaço.</div>`)}
+      ${linha('Título *', `<input id="crmR_titulo" style="${CAMPO}" maxlength="60" value="${esc(r?.titulo || '')}" placeholder="Enviar proposta">`)}
+      ${linha('Texto *', `<textarea id="crmR_texto" rows="5" maxlength="2000" style="${CAMPO}" placeholder="Olá, {nome}! ...">${esc(r?.texto || '')}</textarea>
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px"><b>{nome}</b> vira o primeiro nome do cliente na hora de usar.</div>`)}
+    `, ponte.botoes(r ? 'Salvar' : 'Salvar resposta', 'crmSalvarResposta'));
+    ponte.aoConfirmar('crmSalvarResposta', () => gravar(ponte, () => dados.salvarResposta({
+      id: r?.id || null, atalho: val('crmR_atalho'), titulo: val('crmR_titulo'), texto: val('crmR_texto')
+    }), redesenhar, r ? 'Resposta atualizada.' : 'Resposta criada. Digite / na conversa para usar.'));
+    return true;
+  }
+  if (acao.startsWith('crm:excluir-resposta:')) {
+    const id = resto.replace('excluir-resposta:', '');
+    const ok = await ponte.confirmar?.('Excluir esta resposta rápida? Ela some da lista do "/" para toda a equipe.');
+    if (ok) await gravar(ponte, () => dados.excluirResposta(id), redesenhar, 'Resposta excluída.');
     return true;
   }
 

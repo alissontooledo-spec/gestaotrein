@@ -19,6 +19,7 @@ import * as ui from '../../nucleo/ui.js';
 import { icone } from '../../nucleo/icones.js';
 import * as dados from '../../nucleo/dados.js';
 import * as navegacao from '../../nucleo/navegacao.js';
+import * as sessao from '../../nucleo/sessao.js';
 import { avisoDemo } from './painel.js';
 
 /* ── 18/09: a tela se atualiza sozinha ──────────────────────────────────────
@@ -50,6 +51,24 @@ let _verResolvidas = false;
    abre por cima da conversa. Ela custava 272px permanentes de uma tela onde
    o que se faz é ler e escrever. Fechada por padrão. */
 let _fichaAberta = false;
+
+/* ── 26/09: atender em equipe ─────────────────────────────────────────────
+   `_dono`: na aba Chats, "Minhas" mostra só as conversas de quem está usando;
+   "Todas", as da equipe. Fica lembrado neste navegador (é preferência de uma
+   pessoa, não da empresa). O Provedor em Modo Suporte começa em "Todas" —
+   ele não atende conversa de cliente, e "Minhas" seria sempre vazio.
+   `_modo`: o campo de baixo responde ao cliente ou grava nota interna.
+   Troca de conversa volta para "Responder": nota escrita na conversa errada
+   é só incômodo, mas resposta que a pessoa achava ser nota vai para o
+   cliente — por isso o modo nunca atravessa de uma conversa para outra. */
+const CHAVE_DONO = 'grid.crm.conversas.dono';
+let _dono = (() => {
+  try { const v = localStorage.getItem(CHAVE_DONO); if (v === 'minhas' || v === 'todas') return v; } catch { /* navegador sem armazenamento */ }
+  return sessao.perfil() === 'provedor' ? 'todas' : 'minhas';
+})();
+let _modo = 'responder';
+let _modoDaConversa = null;
+let _respostas = [];
 
 /* Modelos de resposta. Ficam aqui, e não no banco, porque hoje são texto
    fixo — quando virarem configuráveis por organização, viram tabela e esta
@@ -157,11 +176,15 @@ function devolverRolagem() {
 }
 
 export async function render(params = {}) {
-  const [caixas, conversas, contatos] = await Promise.all([
+  const [caixas, conversas, contatos, respostas] = await Promise.all([
     dados.listar('crm_caixas'),
     dados.listar('crm_conversas'),
-    dados.listar('crm_contatos')
+    dados.listar('crm_contatos'),
+    /* Falhar aqui não pode derrubar a tela: sem respostas rápidas, a pessoa
+       continua atendendo — só o "/" fica vazio. */
+    dados.respostasRapidas?.().catch(() => []) ?? []
   ]);
+  _respostas = respostas || [];
 
   const varios = caixas.length > 1;
   const daCaixa   = (c) => _caixaAtiva === 'todas' || c.caixa_id === _caixaAtiva;
@@ -173,6 +196,11 @@ export async function render(params = {}) {
      `estado` não entra aqui de propósito — quem responde vira responsável
      (ver `enviarMensagem` em dados.js), então os dois nunca divergem. */
   const emAtendimento = minhas.filter(c => !resolvida(c) && c.responsavel);
+  /* 26/09: "Minhas" compara pelo id da pessoa; o nome só entra quando não há
+     id (dados de demonstração). */
+  const eu = sessao.usuario() || {};
+  const ehMinha = (c) => (c.responsavel_id && eu.id) ? c.responsavel_id === eu.id : (!!c.responsavel && c.responsavel === eu.nome);
+  const minhasEmAtendimento = emAtendimento.filter(ehMinha);
   /* Fila: quem espera há mais tempo aparece em primeiro, como qualquer fila
      do mundo. A lista geral vem ordenada da mais recente para a mais antiga,
      então aqui ela é invertida. */
@@ -185,7 +213,7 @@ export async function render(params = {}) {
   let lista;
   if (_verResolvidas)       lista = filtraConversas(resolvidas);
   else if (_aba === 'fila') lista = filtraConversas(naFila);
-  else                      lista = filtraConversas(emAtendimento);
+  else                      lista = filtraConversas(_dono === 'minhas' ? minhasEmAtendimento : emAtendimento);
 
   /* Qual conversa fica aberta à direita.
      Regra: continua aberta enquanto existir e pertencer à caixa selecionada —
@@ -198,6 +226,7 @@ export async function render(params = {}) {
   if (atual && resolvida(atual) && !_verResolvidas) atual = null;
   if (!atual && _aba !== 'contatos') atual = lista[0] || null;
   _conversaAtiva = atual ? atual.id : null;
+  if (_modoDaConversa !== _conversaAtiva) { _modo = 'responder'; _modoDaConversa = _conversaAtiva; }
 
   /* 18/09: quantas não-lidas a conversa ABERTA ainda carrega.
      `depois()` usa isto para zerar o contador — ver `marcarAbertaComoLida()`.
@@ -230,13 +259,14 @@ export async function render(params = {}) {
   fotografarLista();
 
   return `
-    <div class="crm-inbox ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}"
+    <div class="crm-inbox wa ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}"
          id="crmConversasVivo">
       ${varios ? chipsCelular(caixas, conversas) : ''}
       ${varios ? trilhoCaixas(caixas, conversas) : ''}
       ${colunaLista({
         lista, listaContatos, caixas, varios,
-        nChats: emAtendimento.length, nFila: naFila.length, nResolvidas: resolvidas.length
+        nChats: emAtendimento.length, nFila: naFila.length, nResolvidas: resolvidas.length,
+        nMinhas: minhasEmAtendimento.length
       })}
       <div class="crm-mob-sep">${icone('chevrondown','sm')} Ao tocar em uma conversa</div>
       ${atual ? colunaConversa(atual, caixas, varios, contato, msgs) : semConversa()}
@@ -284,7 +314,7 @@ function chipsCelular(caixas, conversas) {
 }
 
 /* ── coluna da esquerda: busca, abas e a lista da aba ───────────────────── */
-function colunaLista({ lista, listaContatos, caixas, varios, nChats, nFila, nResolvidas }) {
+function colunaLista({ lista, listaContatos, caixas, varios, nChats, nFila, nResolvidas, nMinhas = 0 }) {
   const aba = (id, rotulo, ic, n) => `
     <button class="crm-aba ${_aba === id && !_verResolvidas ? 'ativa' : ''}" data-acao="crm:aba:${id}">
       ${icone(ic,'sm')}<span>${rotulo}</span>${n ? `<span class="crm-aba-n">${n}</span>` : ''}
@@ -308,6 +338,11 @@ function colunaLista({ lista, listaContatos, caixas, varios, nChats, nFila, nRes
         ${icone('check','sm')} Mostrando ${nResolvidas} resolvida${nResolvidas === 1 ? '' : 's'} ·
         <span data-acao="crm:ver-resolvidas" style="cursor:pointer;text-decoration:underline">voltar</span></div>` : ''}
     </div>
+    ${_aba === 'chats' && !_verResolvidas ? `
+    <div class="crm-dono">
+      <span class="crm-mob-caixa ${_dono === 'minhas' ? 'ativa' : ''}" data-acao="crm:dono:minhas">Minhas <span class="n">${nMinhas}</span></span>
+      <span class="crm-mob-caixa ${_dono === 'todas' ? 'ativa' : ''}" data-acao="crm:dono:todas">Todas <span class="n">${nChats}</span></span>
+    </div>` : ''}
     <div class="crm-col-body crm-lista-rolavel">
       ${_aba === 'contatos' && !_verResolvidas ? listaDeContatos(listaContatos) : listaDeConversas(lista, caixas, varios)}
     </div>
@@ -375,6 +410,8 @@ function vazioDaLista() {
   if (_verResolvidas) return ui.vazio({ icone:'check', titulo:'Nenhuma conversa resolvida ainda' });
   if (_aba === 'fila') return ui.vazio({ icone:'inbox', titulo:'Fila vazia',
     sub:'Ninguém esperando. Quando chegar mensagem de alguém novo, ela entra aqui.' });
+  if (_dono === 'minhas') return ui.vazio({ icone:'chat', titulo:'Nenhuma conversa com você agora',
+    sub:'As da equipe estão em "Todas". O que chega fica na Fila até alguém assumir.' });
   return ui.vazio({ icone:'chat', titulo:'Nenhuma conversa em atendimento',
     sub:'O que chega fica em Fila até alguém assumir. Para puxar assunto, use a aba Contatos.' });
 }
@@ -477,6 +514,12 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
     const dia = rotuloDia(m.criado_em);
     const divisor = dia && dia !== diaCorrente ? `<div class="crm-dia">${ui.esc(dia)}</div>` : '';
     if (dia) diaCorrente = dia;
+    /* 26/09: nota interna — só a equipe vê, nunca foi para o cliente. */
+    if (m.tipo === 'nota') return divisor + `
+      <div class="crm-msg nota">
+        <div class="crm-msg-aut">${icone('clipboard','sm')} Nota interna${m.autor ? ' · ' + ui.esc(m.autor) : ''}</div>
+        <div class="crm-msg-txt">${ui.esc(m.texto || '')}</div>
+        <span class="h">${m.hora || ''}</span></div>`;
     const corpo = m.tipo === 'sistema'
       ? `<div class="crm-msg sis">${ui.esc(m.texto)}</div>`
       : `<div class="crm-msg ${m.tipo === 'enviada' ? 'env' : 'rec'}">
@@ -505,16 +548,19 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
   <div class="crm-col crm-thread">
     <div class="crm-thread-head">
       <div class="crm-conv-av" style="background:rgba(30,42,74,.08);color:var(--navy);width:34px;height:34px">${ui.fmt.iniciais(c.nome)}</div>
+      ${/* 26/09: número, caixa e responsável numa linha só, embaixo do nome.
+            Eram selos soltos no meio do topo, disputando espaço com os botões. */''}
       <div class="crm-thread-ident">
         <div class="nome">${ui.esc(c.nome)}</div>
-        <div class="meta"><span class="num">${ui.fmt.telefone(contato?.telefone || c.telefone)}</span></div>
-      </div>
-      <div class="crm-thread-selos">
-        ${cx ? `<span class="crm-selo-cx">${ui.esc(cx.nome)}</span>` : ''}
-        <span class="crm-selo-dono ${semDono ? 'sem' : ''}">${ui.esc(c.responsavel || 'Na fila')}</span>
+        <div class="meta"><span class="num">${ui.fmt.telefone(contato?.telefone || c.telefone)}</span>
+          ${cx ? `<span class="sep">•</span><span>${ui.esc(cx.nome)}</span>` : ''}
+          <span class="sep">•</span>${semDono
+            ? `<span style="color:var(--amber-text);font-weight:700">Na fila</span>`
+            : `<span class="dono">com ${ui.esc(c.responsavel)}</span>`}</div>
       </div>
       <div class="crm-thread-acoes">
         ${semDono ? `<button class="ds-btn pri sm" data-acao="crm:assumir:${c.id}">${icone('user','sm')} Assumir</button>` : ''}
+        <button class="ds-btn sec sm" data-acao="crm:transferir:${c.id}">${icone('team','sm')} Transferir</button>
         <button class="ds-btn sec sm" data-acao="crm:vincular:${c.id}">${icone('funnel','sm')} Vincular</button>
         ${/* Resolver aparece mesmo sem dono: mensagem errada, propaganda ou
               engano se fecha de uma vez, sem a pessoa ter de assumir antes
@@ -530,25 +576,127 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
       ${msgs.length ? '' : ui.vazio({ icone:'chat', titulo:'Sem mensagens nesta conversa',
         sub:'Escreva abaixo para mandar a primeira.' })}
     </div>
-    <div class="crm-composer">
-      <div class="crm-modelos" id="crmModelos" hidden>
-        <button class="crm-modelo" data-acao="crm:modelo:proposta">${icone('doc','sm')} Enviar proposta</button>
-        <button class="crm-modelo" data-acao="crm:modelo:datas">${icone('calendar','sm')} Sugerir datas</button>
-        <button class="crm-modelo" data-acao="crm:modelo:certificado">${icone('cap','sm')} Certificado 2ª via</button>
+    ${composer(c, contato)}
+  </div>`;
+}
+
+/* ── campo de baixo: responder ou nota interna (26/09) ──────────────────────
+   Os dois modos vivem no MESMO campo, trocados por duas abas. O modo nota
+   pinta a caixa de âmbar, tira anexo/áudio/respostas (nota é texto para a
+   equipe) e troca o botão de enviar pelo de salvar nota — é o botão que
+   decide para onde o texto vai, e o Enter aperta o botão visível.
+
+   O primeiro nome do contato fica no próprio elemento (`data-nome`): é ele
+   que substitui {nome} quando uma resposta rápida entra no campo. */
+function primeiroNome(nome) {
+  const n = String(nome || '').trim();
+  if (!n || /^[+\d\s().-]+$/.test(n)) return '';   // sem nome, só telefone
+  return n.split(/\s+/)[0];
+}
+
+function menuRespostas() {
+  const itens = _respostas.map(r => `
+    <button class="crm-modelo resp" data-acao="crm:resposta:${ui.esc(r.id)}"
+            data-busca="${ui.esc((r.atalho + ' ' + r.titulo).toLowerCase())}" data-atalho="${ui.esc(r.atalho)}">
+      ${icone('doc','sm')} ${ui.esc(r.titulo)} <span class="atalho">/${ui.esc(r.atalho)}</span>
+      <span class="prev">${ui.esc(r.texto)}</span></button>`).join('');
+  return `
+    <div class="crm-modelos respostas" id="crmModelos" hidden>
+      ${itens || `<div class="crm-modelo" style="cursor:default;color:var(--text-3)">Nenhuma resposta rápida cadastrada.</div>`}
+      <button class="crm-modelo" data-acao="ir:crm-respostas" style="color:var(--text-3);font-weight:600">${icone('settings','sm')} Gerenciar respostas rápidas</button>
+    </div>`;
+}
+
+function composer(c, contato) {
+  const nota = _modo === 'nota';
+  return `
+    <div class="crm-composer ${nota ? 'em-nota' : ''}" data-nome="${ui.esc(primeiroNome(contato?.nome || c.nome))}">
+      ${menuRespostas()}
+      <div class="crm-modo">
+        <button class="${nota ? '' : 'ativa'}" data-acao="crm:modo:responder">Responder</button>
+        <button class="${nota ? 'ativa nota' : ''}" data-acao="crm:modo:nota">Nota interna</button>
       </div>
       <div class="crm-composer-box">
-        <div class="crm-composer-icos">
+        <div class="crm-composer-icos" ${nota ? 'hidden' : ''}>
           <button class="crm-cico" data-acao="crm:anexar:${c.id}" title="Anexar arquivo">${icone('clip','sm')}</button>
           <button class="crm-cico" id="crmMic" data-acao="crm:gravar:${c.id}" title="Gravar áudio">${icone('mic','sm')}</button>
-          <button class="crm-cico" data-acao="crm:modelos" title="Modelos de mensagem">${icone('chat','sm')}</button>
+          <button class="crm-cico" data-acao="crm:modelos" title="Respostas rápidas (ou digite /)">${icone('chat','sm')}</button>
         </div>
-        <textarea id="crmComposerTexto" rows="1" placeholder="Escreva a resposta"></textarea>
-        <button class="crm-enviar" data-acao="crm:enviar:${c.id}" title="Enviar">${icone('send','sm')}</button>
+        <textarea id="crmComposerTexto" rows="1"
+          placeholder="${textoCampo(nota)}"></textarea>
+        <button class="crm-enviar" data-acao="${nota ? 'crm:nota:' : 'crm:enviar:'}${c.id}" data-id="${c.id}"
+          title="${nota ? 'Salvar nota' : 'Enviar'}">${icone('send','sm')}</button>
       </div>
       <div class="crm-anexo-pendente" id="crmAnexoPendente" hidden></div>
-      <div class="crm-composer-dica"><kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha</div>
-    </div>
-  </div>`;
+      <div class="crm-composer-dica" ${nota ? '' : 'hidden'}>A nota fica na conversa para a equipe. <b>Não é enviada ao cliente.</b></div>
+    </div>`;
+}
+
+/* Texto de apoio do campo. No celular cabe pouco: frase curta, como no WhatsApp. */
+function textoCampo(nota) {
+  if (sessao.ehCelular()) return nota ? 'Nota só para a equipe' : 'Mensagem';
+  return nota ? 'Só a equipe vê. O cliente não recebe.' : 'Escreva a resposta · / para respostas rápidas';
+}
+
+/* Troca o modo sem redesenhar: redesenhar apagaria o que já foi digitado. */
+function aplicarModo() {
+  const nota = _modo === 'nota';
+  document.querySelectorAll('.crm-composer').forEach(el => {
+    el.classList.toggle('em-nota', nota);
+    const [bResp, bNota] = el.querySelectorAll('.crm-modo button');
+    if (bResp && bNota) {
+      bResp.className = nota ? '' : 'ativa';
+      bNota.className = nota ? 'ativa nota' : '';
+    }
+    const icos = el.querySelector('.crm-composer-icos'); if (icos) icos.hidden = nota;
+    const dica = el.querySelector('.crm-composer-dica'); if (dica) dica.hidden = !nota;
+    const campo = el.querySelector('textarea');
+    if (campo) campo.placeholder = textoCampo(nota);
+    const bot = el.querySelector('.crm-enviar');
+    if (bot) {
+      bot.dataset.acao = (nota ? 'crm:nota:' : 'crm:enviar:') + bot.dataset.id;
+      bot.title = nota ? 'Salvar nota' : 'Enviar';
+    }
+    const menu = el.querySelector('.crm-modelos'); if (menu && nota) menu.hidden = true;
+  });
+}
+
+/* ── o "/" das respostas rápidas ────────────────────────────────────────────
+   Digitou "/" no começo do campo: abre o menu que já existia (o dos modelos),
+   filtrando pelo atalho ou pelo título enquanto a pessoa digita. Setas
+   escolhem, Enter ou Tab colocam o texto no campo — NÃO envia; a pessoa
+   confere e envia. Esc fecha. */
+function filtrarRespostas(campo) {
+  const menu = campo.closest('.crm-composer')?.querySelector('.crm-modelos');
+  if (!menu || _modo === 'nota') return false;
+  const m = campo.value.match(/^\/([^\s]*)$/);
+  if (!m) {
+    if (menu.dataset.pelaBarra) { menu.hidden = true; delete menu.dataset.pelaBarra; }
+    return false;
+  }
+  const termo = m[1].toLowerCase();
+  const itens = [...menu.querySelectorAll('.crm-modelo.resp')];
+  let primeiro = null;
+  itens.forEach(b => {
+    const ok = !termo || b.dataset.atalho.startsWith(termo) || b.dataset.busca.includes(termo);
+    b.hidden = !ok;
+    b.classList.remove('foco');
+    if (ok && !primeiro) primeiro = b;
+  });
+  primeiro?.classList.add('foco');
+  menu.hidden = false;
+  menu.dataset.pelaBarra = '1';
+  return true;
+}
+
+function moverFoco(menu, passo) {
+  const vis = [...menu.querySelectorAll('.crm-modelo.resp')].filter(b => !b.hidden);
+  if (!vis.length) return;
+  const i = vis.findIndex(b => b.classList.contains('foco'));
+  vis.forEach(b => b.classList.remove('foco'));
+  const alvo = vis[(i + passo + vis.length) % vis.length];
+  alvo.classList.add('foco');
+  alvo.scrollIntoView({ block: 'nearest' });
 }
 
 /* ── contexto do contato ────────────────────────────────────────────────── */
@@ -597,6 +745,42 @@ export function acao(nome, valor, redesenhar) {
   if (nome === 'crm:conversa')        { _conversaAtiva = valor; _abertaDeProposito = valor; redesenhar(); return true; }
   if (nome === 'crm:buscar-conversa') { _busca = valor || ''; redesenhar(); return true; }
 
+  /* 26/09 — Minhas | Todas. Lembrado neste navegador. */
+  if (nome === 'crm:dono') {
+    _dono = valor === 'todas' ? 'todas' : 'minhas';
+    try { localStorage.setItem(CHAVE_DONO, _dono); } catch { /* sem armazenamento: vale só nesta visita */ }
+    redesenhar();
+    return true;
+  }
+  /* 26/09 — Responder | Nota interna, sem redesenhar (não perde o que foi digitado). */
+  if (nome === 'crm:modo') {
+    _modo = valor === 'nota' ? 'nota' : 'responder';
+    _modoDaConversa = _conversaAtiva;
+    aplicarModo();
+    visivel('crmComposerTexto')?.focus();
+    return true;
+  }
+  /* 26/09 — escolheu uma resposta rápida (pelo "/" ou pela lista). Se a
+     pessoa digitou o atalho, ele é trocado pelo texto; senão, o texto entra
+     no fim do que já estava escrito. {nome} vira o primeiro nome do contato. */
+  if (nome === 'crm:resposta') {
+    const campo = visivel('crmComposerTexto');
+    const r = _respostas.find(x => String(x.id) === String(valor));
+    if (campo && r) {
+      const pnome = campo.closest('.crm-composer')?.dataset.nome || '';
+      let texto = r.texto.replace(/\{nome\}/gi, pnome);
+      if (!pnome) texto = texto.replace(/\s+([,!.?;:])/g, '$1').replace(/^[\s,]+/, '');
+      if (/^\/[^\s]*$/.test(campo.value)) campo.value = texto;
+      else campo.value = campo.value.trim() ? campo.value.replace(/\s*$/, ' ') + texto : texto;
+      campo.dispatchEvent(new Event('input'));
+      campo.focus();
+      campo.selectionStart = campo.selectionEnd = campo.value.length;
+    }
+    const cx = visivel('crmModelos');
+    if (cx) { cx.hidden = true; delete cx.dataset.pelaBarra; }
+    return true;
+  }
+
   /* Compatibilidade: os chips antigos sumiram da tela, mas um clique guardado
      em algum lugar não pode virar "ação desconhecida". */
   if (nome === 'crm:filtro-conv') {
@@ -618,7 +802,11 @@ export function acao(nome, valor, redesenhar) {
   }
   if (nome === 'crm:modelos') {
     const cx = visivel('crmModelos');
-    if (cx) cx.hidden = !cx.hidden;
+    if (cx) {
+      cx.querySelectorAll('.crm-modelo').forEach(b => { b.hidden = false; b.classList.remove('foco'); });
+      delete cx.dataset.pelaBarra;
+      cx.hidden = !cx.hidden;
+    }
     return true;
   }
   if (nome === 'crm:modelo') {
@@ -702,15 +890,28 @@ export function depois() {
     campo.style.height = Math.min(campo.scrollHeight, 132) + 'px';
   };
   campo.addEventListener('input', crescer);
+  campo.addEventListener('input', () => filtrarRespostas(campo));
   crescer();
 
   /* 3. Enter envia. `isComposing` cobre teclados com acentuação por composição;
         `keyCode 229` cobre parte dos teclados de Android, que não mandam
         `isComposing`. Enviar no meio de uma palavra sendo composta perde texto. */
   campo.addEventListener('keydown', (ev) => {
+    /* 26/09: com o menu do "/" aberto, as setas escolhem e Enter/Tab
+       colocam a resposta no campo — nunca enviam. */
+    const menu = campo.closest('.crm-composer')?.querySelector('.crm-modelos');
+    if (menu && !menu.hidden && menu.dataset.pelaBarra) {
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); moverFoco(menu, 1); return; }
+      if (ev.key === 'ArrowUp')   { ev.preventDefault(); moverFoco(menu, -1); return; }
+      if ((ev.key === 'Enter' && !ev.shiftKey) || ev.key === 'Tab') {
+        const foco = menu.querySelector('.crm-modelo.resp.foco:not([hidden])');
+        if (foco) { ev.preventDefault(); foco.click(); return; }
+      }
+    }
     if (ev.key !== 'Enter' || ev.shiftKey || ev.isComposing || ev.keyCode === 229) return;
     ev.preventDefault();
-    const botao = [...document.querySelectorAll('.crm-enviar[data-acao^="crm:enviar:"]')]
+    /* O botão decide o destino: "enviar" (cliente) ou "nota" (equipe). */
+    const botao = [...document.querySelectorAll('.crm-enviar[data-acao^="crm:enviar:"], .crm-enviar[data-acao^="crm:nota:"]')]
       .find(b => b.getBoundingClientRect().width > 0);
     botao?.click();
   });
@@ -858,7 +1059,7 @@ function ligarAtalhosGlobais() {
   document.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Escape') return;
     const aberta = document.querySelector('.crm-modelos:not([hidden])');
-    if (aberta) { aberta.hidden = true; return; }
+    if (aberta) { aberta.hidden = true; delete aberta.dataset.pelaBarra; return; }
     if (_fichaAberta) {
       _fichaAberta = false;
       document.querySelectorAll('.crm-inbox').forEach(e => e.classList.remove('com-ficha'));

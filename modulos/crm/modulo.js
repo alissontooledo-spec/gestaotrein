@@ -63,6 +63,13 @@ export default {
       textoDesktop:'Criar funis, renomear etapas e definir cores é trabalho de mesa. No computador esta tela abre direto.',
       rota:() => import('./funis.js') },
 
+    /* 26/09 — Respostas rápidas: chega pelo botão no topo de WhatsApp e pelo
+       "Gerenciar" no menu do "/" da conversa. Comercial também entra: é quem
+       mais usa, e o banco já confere o perfil (crm_resposta_salvar). */
+    { id:'crm-respostas', rotulo:'Respostas rápidas', icone:'chat', oculto:true, funcionalidade:'whatsapp',
+      perfis:['administrador','comercial'], mobile:true,
+      rota:() => import('./respostas.js') },
+
     /* Ficha do lead: existe como rota, não como item de menu. */
     { id:'crm-lead', rotulo:'Lead', icone:'funnel', oculto:true,
       perfis:['administrador','comercial'], mobile:true,

@@ -61,7 +61,9 @@ export async function render() {
        promessa vazia que o "Reconectar" fazia. O horário de atendimento já se
        edita em cada número, no botão Editar; respostas rápidas configuráveis
        dependem de tabela nova e voltam ao cabeçalho quando existirem de fato. */
+    /* 26/09: "Respostas rápidas" voltou — agora existe de fato (PASSO-56). */
     acoes:[
+      { rotulo:'Respostas rápidas', icone:'chat', tipo:'sec', acao:'ir:crm-respostas' },
       { rotulo:'Adicionar número', icone:'plus', tipo:'pri', acao:'crm:add-numero' }
     ]
   })}

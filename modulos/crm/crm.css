@@ -571,3 +571,128 @@
 
 /* mensagem enviada: a borda ainda usava o verde antigo */
 .crm-msg.env { border-color: rgba(22,138,89,.28) }
+
+
+/* ═════ Conversas v3 — fundo de WhatsApp e letras maiores (26/09) ═════════
+   Aprovado pelo Alisson na proposta 08-Propostas-visuais/
+   2026-09-26-crm-atender-em-equipe-v2.html ("pode finalizar").
+
+   A queixa: "letras muito pequenas no bate-papo". Era verdade e tinha causa:
+   as medidas de 20/09 (bloco "min-width:768px" acima) vieram de um PNG do
+   conceito reduzido, e deixaram a mensagem em 11,5px, a prévia em 10px e o
+   horário em 9,5px. Aqui a mensagem vai a 15,5px, o nome na lista a 15,5px,
+   a prévia a 14px e o horário a 12px — no computador e no celular.
+
+   Tudo fica atrás da classe `wa` no `.crm-inbox` (conversas.js). Voltar ao
+   visual anterior é tirar essa classe; nada acima foi apagado.
+
+   O desenho do fundo é PRÓPRIO: os ícones do GRID (escudo, capelo,
+   certificado, balão, prancheta, calendário, check), girados e quase
+   invisíveis, no espírito do papel de parede do WhatsApp — nada copiado dele.
+   Também entram aqui as peças novas de "atender em equipe": Minhas | Todas,
+   nota interna, abas do campo, menu do "/" e a janela de transferência. */
+@media (min-width: 768px) {
+  .crm-inbox.wa, .crm-inbox.wa.um-numero { grid-template-columns: 360px minmax(0,1fr) }
+}
+@media (min-width: 1500px) {
+  .crm-inbox.wa, .crm-inbox.wa.um-numero { grid-template-columns: 400px minmax(0,1fr) }
+}
+
+/* ══ VERSÃO 2 (26/09, 2ª rodada): fundo de WhatsApp, letras maiores, tela enxuta ══ */
+/* lista */
+.crm-inbox.wa .crm-conv{padding:12px 14px;gap:12px;align-items:center}
+.crm-inbox.wa .crm-conv-av{width:46px;height:46px;border-radius:50%;font-size:15px;background:#DFE5E7;color:#54656F}
+.crm-inbox.wa .crm-conv-nome{font-size:15.5px}
+.crm-inbox.wa .crm-conv-h{font-size:12.5px;font-weight:600;color:var(--text-3)}
+.crm-inbox.wa .crm-conv-prev{font-size:14px;color:var(--text-2);margin-top:3px}
+.crm-inbox.wa .crm-conv-tags .ds-selo{font-size:11.5px}
+.crm-inbox.wa .crm-conv-nao{font-size:12px;min-width:22px;padding:2px 7px;right:14px;bottom:14px}
+.crm-inbox.wa .crm-busca-linha input{font-size:14.5px}
+.crm-inbox.wa .crm-aba{font-size:13.5px;padding:11px 4px}
+.crm-inbox.wa .crm-dono .crm-mob-caixa{font-size:13px}
+/* topo da conversa: uma linha só; número, caixa e dono juntos embaixo do nome */
+.crm-inbox.wa .crm-thread-head{padding:10px 16px;gap:12px;flex-wrap:nowrap}
+.crm-inbox.wa .crm-thread-head .crm-conv-av{width:42px!important;height:42px!important;border-radius:50%;font-size:14px}
+.crm-inbox.wa .crm-thread-ident .nome{font-size:16.5px}
+.crm-inbox.wa .crm-thread-ident .meta{font-size:13.5px;color:var(--text-2);gap:8px}
+.crm-inbox.wa .crm-thread-ident .meta .sep{color:var(--border-2)}
+.crm-inbox.wa .crm-thread-ident .meta .dono{color:var(--green-text);font-weight:700}
+/* a conversa: fundo bege com desenho suave, como no WhatsApp */
+.crm-inbox.wa .crm-thread{background:#EFEAE2 url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22280%22%20height%3D%22280%22%20viewBox%3D%220%200%20280%20280%22%3E%3Cg%20style%3D%22color%3A%236b5e4a%22%20opacity%3D%220.12%22%3E%3Cg%20transform%3D%22translate(18%2020)%20rotate(-12%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M12%2022s8-4%208-10V5l-8-3-8%203v7c0%206%208%2010%208%2010z%22%2F%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22m9%2012%202%202%204-4%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(98%2014)%20rotate(18%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M21%2011.5a8.4%208.4%200%200%201-9%208.4%208.5%208.5%200%200%201-3.9-.9L3%2020.5l1.6-4.9A8.4%208.4%200%200%201%203.6%2011%208.5%208.5%200%200%201%2012%203a8.4%208.4%200%200%201%209%208.5Z%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(178%2034)%20rotate(-6%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M22%209%2012%204%202%209l10%205%2010-5Z%22%2F%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M6%2011.5V16c0%201.4%202.7%202.5%206%202.5s6-1.1%206-2.5v-4.5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(240%2010)%20rotate(24%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M16%204h2a2%202%200%20012%202v14a2%202%200%2001-2%202H6a2%202%200%2001-2-2V6a2%202%200%20012-2h2%22%2F%3E%3Crect%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20x%3D%228%22%20y%3D%222%22%20width%3D%228%22%20height%3D%224%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(40%2096)%20rotate(10%2012%2012)%20scale(1.05)%22%3E%3Crect%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20x%3D%223%22%20y%3D%225%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22%2F%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M16%203v4M8%203v4M3%2011h18%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(128%2088)%20rotate(-20%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M20%206%209%2017l-5-5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(208%20110)%20rotate(8%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M14%202H6a2%202%200%200%200-2%202v16a2%202%200%200%200%202%202h12a2%202%200%200%200%202-2V8z%22%2F%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M14%202v6h6M16%2013H8M16%2017H8%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(14%20176)%20rotate(-24%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M12%2022s8-4%208-10V5l-8-3-8%203v7c0%206%208%2010%208%2010z%22%2F%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22m9%2012%202%202%204-4%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(92%20168)%20rotate(12%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M21%2011.5a8.4%208.4%200%200%201-9%208.4%208.5%208.5%200%200%201-3.9-.9L3%2020.5l1.6-4.9A8.4%208.4%200%200%201%203.6%2011%208.5%208.5%200%200%201%2012%203a8.4%208.4%200%200%201%209%208.5Z%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(170%20190)%20rotate(-10%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M22%209%2012%204%202%209l10%205%2010-5Z%22%2F%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M6%2011.5V16c0%201.4%202.7%202.5%206%202.5s6-1.1%206-2.5v-4.5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(246%20172)%20rotate(20%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M20%206%209%2017l-5-5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate(124%20246)%20rotate(-4%2012%2012)%20scale(1.05)%22%3E%3Cpath%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20d%3D%22M16%204h2a2%202%200%20012%202v14a2%202%200%2001-2%202H6a2%202%200%2001-2-2V6a2%202%200%20012-2h2%22%2F%3E%3Crect%20stroke%3D%22currentColor%22%20stroke-width%3D%221.75%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%20x%3D%228%22%20y%3D%222%22%20width%3D%228%22%20height%3D%224%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E");background-size:280px 280px}
+.crm-inbox.wa .crm-thread-body{padding:18px 7% 14px;gap:6px}
+.crm-inbox.wa .crm-msg{font-size:15.5px;line-height:1.45;color:#111B21;padding:7px 10px 6px;border-radius:8px;border:none;box-shadow:0 1px .5px rgba(11,20,26,.13);max-width:65%}
+.crm-inbox.wa .crm-msg.rec{background:#fff;border-top-left-radius:0}
+.crm-inbox.wa .crm-msg.env{background:#D9FDD3;border-top-right-radius:0}
+.crm-inbox.wa .crm-msg .h{font-size:12px;font-weight:500;color:#667781;margin-top:2px}
+.crm-inbox.wa .crm-msg.env .h{color:#667781}
+.crm-inbox.wa .crm-msg-aut{font-size:13px;margin-bottom:2px}
+.crm-inbox.wa .crm-msg.env .crm-msg-aut{color:#1F7A5A}
+.crm-inbox.wa .crm-tique{font-size:13px}
+.crm-inbox.wa .crm-tique.ok{color:#8696A0}
+.crm-inbox.wa .crm-tique.lida{color:#53BDEB}
+.crm-inbox.wa .crm-dia{font-size:12.5px;font-weight:600;letter-spacing:0;text-transform:none;color:#54656F;background:#fff;border:none;box-shadow:0 1px .5px rgba(11,20,26,.13);border-radius:8px;padding:5px 12px;margin:8px 0}
+.crm-inbox.wa .crm-msg.sis{font-size:13px;color:#54656F;background:rgba(255,255,255,.92);border:none;box-shadow:0 1px .5px rgba(11,20,26,.13);border-radius:8px;padding:6px 12px;max-width:80%}
+.crm-inbox.wa .crm-msg.nota{background:#FFF4CE;border:1px dashed rgba(180,83,9,.5);border-top-right-radius:0;box-shadow:none}
+.crm-inbox.wa .crm-msg.nota .crm-msg-aut{font-size:13px}
+/* campo de digitação: barra cinza e caixa branca arredondada, como no WhatsApp */
+.crm-inbox.wa .crm-composer{background:#F0F2F5;border-top:none;padding:10px 16px 8px}
+.crm-inbox.wa .crm-composer-box{border:none;border-radius:10px;padding:8px 10px;background:#fff;align-items:center}
+.crm-inbox.wa .crm-composer-box textarea{font-size:15.5px;padding:3px 0}
+.crm-inbox.wa .crm-cico{width:34px;height:34px;color:#54656F}
+.crm-inbox.wa .crm-cico .ico{width:20px;height:20px}
+.crm-inbox.wa .crm-enviar{width:42px;height:42px;border-radius:50%}
+.crm-inbox.wa .crm-composer-dica{font-size:12px}
+.crm-inbox.wa .crm-modo button{font-size:13.5px;padding:5px 12px}
+.crm-inbox.wa .crm-composer.em-nota .crm-composer-box{background:#FFF4CE;box-shadow:inset 0 0 0 1px rgba(180,83,9,.45)}
+.crm-inbox.wa .crm-modelos.respostas{min-width:420px;max-width:520px}
+.crm-inbox.wa .crm-modelo{font-size:14px;padding:9px 12px}
+.crm-inbox.wa .crm-modelo .prev{font-size:13px}
+.crm-inbox.wa .crm-modelo .atalho{font-size:12.5px}
+
+/* Minhas | Todas — mesmo desenho dos chips de caixa do celular (.crm-mob-caixa) */
+.crm-dono{display:flex;gap:6px;padding:var(--sp-2) var(--sp-3) 0}
+.crm-dono .crm-mob-caixa{cursor:pointer;padding:4px 11px}
+.crm-dono .crm-mob-caixa .n{background:var(--gray-200);color:var(--text-2)}
+.crm-dono .crm-mob-caixa.ativa .n{background:var(--amber);color:#fff}
+/* Nota interna: balão âmbar claro, nunca vai para o cliente */
+.crm-msg.nota{align-self:flex-end;background:var(--amber-l,#FEF3C7);border:1px dashed rgba(180,83,9,.45);border-bottom-right-radius:var(--r-sm)}
+.crm-msg.nota .crm-msg-aut{color:var(--amber-text,#92400E);display:flex;align-items:center;gap:5px}
+.crm-msg.nota .crm-msg-aut .ico{width:13px;height:13px}
+.crm-msg.nota .h{color:var(--amber-text,#92400E)}
+/* Responder | Nota interna — abas pequenas em cima do campo */
+.crm-modo{display:flex;gap:2px;margin-bottom:6px}
+.crm-modo button{background:none;border:none;border-bottom:2px solid transparent;font-family:inherit;font-size:var(--fs-2);font-weight:600;color:var(--text-3);padding:4px 10px;cursor:pointer}
+.crm-modo button.ativa{color:var(--navy);border-bottom-color:var(--navy)}
+.crm-modo button.ativa.nota{color:var(--amber-text,#92400E);border-bottom-color:var(--amber)}
+.crm-composer.em-nota .crm-composer-box{background:var(--amber-l,#FEF3C7);border-color:rgba(180,83,9,.45)}
+.crm-composer.em-nota .crm-enviar{background:var(--amber)}
+/* "/" usa o menu de modelos que já existe (.crm-modelos) — só ganha o atalho à direita */
+.crm-modelo .atalho{margin-left:auto;font-size:var(--fs-1);font-weight:700;color:var(--text-3);font-variant-numeric:tabular-nums}
+.crm-modelo.foco{background:var(--surface-2,#F4F6FA);color:var(--navy)}
+.crm-modelos.respostas{min-width:380px;max-width:460px}
+.crm-modelo.resp{flex-wrap:wrap;row-gap:2px}
+.crm-modelo .prev{flex-basis:100%;padding-left:23px;font-weight:500;color:var(--text-3);font-size:var(--fs-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* tique de lida: azul vivo do padrão (--blue), um pouco maior que o cinza */
+.crm-tique.lida{color:var(--blue);font-size:1.05em}
+/* Transferir: lista de pessoas com seleção */
+.crm-transf .ds-linha{cursor:pointer;border-radius:var(--r-md)}
+.crm-transf .ds-linha.sel{background:var(--navy-l,rgba(30,42,74,.06));box-shadow:inset 0 0 0 1.5px var(--navy)}
+.crm-transf .ds-linha .ok{color:var(--navy);display:none}
+.crm-transf .ds-linha.sel .ok{display:inline-flex}
+
+/* `display` de autor vence o [hidden] do navegador: cada peça que a tela
+   esconde com `hidden` precisa desta regra, senão continua aparecendo. */
+.crm-modelo[hidden], .crm-composer-icos[hidden], .crm-composer-dica[hidden] { display: none !important }
+
+/* celular: mesma letra, menos margem, balões mais largos, topo em duas linhas */
+@media (max-width: 767px) {
+  .crm-inbox.wa .crm-thread-body { padding: 12px 10px }
+  .crm-inbox.wa .crm-msg { max-width: 86% }
+  .crm-inbox.wa .crm-thread-head { flex-wrap: wrap; padding: 10px 12px }
+  .crm-inbox.wa .crm-thread-acoes { width: 100%; margin-left: 0; flex-wrap: wrap }
+  .crm-inbox.wa .crm-thread-ident { min-width: 0; flex: 1 }
+  .crm-inbox.wa .crm-thread-ident .meta { flex-wrap: wrap; row-gap: 2px; font-size: 13px }
+  .crm-inbox.wa .crm-cico { width: 30px; height: 30px }
+  .crm-inbox.wa .crm-composer { padding: 8px 10px }
+  .crm-inbox.wa .crm-modelos.respostas { min-width: 0; max-width: none; left: 8px; right: 8px }
+}
