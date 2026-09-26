@@ -9670,7 +9670,9 @@ function aplicarFiltrosClientes() {
   const ordem  = _getElVisible('ordenarClientes')?.value || 'nome_asc';
 
   let r = _clientesCache;
-  if (busca)              r = r.filter(c => c.nome.toLowerCase().includes(busca) || (c.cnpj||'').includes(busca));
+  const _buscaDig = busca.replace(/\D/g, '');
+  if (busca)              r = r.filter(c => c.nome.toLowerCase().includes(busca) || (c.cnpj||'').includes(busca)
+                                        || (_buscaDig.length >= 3 && (c.cnpj||'').replace(/\D/g,'').includes(_buscaDig)));
   if (status === 'ativo')   r = r.filter(c => c.ativo);
   if (status === 'inativo') r = r.filter(c => !c.ativo);
 
@@ -9767,6 +9769,7 @@ function verCliente(id) {
         <div class="detail-actions">
           <button class="btn btn-navy" data-action="editarCliente" data-id="${c.id}">${ICONS.edit} Editar dados</button>
           <button class="btn btn-outline" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar cliente':'Reativar cliente'}</button>
+          ${(_modulosAtivos || []).includes('crm') ? `<button class="btn btn-outline" onclick="irPara('crm-empresa',{id:'${c.id}'})" title="Negócios, contatos e atividades desta empresa no CRM — mesmo cadastro">${ICONS.target} Ver conta no CRM</button>` : ''}
         </div>`:''}
       </div>
 
@@ -9887,6 +9890,15 @@ function abrirModalCliente(id=null) {
 async function salvarCliente() {
   const nome = document.getElementById('mCliNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
+  // 26/09 (v197, cadastro único de empresas): CNPJ não se repete na mesma
+  // organização. A trava de verdade está no banco (PASSO-60) e vale para
+  // qualquer caminho; aqui só avisamos antes, com o nome do cadastro que já
+  // usa o CNPJ, sem gastar a viagem ao servidor.
+  const _cnpjDig = (_valorCampo('mCliCnpj') || '').replace(/\D/g, '');
+  if (_cnpjDig) {
+    const _jaExiste = (_clientesCache || []).find(c => c.id !== _modalCurrentId && (c.cnpj || '').replace(/\D/g, '') === _cnpjDig);
+    if (_jaExiste) { showToast(`Este CNPJ já está cadastrado como "${_jaExiste.nome}". Abra esse cadastro em vez de criar outro.`, 'error'); return; }
+  }
   const dados = {
     nome,
     cnpj: _valorCampo('mCliCnpj'),
@@ -29884,7 +29896,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '196';
+  var APP_BUILD = '197';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
