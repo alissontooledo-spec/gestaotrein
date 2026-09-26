@@ -215,6 +215,23 @@ export async function carregarFuncionalidades() {
   return _funcionalidades;
 }
 
+/* ── 25/09: leitura em partes ───────────────────────────────────────────────
+   O banco entrega no máximo 1000 linhas por leitura. Conversas e contatos
+   eram lidos de uma vez: passou de 1000, os mais antigos sumiam da tela sem
+   aviso nenhum — o mesmo defeito corrigido no Início na v191. Aqui lê até o
+   fim, 1000 de cada vez. A ordenação precisa terminar em `id` para as partes
+   não se sobreporem nem pularem linha. */
+async function _lerTudo(montar, lote = 1000) {
+  const tudo = [];
+  for (let de = 0; ; de += lote) {
+    const { data, error } = await montar().range(de, de + lote - 1);
+    if (error) throw error;
+    tudo.push(...(data || []));
+    if (!data || data.length < lote) break;
+  }
+  return tudo;
+}
+
 /* Leitura padrão de uma coleção do módulo. Sempre filtrada por organização.
    Em modo exemplo devolve o conjunto de demonstração, com o mesmo formato. */
 export async function listar(colecao, { filtro = {}, ordem = null } = {}) {
@@ -232,11 +249,10 @@ export async function listar(colecao, { filtro = {}, ordem = null } = {}) {
       return (data || []).map(_mapLead);
     }
     if (colecao === 'crm_contatos') {
-      const { data, error } = await _sb.from('contatos')
+      const data = await _lerTudo(() => _sb.from('contatos')
         .select('*, cliente:clientes(nome)')
-        .eq('org_id', sessao.orgId()).is('excluido_em', null).order('nome');
-      if (error) throw error;
-      return (data || []).map(_mapContato);
+        .eq('org_id', sessao.orgId()).is('excluido_em', null).order('nome').order('id'));
+      return data.map(_mapContato);
     }
     if (colecao === 'crm_atividades') {
       /* `criado_por` entra no select porque a tela precisa dizer QUEM pediu a
@@ -334,14 +350,14 @@ export async function listar(colecao, { filtro = {}, ordem = null } = {}) {
       }));
     }
     if (colecao === 'crm_conversas') {
-      const { data, error } = await _sb.from('crm_conversas')
+      const data = await _lerTudo(() => _sb.from('crm_conversas')
         .select(`*,
           contato:contatos!crm_conversas_contato_id_fkey(nome, cliente:clientes(nome)),
           responsavel:usuarios!crm_conversas_responsavel_id_fkey(nome)`)
         .eq('org_id', sessao.orgId())
-        .order('ultima_mensagem_em', { ascending: false, nullsFirst: false });
-      if (error) throw error;
-      return (data || []).map(_mapConversa);
+        .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
+        .order('id'));
+      return data.map(_mapConversa);
     }
   }
   if (_origem === 'banco' && SO_EXEMPLO.includes(colecao)) return [];
@@ -1020,11 +1036,21 @@ export async function salvarContato(form) {
    demonstração, no mesmo formato. */
 export async function mensagensDaConversa(conversaId) {
   if (_origem !== 'banco') return (_exemplo.crm_mensagens || {})[conversaId] || [];
-  const { data, error } = await _sb.from('crm_mensagens')
-    .select('tipo, texto, criado_em, status, erro, midia_tipo, midia_path, midia_nome, midia_mime, midia_bytes, midia_duracao, autor:usuarios!crm_mensagens_autor_id_fkey(nome)')
+  /* 25/09: as MAIS RECENTES, e não as primeiras.
+     Antes vinham todas em ordem crescente — e o banco corta em 1000. Numa
+     conversa longa, a tela mostraria as 1000 PRIMEIRAS e esconderia justamente
+     as últimas, as que importam. Agora vêm as 500 mais novas (de trás para a
+     frente, depois desviradas); a tela avisa quando há mais antigas.
+     `gateway_jid` entra para a tela saber o que foi respondido pelo celular
+     (PASSO-54: só mensagem enviada PELO CELULAR tem esse campo). */
+  const LIMITE_MSGS = 500;
+  const { data: recentes, error } = await _sb.from('crm_mensagens')
+    .select('tipo, texto, criado_em, status, erro, gateway_jid, midia_tipo, midia_path, midia_nome, midia_mime, midia_bytes, midia_duracao, autor:usuarios!crm_mensagens_autor_id_fkey(nome)')
     .eq('org_id', sessao.orgId()).eq('conversa_id', conversaId)
-    .order('criado_em');
+    .order('criado_em', { ascending: false })
+    .limit(LIMITE_MSGS);
   if (error) throw error;
+  const data = (recentes || []).slice().reverse();
 
   /* ── 15/09: endereços temporários para os anexos ───────────────────────────
      A área de arquivos é privada — não existe URL fixa, e é assim de
@@ -1042,7 +1068,7 @@ export async function mensagensDaConversa(conversaId) {
     (assinados || []).forEach(a => { if (a?.path && a?.signedUrl) enderecos[a.path] = a.signedUrl; });
   }
 
-  return (data || []).map(m => ({
+  const lista = (data || []).map(m => ({
     tipo: m.tipo,
     texto: m.texto,
     hora: _horaCurta(m.criado_em) || '',
@@ -1058,6 +1084,7 @@ export async function mensagensDaConversa(conversaId) {
        foi o caso do numero que nao existia no WhatsApp. */
     erro: m.erro || null,
     criado_em: m.criado_em || null,
+    peloCelular: m.tipo === 'enviada' && !!m.gateway_jid,
     /* `midiaUrl` pode vir nula se a assinatura falhar. A tela desenha o anexo
        com o nome e sem o link, em vez de sumir com a mensagem. */
     midia: m.midia_path ? {
@@ -1066,6 +1093,9 @@ export async function mensagensDaConversa(conversaId) {
       url: enderecos[m.midia_path] || null
     } : null
   }));
+  // A tela usa isto para dizer "mostrando as 500 mais recentes".
+  lista.temMaisAntigas = (recentes || []).length >= LIMITE_MSGS;
+  return lista;
 }
 
 /* ── 15/09: subir um arquivo da tela para a área do WhatsApp ───────────────
