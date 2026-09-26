@@ -856,6 +856,8 @@ export function depois() {
         a rolagem é insuportável de usar. Agora: quem estava no fim continua
         no fim (é lá que a mensagem nova aparece); quem tinha subido para ler
         fica exatamente onde estava. */
+  ligarAjusteDeAltura();
+  ajustarAltura();      // antes de devolver a rolagem: a altura muda onde é "o fim"
   devolverRolagem();
   devolverLista();
 
@@ -1041,6 +1043,41 @@ function ligarAtualizacaoAutomatica() {
       _rascunhoAntes = null;
     }
   }, INTERVALO_ATUALIZACAO);
+}
+
+/* ── Altura da tela ─────────────────────────────────────────────────────────
+   26/09: a caixa tinha altura fixa no CSS (100vh - 230px, mínimo 520). O 230
+   era um chute sobre o tamanho do topo do app; em tela de 900px de altura
+   sobravam ~100px vazios embaixo, e em notebook de 700px a caixa passava da
+   tela. Aqui a caixa ocupa exatamente o que sobra na área de conteúdo, até
+   a margem de baixo que o app já tem. Só no computador: no celular a tela
+   rola inteira (height:auto no CSS). O CSS continua como reserva. */
+function ajustarAltura() {
+  if (typeof document === 'undefined') return;
+  const caixa = [...document.querySelectorAll('.crm-inbox')].find(e => e.offsetParent);
+  if (!caixa) return;
+  if (sessao.ehCelular()) { caixa.style.height = ''; return; }
+  let rolo = caixa.parentElement;
+  while (rolo && rolo !== document.body && !/(auto|scroll)/.test(getComputedStyle(rolo).overflowY)) {
+    rolo = rolo.parentElement;
+  }
+  if (!rolo || rolo === document.body) return;
+  const topo = caixa.getBoundingClientRect().top - rolo.getBoundingClientRect().top + rolo.scrollTop;
+  const folgaBaixo = parseFloat(getComputedStyle(rolo).paddingBottom) || 0;
+  const livre = Math.round(rolo.clientHeight - topo - folgaBaixo);
+  caixa.style.height = Math.max(440, livre) + 'px';
+}
+
+let _alturaLigada = false;
+function ligarAjusteDeAltura() {
+  if (_alturaLigada || typeof window === 'undefined') return;
+  _alturaLigada = true;
+  let pendente = false;
+  window.addEventListener('resize', () => {
+    if (pendente) return;
+    pendente = true;
+    requestAnimationFrame(() => { pendente = false; ajustarAltura(); });
+  });
 }
 
 /* ── Fechar o que está por cima ─────────────────────────────────────────────
