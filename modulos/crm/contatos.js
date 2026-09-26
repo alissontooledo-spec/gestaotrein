@@ -11,18 +11,29 @@ import { avisoDemo } from './painel.js';
 let _ordem = { campo:'nome', desc:false };
 let _fEmpresa = '';
 let _fOrigem  = '';
+let _fEtiqueta = '';
 
-export async function render() {
+export async function render(params = {}) {
   let contatos = await dados.listar('crm_contatos');
+  /* 26/09 (v196): "Ver na tela Contatos", na ficha da conversa, chega aqui
+     com o id — a lista abre já filtrada naquela pessoa. É o MESMO cadastro
+     que a ficha edita. */
+  if (params.id) {
+    const alvo = contatos.find(c => String(c.id) === String(params.id));
+    if (alvo) { _busca = alvo.nome; _fEmpresa = ''; _fOrigem = ''; _fEtiqueta = ''; }
+    params.id = null;
+  }
   // Listas montadas ANTES de filtrar: um filtro que some da lista depois de
   // usado impede a pessoa de voltar atras.
   const todasEmpresas = [...new Set(contatos.map(c => c.empresa).filter(Boolean))].sort();
   const todasOrigens  = [...new Set(contatos.map(c => c.origem).filter(Boolean))].sort();
+  const todasEtiquetas = [...new Set(contatos.flatMap(c => c.etiquetas || []))].sort((a, b) => a.localeCompare(b));
   if (_fEmpresa) contatos = contatos.filter(c => c.empresa === _fEmpresa);
   if (_fOrigem)  contatos = contatos.filter(c => c.origem === _fOrigem);
+  if (_fEtiqueta) contatos = contatos.filter(c => (c.etiquetas || []).includes(_fEtiqueta));
   if (_busca) {
     const t = _busca.toLowerCase();
-    contatos = contatos.filter(c => [c.nome, c.empresa, c.cargo, c.telefone]
+    contatos = contatos.filter(c => [c.nome, c.empresa, c.cargo, c.telefone, ...(c.etiquetas || [])]
       .some(v => (v || '').toLowerCase().includes(t)));
   }
   const celular  = sessao.ehCelular();
@@ -51,7 +62,9 @@ export async function render() {
       { id:'crmFiltroEmpresa', acao:'crm:filtro-empresa', valor:_fEmpresa,
         opcoes:[{ v:'', r:'Todas as empresas' }, ...todasEmpresas.map(x => ({ v:x, r:x }))] },
       { id:'crmFiltroOrigem', acao:'crm:filtro-orig-contato', valor:_fOrigem,
-        opcoes:[{ v:'', r:'Todas as origens' }, ...todasOrigens.map(x => ({ v:x, r:x }))] }
+        opcoes:[{ v:'', r:'Todas as origens' }, ...todasOrigens.map(x => ({ v:x, r:x }))] },
+      ...(todasEtiquetas.length ? [{ id:'crmFiltroEtiqueta', acao:'crm:filtro-etq-contato', valor:_fEtiqueta,
+        opcoes:[{ v:'', r:'Todas as etiquetas' }, ...todasEtiquetas.map(x => ({ v:x, r:x }))] }] : [])
     ]
   })}
 
@@ -69,7 +82,7 @@ function tabela(contatos) {
     acaoLinha: (c) => `crm:contato:${c.id}`,
     colunas:[
       { campo:'nome', rotulo:'Contato',
-        render:(c) => `<div class="prim">${ui.esc(c.nome)}</div><div class="sub">${ui.esc(c.cargo || '—')}</div>` },
+        render:(c) => `<div class="prim">${ui.esc(c.nome)}</div><div class="sub">${ui.esc(c.cargo || '—')}</div>${etiquetas(c)}` },
       { campo:'empresa', rotulo:'Empresa',
         render:(c) => c.empresa ? ui.esc(c.empresa) : `<span style="color:var(--text-3)">Sem empresa vinculada</span>` },
       { campo:'telefone', rotulo:'Telefone', render:(c) => `<span class="num">${ui.fmt.telefone(c.telefone)}</span>` },
@@ -87,6 +100,11 @@ function tabela(contatos) {
     rodape: ui.paginacao({ total: linhas.length, porPagina: linhas.length, rotulo:'contatos' })
   });
 }
+
+/* Etiquetas embaixo do nome: as mesmas que a ficha da conversa edita. */
+const etiquetas = (c) => (c.etiquetas || []).length
+  ? `<div class="crm-etq-lista">${c.etiquetas.slice(0, 4).map(e => `<span class="crm-etq-chip mini">${ui.esc(e)}</span>`).join('')}${c.etiquetas.length > 4 ? `<span class="crm-etq-mais">+${c.etiquetas.length - 4}</span>` : ''}</div>`
+  : '';
 
 const listaCelular = (contatos) => ui.lista(contatos.map(c => ({
   titulo: c.nome,
@@ -109,6 +127,7 @@ export function acao(nome, valor, redesenhar) {
   if (nome === 'crm:filtrar-contatos')   { _busca = valor || ''; redesenhar(); return true; }
   if (nome === 'crm:filtro-empresa')     { _fEmpresa = valor || ''; redesenhar(); return true; }
   if (nome === 'crm:filtro-orig-contato'){ _fOrigem = valor || '';  redesenhar(); return true; }
+  if (nome === 'crm:filtro-etq-contato') { _fEtiqueta = valor || ''; redesenhar(); return true; }
   if (nome === 'ordenar') { _ordem = { campo: valor, desc: !(_ordem.campo === valor && _ordem.desc) }; redesenhar(); return true; }
   return false;
 }

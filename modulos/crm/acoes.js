@@ -12,6 +12,7 @@ import * as sessao from '../../nucleo/sessao.js';
 import * as navegacao from '../../nucleo/navegacao.js';
 import { ESTAGIOS } from '../../nucleo/estagios.js';
 import { icone } from '../../nucleo/icones.js';
+import * as ui from '../../nucleo/ui.js';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -68,7 +69,7 @@ async function gravar(ponte, fn, redesenhar, sucesso) {
   }
 }
 
-async function formLead(ponte, redesenhar, lead = null) {
+async function formLead(ponte, redesenhar, lead = null, pre = null) {
   const [resps, cursos] = await Promise.all([dados.responsaveis(), dados.listar('catalogo')]);
   /* O rotulo do que se vende vem do funil, nao do codigo. Uma organizacao que
      vende servico ve "Serviço"; quem vende curso continua vendo "Treinamento".
@@ -79,8 +80,8 @@ async function formLead(ponte, redesenhar, lead = null) {
     `<option value="">${rotuloVazio}</option>` +
     lista.map(o => `<option value="${esc(o.id)}" ${String(o.id) === String(sel) ? 'selected' : ''}>${esc(o.nome)}</option>`).join('');
 
-  ponte.abrirModal(lead ? 'Editar lead' : 'Novo lead', `
-    ${linha('Empresa *', `<input id="crmF_empresa" style="${CAMPO}" value="${esc(lead?.empresa || '')}" placeholder="Nome da empresa">`)}
+  ponte.abrirModal(lead ? 'Editar lead' : (pre ? 'Novo negócio' : 'Novo lead'), `
+    ${linha('Empresa *', `<input id="crmF_empresa" style="${CAMPO}" value="${esc(lead?.empresa || pre?.empresa || '')}" placeholder="Nome da empresa">`)}
     ${duas(
       linha('Etapa', `<select id="crmF_estagio" style="${CAMPO}">${ESTAGIOS.map(e => `<option value="${e.id}" ${e.id === (lead?.estagio || 'novo') ? 'selected' : ''}>${esc(e.rotulo)}</option>`).join('')}</select>`),
       linha('Responsável', `<select id="crmF_resp" style="${CAMPO}">${opc(resps, lead?.responsavel_id, 'Sem responsável')}</select>`)
@@ -93,20 +94,26 @@ async function formLead(ponte, redesenhar, lead = null) {
       linha('Valor (R$)', `<input id="crmF_valor" type="number" min="0" step="0.01" style="${CAMPO}" value="${esc(lead?.valor ?? '')}">`)
     )}
     ${duas(
-      linha('Origem', `<input id="crmF_origem" style="${CAMPO}" value="${esc(lead?.origem || '')}" placeholder="WhatsApp, Indicação, Site...">`),
+      linha('Origem', `<input id="crmF_origem" style="${CAMPO}" value="${esc(lead?.origem || pre?.origem || '')}" placeholder="WhatsApp, Indicação, Site...">`),
       linha('Previsão de fechamento', `<input id="crmF_previsao" type="date" style="${CAMPO}" value="${esc(lead?.previsao || '')}">`)
     )}
     ${linha('Observações', `<textarea id="crmF_obs" rows="3" style="${CAMPO}">${esc(lead?.observacoes || '')}</textarea>`)}
   `, ponte.botoes('Salvar lead', 'crmSalvarLead'));
 
-  ponte.aoConfirmar('crmSalvarLead', () => gravar(ponte, () => dados.salvarLead({
-    id: lead?.id, empresa: val('crmF_empresa'), estagio: val('crmF_estagio'),
-    titulo: val('crmF_titulo'),
-    responsavel_id: val('crmF_resp') || null, catalogo_id: val('crmF_curso') || null,
-    treinamento_livre: val('crmF_livre') || null, vagas: val('crmF_vagas'),
-    valor: val('crmF_valor'), origem: val('crmF_origem'), observacoes: val('crmF_obs'),
-    previsao: val('crmF_previsao') || null
-  }), redesenhar, lead ? 'Lead atualizado.' : 'Lead criado.'));
+  ponte.aoConfirmar('crmSalvarLead', () => gravar(ponte, async () => {
+    const salvo = await dados.salvarLead({
+      id: lead?.id, empresa: val('crmF_empresa'), estagio: val('crmF_estagio'),
+      titulo: val('crmF_titulo'),
+      responsavel_id: val('crmF_resp') || null, catalogo_id: val('crmF_curso') || null,
+      treinamento_livre: val('crmF_livre') || null, vagas: val('crmF_vagas'),
+      valor: val('crmF_valor'), origem: val('crmF_origem'), observacoes: val('crmF_obs'),
+      previsao: val('crmF_previsao') || null,
+      // v196: vindo da ficha do contato, o negócio nasce ligado à pessoa e à empresa dela
+      ...(pre ? { contato_id: pre.contato_id || null, cliente_id: pre.cliente_id || null } : {})
+    });
+    if (pre?.conversaId && salvo?.id) await dados.vincularConversaLead(pre.conversaId, salvo.id);
+    pre?.antes?.();
+  }, redesenhar, lead ? 'Lead atualizado.' : (pre ? 'Negócio criado e ligado a esta conversa.' : 'Lead criado.')));
 }
 
 /* Uma atividade e um combinado entre duas pessoas: quem pede e quem faz. O
@@ -145,7 +152,7 @@ async function formAtividade(ponte, redesenhar, alvoLead = null, ativ = null) {
      nao vende treinamento vive quase so de "ligar para a empresa X". O valor
      carrega o tipo junto ("lead:<id>") para nao precisar de dois campos. */
   const alvoSel = ativ?.alvo_tipo && ativ?.alvo_id ? `${ativ.alvo_tipo}:${ativ.alvo_id}`
-                : (alvoLead ? `lead:${alvoLead}` : '');
+                : (alvoLead ? (String(alvoLead).includes(':') ? String(alvoLead) : `lead:${alvoLead}`) : '');
   const grupo = (rotulo, itens, tipo, texto) => itens.length
     ? `<optgroup label="${rotulo}">${itens.slice(0, 300).map(i => {
         const v = `${tipo}:${i.id}`;
@@ -216,12 +223,16 @@ async function formContato(ponte, redesenhar, contato = null) {
     ${linha('Empresa cliente', `<select id="crmC_cli" style="${CAMPO}"><option value="">Ainda não é cliente</option>${
       clientes.map(c => `<option value="${esc(c.id)}" ${String(c.id) === String(contato?.cliente_id) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select>`)}
     ${linha('Origem', `<input id="crmC_origem" style="${CAMPO}" value="${esc(contato?.origem || '')}" placeholder="WhatsApp, Indicação...">`)}
+    ${linha('Etiquetas <span style="font-weight:500;color:var(--text-3)">(separe por vírgula)</span>', `<input id="crmC_etq" style="${CAMPO}" value="${esc((contato?.etiquetas || []).join(', '))}" placeholder="Ex.: Comprador, Orçamento NR-35">`)}
+    ${linha('Observações', `<textarea id="crmC_obs" rows="3" maxlength="4000" style="${CAMPO}">${esc(contato?.observacoes || '')}</textarea>`)}
   `, ponte.botoes(contato ? 'Salvar' : 'Salvar contato', 'crmSalvarContato'));
 
   ponte.aoConfirmar('crmSalvarContato', () => gravar(ponte, () => dados.salvarContato({
     id: contato?.id,
     nome: val('crmC_nome'), cargo: val('crmC_cargo'), telefone: val('crmC_tel'),
-    email: val('crmC_email'), cliente_id: val('crmC_cli') || null, origem: val('crmC_origem')
+    email: val('crmC_email'), cliente_id: val('crmC_cli') || null, origem: val('crmC_origem'),
+    observacoes: val('crmC_obs'),
+    etiquetas: val('crmC_etq').split(',').map(e => e.trim()).filter(Boolean)
   }), redesenhar, contato ? 'Contato atualizado.' : 'Contato criado.'));
 }
 
@@ -419,6 +430,106 @@ export default async function acoes(acao, { redesenhar }) {
     const tel = String(resto.replace('ligar:', '')).replace(/\D/g, '');
     if (!tel) { ponte.avisar?.('Este contato não tem telefone cadastrado.', 'error'); return true; }
     window.open(`tel:+${tel.length > 11 ? tel : '55' + tel}`, '_self');
+    return true;
+  }
+
+  /* ── Ficha do contato, aberta pela conversa (v196, 26/09) ────────────────
+     Tudo grava no MESMO cadastro da tela Contatos (dados.salvarContato) — a
+     ficha é outra porta para a mesma linha, não uma cópia. Depois de gravar,
+     o redesenho guarda o rascunho da mensagem e a rolagem da conversa. */
+  if (acao.startsWith('crm:ficha-')) {
+    const conv = await import('./conversas.js');
+    const antesDeRedesenhar = () => { conv.marcarFichaLimpa(); conv.preservarNoProximoDesenho(); };
+
+    if (acao.startsWith('crm:ficha-salvar:')) {
+      const id = resto.replace('ficha-salvar:', '');
+      const v = conv.lerFicha();
+      if (!v) return true;
+      if (!v.nome) { ponte.avisar?.('O nome do contato não pode ficar em branco.', 'error'); return true; }
+      const { existente, ...campos } = v;
+      await gravar(ponte, async () => {
+        await dados.salvarContato({ id, ...campos });
+        antesDeRedesenhar();
+      }, redesenhar, 'Contato salvo. A tela Contatos já mostra a alteração.');
+      return true;
+    }
+
+    if (acao.startsWith('crm:ficha-cadastrar:')) {
+      const conversaId = resto.replace('ficha-cadastrar:', '');
+      const v = conv.lerFicha();
+      if (!v?.nome) { ponte.avisar?.('Informe o nome para cadastrar o contato.', 'error'); return true; }
+      const { existente, ...campos } = v;
+      await gravar(ponte, async () => {
+        const novo = await dados.salvarContato({ ...campos, origem: campos.origem || 'WhatsApp' });
+        if (novo?.id) await dados.vincularConversaContato(conversaId, novo.id);
+        antesDeRedesenhar();
+      }, redesenhar, 'Contato cadastrado e ligado a esta conversa.');
+      return true;
+    }
+
+    if (acao.startsWith('crm:ficha-ligar:')) {
+      const conversaId = resto.replace('ficha-ligar:', '');
+      const id = conv.lerFicha()?.existente;
+      if (!id) { ponte.avisar?.('Escolha o contato na lista.', 'error'); return true; }
+      await gravar(ponte, async () => {
+        await dados.vincularConversaContato(conversaId, id);
+        antesDeRedesenhar();
+      }, redesenhar, 'Conversa ligada ao contato.');
+      return true;
+    }
+
+    /* A conversa foi ligada à pessoa errada (mesmo telefone de outra pessoa,
+       por exemplo). Troca ou deixa sem contato. */
+    if (acao.startsWith('crm:ficha-trocar:')) {
+      const conversaId = resto.replace('ficha-trocar:', '');
+      const contatos = await dados.listar('crm_contatos').catch(() => []);
+      ponte.abrirModal('Trocar o contato desta conversa', `
+        ${linha('Contato', `<select id="crmFT_contato" style="${CAMPO}">
+          <option value="">Deixar a conversa sem contato</option>
+          ${contatos.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}${c.empresa ? ' · ' + esc(c.empresa) : ''}${c.telefone ? ' · ' + esc(ui.fmt.telefone(c.telefone)) : ''}</option>`).join('')}
+        </select>`)}
+        <div style="font-size:12px;color:var(--text-3);line-height:1.6">
+          Só muda a qual cadastro esta conversa pertence. Nenhum contato é apagado ou alterado.</div>
+      `, ponte.botoes('Trocar', 'crmFichaTrocar'));
+      ponte.aoConfirmar('crmFichaTrocar', () => gravar(ponte, async () => {
+        await dados.vincularConversaContato(conversaId, val('crmFT_contato') || null);
+        antesDeRedesenhar();
+      }, redesenhar, val('crmFT_contato') ? 'Contato da conversa trocado.' : 'A conversa ficou sem contato.'));
+      return true;
+    }
+
+    if (acao.startsWith('crm:ficha-desvincular-lead:')) {
+      const conversaId = resto.replace('ficha-desvincular-lead:', '');
+      const ok = await ponte.confirmar?.('Desvincular o negócio desta conversa? O negócio continua no funil; só deixa de aparecer aqui.');
+      if (!ok) return true;
+      await gravar(ponte, async () => {
+        await dados.vincularConversaLead(conversaId, null);
+        conv.preservarNoProximoDesenho();
+      }, redesenhar, 'Negócio desvinculado da conversa.');
+      return true;
+    }
+
+    /* Novo negócio já nasce com o contato, a empresa dele e a origem, e fica
+       ligado a esta conversa. */
+    if (acao.startsWith('crm:ficha-novo-negocio:')) {
+      const conversaId = resto.replace('ficha-novo-negocio:', '');
+      const f = conv.fichaVisivel();
+      const contatoId = f?.dataset.contato || null;
+      const contato = contatoId ? await dados.obter('crm_contatos', contatoId).catch(() => null) : null;
+      await formLead(ponte, redesenhar, null, {
+        empresa: contato?.empresa || contato?.nome || '',
+        origem: 'WhatsApp', contato_id: contatoId, cliente_id: contato?.cliente_id || null,
+        conversaId, antes: () => conv.preservarNoProximoDesenho()
+      });
+      return true;
+    }
+    return false;
+  }
+
+  if (acao.startsWith('crm:nova-atividade-contato:')) {
+    const conv = await import('./conversas.js');
+    await formAtividade(ponte, async () => { conv.preservarNoProximoDesenho(); await redesenhar(); },
+      'contato:' + resto.replace('nova-atividade-contato:', ''));
     return true;
   }
 

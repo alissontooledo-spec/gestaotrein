@@ -51,6 +51,10 @@ let _verResolvidas = false;
    abre por cima da conversa. Ela custava 272px permanentes de uma tela onde
    o que se faz é ler e escrever. Fechada por padrão. */
 let _fichaAberta = false;
+/* 26/09 (v196): a ficha virou painel de EDIÇÃO do contato. O que foi
+   digitado nela e ainda não salvo atravessa o redesenho (automático ou não),
+   do mesmo jeito que o rascunho da mensagem. */
+let _fichaRascunho = null;
 
 /* ── 26/09: atender em equipe ─────────────────────────────────────────────
    `_dono`: na aba Chats, "Minhas" mostra só as conversas de quem está usando;
@@ -220,8 +224,14 @@ export async function render(params = {}) {
      inclusive enquanto a pessoa navega pelos Contatos ou digita na busca, que
      é como qualquer atendimento funciona. Só duas coisas a fecham: ela ter
      sido resolvida (e não estarmos vendo as resolvidas) ou ter sumido. */
-  if (params.conversa) _conversaAtiva = params.conversa;
-  if (params.id)       _conversaAtiva = params.id;
+  /* 26/09 (v196) — DEFEITO CORRIGIDO: o `id` que chega pela navegação
+     (ex.: botão de conversa na tela Contatos → "ir:crm-conversas:<id>")
+     ficava guardado em `_paramsAtuais` e voltava em TODO redesenho. Quem
+     entrava por ali não conseguia abrir outra conversa: o clique trocava e o
+     redesenho seguinte (ou o automático, dez segundos depois) puxava de volta.
+     O pedido vale uma vez; depois quem manda é o clique. */
+  if (params.conversa) { _conversaAtiva = params.conversa; params.conversa = null; }
+  if (params.id)       { _conversaAtiva = params.id;       params.id = null; }
   let atual = minhas.find(c => c.id === _conversaAtiva) || null;
   if (atual && resolvida(atual) && !_verResolvidas) atual = null;
   if (!atual && _aba !== 'contatos') atual = lista[0] || null;
@@ -241,6 +251,26 @@ export async function render(params = {}) {
 
   const listaContatos = contatos.filter(c => casaBusca(t, [c.nome, c.empresa, c.cargo, c.telefone]));
 
+  /* Ficha do contato: empresas, negócios e atividades só são lidos com ela
+     ABERTA. A tela se redesenha a cada dez segundos; buscar isso sempre, para
+     um painel fechado, seria trabalho à toa. */
+  let extraFicha = null;
+  if (_fichaAberta && atual) {
+    const [clientes, leadsContato, ativs] = await Promise.all([
+      dados.clientes().catch(() => []),
+      contato ? dados.listar('crm_leads', { contato_id: contato.id, funil_id: null }).catch(() => []) : [],
+      dados.listar('crm_atividades').catch(() => [])
+    ]);
+    const atividades = ativs
+      .filter(a => !a.concluida && (
+        (contato && a.alvo_tipo === 'contato' && a.alvo_id === contato.id) ||
+        (atual.lead_id && a.lead_id === atual.lead_id)))
+      .sort((a, b) => String(a.quando || '9').localeCompare(String(b.quando || '9')))
+      .slice(0, 4);
+    const etiquetasOrg = [...new Set(contatos.flatMap(k => k.etiquetas || []))].sort((a, b) => a.localeCompare(b));
+    extraFicha = { clientes, leads: leadsContato, atividades, etiquetasOrg, contatos };
+  }
+
   /* ── A fotografia é tirada AQUI, e não no temporizador ────────────────────
      Escrita primeiro lá, antes do `await`. Errado, e `navegacao.js` já
      documenta exatamente esse erro (h38): `render()` consulta o banco e leva
@@ -257,6 +287,10 @@ export async function render(params = {}) {
     _rolagemAntes = fotografarRolagem();
   }
   fotografarLista();
+  if (fichaSuja()) {
+    const f = fichaVisivel();
+    _fichaRascunho = { conversa: f.dataset.conversa, contato: f.dataset.contato || '', valores: lerFicha() };
+  }
 
   return `
     <div class="crm-inbox wa ${varios ? '' : 'um-numero'} ${_fichaAberta ? 'com-ficha' : ''}"
@@ -270,7 +304,7 @@ export async function render(params = {}) {
       })}
       <div class="crm-mob-sep">${icone('chevrondown','sm')} Ao tocar em uma conversa</div>
       ${atual ? colunaConversa(atual, caixas, varios, contato, msgs) : semConversa()}
-      ${atual ? colunaContexto(atual, contato, lead) : ''}
+      ${atual ? colunaContexto(atual, contato, lead, extraFicha, caixas) : ''}
     </div>
     ${dados.ehExemplo() ? avisoDemo() : ''}`;
 }
@@ -561,13 +595,16 @@ function colunaConversa(c, caixas, varios, contato, msgs) {
       <div class="crm-thread-acoes">
         ${semDono ? `<button class="ds-btn pri sm" data-acao="crm:assumir:${c.id}">${icone('user','sm')} Assumir</button>` : ''}
         <button class="ds-btn sec sm" data-acao="crm:transferir:${c.id}">${icone('team','sm')} Transferir</button>
-        <button class="ds-btn sec sm" data-acao="crm:vincular:${c.id}">${icone('funnel','sm')} Vincular</button>
+        ${/* 26/09 (v196): Vincular saiu daqui e foi para a ficha do contato,
+              na parte "Negócio" — é dado do relacionamento com a pessoa, não
+              uma ação do atendimento. */''}
         ${/* Resolver aparece mesmo sem dono: mensagem errada, propaganda ou
               engano se fecha de uma vez, sem a pessoa ter de assumir antes
               algo que não vai atender. Com dono, ele é a ação principal; sem
               dono, quem manda na tela é "Assumir". */''}
         <button class="ds-btn ${semDono ? 'sec' : 'pri'} sm" data-acao="crm:resolver:${c.id}">${icone('check','sm')} Resolver</button>
-        <button class="ds-icobtn" data-acao="crm:ficha" title="Ficha do contato">${icone('user','sm')}</button>
+        <button class="ds-btn sec sm crm-btn-ficha ${_fichaAberta ? 'ativo' : ''}" data-acao="crm:ficha"
+          title="Ver e editar a ficha do contato">${icone('user','sm')} Contato</button>
       </div>
     </div>
     <div class="crm-thread-body">
@@ -699,38 +736,306 @@ function moverFoco(menu, passo) {
   alvo.scrollIntoView({ block: 'nearest' });
 }
 
-/* ── contexto do contato ────────────────────────────────────────────────── */
-function colunaContexto(c, contato, lead) {
-  return `
-  <div class="crm-col crm-ctx">
+/* ── Ficha do contato (v196, 26/09) ────────────────────────────────────────
+   Painel ao lado da conversa para CONSULTAR E EDITAR o contato sem sair do
+   atendimento. Não existe "cadastro da conversa": a ficha lê e grava a mesma
+   linha de `contatos` que a tela Contatos usa (dados.salvarContato), então o
+   que muda aqui aparece lá, e vice-versa.
+
+   Os campos usam `name`, não `id`: a tela existe em duas cópias (computador
+   e celular), e `id` repetido é a armadilha já documentada em acoes.js.
+   Quem lê os valores é `lerFicha()`, sempre na cópia visível. */
+function colunaContexto(c, contato, lead, x, caixas = []) {
+  const ex = x || { clientes: [], leads: [], atividades: [], etiquetasOrg: [], contatos: [] };
+  const cx = caixas.find(k => k.id === c.caixa_id);
+  const nomeTela = contato?.nome || c.nome;
+  const campo = (rotulo, html, extra = '') =>
+    `<label class="crm-fc-campo ${extra}"><span>${rotulo}</span>${html}</label>`;
+  const inp = (name, valor, attrs = '') =>
+    `<input name="${name}" value="${ui.esc(valor || '')}" ${attrs}>`;
+
+  const topo = `
     <div class="crm-ctx-topo">
       <span>Ficha do contato</span>
-      <button class="ds-icobtn" data-acao="crm:ficha" title="Fechar">✕</button>
+      <button class="ds-icobtn" data-acao="crm:ficha" title="Fechar">${icone('close','sm')}</button>
+    </div>`;
+
+  /* Conversa sem contato: depois do PASSO-57 é raro (só quando a empresa
+     falou primeiro e o cliente ainda não respondeu). Cadastra ou liga a um
+     contato que já existe — sem sair da conversa. */
+  if (!contato) {
+    const opcoes = (ex.contatos || []).slice(0, 500).map(k =>
+      `<option value="${ui.esc(k.id)}">${ui.esc(k.nome)}${k.empresa ? ' · ' + ui.esc(k.empresa) : ''}${k.telefone ? ' · ' + ui.esc(ui.fmt.telefone(k.telefone)) : ''}</option>`).join('');
+    return `
+    <div class="crm-col crm-ctx crm-ficha" data-conversa="${ui.esc(c.id)}" data-contato="">
+      ${topo}
+      <div class="crm-ficha-rolo">
+        <div class="crm-ctx-bloco">
+          <div class="crm-fc-aviso">${icone('user','sm')} Esta conversa ainda não tem contato cadastrado.</div>
+          ${campo('Nome *', inp('nome', c.nome_exibicao || (c.nome !== c.telefone ? c.nome : ''), 'maxlength="120" placeholder="Nome da pessoa"'))}
+          ${campo('Telefone', inp('telefone', telefoneDaAgenda(c.telefone), 'placeholder="(47) 99999-0000"'))}
+          ${campo('E-mail', inp('email', '', 'type="email" placeholder="nome@empresa.com.br"'))}
+          ${campo('Empresa', seletorEmpresa(ex.clientes, null))}
+          <input type="hidden" name="origem" value="WhatsApp">
+          <button class="ds-btn pri sm crm-fc-largo" data-acao="crm:ficha-cadastrar:${ui.esc(c.id)}">${icone('plus','sm')} Cadastrar contato</button>
+        </div>
+        <div class="crm-ctx-bloco">
+          <div class="crm-ctx-lbl">Ou ligar a um contato que já existe</div>
+          ${campo('Contato', `<select name="existente"><option value="">Escolha…</option>${opcoes}</select>`)}
+          <button class="ds-btn sec sm crm-fc-largo" data-acao="crm:ficha-ligar:${ui.esc(c.id)}">Ligar a esta conversa</button>
+        </div>
+        ${blocoAtendimento(c, cx)}
+      </div>
+    </div>`;
+  }
+
+  const etq = (contato.etiquetas || []);
+  const zapDiferente = !!c.telefone && !!contato.telefone
+    && String(contato.telefone).replace(/\D/g, '').slice(-8) !== String(c.telefone).replace(/\D/g, '').slice(-8);
+
+  return `
+  <div class="crm-col crm-ctx crm-ficha" data-conversa="${ui.esc(c.id)}" data-contato="${ui.esc(contato.id)}">
+    ${topo}
+    <div class="crm-ficha-rolo">
+      <div class="crm-fc-cab">
+        <div class="av">${ui.fmt.iniciais(nomeTela)}</div>
+        <div class="id">
+          <div class="n">${ui.esc(nomeTela)}</div>
+          <div class="s">${ui.esc([contato.cargo, contato.empresa].filter(Boolean).join(' · ') || 'Sem cargo e sem empresa')}</div>
+          <div class="selos">
+            ${ui.selo(contato.cliente_id ? 'Cliente' : 'Lead', contato.cliente_id ? 'ok' : 'info')}
+            ${contato.automatico ? ui.selo('Cadastrado pelo WhatsApp', 'neutro') : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="crm-ctx-bloco">
+        <div class="crm-ctx-lbl">Dados do contato</div>
+        ${campo('Nome *', inp('nome', contato.nome, 'maxlength="120"'))}
+        <div class="crm-fc-duas">
+          ${campo('Cargo', inp('cargo', contato.cargo, 'placeholder="Ex.: Compras"'))}
+          ${campo('Telefone', inp('telefone', contato.telefone ? ui.fmt.telefone(contato.telefone) : '', 'placeholder="(47) 99999-0000"'))}
+        </div>
+        ${zapDiferente ? `<div class="crm-fc-dica">Esta conversa é pelo WhatsApp ${ui.esc(ui.fmt.telefone(c.telefone))}. O telefone acima é o da agenda.</div>` : ''}
+        ${campo('E-mail', inp('email', contato.email, 'type="email" placeholder="nome@empresa.com.br"'))}
+        <div class="crm-fc-duas">
+          ${campo('Empresa', seletorEmpresa(ex.clientes, contato.cliente_id))}
+          ${campo('Origem', inp('origem', contato.origem, 'placeholder="WhatsApp, Indicação..."'))}
+        </div>
+        ${campo('Etiquetas', `
+          <div class="crm-etq" data-etq>
+            ${etq.map((e, i) => chipEtiqueta(e, i)).join('')}
+            <input class="crm-etq-novo" name="etq_novo" list="crmEtqSugestoes" maxlength="30"
+              placeholder="${etq.length ? '+ etiqueta' : 'Digite e tecle Enter'}">
+          </div>
+          <datalist id="crmEtqSugestoes">${(ex.etiquetasOrg || []).map(e => `<option value="${ui.esc(e)}">`).join('')}</datalist>`, 'etq')}
+        ${campo('Observações', `<textarea name="observacoes" rows="3" maxlength="4000"
+          placeholder="O que a equipe precisa saber sobre esta pessoa">${ui.esc(contato.observacoes || '')}</textarea>`)}
+      </div>
+
+      ${blocoAtendimento(c, cx)}
+      ${blocoNegocio(c, contato, lead, ex.leads)}
+      ${blocoAtividades(contato, ex.atividades)}
+
+      <div class="crm-fc-pe">
+        <button class="crm-fc-link" data-acao="ir:crm-contatos:${ui.esc(contato.id)}">${icone('user','sm')} Ver na tela Contatos</button>
+        <button class="crm-fc-link" data-acao="crm:ficha-trocar:${ui.esc(c.id)}">Não é esta pessoa? Trocar contato</button>
+      </div>
     </div>
-    <div class="crm-ctx-bloco">
-      <div class="crm-ctx-lbl">Contato</div>
-      <div style="font-size:var(--fs-4);font-weight:700;color:var(--text-1)">${ui.esc(contato?.nome || c.nome)}</div>
-      <div style="font-size:var(--fs-2);color:var(--text-3);margin-bottom:12px">${ui.esc(contato?.cargo || '')}</div>
-      ${linhaCtx('Telefone', ui.fmt.telefone(contato?.telefone || c.telefone))}
-      ${linhaCtx('Empresa', contato?.empresa || '—')}
-      ${linhaCtx('Origem', contato?.origem || '—')}
-      ${linhaCtx('Responsável', c.responsavel || 'Na fila, sem responsável')}
+    <div class="crm-fc-salvar" hidden>
+      <span>Alterações não salvas</span>
+      <button class="ds-btn sec sm" data-acao="crm:ficha-descartar">Descartar</button>
+      <button class="ds-btn pri sm" data-acao="crm:ficha-salvar:${ui.esc(contato.id)}">${icone('check','sm')} Salvar</button>
     </div>
-    ${lead ? `<div class="crm-ctx-bloco">
-      <div class="crm-ctx-lbl">Lead ativo</div>
-      <div class="crm-lead-card" data-acao="ir:crm-lead:${lead.id}">
-        <div class="crm-lead-emp">${ui.esc(lead.item || lead.treinamento || 'Negócio')}${lead.vagas ? ' — ' + lead.vagas + ' vagas' : ''}</div>
-        <div class="crm-lead-meta"><span>${icone('funnel','sm')} Estágio: ${ui.esc(lead.estagio)}</span>
-          <span>${icone('user','sm')} ${ui.esc(lead.responsavel || 'sem dono')}</span></div>
-        <div class="crm-lead-rod"><span class="crm-lead-val">${ui.fmt.moeda(lead.valor)}</span></div>
-      </div></div>` : ''}
   </div>`;
 }
 
-const linhaCtx = (k, v) => `<div class="crm-ctx-linha"><span class="k">${k}</span><span class="v">${ui.esc(v)}</span></div>`;
+/* Mesmo formato que o PASSO-57 grava no cadastro automático: celular que o
+   WhatsApp manda sem o nono dígito ganha o 9, e o DDI 55 sai. */
+function telefoneDaAgenda(t) {
+  let d = String(t || '').replace(/\D/g, '');
+  if (/^55\d{2}[6-9]\d{7}$/.test(d)) d = d.slice(0, 4) + '9' + d.slice(4);
+  if (/^55\d{11}$/.test(d)) return `(${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+  if (/^55\d{10}$/.test(d)) return `(${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+  return d ? '+' + d : '';
+}
+
+const chipEtiqueta = (e, i) =>
+  `<span class="crm-etq-chip" data-v="${ui.esc(e)}">${ui.esc(e)}<button type="button" data-acao="crm:etq-tirar:${i}" title="Tirar etiqueta">${icone('close','sm')}</button></span>`;
+
+function seletorEmpresa(clientes, sel) {
+  return `<select name="cliente_id"><option value="">Ainda não é cliente</option>${
+    (clientes || []).map(e => `<option value="${ui.esc(e.id)}" ${String(e.id) === String(sel) ? 'selected' : ''}>${ui.esc(e.nome)}</option>`).join('')}</select>`;
+}
+
+function blocoAtendimento(c, cx) {
+  return `
+    <div class="crm-ctx-bloco">
+      <div class="crm-ctx-lbl">Atendimento</div>
+      <div class="crm-fc-linha">
+        <span class="k">Responsável</span>
+        <span class="v">${c.responsavel ? ui.esc(c.responsavel) : '<span style="color:var(--amber-text)">Na fila</span>'}</span>
+        <button class="crm-fc-link" data-acao="crm:transferir:${ui.esc(c.id)}">Transferir</button>
+      </div>
+      <div class="crm-fc-linha"><span class="k">Número</span><span class="v">${ui.esc(cx?.nome || '—')}</span></div>
+      <div class="crm-fc-linha"><span class="k">WhatsApp</span><span class="v num">${ui.esc(ui.fmt.telefone(c.telefone))}</span></div>
+    </div>`;
+}
+
+function blocoNegocio(c, contato, lead, leads) {
+  const outros = (leads || []).filter(l => l.id !== lead?.id && !['perdido'].includes(l.estagio));
+  const cartao = lead ? `
+      <div class="crm-lead-card crm-fc-lead" data-acao="ir:crm-lead:${ui.esc(lead.id)}">
+        <div class="crm-lead-emp">${ui.esc(lead.item || lead.treinamento || lead.empresa || 'Negócio')}${lead.vagas ? ' — ' + lead.vagas + ' vagas' : ''}</div>
+        <div class="crm-lead-meta"><span>${icone('funnel','sm')} ${ui.esc(lead.empresa || '')} · ${ui.esc(lead.estagio || '')}</span>
+          <span>${icone('user','sm')} ${ui.esc(lead.responsavel || 'sem responsável')}</span></div>
+        <div class="crm-lead-rod"><span class="crm-lead-val">${ui.fmt.moeda(lead.valor)}</span></div>
+      </div>
+      <div class="crm-fc-acoes">
+        <button class="crm-fc-link" data-acao="crm:vincular:${ui.esc(c.id)}">Trocar negócio</button>
+        <button class="crm-fc-link" data-acao="crm:ficha-desvincular-lead:${ui.esc(c.id)}">Desvincular</button>
+      </div>` : `
+      <div class="crm-fc-vazio">Nenhum negócio ligado a esta conversa.</div>
+      <div class="crm-fc-acoes">
+        <button class="ds-btn sec sm" data-acao="crm:vincular:${ui.esc(c.id)}">${icone('funnel','sm')} Vincular negócio</button>
+        <button class="ds-btn sec sm" data-acao="crm:ficha-novo-negocio:${ui.esc(c.id)}">${icone('plus','sm')} Novo negócio</button>
+      </div>`;
+  return `
+    <div class="crm-ctx-bloco">
+      <div class="crm-ctx-lbl">Negócio</div>
+      ${cartao}
+      ${outros.length ? `<div class="crm-fc-sub">Outros negócios de ${ui.esc((contato.nome || '').split(' ')[0])}</div>
+        ${outros.slice(0, 4).map(l => `<button class="crm-fc-item" data-acao="ir:crm-lead:${ui.esc(l.id)}">
+          <span>${ui.esc(l.item || l.treinamento || l.empresa)}</span><span class="k">${ui.esc(l.estagio || '')} · ${ui.fmt.moeda(l.valor)}</span></button>`).join('')}` : ''}
+    </div>`;
+}
+
+function blocoAtividades(contato, atividades) {
+  const quando = (a) => a.quando ? `${ui.fmt.data(a.quando)} ${ui.fmt.hora(a.quando)}` : 'sem data';
+  return `
+    <div class="crm-ctx-bloco">
+      <div class="crm-ctx-lbl">Próximas atividades</div>
+      ${(atividades || []).length ? atividades.map(a => `
+        <button class="crm-fc-item" data-acao="crm:atividade:${ui.esc(a.id)}">
+          <span>${ui.esc(a.titulo || a.assunto || 'Atividade')}</span>
+          <span class="k">${quando(a)}${a.responsavel ? ' · ' + ui.esc(a.responsavel) : ''}</span>
+        </button>`).join('') : `<div class="crm-fc-vazio">Nada agendado com esta pessoa.</div>`}
+      <div class="crm-fc-acoes">
+        <button class="ds-btn sec sm" data-acao="crm:nova-atividade-contato:${ui.esc(contato.id)}">${icone('plus','sm')} Nova atividade</button>
+      </div>
+    </div>`;
+}
+
+/* ── Leitura e estado da ficha (usados também por acoes.js) ─────────────── */
+/* `offsetParent` não serve aqui: no celular a ficha é `position:fixed`, e
+   elemento fixo sempre tem offsetParent nulo. `getClientRects()` só vem vazio
+   quando a cópia está com display:none (a outra casca). */
+const naTela = (el) => !!el && el.getClientRects().length > 0;
+export function fichaVisivel() {
+  if (typeof document === 'undefined') return null;
+  return [...document.querySelectorAll('.crm-ficha')].find(naTela) || null;
+}
+export const fichaSuja = () => fichaVisivel()?.dataset.suja === '1';
+
+export function lerFicha() {
+  const f = fichaVisivel();
+  if (!f) return null;
+  const v = (n) => (f.querySelector(`[name="${n}"]`)?.value ?? '').trim();
+  const etiquetas = [...f.querySelectorAll('.crm-etq-chip')].map(x => x.dataset.v);
+  const pendente = v('etq_novo');           // digitou e não teclou Enter: entra assim mesmo
+  if (pendente && !etiquetas.some(e => e.toLowerCase() === pendente.toLowerCase())) etiquetas.push(pendente);
+  return { nome: v('nome'), cargo: v('cargo'), telefone: v('telefone'), email: v('email'),
+           cliente_id: v('cliente_id') || null, origem: v('origem'), observacoes: v('observacoes'),
+           etiquetas, existente: v('existente') || null };
+}
+
+function marcarSuja(f, suja = true) {
+  if (!f) return;
+  f.dataset.suja = suja ? '1' : '0';
+  const barra = f.querySelector('.crm-fc-salvar');
+  if (barra) barra.hidden = !suja;
+}
+/* Depois de salvar: a ficha deixa de estar "suja" ANTES do redesenho, senão
+   a foto do redesenho devolveria os campos e a barra de salvar voltaria. */
+export function marcarFichaLimpa() {
+  document.querySelectorAll('.crm-ficha').forEach(f => marcarSuja(f, false));
+  _fichaRascunho = null;
+}
+/* O próximo desenho guarda rascunho da mensagem e rolagem, como o automático. */
+export function preservarNoProximoDesenho() { _emAtualizacaoAutomatica = true; }
+
+function adicionarEtiqueta(f, texto) {
+  const t = String(texto || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+  if (!t) return;
+  const caixa = f.querySelector('[data-etq]');
+  const atuais = [...caixa.querySelectorAll('.crm-etq-chip')].map(x => x.dataset.v.toLowerCase());
+  if (atuais.includes(t.toLowerCase())) return;
+  if (atuais.length >= 12) { (window.__GRID_PONTE?.avisar || (() => {}))('Até 12 etiquetas por contato.', 'error'); return; }
+  const novo = caixa.querySelector('.crm-etq-novo');
+  novo.insertAdjacentHTML('beforebegin', chipEtiqueta(t, atuais.length));
+  renumerarEtiquetas(caixa);
+  marcarSuja(f);
+}
+function renumerarEtiquetas(caixa) {
+  caixa.querySelectorAll('.crm-etq-chip button').forEach((b, i) => { b.dataset.acao = `crm:etq-tirar:${i}`; });
+}
+
+/* Liga os eventos da ficha. Roda a cada desenho (o HTML é novo a cada vez). */
+function ligarFicha() {
+  document.querySelectorAll('.crm-ficha').forEach(f => {
+    // devolve o que foi digitado e não salvo, se for a mesma conversa e o mesmo contato
+    if (_fichaRascunho && naTela(f)
+        && _fichaRascunho.conversa === f.dataset.conversa && _fichaRascunho.contato === (f.dataset.contato || '')) {
+      const r = _fichaRascunho.valores || {};
+      for (const k of ['nome','cargo','telefone','email','cliente_id','origem','observacoes','existente']) {
+        const el = f.querySelector(`[name="${k}"]`);
+        if (el && r[k] != null) el.value = r[k];
+      }
+      const caixa = f.querySelector('[data-etq]');
+      if (caixa && Array.isArray(r.etiquetas)) {
+        caixa.querySelectorAll('.crm-etq-chip').forEach(x => x.remove());
+        const novo = caixa.querySelector('.crm-etq-novo');
+        r.etiquetas.forEach((e, i) => novo.insertAdjacentHTML('beforebegin', chipEtiqueta(e, i)));
+      }
+      marcarSuja(f);
+    }
+    f.addEventListener('input', (ev) => {
+      if (ev.target.name === 'etq_novo' || ev.target.name === 'existente') return;
+      marcarSuja(f);
+    });
+    f.addEventListener('change', (ev) => {
+      if (ev.target.name === 'existente') return;
+      if (ev.target.name === 'etq_novo') { adicionarEtiqueta(f, ev.target.value); ev.target.value = ''; return; }
+      marcarSuja(f);
+    });
+    const novo = f.querySelector('.crm-etq-novo');
+    novo?.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ',') {
+        ev.preventDefault();
+        adicionarEtiqueta(f, novo.value);
+        novo.value = '';
+      } else if (ev.key === 'Backspace' && !novo.value) {
+        const ult = [...f.querySelectorAll('.crm-etq-chip')].pop();
+        if (ult) { ult.remove(); marcarSuja(f); }
+      }
+    });
+  });
+  _fichaRascunho = null;
+}
+
 
 /* Troca de aba, de caixa e de conversa sem recarregar a tela inteira. */
-export function acao(nome, valor, redesenhar) {
+const confirmarDescarte = async () => {
+  const ponte = (typeof window !== 'undefined' && window.__GRID_PONTE) || {};
+  return ponte.confirmar ? !!(await ponte.confirmar('A ficha do contato tem alterações que não foram salvas. Sair sem salvar?')) : true;
+};
+const SAI_DA_FICHA = ['crm:conversa', 'crm:aba', 'crm:caixa', 'crm:dono', 'crm:ver-resolvidas'];
+
+export async function acao(nome, valor, redesenhar) {
+  if (SAI_DA_FICHA.includes(nome) && fichaSuja()) {
+    if (!(await confirmarDescarte())) return true;
+    marcarFichaLimpa();
+  }
   if (nome === 'crm:aba') {
     _aba = valor || 'chats';
     /* Trocar de aba desliga o filtro de resolvidas: os dois disputam a mesma
@@ -795,9 +1100,40 @@ export function acao(nome, valor, redesenhar) {
      tela e apagaria a resposta que a pessoa já digitou e ainda não enviou.
      Perder texto escrito é o tipo de defeito que faz desconfiar do sistema
      inteiro — então abrir a ficha ou pegar um modelo não redesenha nada. */
+  /* 26/09 (v196): a ficha agora busca empresas, negócios e atividades —
+     abrir precisa de um desenho. Ele guarda o rascunho da mensagem e a
+     rolagem (preservarNoProximoDesenho), então nada do que estava escrito se
+     perde. Fechar continua só no DOM. */
   if (nome === 'crm:ficha') {
-    _fichaAberta = !_fichaAberta;
-    document.querySelectorAll('.crm-inbox').forEach(e => e.classList.toggle('com-ficha', _fichaAberta));
+    if (_fichaAberta) {
+      if (fichaSuja() && !(await confirmarDescarte())) return true;
+      _fichaAberta = false;
+      _fichaRascunho = null;
+      document.querySelectorAll('.crm-inbox').forEach(e => e.classList.remove('com-ficha'));
+      document.querySelectorAll('.crm-btn-ficha').forEach(b => b.classList.remove('ativo'));
+      document.querySelectorAll('.crm-ficha').forEach(f => { f.dataset.suja = '0'; });
+      return true;
+    }
+    _fichaAberta = true;
+    preservarNoProximoDesenho();
+    await redesenhar();
+    return true;
+  }
+  if (nome === 'crm:ficha-descartar') {
+    marcarFichaLimpa();
+    preservarNoProximoDesenho();
+    await redesenhar();
+    return true;
+  }
+  if (nome === 'crm:etq-tirar') {
+    const f = fichaVisivel();
+    const chip = f?.querySelectorAll('.crm-etq-chip')[Number(valor)];
+    if (chip) {
+      const caixa = chip.parentElement;
+      chip.remove();
+      renumerarEtiquetas(caixa);
+      marcarSuja(f);
+    }
     return true;
   }
   if (nome === 'crm:modelos') {
@@ -858,6 +1194,7 @@ export function depois() {
         fica exatamente onde estava. */
   ligarAjusteDeAltura();
   ajustarAltura();      // antes de devolver a rolagem: a altura muda onde é "o fim"
+  ligarFicha();
   devolverRolagem();
   devolverLista();
 
@@ -990,6 +1327,10 @@ function ligarAtualizacaoAutomatica() {
        áudio pela metade. */
     window.__crmGravador?.state === 'recording' ||
     document.querySelector('.crm-modelos:not([hidden])') ||      // caixa de modelos
+    /* 26/09 (v196): editando a ficha do contato. O rascunho sobreviveria ao
+       redesenho, mas o cursor e a seleção não — e o campo piscaria no meio
+       da digitação. Espera a pessoa salvar ou sair do campo. */
+    fichaSuja() || document.activeElement?.closest?.('.crm-ficha') ||
     (document.getElementById('modalOverlay')?.style.display || 'none') !== 'none'
   );
 
