@@ -116,6 +116,31 @@ export async function catalogo({ fresco = false } = {}) {
   _catalogo = montarCatalogo(guardado);
   return _catalogo;
 }
+/* v206: semelhança de nomes (igual à Edge Function soc-campo): 1 = igual; ≥ 0,6 = mesmo risco. */
+export const normNome = (v) => String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+const _PARADAS = new Set(['de', 'do', 'da', 'dos', 'das', 'e', 'ou', 'com', 'em', 'a', 'o', 'os', 'as',
+  'para', 'por', 'no', 'na', 'nos', 'nas', 'ao', 'aos', 'um', 'uma']);
+const _radicais = (v) => new Set(normNome(v).split(' ').filter(t => t.length >= 2 && !_PARADAS.has(t)).map(t => t.slice(0, 5)));
+export function semelhanca(nomeSoc, nomeAlvo) {
+  const a = normNome(nomeSoc), b = normNome(nomeAlvo);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const ta = _radicais(a), tb = _radicais(b);
+  if (!ta.size || !tb.size) return 0;
+  let comum = 0;
+  for (const t of ta) if (tb.has(t)) comum++;
+  return 0.7 * (comum / tb.size) + 0.3 * (comum / ta.size);
+}
+export function melhorPorNome(nome, lista, nomeDe, minimo = 0.6) {
+  let melhor = null, nota = 0;
+  for (const x of lista) {
+    const s = semelhanca(nome, nomeDe(x));
+    if (s >= minimo && (!melhor || s > nota)) { melhor = x; nota = s; }
+  }
+  return melhor;
+}
+
 function montarCatalogo(linhas) {
   /* Item da organização (org_id preenchido) vence o padrão GRID de mesmo código. */
   const por = (tipo) => {
@@ -127,6 +152,8 @@ function montarCatalogo(linhas) {
   return {
     riscos, treinamentos, ambiente,
     risco: (cod) => riscos.find(r => r.codigo === String(cod)) || null,
+    /* v206: o SOC às vezes manda o risco só com o nome ("ILUMINÂNCIA" × "Iluminação"). */
+    riscoPorNome: (nome) => melhorPorNome(nome, riscos, r => r.nome),
     treinamento: (cod) => treinamentos.find(t => t.codigo === cod) || null,
     opcoes: (grupo) => ambiente.filter(a => a.categoria === grupo).map(a => a.nome)
   };

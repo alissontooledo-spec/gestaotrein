@@ -220,17 +220,18 @@ async function usarGhesDoSoc(d, soIdx = null) {
     if (usados.has(chave)) continue;
     const uniq = (xs) => [...new Set(xs.filter(Boolean))];
     const riscos = (gs.riscos || []).map(rs => {
-      const c = cat.risco(rs.codigo);
+      /* v206: sem código (ou código fora do catálogo) → casa pelo nome */
+      const c = (rs.codigo && cat.risco(rs.codigo)) || cat.riscoPorNome(rs.nome);
       return {
         uid: D.novoId(), codigo: c ? c.codigo : (rs.codigo || null), nome: c ? c.nome : rs.nome,
         categoria: c ? c.categoria : (rs.grupo || 'outro'), nao_listado: !c, ambiente: 'Todos',
         /* v205: caracterização vigente do SOC vem preenchida; as conclusões (ins/per/AE)
            ficam como dica "SOC:", quem decide é o técnico. */
-        analise: rs.descricao || '', fonte: rs.fonte || '', epc: rs.epc || '', medidas_adm: rs.medidas_adm || '',
+        analise: rs.descricao || '', fonte: /^[\d\s,;.\-/|]*$/.test(rs.fonte || '') ? '' : rs.fonte, epc: rs.epc || '', medidas_adm: rs.medidas_adm || '',
         exposicao: rs.exposicao || null, probabilidade: null, severidade: null, classificacao: null,
         epi: rs.epi_ca || '', epi_eficaz: rs.epi_eficaz === true ? 'S' : rs.epi_eficaz === false ? 'N' : null,
         medicao: null, iluminacao: null, ins: null, per: null, ae: null, grau: null, pendente: null,
-        soc: { ins: !!rs.insalubridade, per: !!rs.periculosidade, ae: !!rs.aposentadoria, grau: grauSoc(rs.insalubre_grau),
+        soc: { ins: !!rs.insalubridade && !/n[aã]o informado/i.test(rs.insalubre_grau || ''), per: !!rs.periculosidade, ae: !!rs.aposentadoria, grau: grauSoc(rs.insalubre_grau),
                exposicao: rs.exposicao || null, medicao: rs.medicao || null }
       };
     });

@@ -176,7 +176,7 @@ function riscoAberto(d, g, r, trav) {
   const graus = ['10%', '20%', '40%'];
   const socDica = (k) => r.soc && (k === 'ins' || k === 'per' || (k === 'ae' && 'ae' in r.soc)) ? `<span class="cp-padrao">SOC: ${r.soc[k] ? 'S' : 'N'}${k === 'ins' && r.soc.ins && r.soc.grau ? ' · ' + r.soc.grau : ''}</span>` : '';
   /* v205: última medição do SOC como referência para a de hoje. */
-  const refMed = r.soc?.medicao?.valor ? `<div class="cp-soc-ref"><b>Última medição no SOC:</b> ${esc(r.soc.medicao.valor)}${r.soc.medicao.data ? ' em ' + esc(r.soc.medicao.data) : ''}. Registre abaixo a de hoje (ou deixe em branco se não medir).</div>` : '';
+  const refMed = r.soc?.medicao?.valor ? `<div class="cp-soc-ref"><b>Última medição no SOC:</b> ${esc(r.soc.medicao.valor)}${r.soc.medicao.unidade ? ' ' + esc(r.soc.medicao.unidade) : ''}${r.soc.medicao.data ? ' em ' + esc(r.soc.medicao.data) : ''}. Registre abaixo a de hoje (ou deixe em branco se não medir).</div>` : '';
   const expoSoc = r.soc?.exposicao ? `<span class="cp-padrao">SOC: ${esc((D.EXPOSICAO.find(([k]) => k === r.soc.exposicao) || [, ''])[1])}</span>` : '';
 
   const pendBox = r.pendente ? `<div class="cp-depois"><div class="cp-sec-tit">${ico('relogio')}Completar depois</div>

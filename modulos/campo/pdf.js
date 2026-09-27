@@ -133,7 +133,7 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
 
   function cabecalhoInterno(tit) {
     fonte(8.5, true, C2);
-    const linhaOrg = doc.splitTextToSize(S(`${org.nome || 'GRID'} · Avaliação de Riscos Ambientais · ${cli.nome || ''}`.toUpperCase()), CW - 48)[0];
+    const linhaOrg = doc.splitTextToSize(S(`Avaliação de Riscos Ambientais · ${cli.nome || ''}`.toUpperCase()), CW - 48)[0];
     doc.text(linhaOrg, ML, MT + 3);
     fonte(14, true, NAVY);
     const suf = / \(continuação\)$/.test(tit) ? S(' (continuação)') : '';
@@ -445,7 +445,8 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
 
   // =================== CAPA ===================
   {
-    fonte(9, true, C2); doc.text(S(`${org.nome || 'GRID'} · Segurança do Trabalho`.toUpperCase()), ML, MT + 3);
+    /* v206: sem o nome da organização do GRID (ex.: a empresa de treinamentos) — o laudo é do técnico. */
+    fonte(9, true, C2); doc.text(S('SEGURANÇA DO TRABALHO'), ML, MT + 3);
     fonte(15, true, NAVY); doc.text(S('Avaliação de Riscos Ambientais'), ML, MT + 10.5);
     fonte(8.5, false, C2); doc.text(S('Levantamento de campo por Grupo Homogêneo de Exposição (GHE)'), ML, MT + 15.5);
     doc.setFillColor(...AMBAR); doc.rect(ML, MT + 18, 26, 1.1, 'F');
