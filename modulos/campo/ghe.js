@@ -81,7 +81,8 @@ function sugestoesSoc(d, g) {
 }
 function passo1(d, g, trav) {
   const sug = sugestoesSoc(d, g);
-  return `<div class="cp-sec"><div class="cp-sec-tit">GHE</div>
+  const faixaSoc = g.codigo_soc && !trav ? `<div class="cp-faixa-soc">Este GHE veio do SOC (caracterização vigente). Confira com o acompanhante e altere só o que mudou.</div>` : '';
+  return `${faixaSoc}<div class="cp-sec"><div class="cp-sec-tit">GHE</div>
       <label class="cp-lbl">Nome do GHE <span class="obr">*</span></label>${inp('g.nome', g.nome, { travado: trav })}
       ${g.codigo_soc ? `<div class="cp-ajuda">Veio do SOC (GHE ${esc(g.codigo_soc)}).</div>` : ''}</div>
     <div class="cp-sec"><div class="cp-sec-tit">Setores e funções</div>
@@ -173,7 +174,10 @@ function riscoAberto(d, g, r, trav) {
   const med = r.medicao || {}, ilu = r.iluminacao || {};
   const nomeConc = { ins: 'Insalubridade', per: 'Periculosidade', ae: 'Aposentadoria especial' };
   const graus = ['10%', '20%', '40%'];
-  const socDica = (k) => r.soc && (k === 'ins' || k === 'per') ? `<span class="cp-padrao">SOC: ${r.soc[k] ? 'S' : 'N'}</span>` : '';
+  const socDica = (k) => r.soc && (k === 'ins' || k === 'per' || (k === 'ae' && 'ae' in r.soc)) ? `<span class="cp-padrao">SOC: ${r.soc[k] ? 'S' : 'N'}${k === 'ins' && r.soc.ins && r.soc.grau ? ' · ' + r.soc.grau : ''}</span>` : '';
+  /* v205: última medição do SOC como referência para a de hoje. */
+  const refMed = r.soc?.medicao?.valor ? `<div class="cp-soc-ref"><b>Última medição no SOC:</b> ${esc(r.soc.medicao.valor)}${r.soc.medicao.data ? ' em ' + esc(r.soc.medicao.data) : ''}. Registre abaixo a de hoje (ou deixe em branco se não medir).</div>` : '';
+  const expoSoc = r.soc?.exposicao ? `<span class="cp-padrao">SOC: ${esc((D.EXPOSICAO.find(([k]) => k === r.soc.exposicao) || [, ''])[1])}</span>` : '';
 
   const pendBox = r.pendente ? `<div class="cp-depois"><div class="cp-sec-tit">${ico('relogio')}Completar depois</div>
       <div class="cp-opts" style="margin-bottom:10px">${D.MOTIVOS_PENDENCIA.map(([k, l]) => opt(`pend-motivo:${k}`, l, r.pendente.motivo === k, trav)).join('')}</div>
@@ -184,6 +188,7 @@ function riscoAberto(d, g, r, trav) {
     : (trav ? '' : `<div style="margin:0 0 12px">${btn(ico('relogio') + ' Não dá para completar agora · deixar para depois', 'campo:pend-on', { cls: 'btn-outline', estilo: 'width:100%;min-height:44px' })}</div>`);
 
   const blocoMedicao = temMedicao(r) ? `<div class="cp-sec"><div class="cp-sec-tit">Medição <span class="dir" style="color:var(--text-3)">se houver</span></div>
+      ${refMed}
       <div class="cp-grid3"><div><label class="cp-lbl">Resultado</label>${inp('r.med.resultado', med.resultado, { ph: 'Ex.: 82,4', travado: trav, modo: 'decimal' })}</div>
         <div><label class="cp-lbl">Unidade</label>${inp('r.med.unidade', med.unidade, { ph: 'Ex.: dB(A)', travado: trav })}</div>
         <div><label class="cp-lbl">Limite de referência</label>${inp('r.med.limite', med.limite, { ph: 'Ex.: 85 dB(A) · NR-15 Anexo 1', travado: trav })}</div></div>
@@ -191,6 +196,7 @@ function riscoAberto(d, g, r, trav) {
         <div><label class="cp-lbl">Data da medição</label>${inp('r.med.data', med.data, { tipo: 'date', travado: trav })}</div></div>
       <label class="cp-lbl" style="margin-top:12px">Resultado em relação ao limite</label>${seg('med-sit', [['abaixo', 'Abaixo do limite'], ['acima', 'Acima do limite']], med.situacao, { travado: trav })}</div>` : '';
   const blocoIlu = ehIluminacao(r) ? `<div class="cp-sec"><div class="cp-sec-tit">Iluminância (NHO 11)</div>
+      ${temMedicao(r) ? '' : refMed}
       <div class="cp-grid3"><div><label class="cp-lbl">Nível encontrado (lux)</label>${inp('r.ilu.nivel_encontrado', ilu.nivel_encontrado, { travado: trav, modo: 'decimal' })}</div>
         <div><label class="cp-lbl">Nível mínimo (lux)</label>${inp('r.ilu.nivel_minimo', ilu.nivel_minimo, { travado: trav, modo: 'decimal' })}</div>
         <div><label class="cp-lbl">IRC</label>${inp('r.ilu.irc', ilu.irc, { travado: trav, modo: 'decimal' })}</div></div></div>` : '';
@@ -215,7 +221,7 @@ function riscoAberto(d, g, r, trav) {
       <label class="cp-lbl" style="margin-top:12px">Medidas administrativas / recomendações</label>${area('r.medidas_adm', r.medidas_adm, { travado: trav, alto: 60 })}</div>
     ${blocoMedicao}${blocoIlu}
     <div class="cp-sec"><div class="cp-sec-tit">Avaliação</div>
-      <label class="cp-lbl">Exposição <span class="obr">*</span></label>${seg('r:exposicao', D.EXPOSICAO.map(([k, l]) => [k, l]), r.exposicao, { travado: trav })}
+      <label class="cp-lbl">Exposição <span class="obr">*</span>${expoSoc}</label>${seg('r:exposicao', D.EXPOSICAO.map(([k, l]) => [k, l]), r.exposicao, { travado: trav })}
       <div class="cp-grid2" style="margin-top:14px"><div><label class="cp-lbl">Probabilidade <span class="obr">*</span></label>${seg('r:probabilidade', D.PROBABILIDADE.map(([k]) => [k, k]), r.probabilidade, { travado: trav })}${legenda(D.PROBABILIDADE, r.probabilidade)}</div>
         <div><label class="cp-lbl">Severidade <span class="obr">*</span></label>${seg('r:severidade', D.SEVERIDADE.map(([k]) => [k, k]), r.severidade, { travado: trav })}${legenda(D.SEVERIDADE, r.severidade)}</div></div>
       <label class="cp-lbl" style="margin-top:14px">Classificação do risco <span class="obr">*</span></label>${seg('r:classificacao', D.CLASSIFICACAO, r.classificacao, { travado: trav })}

@@ -58,10 +58,39 @@ function blocoSoc(d, cli, editavel) {
     <div class="cp-soc-linha"><div class="cp-soc-stats">${stat(nSet, nSet === 1 ? 'setor' : 'setores')}${stat(nCar, nCar === 1 ? 'função' : 'funções')}${stat(s.total_funcionarios ?? 0, (s.total_funcionarios ?? 0) === 1 ? 'funcionário' : 'funcionários')}${stat(nGhe, nGhe === 1 ? 'GHE' : 'GHEs')}</div>${botao}</div>
     ${dicas.length ? `<div class="cp-soc-dica">${dicas.map(esc).join('<br>')}</div>` : ''}
     ${verDetalhes ? `<details class="cp-soc-det"><summary>Detalhes da busca no SOC <small>só administrador vê</small></summary><ul>${s.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul><div class="cp-ajuda">Código da empresa no SOC: ${esc(cli.soc_codigo_empresa)}</div></details>` : ''}
-    ${editavel && ghesSoc.length ? `<div style="margin-top:10px">${btn(`Usar ${ghesSoc.length === 1 ? 'o GHE' : 'os ' + ghesSoc.length + ' GHEs'} do SOC`, 'campo:soc-ghes', { cls: 'btn-outline btn-sm' })}
-      <div class="cp-ajuda">Cria um GHE para cada GHE ativo do SOC, com setores, funções e os riscos já caracterizados lá. Você confere e completa na visita.</div></div>` : ''}
-  </div>`;
+  </div>
+  ${editavel && ghesSoc.length ? blocoGhesSoc(d, ghesSoc) : ''}`;
 }
+
+/* v205: GHEs que já existem no SOC — o técnico escolhe de qual partir. */
+function blocoGhesSoc(d, ghesSoc) {
+  const nm = D.nomesSoc(d.av.soc);
+  const inativas = new Set((d.av.soc?.hierarquias || []).filter(h => h.ativa === false).map(h => `${h.unidade}|${h.setor}|${h.cargo}`));
+  const uniq = (xs) => [...new Set(xs.filter(Boolean))];
+  const todos = d.av.soc?.ghes || [];
+  const cartao = (gs) => {
+    const hs = (gs.hierarquias || []).filter(h => !inativas.has(`${h.unidade}|${h.setor}|${h.cargo}`));
+    const set = uniq(hs.map(nm.setor)), fun = uniq(hs.map(nm.cargo));
+    const rs = gs.riscos || [];
+    const datas = rs.map(r => r.medicao?.data).filter(Boolean);
+    const ult = datas.sort((a, b) => dataOrd(b).localeCompare(dataOrd(a)))[0];
+    const idx = todos.indexOf(gs);
+    return `<div class="cp-ghe-soc">
+      <div class="n">${esc(gs.codigo ? 'GHE ' + gs.codigo + ' · ' : '')}${esc(gs.nome || '')}</div>
+      <div class="s">${set.length ? 'Setores: ' + esc(set.join(', ')) : 'Sem setor no SOC'}${fun.length ? ' · Funções: ' + esc(fun.join(', ')) : ''}</div>
+      <div class="s">${rs.length ? `${rs.length} risco${rs.length === 1 ? '' : 's'}: ` + esc(rs.slice(0, 4).map(r => (r.codigo ? r.codigo + ' ' : '') + r.nome).join(', ')) + (rs.length > 4 ? '…' : '') : 'Sem risco caracterizado no SOC'}</div>
+      ${ult ? `<span class="cp-ghe-soc-med">Última medição: ${esc(ult)}</span>` : ''}
+      <div style="margin-top:8px">${btn('Começar a partir deste GHE', `campo:soc-ghe:${idx}`, { cls: 'btn-navy btn-sm' })}</div></div>`;
+  };
+  return `<div class="cp-sec"><div class="cp-sec-tit">GHEs que já existem no SOC <span class="dir">${ghesSoc.length}</span></div>
+    <div class="cp-ajuda" style="margin:0 0 10px">Escolha de qual GHE partir: ele entra na avaliação já com setores, funções, riscos e a última medição. Na visita, confira e altere só o que mudou.</div>
+    ${ghesSoc.map(cartao).join('')}
+    ${ghesSoc.length > 1 ? btn('Usar todos', 'campo:soc-ghes', { cls: 'btn-outline btn-sm' }) : ''}</div>`;
+}
+/* "15/04/2025" → "2025-04-15" para ordenar. */
+const dataOrd = (t) => { const m = String(t || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : String(t || ''); };
+/* "Grau médio (20%)" / "20" → "20%" (graus da ficha). */
+const grauSoc = (t) => { const m = String(t || '').match(/\b(10|20|40)\b/); return m ? m[1] + '%' : null; };
 
 /* v203: conferência dos funcionários com a empresa (quadro no hub). */
 function blocoFuncionarios(d, editavel) {
@@ -176,7 +205,7 @@ function modalNovoGhe(d, redesenhar) {
 }
 
 /* GHEs do SOC → GHEs da avaliação (o técnico confere na visita). */
-async function usarGhesDoSoc(d) {
+async function usarGhesDoSoc(d, soIdx = null) {
   const cat = await D.catalogo();
   const usados = new Set(d.ghes.map(g => g.codigo_soc).filter(Boolean));
   const nm = D.nomesSoc(d.av.soc);   /* v202: código → nome */
@@ -184,7 +213,9 @@ async function usarGhesDoSoc(d) {
   const inativas = new Set((d.av.soc?.hierarquias || []).filter(h => h.ativa === false).map(h => `${h.unidade}|${h.setor}|${h.cargo}`));
   const ativasGhe = (gs) => (gs.hierarquias || []).filter(h => !inativas.has(`${h.unidade}|${h.setor}|${h.cargo}`));
   let n = 0;
-  for (const gs of d.av.soc?.ghes || []) {
+  let ultimo = null;
+  const todos = d.av.soc?.ghes || [];
+  for (const gs of soIdx == null ? todos : [todos[soIdx]].filter(Boolean)) {
     const chave = gs.codigo || gs.nome;
     if (usados.has(chave)) continue;
     const uniq = (xs) => [...new Set(xs.filter(Boolean))];
@@ -193,17 +224,21 @@ async function usarGhesDoSoc(d) {
       return {
         uid: D.novoId(), codigo: c ? c.codigo : (rs.codigo || null), nome: c ? c.nome : rs.nome,
         categoria: c ? c.categoria : (rs.grupo || 'outro'), nao_listado: !c, ambiente: 'Todos',
-        analise: '', fonte: rs.fonte || '', epc: '', medidas_adm: '', exposicao: null, probabilidade: null, severidade: null, classificacao: null,
+        /* v205: caracterização vigente do SOC vem preenchida; as conclusões (ins/per/AE)
+           ficam como dica "SOC:", quem decide é o técnico. */
+        analise: rs.descricao || '', fonte: rs.fonte || '', epc: rs.epc || '', medidas_adm: rs.medidas_adm || '',
+        exposicao: rs.exposicao || null, probabilidade: null, severidade: null, classificacao: null,
         epi: rs.epi_ca || '', epi_eficaz: rs.epi_eficaz === true ? 'S' : rs.epi_eficaz === false ? 'N' : null,
         medicao: null, iluminacao: null, ins: null, per: null, ae: null, grau: null, pendente: null,
-        soc: { ins: !!rs.insalubridade, per: !!rs.periculosidade }
+        soc: { ins: !!rs.insalubridade, per: !!rs.periculosidade, ae: !!rs.aposentadoria, grau: grauSoc(rs.insalubre_grau),
+               exposicao: rs.exposicao || null, medicao: rs.medicao || null }
       };
     });
-    D.novoGhe(d.id, { nome: gs.nome || ('GHE ' + gs.codigo), codigo_soc: chave,
+    ultimo = D.novoGhe(d.id, { nome: gs.nome || ('GHE ' + gs.codigo), codigo_soc: chave,
       setores: uniq(ativasGhe(gs).map(nm.setor)), funcoes: uniq(ativasGhe(gs).map(nm.cargo)), riscos });
     n++;
   }
-  return n;
+  return soIdx == null ? n : ultimo;
 }
 
 export async function acao(nome, valor, redesenhar) {
@@ -217,6 +252,12 @@ export async function acao(nome, valor, redesenhar) {
       avisar(`SOC: ${(s.setores || []).length} setores, ${(s.cargos || []).length} cargos e ${(s.ghes || []).length} GHEs.`);
     } catch (e) { avisar(D.traduzirErro(e), 'erro'); }
     finally { _ocupado = ''; redesenhar(); }
+    return true;
+  }
+  if (nome === 'campo:soc-ghe') {   /* v205: um GHE escolhido */
+    const g = await usarGhesDoSoc(d, Number(valor));
+    if (g) { avisar('GHE criado a partir do SOC. Confira na visita e altere o que mudou.'); irPara(`campo-ghe:${d.id}~${g.id}`); }
+    else redesenhar();
     return true;
   }
   if (nome === 'campo:soc-ghes') {
