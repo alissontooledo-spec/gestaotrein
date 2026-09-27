@@ -49,8 +49,9 @@
   --red:#DC2626;--red-l:#FEE2E2;--red-text:#991B1B;
   --warn:#D97706;--warn-l:#FEF3C7;--warn-text:#92400E;
   --gray-50:#F0F2F7;--gray-100:#E8EBF2;--gray-200:#D2D7E1;--gray-300:#BFC5D2;--gray-400:#8B93A8;--gray-500:#5E6780;--gray-600:#454E66;
-  --text-1:#172541;--text-2:#414B63;--text-3:#5E6780;
-  --surface:#FFFFFF;--bg:#F3F5FA;--border:#E3E7F0;--border-2:#CDD4E2;
+  /* v202 (27/09): textos secundários e linhas mais escuros — no notebook estavam claros demais. Antes: text-2 #414B63, text-3 #5E6780, border #E3E7F0, border-2 #CDD4E2 */
+  --text-1:#172541;--text-2:#343E56;--text-3:#4C5570;
+  --surface:#FFFFFF;--bg:#F3F5FA;--border:#D5DBE6;--border-2:#B7C0D1;
   --r-sm:4px;--r-md:6px;--r-lg:8px;--r-xl:10px;--r-2xl:12px;
   --shadow:0 1px 2px rgba(23,32,56,.04),0 2px 6px rgba(23,32,56,.06);
   --shadow-md:0 1px 2px rgba(23,37,65,.05),0 6px 16px rgba(23,37,65,.08);
@@ -4692,6 +4693,8 @@ async function _iniciarPlataforma() {
       /* v200: perfis de acesso — o módulo pergunta, a casca responde. */
       pode: (tela, nivel) => _pode(tela, nivel),
       podeAcao: (acao) => _podeAcao(acao),
+      /* v202: perfil padrão de quem está usando (administrador/comercial/instrutor/provedor). */
+      perfil: () => usuarioAtual?.perfil || null,
       /* A lista "Requer atencao" vive na casca porque a tela Inicio precisa
          dela sem modulo nenhum. Passar pela ponte evita a segunda copia: o
          modulo pede, nao reimplementa. */
@@ -30514,7 +30517,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '201';
+  var APP_BUILD = '203';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
