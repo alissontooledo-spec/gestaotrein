@@ -24,7 +24,8 @@ const ehMudanca = (p) => p.origem === 'empresa' || p.situacao === 'saiu' || p.si
 function conhecidos(d) {
   const set = new Set(), fun = new Set();
   const nm = D.nomesSoc(d.av.soc);
-  for (const h of d.av.soc?.hierarquias || []) { if (nm.setor(h)) set.add(nm.setor(h)); if (nm.cargo(h)) fun.add(nm.cargo(h)); }
+  /* v204: só combinações ATIVAS no SOC (cargo inativo confunde o técnico). */
+  for (const h of (d.av.soc?.hierarquias || []).filter(x => x.ativa !== false)) { if (nm.setor(h)) set.add(nm.setor(h)); if (nm.cargo(h)) fun.add(nm.cargo(h)); }
   for (const g of d.ghes || []) { (g.setores || []).forEach(x => set.add(x)); (g.funcoes || []).forEach(x => fun.add(x)); }
   for (const p of D.listaFuncionarios(d)) { [p.setor, p.novo_setor].forEach(x => x && set.add(x)); [p.funcao, p.nova_funcao].forEach(x => x && fun.add(x)); }
   const ord = (s) => [...s].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));

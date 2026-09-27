@@ -180,6 +180,9 @@ async function usarGhesDoSoc(d) {
   const cat = await D.catalogo();
   const usados = new Set(d.ghes.map(g => g.codigo_soc).filter(Boolean));
   const nm = D.nomesSoc(d.av.soc);   /* v202: código → nome */
+  /* v204: combinação inativa no SOC não entra no GHE. */
+  const inativas = new Set((d.av.soc?.hierarquias || []).filter(h => h.ativa === false).map(h => `${h.unidade}|${h.setor}|${h.cargo}`));
+  const ativasGhe = (gs) => (gs.hierarquias || []).filter(h => !inativas.has(`${h.unidade}|${h.setor}|${h.cargo}`));
   let n = 0;
   for (const gs of d.av.soc?.ghes || []) {
     const chave = gs.codigo || gs.nome;
@@ -197,7 +200,7 @@ async function usarGhesDoSoc(d) {
       };
     });
     D.novoGhe(d.id, { nome: gs.nome || ('GHE ' + gs.codigo), codigo_soc: chave,
-      setores: uniq((gs.hierarquias || []).map(nm.setor)), funcoes: uniq((gs.hierarquias || []).map(nm.cargo)), riscos });
+      setores: uniq(ativasGhe(gs).map(nm.setor)), funcoes: uniq(ativasGhe(gs).map(nm.cargo)), riscos });
     n++;
   }
   return n;
