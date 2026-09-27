@@ -1494,6 +1494,35 @@ body.sidebar-mini .mod-sel button.on::after {
   background: #F59E0B;
 }
 
+/* ===== Seletor de módulo v2 (27/09, v199) — botão + lista =====
+   Substitui as abas .mod-sel, que cortavam os nomes a partir do 3º módulo.
+   Mesmas cores do seletor anterior (#101C33 / #32405D / #30405F) + âmbar. */
+.mod-sel2 { position: relative; margin: 14px 10px 6px; }
+.mod-sel2-btn { width: 100%; display: flex; align-items: center; gap: 10px; background: #101C33; border: 1px solid #32405D; border-radius: 8px; padding: 8px 10px; color: #fff; font-family: inherit; cursor: pointer; text-align: left; }
+.mod-sel2-btn:hover { border-color: #46557A; }
+.mod-sel2-ic { width: 28px; height: 28px; border-radius: 7px; background: #F59E0B; color: #172541; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mod-sel2-ic svg, .mod-sel2-opic svg { width: 15px; height: 15px; }
+.mod-sel2-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mod-sel2-rot { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: #7787A4; font-weight: 700; }
+.mod-sel2-nome { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod-sel2-seta { color: #8E9BB1; display: flex; transition: transform .15s; }
+.mod-sel2.aberto .mod-sel2-seta { transform: rotate(180deg); }
+.mod-sel2-lista { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; background: #101C33; border: 1px solid #32405D; border-radius: 8px; padding: 4px; box-shadow: 0 12px 28px rgba(0,0,0,.35); }
+.mod-sel2.aberto .mod-sel2-lista { display: block; }
+.mod-sel2-op { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: #C3CDDD; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; text-align: left; }
+.mod-sel2-op:hover, .mod-sel2-op.on { background: #30405F; color: #fff; }
+.mod-sel2-opic { width: 26px; height: 26px; border-radius: 6px; background: #1E2B47; color: #C3CDDD; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mod-sel2-op.on .mod-sel2-opic { background: #F59E0B; color: #172541; }
+.mod-sel2-optxt { flex: 1; min-width: 0; line-height: 1.3; }
+.mod-sel2-optxt small { display: block; font-size: 10.5px; font-weight: 500; color: #7787A4; }
+.mod-sel2-ok { color: #F59E0B; display: flex; }
+/* Menu recolhido: só o ícone; a lista abre embaixo, só com ícones. */
+body.sidebar-mini .mod-sel2 { margin: 12px 10px 4px; }
+body.sidebar-mini .mod-sel2-btn { justify-content: center; padding: 6px; }
+body.sidebar-mini .mod-sel2-txt, body.sidebar-mini .mod-sel2-seta,
+body.sidebar-mini .mod-sel2-optxt, body.sidebar-mini .mod-sel2-ok { display: none; }
+body.sidebar-mini .mod-sel2-op { justify-content: center; padding: 6px; }
+
 /* LARGURA DA BARRA — deliberadamente NÃO alterada.
    O conceito da Lovable é um mockup de largura fixa (1280px) e mede 214px.
    O app é responsivo: 228px no desktop, 204px entre 768 e 1024px, e 64px
@@ -5068,11 +5097,10 @@ function _htmlMenuLateral(itens) {
   const abas = [{ id: 'base', nome: 'Treinamentos' }]
     .concat(comItens.map(id => ({ id, nome: nomes[id] })));
 
-  const seletor = abas.length < 2 ? '' : `<div class="mod-sel" role="tablist">${
-    abas.map(a => `<button type="button" role="tab" aria-selected="${a.id === ativo}"` +
-      ` class="${a.id === ativo ? 'on' : ''}" onclick="trocarModulo('${a.id}')"` +
-      ` title="${escapeHtml(a.nome)}">${escapeHtml(a.nome)}</button>`).join('')
-  }</div>`;
+  // 27/09 (v199): com 3 módulos as abas cortavam os nomes ("Treinam…",
+  // "Avaliaçã…"). Agora é um botão com o módulo atual (nome inteiro) que abre
+  // a lista de todos — serve para qualquer quantidade de módulos.
+  const seletor = abas.length < 2 ? '' : _htmlSeletorModulo(abas, ativo);
 
   const visiveis = ativo === 'base'
     ? base
@@ -5082,6 +5110,54 @@ function _htmlMenuLateral(itens) {
     + _htmlGruposMenu(visiveis, ativo === 'base' ? '' : nomes[ativo])
     + _htmlConfigMenu(config);
 }
+
+// Ícone e resumo de cada módulo no seletor. Módulo novo sem entrada aqui usa
+// o ícone do próprio manifesto e fica sem resumo — aparece do mesmo jeito.
+const _MODULO_SELETOR = {
+  base:  { icone: 'cap',       sub: 'Turmas, certificados, agenda' },
+  crm:   { icone: 'funnel',    sub: 'Funil, contatos, WhatsApp' },
+  campo: { icone: 'clipboard', sub: 'Visitas, GHEs, riscos' },
+};
+const _SETA_SELETOR = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+const _CHECK_SELETOR = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+function _iconeModuloSeletor(id) {
+  let nome = _MODULO_SELETOR[id]?.icone;
+  if (!nome) { try { nome = _GRID?.modulos?.().find(m => m.id === id)?.icone; } catch (e) {} }
+  return ICONS[nome] || ICONS.clipboard || '';
+}
+function _htmlSeletorModulo(abas, ativo) {
+  const atual = abas.find(a => a.id === ativo) || abas[0];
+  return `<div class="mod-sel2" id="modSel2">
+    <button type="button" class="mod-sel2-btn" aria-haspopup="listbox" aria-expanded="false" onclick="_alternarSeletorModulo(event)" title="Trocar de módulo: ${escapeHtml(atual.nome)}">
+      <span class="mod-sel2-ic">${_iconeModuloSeletor(atual.id)}</span>
+      <span class="mod-sel2-txt"><span class="mod-sel2-rot">Módulo</span><span class="mod-sel2-nome">${escapeHtml(atual.nome)}</span></span>
+      <span class="mod-sel2-seta">${_SETA_SELETOR}</span>
+    </button>
+    <div class="mod-sel2-lista" role="listbox">${abas.map(a => `
+      <button type="button" role="option" aria-selected="${a.id === ativo}" class="mod-sel2-op${a.id === ativo ? ' on' : ''}" onclick="_escolherModulo('${a.id}')" title="${escapeHtml(a.nome)}">
+        <span class="mod-sel2-opic">${_iconeModuloSeletor(a.id)}</span>
+        <span class="mod-sel2-optxt">${escapeHtml(a.nome)}${_MODULO_SELETOR[a.id]?.sub ? `<small>${escapeHtml(_MODULO_SELETOR[a.id].sub)}</small>` : ''}</span>
+        ${a.id === ativo ? `<span class="mod-sel2-ok">${_CHECK_SELETOR}</span>` : ''}
+      </button>`).join('')}
+    </div></div>`;
+}
+function _alternarSeletorModulo(ev) {
+  if (ev) ev.stopPropagation();
+  const el = ev?.currentTarget?.closest('.mod-sel2') || document.getElementById('modSel2');
+  if (!el) return;
+  const abrir = !el.classList.contains('aberto');
+  el.classList.toggle('aberto', abrir);
+  el.querySelector('.mod-sel2-btn')?.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+}
+function _fecharSeletorModulo() {
+  document.querySelectorAll('.mod-sel2.aberto').forEach(el => {
+    el.classList.remove('aberto');
+    el.querySelector('.mod-sel2-btn')?.setAttribute('aria-expanded', 'false');
+  });
+}
+function _escolherModulo(id) { _fecharSeletorModulo(); trocarModulo(id); }
+document.addEventListener('click', (e) => { if (!e.target.closest('.mod-sel2')) _fecharSeletorModulo(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') _fecharSeletorModulo(); });
 
 function _htmlConfigMenu(config) {
   if (!config.length) return '';
@@ -30119,7 +30195,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '198';
+  var APP_BUILD = '199';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
