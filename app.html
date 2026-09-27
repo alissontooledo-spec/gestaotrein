@@ -6662,9 +6662,12 @@ async function _carregarSocOrg(orgId, org) {
 // e-mail e a senha de login do GRID (visto em produção em 27/09).
 window._socBlocoAberto = null;
 const _SOC_ROTINAS_CAMPO = [
-  { id:'hierarquia_empresa', titulo:'Hierarquia da empresa', sub:'setores e cargos, mesmo sem funcionário', soc:'Hierarquia da empresa' },
-  { id:'caracteristica_risco_ghe', titulo:'GHEs e riscos', sub:'"Característica do Risco com Fonte Geradora (Interface Sênior)"', soc:'Característica do Risco com Fonte Geradora (Interface Sênior)' },
-  { id:'hierarquias_ghe', titulo:'Hierarquias do GHE', sub:'setores e cargos de cada GHE', soc:'Hierarquias do GHE' },
+  { id:'hierarquia_empresa', titulo:'Hierarquia da empresa', sub:'setores e cargos, mesmo sem funcionário', soc:'Hierarquia da empresa', conta:true },
+  { id:'hierarquias_ghe', titulo:'Hierarquias do GHE', sub:'setores e cargos de cada GHE', soc:'Hierarquias do GHE', conta:true },
+  /* v205 (27/09): caracterização vigente completa e última medição de cada risco do GHE */
+  { id:'caracteristica_ghe', titulo:'Riscos dos GHEs', sub:'"Característica de Risco: GHE" — caracterização vigente', soc:'Característica de Risco: GHE', conta:true },
+  { id:'ultima_medicao_ghe', titulo:'Últimas medições', sub:'"Última medição riscos do GHE (Interface Sênior)"', soc:'Última medição riscos do GHE (Interface Sênior)', conta:true },
+  { id:'caracteristica_risco_ghe', titulo:'GHEs e riscos (antiga)', sub:'"Característica do Risco com Fonte Geradora (Interface Sênior)" — só é usada se a de cima não estiver cadastrada', soc:'Característica do Risco com Fonte Geradora (Interface Sênior)' },
 ];
 const _SOC_ICO = {
   busca:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>',
@@ -6754,8 +6757,9 @@ function _htmlIntegracaoSocOrg() {
   const temCampo = ((window._orgModulosAtual || {}).modulos || []).some(m => m.modulo === 'campo' && m.ativo);
   if (st.rotinas && temCampo) {
     const r = st.rotinas;
-    const prontas = _SOC_ROTINAS_CAMPO.filter(x => r[x.id]?.codigo && r[x.id]?.temChave && r[x.id]?.ativo !== false).length;
-    const selo = prontas === 3 ? ['badge-green','3 de 3 rotinas'] : prontas ? ['badge-warn', `${prontas} de 3 rotinas`] : ['badge-gray','Não configurada'];
+    const _conta = _SOC_ROTINAS_CAMPO.filter(x => x.conta);
+    const prontas = _conta.filter(x => r[x.id]?.codigo && r[x.id]?.temChave && r[x.id]?.ativo !== false).length;
+    const selo = prontas === _conta.length ? ['badge-green', `${prontas} de ${_conta.length} rotinas`] : prontas ? ['badge-warn', `${prontas} de ${_conta.length} rotinas`] : ['badge-gray','Não configurada'];
     const quando = Object.values(r).map(x => x.atualizado_em).filter(Boolean).sort().pop();
     blocos.push(_socBloco('campo', 'Avaliação de Campo', 'Hierarquia completa e GHEs ativos da empresa visitada', selo, () => `
       <div style="display:flex;gap:8px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 11px;font-size:12px;color:var(--text-2);line-height:1.45;margin:0 0 12px">
@@ -6820,7 +6824,11 @@ async function salvarSocRotinasCampoOrg(orgId) {
   if (!linhas.length) { showToast('Preencha o código e a chave de ao menos uma rotina.', 'error'); return; }
   for (const l of linhas) {
     const { error } = await sb.from('organizacoes_soc_rotinas').upsert(l, { onConflict: 'org_id,rotina' });
-    if (error) { showToast(`Não foi possível salvar: ${traduzErroSupabase(error, 'erro desconhecido')}`, 'error'); return; }
+    if (error) {
+      const semPasso = /rotina_ck/i.test(error.message || '');
+      showToast(semPasso ? 'Falta rodar o PASSO-69 no banco para aceitar as rotinas novas.' : `Não foi possível salvar: ${traduzErroSupabase(error, 'erro desconhecido')}`, 'error', 7000);
+      return;
+    }
   }
   const { data: org } = await sb.from('organizacoes').select('soc_integracao_ativa').eq('id', orgId).maybeSingle();
   window._orgSocAtual = await _carregarSocOrg(orgId, org);
@@ -30517,7 +30525,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '204';
+  var APP_BUILD = '205';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
