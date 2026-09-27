@@ -356,6 +356,8 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
 .btn-sm{padding:6px 12px;font-size:12px}
 .btn-amber{background:var(--amber);color:var(--navy);font-weight:600}
 .btn-amber:hover{background:var(--amber-h)}
+/* 27/09 (v198): card Integração SOC — duas colunas viram uma no celular */
+@media(max-width:767px){.soc-grid2{grid-template-columns:1fr!important}}
 .btn-blue{background:var(--blue);color:#fff}
 .btn-blue:hover{background:var(--blue-h)}
 .btn-navy{background:var(--navy);color:#fff}
@@ -4553,7 +4555,7 @@ const NAV_BOTTOM = {
   provedor:['home','orgs','financeiro','adocao','conta'],
   administrador:['home','turmas','agendaequipe','relatorios','conta'],
   comercial:['home','turmas','agendaequipe','relatorios','conta'],
-  instrutor:['home','agenda','historico','conta'],
+  instrutor:['home','agenda','campo','historico','conta'],
 };
 
 // Permite navegar para 'pagina' apenas se ela existir no menu do perfil
@@ -4605,13 +4607,20 @@ async function _carregarModulosDaOrg() {
     // Organizacao sem a tabela (banco antigo) ou consulta barrada: segue sem
     // modulo nenhum. Treinamentos continua inteiro — ele nao passa por aqui.
     console.warn('[modulos] nao foi possivel ler organizacoes_modulos:', e?.message || e);
+    // 26/09 (v198): sem internet (técnico em campo) a consulta falha; usar a
+    // lista guardada da última sessão mantém o módulo Avaliação de Campo
+    // abrindo com o que está no aparelho. A trava de verdade segue na RLS.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return _modulosEmCache();
     return [];
   }
 }
 
 async function _iniciarPlataforma() {
   _modulosAtivos = await _carregarModulosDaOrg();
-  if (!_modulosAtivos.includes('crm')) return;
+  // 26/09 (v198): a plataforma sobe para QUALQUER módulo além do
+  // Treinamentos. Antes só o CRM a ligava — uma organização só com
+  // Avaliação de Campo ficaria sem o módulo.
+  if (!_modulosAtivos.some(m => m !== 'treinamentos')) return;
   try {
     // O CSS dos componentes dos modulos (ui.js) e o tamanho dos icones vivem
     // no aditivo do design system. Sem ele, `.ico` fica sem width/height e um
@@ -4635,6 +4644,10 @@ async function _iniciarPlataforma() {
       fecharModal,
       avisar: (msg, tipo) => showToast(msg, tipo === 'error' ? 'error' : 'success'),
       confirmar: (msg) => confirmarAcao(msg, 'Confirmar', true),
+      /* 26/09 (v198): o PDF da Avaliação de Campo usa o mesmo jsPDF do app. */
+      garantirJsPDF: () => _garantirJsPDF(),
+      /* Provedor em Modo Suporte: libera o editor do catálogo da ficha. */
+      modoSuporte: () => !!_suporteAtivo,
       /* A lista "Requer atencao" vive na casca porque a tela Inicio precisa
          dela sem modulo nenhum. Passar pela ponte evita a segunda copia: o
          modulo pede, nao reimplementa. */
@@ -4673,7 +4686,9 @@ async function _iniciarPlataforma() {
     // mesmo com o banco ligado (ver SO_EXEMPLO em nucleo/dados.js).
     // Sem `?v=` pelo mesmo motivo acima: as telas de conversa importam este
     // arquivo por caminho relativo, e duas copias seriam dois conjuntos de dados.
-    const { EXEMPLO } = await import('./modulos/crm/exemplo.js');
+    // 26/09 (v198): so o CRM usa os dados de demonstracao; organizacao so com
+    // Avaliacao de Campo nao precisa baixar o arquivo.
+    const EXEMPLO = _modulosAtivos.includes('crm') ? (await import('./modulos/crm/exemplo.js')).EXEMPLO : {};
     dados.iniciar({ sb, origem: 'banco', exemplo: EXEMPLO });
     console.info('[modulos] nucleo carregado');
 
@@ -4681,6 +4696,7 @@ async function _iniciarPlataforma() {
     // nucleo/estagios.js ja traz a lista padrao, e o CRM abre com ela. Antes
     // esta linha estava dentro do try geral, entao um erro aqui apagava o menu
     // inteiro — falha desproporcional ao problema.
+    if (_modulosAtivos.includes('crm'))
     try { await dados.carregarEtapas(); console.info('[modulos] etapas do banco'); }
     catch (e) { console.warn('[modulos] etapas: usando a lista padrao —', e?.message || e); }
 
@@ -4692,7 +4708,7 @@ async function _iniciarPlataforma() {
     _GRID = nucleo.GRID;
     _ligarAcoesDeModulo();
   } catch (e) {
-    console.error('[modulos] CRM nao carregou:', e);
+    console.error('[modulos] modulos nao carregaram:', e);
     _GRID = null;              // sem modulo, o app segue como sempre foi
   }
 }
@@ -4778,6 +4794,9 @@ function _ligarAcoesDeModulo() {
 // _injetarMenuDosModulos roda de novo com a lista real e o menu se corrige —
 // na pratica sao identicos, e por isso o menu nao "pula".
 const MENU_MODULO_PREVIO = {
+  campo: [
+    { id:'campo', rotulo:'Avaliações de campo', icone:'clipboard', perfis:['administrador','comercial','instrutor'] },
+  ],
   crm: [
     { id:'crm',            rotulo:'Painel comercial', icone:'trend',    perfis:['administrador','comercial'] },
     /* Conversas e WhatsApp NAO entram no preview: dependem da funcionalidade
@@ -4908,7 +4927,7 @@ function _blocoAberto(id, padrao) {
 
 // Nome de exibicao do bloco antes do modulo carregar. Depois que ele chega,
 // o nome vem do proprio manifesto.
-const NOME_MODULO_PREVIO = { crm: 'CRM' };
+const NOME_MODULO_PREVIO = { crm: 'CRM', campo: 'Avaliação de Campo' };
 
 // ── Barra lateral v2 — seletor de módulo ────────────────────────────────
 // ANTES: blocos recolhíveis com Treinamentos e CRM abertos ao mesmo tempo —
@@ -5130,7 +5149,9 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {configuracoes:'Configurações',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos'};
+const TITULOS = {configuracoes:'Configurações',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos',
+  // 26/09 (v198): rotas da Avaliação de Campo (as ocultas não passam pelo menu)
+  campo:'Avaliações de campo','campo-avaliacao':'Avaliação de campo','campo-ghe':'GHE','campo-finalizar':'Finalizar avaliação','campo-catalogo':'Catálogo da ficha'};
 
 async function irPara(pagina, params={}) {
   // Bloqueia navegação para telas fora do menu do perfil atual (ver
@@ -5872,6 +5893,12 @@ async function verOrgProvedor(orgId) {
   const { data: socGedConfig } = await sb.from('soc_ged_config').select('org_id,soc_codigo_usuario,soc_codigo_empresa_principal,soc_codigo_responsavel,soc_codigo_tipo_ged,soc_url_socged,soc_url_upload,ativo,atualizado_em').eq('org_id', orgId).maybeSingle();
   window._orgSocGedConfigAtual = socGedConfig || null;
 
+  // ── Integração SOC num card só (27/09, v198) ─────────────────────────────
+  // Busca no SOC (organizacoes_integracoes_soc), SOCGED (acima) e rotinas da
+  // Avaliação de Campo (organizacoes_soc_rotinas). As CHAVES nunca vêm para a
+  // tela: só perguntamos ao banco SE existe chave (filtro "not is null" sem
+  // pedir a coluna), então o valor não trafega.
+
   // Modulos contratados e funcionalidades dentro deles (PASSO-30). Mesmo
   // padrao tolerante dos cards acima: se a migration ainda nao rodou, o
   // select falha, a variavel fica undefined e o card simplesmente nao
@@ -5883,6 +5910,9 @@ async function verOrgProvedor(orgId) {
   const { data: funcsOrg } = await sb.from('organizacoes_modulo_funcionalidades')
     .select('modulo,funcionalidade,ativo').eq('org_id', orgId);
   window._orgModulosAtual = modsOrg ? { orgId, modulos: modsOrg, funcionalidades: funcsOrg || [] } : undefined;
+
+  // Integração SOC (27/09, v198) — ver _carregarSocOrg.
+  window._orgSocAtual = await _carregarSocOrg(orgId, org);
 
   // Histórico de mudanças desta organização — reaproveita a mesma tabela
   // de auditoria (eventos_sistema) que já alimenta o feed geral do
@@ -6020,10 +6050,10 @@ async function verOrgProvedor(orgId) {
     <!-- Integração SOC (SOCGED) — feature nova e isolada, 2026-08-10. Só
          aparece se a migration migration-soc-ged-certificados.sql já rodou
          (senão window._orgSocGedConfigAtual fica undefined, não null). -->
-    ${window._orgSocGedConfigAtual !== undefined ? `
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Integração SOC — Certificados no SOCGED</div>
+    <!-- 27/09 (v198): um card só para tudo o que vem do SOC — Busca (antes só
+         por SQL), SOCGED e rotinas da Avaliação de Campo. -->
+    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Integração SOC</div>
     <div class="card" style="padding:14px" id="integracaoSocOrg">${_htmlIntegracaoSocOrg()}</div>
-    ` : ''}
 
     <!-- Histórico de mudanças — só leitura, últimos 15 eventos desta organização -->
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Histórico de mudanças</div>
@@ -6061,7 +6091,9 @@ const _MODULOS_DO_PRODUTO = [
     funcionalidades:[
       { id:'whatsapp', nome:'WhatsApp',
         desc:'Conversas e configuração de números. O gateway ainda não existe — ligado, as telas abrem vazias.' }
-    ] }
+    ] },
+  { id:'campo', nome:'Avaliação de Campo',
+    desc:'Ficha de análise de riscos ambientais no celular: visita marcada na Agenda da Equipe, GHEs, riscos, fotos, assinaturas e PDF. Técnico = perfil Instrutor.' }
 ];
 
 /* `leitura_ate` e uma DATA, nao um instante. `new Date('2026-12-07')` e lido
@@ -6119,6 +6151,8 @@ async function _recarregarCardModulosOrg() {
   window._orgModulosAtual = { orgId: est.orgId, modulos: mods || [], funcionalidades: funcs || [] };
   const el = document.getElementById('modulosOrg');
   if (el) el.innerHTML = _htmlModulosOrg();
+  // Ligar/desligar a Avaliação de Campo mostra/esconde o bloco dela no card SOC.
+  if (window._orgSocAtual && document.getElementById('integracaoSocOrg')) _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
 }
 
 async function alternarModuloOrg(modulo, ligar) {
@@ -6202,39 +6236,206 @@ async function alternarFuncionalidadeOrg(modulo, funcionalidade, ligar) {
   _recarregarCardModulosOrg();
 }
 
+async function _carregarSocOrg(orgId, org) {
+  const temChave = async (tabela, coluna, extra = (q) => q) => {
+    try {
+      const { data, error } = await extra(sb.from(tabela).select('org_id').eq('org_id', orgId).not(coluna, 'is', null)).limit(1);
+      return !error && !!(data && data.length);
+    } catch (e) { return false; }
+  };
+  const est = { orgId, integracaoAtiva: !!org?.soc_integracao_ativa, busca: null, buscaChaves: {}, gedChave: false, rotinas: null };
+  try {
+    const { data, error } = await sb.from('organizacoes_integracoes_soc')
+      .select('org_id,soc_codigo_empresa_principal,soc_codigo_empresas,soc_codigo_funcionarios,ativo,atualizado_em').eq('org_id', orgId).maybeSingle();
+    if (!error) {
+      est.busca = data || {};
+      est.buscaChaves = { empresas: await temChave('organizacoes_integracoes_soc', 'soc_chave_empresas'),
+                          funcionarios: await temChave('organizacoes_integracoes_soc', 'soc_chave_funcionarios') };
+    }
+  } catch (e) { /* tabela ausente: bloco não aparece */ }
+  est.gedChave = await temChave('soc_ged_config', 'soc_chave_acesso');
+  try {
+    const { data, error } = await sb.from('organizacoes_soc_rotinas').select('rotina,codigo,ativo,atualizado_em').eq('org_id', orgId);
+    if (!error) {
+      const { data: comChave } = await sb.from('organizacoes_soc_rotinas').select('rotina').eq('org_id', orgId).not('chave', 'is', null);
+      const chaves = new Set((comChave || []).map(r => r.rotina));
+      est.rotinas = Object.fromEntries((data || []).map(r => [r.rotina, { ...r, temChave: chaves.has(r.rotina) }]));
+    }
+  } catch (e) { /* PASSO-64 ausente */ }
+  return est;
+}
+
+// ── Card "Integração SOC" (27/09, v198) ───────────────────────────────────
+// Três blocos que abrem e fecham. Os campos de chave são texto mascarado
+// (e não type=password) e todos têm autocomplete desligado: com um campo de
+// senha na tela, o Chrome preenchia "Código do usuário" e "Chave" com o
+// e-mail e a senha de login do GRID (visto em produção em 27/09).
+window._socBlocoAberto = null;
+const _SOC_ROTINAS_CAMPO = [
+  { id:'hierarquia_empresa', titulo:'Hierarquia da empresa', sub:'setores e cargos, mesmo sem funcionário', soc:'Hierarquia da empresa' },
+  { id:'caracteristica_risco_ghe', titulo:'GHEs e riscos', sub:'"Característica do Risco com Fonte Geradora (Interface Sênior)"', soc:'Característica do Risco com Fonte Geradora (Interface Sênior)' },
+  { id:'hierarquias_ghe', titulo:'Hierarquias do GHE', sub:'setores e cargos de cada GHE', soc:'Hierarquias do GHE' },
+];
+const _SOC_ICO = {
+  busca:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>',
+  ged:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>',
+  campo:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg>',
+  cadeado:'<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  chevD:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+  chevU:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
+  info:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
+};
+function _socCampo(id, label, valor, o = {}) {
+  const mascara = o.chave ? '-webkit-text-security:disc;' : '';
+  return `<div style="margin-bottom:10px">
+    <label for="${id}" style="display:block;font-size:11px;font-weight:600;color:var(--text-3);margin-bottom:4px">${label}</label>
+    <input id="${id}" type="text" name="soc-${id}-${Date.now()}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"
+      value="${escapeHtml(valor || '')}" placeholder="${escapeHtml(o.ph || '')}"
+      style="${mascara}width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)">
+    ${o.ok ? `<div style="font-size:11px;color:var(--green-text);margin-top:3px;display:flex;gap:4px;align-items:center">${_SOC_ICO.cadeado}${o.ok}</div>` : ''}
+    ${o.aj ? `<div style="font-size:11px;color:var(--text-3);margin-top:3px">${o.aj}</div>` : ''}
+  </div>`;
+}
+const _socChave = (id, label, jaTem) => _socCampo(id, label, '', { chave: true,
+  ph: jaTem ? 'Já cadastrada. Digite só se for trocar' : 'cole a chave',
+  ok: jaTem ? 'Chave guardada no servidor; não aparece nesta tela' : '' });
+function _socRotina(prefixo, titulo, sub, codigo, jaTem) {
+  const ok = !!codigo && jaTem;
+  return `<div style="border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px">
+    <div style="font-size:12.5px;font-weight:700;color:var(--text-1);display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">${titulo}
+      <span style="font-weight:500;color:var(--text-3);font-size:11px">${escapeHtml(sub)}</span>
+      <span class="badge ${ok ? 'badge-green' : 'badge-gray'}" style="margin-left:auto">${ok ? 'Cadastrada' : (codigo ? 'Falta a chave' : 'Falta cadastrar')}</span></div>
+    <div class="soc-grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+      ${_socCampo(prefixo + 'Cod', 'Código', codigo, { ph:'código da cópia na tela 733' })}${_socChave(prefixo + 'Chave', 'Chave', jaTem)}</div></div>`;
+}
+function _socBloco(id, titulo, sub, selo, corpo) {
+  const aberto = window._socBlocoAberto === id;
+  return `<div style="border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;background:var(--surface)">
+    <div onclick="_socAlternarBloco('${id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;flex-wrap:wrap">
+      <span style="width:34px;height:34px;border-radius:8px;background:var(--gray-100);color:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0">${_SOC_ICO[id]}</span>
+      <div style="flex:1;min-width:180px"><div style="font-size:13.5px;font-weight:700;color:var(--text-1)">${titulo}</div><div style="font-size:11.5px;color:var(--text-3);margin-top:1px">${sub}</div></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+        <span class="badge ${selo[0]}">${selo[1]}</span>
+        ${aberto ? '' : '<button class="btn btn-outline btn-sm" type="button">Configurar</button>'}
+        <span style="display:flex;color:var(--text-3)">${aberto ? _SOC_ICO.chevU : _SOC_ICO.chevD}</span></div></div>
+    ${aberto ? `<div style="border-top:1px solid var(--border);padding:14px">${corpo()}</div>` : ''}</div>`;
+}
+function _socAlternarBloco(id) {
+  window._socBlocoAberto = window._socBlocoAberto === id ? null : id;
+  _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
+}
+const _socRodape = (esquerda, acao, quando) => `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px">${esquerda}
+  ${quando ? `<span style="font-size:11px;color:var(--text-3);margin-left:auto">Salvo em ${new Date(quando).toLocaleString('pt-BR')}</span>` : ''}
+  <button class="btn btn-navy btn-sm" type="button" style="${quando ? '' : 'margin-left:auto'}" onclick="${acao}">Salvar</button></div>`;
+
 function _htmlIntegracaoSocOrg() {
-  const c = window._orgSocGedConfigAtual || {};
-  // A chave de acesso não é mais buscada para o client (ver select() acima) —
-  // esse campo nunca vem pré-preenchido com o valor real, só indica por
-  // placeholder se já existe uma configuração salva.
-  const chaveJaConfigurada = !!c.soc_codigo_usuario;
-  const campo = (id, label, valor, opts={}) => `
-    <div style="margin-bottom:10px">
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--text-3);margin-bottom:4px">${label}</label>
-      <input id="${id}" type="${opts.tipo||'text'}" value="${escapeHtml(valor||'')}" placeholder="${escapeHtml(opts.placeholder||'')}"
-        style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)">
-    </div>`;
-  return `
-    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
-      Credenciais do usuário WebService do SOC, usadas para enviar os certificados de treinamento ao SOCGED do cliente (ver 01-Requisitos/integracao-soc-socged-certificados.md). Visível e editável só pelo Provedor.
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
-      ${campo('socCodigoUsuario', 'Código do usuário (sem o "U")', c.soc_codigo_usuario, {placeholder:'ex.: 3792714'})}
-      ${campo('socChaveAcesso', 'Chave de acesso', '', {tipo:'password', placeholder: chaveJaConfigurada ? 'Chave já configurada — deixe em branco para manter' : 'chave do usuário WebService'})}
-      ${campo('socCodigoEmpresaPrincipal', 'Código da empresa principal', c.soc_codigo_empresa_principal, {placeholder:'empresa principal da Avanteseg no SOC'})}
-      ${campo('socCodigoResponsavel', 'Código do responsável', c.soc_codigo_responsavel, {placeholder:'configurações de integração no SOC'})}
-      ${campo('socCodigoTipoGed', 'Código do Tipo de SOCGED', c.soc_codigo_tipo_ged, {placeholder:'ex.: 3 (tela 623, sem zeros à esquerda)'})}
-      <div></div>
-      ${campo('socUrlSocged', 'URL do WS SOCGED (incluirSocGed)', c.soc_url_socged, {placeholder:'endpoint do WSDL fornecido pelo SOC'})}
-      ${campo('socUrlUpload', 'URL do WS Upload de Arquivos', c.soc_url_upload, {placeholder:'endpoint do WSDL fornecido pelo SOC'})}
-    </div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-1);margin:6px 0 14px;cursor:pointer">
-      <input type="checkbox" id="socGedAtivo" ${c.ativo?'checked':''} style="width:16px;height:16px;cursor:pointer">
-      Integração ativa. Marque apenas depois de testar o envio.
-    </label>
-    <button class="btn btn-navy btn-sm" onclick="salvarIntegracaoSocOrg('${window._orgIdAtualProvedor}')">Salvar credenciais SOC</button>
-    ${c.atualizado_em ? `<div style="font-size:11px;color:var(--text-3);margin-top:8px">Última atualização: ${new Date(c.atualizado_em).toLocaleString('pt-BR')}</div>` : ''}
-  `;
+  const st = window._orgSocAtual || {};
+  const blocos = [];
+  // 1. Busca no SOC (Treinamentos)
+  if (st.busca) {
+    const b = st.busca, ch = st.buscaChaves || {};
+    const completo = !!(b.soc_codigo_empresa_principal && b.soc_codigo_funcionarios && ch.funcionarios);
+    const selo = st.integracaoAtiva ? (completo ? ['badge-green','Ligada'] : ['badge-warn','Ligada, incompleta']) : ['badge-gray','Desligada'];
+    blocos.push(_socBloco('busca', 'Busca no SOC', 'Treinamentos · empresas e funcionários em Clientes e Colaboradores', selo, () => `
+      <div class="soc-grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+        ${_socCampo('socBuscaEmpresa', 'Código da empresa principal no SOC', b.soc_codigo_empresa_principal, { aj:'Empresa do cliente GRID dentro do SOC (a mesma nas duas rotinas).' })}<div></div></div>
+      ${_socRotina('socBuscaEmp', 'Empresas', '"Cadastro de Empresas"', b.soc_codigo_empresas, ch.empresas)}
+      ${_socRotina('socBuscaFun', 'Funcionários', '"Cadastro de Funcionários (Por Empresa)"', b.soc_codigo_funcionarios, ch.funcionarios)}
+      ${_socRodape(`<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-1);cursor:pointer"><input type="checkbox" id="socBuscaAtiva" ${st.integracaoAtiva ? 'checked' : ''} style="width:16px;height:16px"> Ligada: aparece o botão "Buscar no SOC" em Clientes e Colaboradores</label>`,
+        `salvarSocBuscaOrg('${st.orgId}')`, b.atualizado_em)}`));
+  }
+  // 2. Certificados no SOCGED (mesmos campos de antes)
+  if (window._orgSocGedConfigAtual !== undefined) {
+    const c = window._orgSocGedConfigAtual || {};
+    const selo = c.ativo ? ['badge-green','Ligada'] : ['badge-gray','Desligada'];
+    blocos.push(_socBloco('ged', 'Certificados no SOCGED', 'Treinamentos · envia o certificado para a pasta do funcionário', selo, () => `
+      <div class="soc-grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+        ${_socCampo('socCodigoUsuario', 'Código do usuário WebService (sem o "U")', c.soc_codigo_usuario, { ph:'ex.: 3792714' })}
+        ${_socChave('socChaveAcesso', 'Chave de acesso', st.gedChave)}
+        ${_socCampo('socCodigoEmpresaPrincipal', 'Código da empresa principal', c.soc_codigo_empresa_principal)}
+        ${_socCampo('socCodigoResponsavel', 'Código do responsável', c.soc_codigo_responsavel, { ph:'configurações de integração no SOC' })}
+        ${_socCampo('socCodigoTipoGed', 'Código do tipo de SOCGED', c.soc_codigo_tipo_ged, { aj:'Tela 623, sem zeros à esquerda.' })}<div></div>
+        ${_socCampo('socUrlSocged', 'URL do WS SOCGED (incluirSocGed)', c.soc_url_socged, { ph:'endpoint do WSDL fornecido pelo SOC' })}
+        ${_socCampo('socUrlUpload', 'URL do WS Upload de Arquivos', c.soc_url_upload, { ph:'endpoint do WSDL fornecido pelo SOC' })}</div>
+      ${_socRodape(`<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-1);cursor:pointer"><input type="checkbox" id="socGedAtivo" ${c.ativo ? 'checked' : ''} style="width:16px;height:16px"> Ligada: marque só depois de testar um envio</label>`,
+        `salvarIntegracaoSocOrg('${st.orgId || window._orgIdAtualProvedor}')`, c.atualizado_em)}`));
+  }
+  // 3. Avaliação de Campo — só com o módulo ligado
+  const temCampo = ((window._orgModulosAtual || {}).modulos || []).some(m => m.modulo === 'campo' && m.ativo);
+  if (st.rotinas && temCampo) {
+    const r = st.rotinas;
+    const prontas = _SOC_ROTINAS_CAMPO.filter(x => r[x.id]?.codigo && r[x.id]?.temChave && r[x.id]?.ativo !== false).length;
+    const selo = prontas === 3 ? ['badge-green','3 de 3 rotinas'] : prontas ? ['badge-warn', `${prontas} de 3 rotinas`] : ['badge-gray','Não configurada'];
+    const quando = Object.values(r).map(x => x.atualizado_em).filter(Boolean).sort().pop();
+    blocos.push(_socBloco('campo', 'Avaliação de Campo', 'Hierarquia completa e GHEs ativos da empresa visitada', selo, () => `
+      <div style="display:flex;gap:8px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 11px;font-size:12px;color:var(--text-2);line-height:1.45;margin:0 0 12px">
+        <span style="color:var(--text-3);display:flex;margin-top:1px">${_SOC_ICO.info}</span>
+        <span>No SOC, tela <b>733</b>, use <b>Copia Exporta Dados Disponíveis</b> em cada rotina abaixo, com saída <b>json</b> e <b>Acesso Post = Sim</b>, e cole aqui o código e a chave da cópia. Usa também a empresa principal e a rotina de Funcionários da <b>Busca no SOC</b>.</span></div>
+      ${_SOC_ROTINAS_CAMPO.map(x => _socRotina('socCampo_' + x.id, x.titulo, x.sub, r[x.id]?.codigo, r[x.id]?.temChave)).join('')}
+      ${_socRodape('<span style="font-size:12px;color:var(--text-3)">Rotina sem código fica de fora; o técnico vê o aviso e recebe o resto.</span>', `salvarSocRotinasCampoOrg('${st.orgId}')`, quando)}`));
+  }
+  if (!blocos.length) return '<div style="font-size:12.5px;color:var(--text-3)">Integração SOC indisponível neste banco.</div>';
+  return `<div style="font-size:12.5px;color:var(--text-2);line-height:1.55;margin-bottom:12px">
+      Tudo o que o GRID usa do SOC desta organização, num lugar só. Visível e editável só pelo Provedor. As chaves ficam guardadas no servidor e nunca voltam para a tela.</div>
+    ${blocos.join('')}`;
+}
+
+async function salvarSocBuscaOrg(orgId) {
+  const val = id => (_getElVisible(id)?.value || '').trim();
+  const st = window._orgSocAtual || {};
+  const ligar = !!_getElVisible('socBuscaAtiva')?.checked;
+  const dados = {
+    org_id: orgId,
+    soc_codigo_empresa_principal: val('socBuscaEmpresa') || null,
+    soc_codigo_empresas: val('socBuscaEmpCod') || null,
+    soc_codigo_funcionarios: val('socBuscaFunCod') || null,
+    ativo: true,
+    atualizado_em: new Date().toISOString(),
+  };
+  const chEmp = val('socBuscaEmpChave'), chFun = val('socBuscaFunChave');
+  if (chEmp) dados.soc_chave_empresas = chEmp;
+  if (chFun) dados.soc_chave_funcionarios = chFun;
+  if (ligar) {
+    const falta = [];
+    if (!dados.soc_codigo_empresa_principal) falta.push('empresa principal');
+    if (!dados.soc_codigo_funcionarios) falta.push('código de Funcionários');
+    if (!chFun && !st.buscaChaves?.funcionarios) falta.push('chave de Funcionários');
+    if (falta.length) { showToast(`Para ligar, preencha: ${falta.join(', ')}.`, 'error', 6000); return; }
+  }
+  const { error } = await sb.from('organizacoes_integracoes_soc').upsert(dados, { onConflict: 'org_id' });
+  if (error) { showToast(`Não foi possível salvar: ${traduzErroSupabase(error, 'erro desconhecido')}`, 'error'); return; }
+  if (ligar !== !!st.integracaoAtiva) {
+    const { error: e2 } = await sb.from('organizacoes').update({ soc_integracao_ativa: ligar }).eq('id', orgId);
+    if (e2) { showToast(`Rotinas salvas, mas não consegui ${ligar ? 'ligar' : 'desligar'} a busca: ${traduzErroSupabase(e2, 'erro')}`, 'error'); }
+  }
+  const { data: org } = await sb.from('organizacoes').select('soc_integracao_ativa').eq('id', orgId).maybeSingle();
+  window._orgSocAtual = await _carregarSocOrg(orgId, org);
+  _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
+  showToast('Busca no SOC salva.', 'success');
+}
+
+async function salvarSocRotinasCampoOrg(orgId) {
+  const val = id => (_getElVisible(id)?.value || '').trim();
+  const atuais = (window._orgSocAtual || {}).rotinas || {};
+  const linhas = [];
+  for (const x of _SOC_ROTINAS_CAMPO) {
+    const codigo = val('socCampo_' + x.id + 'Cod');
+    const chave = val('socCampo_' + x.id + 'Chave');
+    if (!codigo && !atuais[x.id]) continue;              // nunca cadastrada e continua vazia
+    const l = { org_id: orgId, rotina: x.id, codigo: codigo || null, ativo: !!codigo, atualizado_em: new Date().toISOString() };
+    if (chave) l.chave = chave;
+    if (codigo && !chave && !atuais[x.id]?.temChave) { showToast(`Falta a chave da rotina "${x.soc}".`, 'error', 6000); return; }
+    linhas.push(l);
+  }
+  if (!linhas.length) { showToast('Preencha o código e a chave de ao menos uma rotina.', 'error'); return; }
+  for (const l of linhas) {
+    const { error } = await sb.from('organizacoes_soc_rotinas').upsert(l, { onConflict: 'org_id,rotina' });
+    if (error) { showToast(`Não foi possível salvar: ${traduzErroSupabase(error, 'erro desconhecido')}`, 'error'); return; }
+  }
+  const { data: org } = await sb.from('organizacoes').select('soc_integracao_ativa').eq('id', orgId).maybeSingle();
+  window._orgSocAtual = await _carregarSocOrg(orgId, org);
+  _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
+  showToast('Rotinas da Avaliação de Campo salvas.', 'success');
 }
 
 async function salvarIntegracaoSocOrg(orgId) {
@@ -6262,7 +6463,7 @@ async function salvarIntegracaoSocOrg(orgId) {
   // chave, considera OK tanto uma nova digitada agora quanto uma já
   // configurada anteriormente (não temos mais o valor em mãos para conferir).
   if (dados.ativo) {
-    const chaveOk = !!novaChave || !!(window._orgSocGedConfigAtual && window._orgSocGedConfigAtual.soc_codigo_usuario);
+    const chaveOk = !!novaChave || !!(window._orgSocAtual && window._orgSocAtual.gedChave);
     const faltando = ['soc_codigo_usuario','soc_codigo_empresa_principal','soc_codigo_responsavel','soc_codigo_tipo_ged','soc_url_socged','soc_url_upload']
       .filter(k => !dados[k]);
     if (!chaveOk) faltando.unshift('soc_chave_acesso');
@@ -6276,8 +6477,9 @@ async function salvarIntegracaoSocOrg(orgId) {
   if (error) { showToast(`Não foi possível salvar: ${traduzErroSupabase(error, 'erro desconhecido')}`, 'error'); return; }
 
   window._orgSocGedConfigAtual = data;
+  if (novaChave && window._orgSocAtual) window._orgSocAtual.gedChave = true;
   _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
-  showToast('Credenciais SOC salvas.', 'success');
+  showToast('Certificados no SOCGED: salvo.', 'success');
 }
 
 function _htmlHistoricoOrg() {
@@ -16773,6 +16975,9 @@ const COMPROMISSO_TIPOS = [
   { v:'evento',   label:'Evento',   icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="m12 3.5 2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.9l6-.8z"/></svg>' },
   { v:'palestra', label:'Palestra', icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg>' },
   { v:'reuniao',  label:'Reunião',  icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="8" r="3.2"/><path d="M17 15a4 4 0 0 1 4 4v1M16.5 5.2a3.2 3.2 0 0 1 0 5.6"/></svg>' },
+  // 26/09 (v198): visita da Avaliação de Campo. Só aparece para quem tem o
+  // módulo; ao gravar, o banco cria a avaliação ligada (PASSO-64).
+  { v:'visita_campo', label:'Visita técnica', icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg>' },
   { v:'outro',    label:'Outro',    icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M5 4h14v12l-5 5H5z"/><path d="M19 16h-5v5M9 9h6M9 13h3"/></svg>' },
 ];
 // Lista explicita de colunas — nunca select('*'), mesmo cuidado contra
@@ -17023,7 +17228,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
   const instrutorSel = cm?.instrutor_id || preset.instrutorId || '';
   const instOpts = instrutores.map(i => `<option value="${i.id}" ${i.id===instrutorSel?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
   const tipoSel  = cm?.tipo || 'reuniao';
-  const tipoOpts = COMPROMISSO_TIPOS.map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('');
+  const tipoOpts = COMPROMISSO_TIPOS.filter(t => t.v !== 'visita_campo' || t.v === tipoSel || _modulosAtivos.includes('campo')).map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('');
   const cliOpcoes = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
 
   // 2026-08-22 (pedido do Alisson — revisão de UX/UI): mesmo padrão
@@ -17206,7 +17411,9 @@ async function _compVerificarConflito() {
 
 async function salvarCompromisso() {
   if (!_compPodeGerenciar()) { showToast('Você não tem permissão para isso','error'); return; }
-  const titulo      = document.getElementById('mCompTitulo')?.value.trim() || '';
+  const tipoEscolhido = document.getElementById('mCompTipo')?.value || 'outro';
+  // Visita técnica sem título: o nome do tipo basta (o cliente já identifica).
+  const titulo      = document.getElementById('mCompTitulo')?.value.trim() || (tipoEscolhido === 'visita_campo' ? 'Visita técnica' : '');
   const instrutorId = document.getElementById('mCompInstrutor')?.value || '';
   const clienteId   = document.getElementById('mCompCliente')?.value || '';
   const data        = document.getElementById('mCompData')?.value || '';
@@ -17309,11 +17516,25 @@ async function verCompromisso(id) {
       ${linha('Endereço', cm.local)}
       ${linha('Observações', cm.observacoes)}
     </div>`,
-    _compPodeGerenciar()
+    (cm.tipo === 'visita_campo' && _modulosAtivos.includes('campo')
+      ? `<button class="btn btn-amber" onclick="_abrirAvaliacaoDoCompromisso('${cm.id}')">Abrir avaliação</button>` : '') +
+    (_compPodeGerenciar()
       ? `<button class="btn btn-outline" onclick="cancelarCompromisso('${cm.id}')" style="color:var(--red);border-color:var(--red)">Cancelar reserva</button>
          <button class="btn btn-outline" onclick="abrirModalCompromisso('${cm.id}')">Editar</button>
          <button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`
-      : `<button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`);
+      : `<button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`));
+}
+
+// 26/09 (v198): da Visita técnica para a avaliação que o banco criou.
+async function _abrirAvaliacaoDoCompromisso(compromissoId) {
+  try {
+    const { data, error } = await sb.from('campo_avaliacoes').select('id')
+      .eq('compromisso_id', compromissoId).order('revisao', { ascending: false }).limit(1);
+    if (error) throw error;
+    if (!data || !data.length) { showToast('A avaliação desta visita não foi encontrada. Confira se o módulo Avaliação de Campo está ligado.', 'error'); return; }
+    fecharModal();
+    irPara('campo-avaliacao', { id: data[0].id });
+  } catch (e) { showToast(traduzErroSupabase(e, 'Não foi possível abrir a avaliação'), 'error'); }
 }
 
 // Tela cheia do compromisso pro instrutor — mesmo padrão de verTurma()
@@ -17362,6 +17583,8 @@ async function _verCompromissoTelaInstrutor(id) {
             ${cm.local?`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cm.local)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:12px;color:var(--amber);text-decoration:none;font-weight:700"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg> Abrir no mapa</a>`:''}
           </div>
         </div>
+        ${cm.tipo === 'visita_campo' && _modulosAtivos.includes('campo') ? `
+          <button class="hbtn2" style="width:100%;justify-content:center;font-size:14px;padding:13px;margin-top:14px;background:var(--amber);color:var(--navy)" onclick="_abrirAvaliacaoDoCompromisso('${id}')">Abrir avaliação</button>` : ''}
         ${!cm.concluido?`
           <button class="hbtn2" style="width:100%;justify-content:center;font-size:14px;padding:13px;margin-top:14px;background:var(--green);color:#fff" data-action="concluirCompromisso" data-id="${id}">
             ✓ Concluído
@@ -29896,7 +30119,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '197';
+  var APP_BUILD = '198';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
