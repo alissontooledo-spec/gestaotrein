@@ -152,7 +152,18 @@ export const temPendencia = (doc) => !!doc && (doc.sujo.av || Object.keys(doc.su
 export const qtdPendente = (doc) => !doc ? 0 : (doc.sujo.av ? 1 : 0) + Object.keys(doc.sujo.ghes).length + doc.sujo.apagados.length
   + Object.keys(doc.sujo.fotosNovas).length + Object.keys(doc.sujo.fotosLegenda).length + doc.sujo.fotosApagadas.length + doc.sujo.arquivos.length;
 
-const SEL_AV = 'id,org_id,numero,cliente_id,compromisso_id,tecnico_id,data_visita,hora_inicio,situacao,acompanhante_nome,acompanhante_cargo,observacoes,documentos,assinatura_acomp_path,assinatura_acomp_em,assinatura_tec_path,assinatura_tec_em,concluida_em,concluida_por,pdf_path,revisao,grupo_id,revisao_de,edicao,resumo,soc,criado_em,atualizado_em';
+const SEL_AV_BASE = 'id,org_id,numero,cliente_id,compromisso_id,tecnico_id,data_visita,hora_inicio,situacao,acompanhante_nome,acompanhante_cargo,observacoes,documentos,assinatura_acomp_path,assinatura_acomp_em,assinatura_tec_path,assinatura_tec_em,concluida_em,concluida_por,pdf_path,revisao,grupo_id,revisao_de,edicao,resumo,soc,criado_em,atualizado_em';
+/* v203: conferência de funcionários (PASSO-68). Se o banco ainda não tem a
+   coluna, o app segue como antes: lê sem ela e esconde a conferência. */
+let SEL_AV = SEL_AV_BASE + ',funcionarios';
+let _temConf = null;   // null = ainda não sabe; true/false depois da 1ª leitura
+const semColunaConf = (e) => /funcionarios/i.test(String(e?.message || '')) && /(column|coluna|42703|does not exist|schema cache)/i.test(String(e?.message || '') + ' ' + String(e?.code || ''));
+async function lerAv(fn) {
+  let r = await fn(SEL_AV);
+  if (r.error && semColunaConf(r.error)) { SEL_AV = SEL_AV_BASE; _temConf = false; r = await fn(SEL_AV); }
+  else if (!r.error && _temConf === null && SEL_AV !== SEL_AV_BASE) _temConf = true;
+  return r;
+}
 const SEL_GHE = 'id,avaliacao_id,org_id,ordem,nome,codigo_soc,setores,funcoes,menor18,descricao,ambientes,riscos,treinamentos,edicao,criado_em,atualizado_em';
 const SEL_FOTO = 'id,avaliacao_id,ghe_id,alvo,alvo_uid,legenda,storage_path,largura,altura,tirada_em,criado_em';
 
@@ -163,8 +174,8 @@ export async function listarAvaliacoes() {
   const lerTudo = async () => {
     const tudo = [];
     for (let de = 0; ; de += 1000) {
-      const { data, error } = await sb().from('campo_avaliacoes').select(SEL_AV)
-        .order('data_visita', { ascending: false }).order('id').range(de, de + 999);
+      const { data, error } = await lerAv(sel => sb().from('campo_avaliacoes').select(sel)
+        .order('data_visita', { ascending: false }).order('id').range(de, de + 999));
       if (error) throw error;
       tudo.push(...(data || []));
       if (!data || data.length < 1000) break;
@@ -228,7 +239,7 @@ export async function abrir(id, { fresco = false } = {}) {
   return doc;
 }
 async function baixar(id) {
-  const { data: av, error } = await sb().from('campo_avaliacoes').select(SEL_AV).eq('id', id).maybeSingle();
+  const { data: av, error } = await lerAv(sel => sb().from('campo_avaliacoes').select(sel).eq('id', id).maybeSingle());
   if (error) throw error;
   if (!av) throw new Error('Avaliação não encontrada ou sem permissão para abrir.');
   const [{ data: ghes, error: e2 }, { data: fotos, error: e3 }] = await Promise.all([
@@ -414,7 +425,7 @@ export const assinaturaDe = (d, quem) => ({
 /* ══ Envio para o banco ═════════════════════════════════════════════════════ */
 const _enviando = new Map();
 const ehConflito = (e) => /CAMPO_CONFLITO/.test(e?.message || '');
-const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc'];
+const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios'];
 const CAMPOS_GHE = ['ordem', 'nome', 'codigo_soc', 'setores', 'funcoes', 'menor18', 'descricao', 'ambientes', 'riscos', 'treinamentos'];
 
 export function sincronizar(id) {
@@ -480,7 +491,7 @@ async function _sincronizar(id) {
     /* 4. Avaliação */
     if (d.sujo.av || Object.keys(patchArq).length) {
       const patch = { ...patchArq };
-      for (const c of CAMPOS_AV) if (c in d.av) patch[c] = d.av[c] ?? null;
+      for (const c of CAMPOS_AV) if (c in d.av && !(c === 'funcionarios' && _temConf === false)) patch[c] = d.av[c] ?? null;
       await gravarAv(d, patch);
       for (const a of d.sujo.arquivos) { delete d.av['_assinatura_' + a.campo + '_local']; delete d.av['_assinatura_' + a.campo + '_local_em']; }
       d.sujo.arquivos = [];
@@ -649,6 +660,18 @@ export async function novaRevisao(id) {
 }
 
 /* ══ SOC: hierarquia da empresa-cliente ════════════════════════════════════ */
+/* v202: as hierarquias do SOC guardam CÓDIGOS de setor e cargo (unidade|setor|cargo);
+   os nomes estão em soc.setores / soc.cargos. Tudo que mostra setor ou função ao
+   técnico passa por aqui — antes a tela mostrava "1", "2" em vez do nome. */
+export function nomesSoc(soc) {
+  const set = new Map((soc?.setores || []).map(x => [`${x.unidade}|${x.codigo}`, x.nome]));
+  const car = new Map((soc?.cargos || []).map(x => [`${x.unidade}|${x.setor}|${x.codigo}`, x.nome]));
+  return {
+    setor: h => set.get(`${h.unidade}|${h.setor}`) || (h.setor ? `Setor ${h.setor}` : ''),
+    cargo: h => car.get(`${h.unidade}|${h.setor}|${h.cargo}`) || (h.cargo ? `Função ${h.cargo}` : ''),
+  };
+}
+
 export async function trazerDoSoc(id) {
   const d = _docs.get(id);
   if (!online()) throw new Error('Para buscar no SOC é preciso internet.');
@@ -665,9 +688,63 @@ export async function trazerDoSoc(id) {
   const { funcionarios = [], ...resto } = data || {};
   const foto = { ...resto, total_funcionarios: funcionarios.length,
     ghes: (resto.ghes || []).map(({ funcionarios: f = [], ...g }) => ({ ...g, total_funcionarios: f.length })) };
-  alterarAv(id, { soc: foto });
+  const patch = { soc: foto };
+  /* v203: com a conferência ligada, a lista de funcionários (só nome, código,
+     setor e função) fica na avaliação para o técnico conferir com a empresa.
+     O que já foi conferido é mantido ao atualizar do SOC. */
+  if (temConferencia(d)) patch.funcionarios = mesclarFuncionariosSoc(d.av.funcionarios, funcionarios, nomesSoc(resto));
+  alterarAv(id, patch);
   await guardarAgora(id);
   return foto;
+}
+
+/* ── v203: conferência dos funcionários com a empresa ─────────────────────
+   av.funcionarios = { lista: [{ id, codigo, nome, setor, funcao, origem:'soc'|'empresa',
+                                  situacao: null|'confere'|'saiu'|'mudou', novo_setor, nova_funcao }],
+                        conferido_em }
+   LGPD: só nome, código no SOC, setor e função. */
+export const temConferencia = (d) => !!d && _temConf !== false && ('funcionarios' in (d.av || {}) || _temConf === true);
+export const listaFuncionarios = (d) => (d?.av?.funcionarios?.lista || []);
+export function mesclarFuncionariosSoc(atual, doSoc, nm) {
+  const antes = new Map((atual?.lista || []).filter(p => p.origem === 'soc' && p.codigo).map(p => [String(p.codigo), p]));
+  const lista = [];
+  const vistos = new Set();
+  for (const f of doSoc || []) {
+    const codigo = String(f.codigo || '');
+    if (!codigo || vistos.has(codigo)) continue;
+    vistos.add(codigo);
+    const velho = antes.get(codigo) || {};
+    lista.push({ id: 's' + codigo, codigo, nome: String(f.nome || '').trim(),
+      setor: nm.setor(f), funcao: nm.cargo(f), origem: 'soc',
+      situacao: velho.situacao || null, novo_setor: velho.novo_setor || null, nova_funcao: velho.nova_funcao || null });
+  }
+  for (const p of atual?.lista || []) if (p.origem === 'empresa') lista.push(p);
+  return { ...(atual || {}), lista };
+}
+export function alterarFuncionarios(id, fn) {
+  const d = _docs.get(id); if (!d || !podeEditar(d) || !temConferencia(d)) return;
+  const f = { ...(d.av.funcionarios || {}) };
+  f.lista = (f.lista || []).map(p => ({ ...p }));
+  fn(f.lista);
+  f.conferido_em = new Date().toISOString();
+  alterarAv(id, { funcionarios: f });
+}
+export function resumoConferencia(d) {
+  const l = listaFuncionarios(d);
+  const soc = l.filter(p => p.origem === 'soc');
+  const r = { total: l.length, soc: soc.length, confere: 0, saiu: 0, mudou: 0, falta: 0,
+              incluidos: l.filter(p => p.origem === 'empresa').length };
+  for (const p of soc) { if (p.situacao === 'confere') r.confere++; else if (p.situacao === 'saiu') r.saiu++; else if (p.situacao === 'mudou') r.mudou++; else r.falta++; }
+  r.naEmpresa = r.soc - r.saiu + r.incluidos;
+  return r;
+}
+/* Onde cada pessoa está hoje (para a contagem dos GHEs). null = sem lista. */
+export function pessoasAtuais(d) {
+  const l = listaFuncionarios(d);
+  if (!l.length) return null;
+  return l.filter(p => p.situacao !== 'saiu').map(p => p.situacao === 'mudou'
+    ? { setor: p.novo_setor || p.setor, funcao: p.nova_funcao || p.funcao }
+    : { setor: p.setor, funcao: p.funcao });
 }
 
 /* Envia tudo que estiver pendente quando a internet voltar. */

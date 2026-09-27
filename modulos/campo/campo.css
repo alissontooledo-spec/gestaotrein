@@ -198,12 +198,14 @@ textarea.cp-inp{min-height:84px;resize:vertical;line-height:1.45}
 .cp-assin-area.feita{background:var(--surface);border-style:solid;border-color:var(--border)}
 
 /* ── Barra de ações da ficha (fixa no rodapé da área de conteúdo) ──── */
-.cp-acoes{position:sticky;bottom:0;z-index:5;display:flex;gap:8px;padding:10px 0 12px;background:linear-gradient(to top,var(--bg) 70%,rgba(243,245,250,0))}
+/* v202: no celular a barra fica presa embaixo com fundo sólido (não deixa o conteúdo
+   aparecer por trás); no notebook ela fica no fim da página e não acompanha a rolagem. */
+.cp-acoes{position:sticky;bottom:0;z-index:5;display:flex;gap:8px;padding:10px 0 12px;background:var(--bg);box-shadow:0 -1px 0 var(--border)}
 .cp-acoes .btn{min-height:44px;font-size:14px;font-weight:700}
 .cp-acoes .cp-a-voltar{flex:0 0 auto;padding:0 18px}
 .cp-acoes .cp-a-salvar{flex:0 0 auto;padding:0 18px}
 .cp-acoes .cp-a-prox{flex:1}
-@media(min-width:768px){.cp-acoes{justify-content:flex-end}.cp-acoes .cp-a-prox{flex:0 0 auto;padding:0 28px}.cp-acoes .cp-a-voltar{margin-right:auto}}
+@media(min-width:768px){.cp-acoes{justify-content:flex-end;position:static;box-shadow:none;background:none;padding:6px 0 18px}.cp-acoes .cp-a-prox{flex:0 0 auto;padding:0 28px}.cp-acoes .cp-a-voltar{margin-right:auto}}
 
 /* ── Tablet/desktop: ficha com resumo lateral ───────────────────────── */
 .cp-2col{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
@@ -278,4 +280,47 @@ textarea.cp-inp{min-height:84px;resize:vertical;line-height:1.45}
 .cp-soc-linha{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .cp-soc-linha .t{flex:1;min-width:200px;font-size:12.5px;color:var(--text-2);line-height:1.45}
 .cp-soc-linha .t b{color:var(--text-1)}
+/* v202: Dados do SOC em números simples; detalhes técnicos só para administrador */
+.cp-soc-stats{flex:1;display:flex;gap:8px;flex-wrap:wrap;min-width:200px}
+.cp-soc-stat{display:flex;align-items:baseline;gap:6px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:7px 12px}
+.cp-soc-stat b{font-size:17px;font-weight:800;color:var(--text-1)}
+.cp-soc-stat span{font-size:12.5px;color:var(--text-2)}
+.cp-soc-dica{margin-top:10px;font-size:12.5px;color:var(--text-2);line-height:1.5}
+.cp-soc-det{margin-top:10px;font-size:12px;color:var(--text-2)}
+.cp-soc-det summary{cursor:pointer;font-weight:600;color:var(--text-2)}
+.cp-soc-det summary small{font-weight:500;color:var(--text-3);margin-left:4px}
+.cp-soc-det ul{margin:6px 0 4px 18px;padding:0;line-height:1.5}
 .cp-progresso{font-size:12.5px;color:var(--text-2);margin-top:8px;font-weight:600}
+
+/* ── v203: conferência dos funcionários com a empresa ─────────────────────── */
+.cp-soc-stat.ok{background:var(--green-l);border-color:#A7E3C4}
+.cp-soc-stat.red{background:var(--red-l);border-color:#F8C4C1}
+.cp-soc-stat.warn{background:var(--warn-l);border-color:#F6DB94}
+.cp-conf-bar{display:flex;height:6px;border-radius:9px;background:var(--gray-100);overflow:hidden;margin:10px 0 8px}
+.cp-conf-bar i{display:block;height:100%}
+.cp-fun-chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.cp-fun-chip{font-size:12px;font-weight:700;border:1px solid var(--border-2);border-radius:999px;padding:6px 12px;background:var(--surface);color:var(--text-2);cursor:pointer;user-select:none}
+.cp-fun-chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.cp-fun-busca{margin-bottom:10px}
+.cp-fun-grupo{font-size:11px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;margin:14px 2px 6px;display:flex;gap:6px;align-items:center}
+.cp-fun-grupo span{font-weight:700;color:var(--text-3)}
+.cp-fun{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:11px 12px;margin-bottom:8px}
+.cp-fun-topo{display:flex;gap:10px;align-items:flex-start}
+.cp-fun-n{font-size:14px;font-weight:700;color:var(--text-1);overflow-wrap:anywhere}
+.cp-fun-s{font-size:12px;color:var(--text-3);margin-top:1px}
+.cp-fun.saiu .cp-fun-n{text-decoration:line-through;color:var(--text-3)}
+.cp-fun-novo{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;background:var(--blue-l);color:var(--blue);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.cp-fun-seg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:9px}
+.cp-fun-seg button{min-height:40px;font:inherit;font-size:13px;font-weight:700;border:1px solid var(--border-2);border-radius:var(--r-md);background:var(--surface);color:var(--text-2);cursor:pointer}
+.cp-fun-seg button.on-confere{background:var(--green);border-color:var(--green);color:#fff}
+.cp-fun-seg button.on-saiu{background:var(--red);border-color:var(--red);color:#fff}
+.cp-fun-seg button.on-mudou{background:var(--amber);border-color:var(--amber);color:#1f1300}
+.cp-fun-muda{margin-top:8px;font-size:12.5px;background:var(--warn-l);color:var(--warn-text);border-radius:var(--r-md);padding:7px 9px;cursor:pointer}
+.cp-fun-est{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap;background:var(--gray-100);color:var(--text-2)}
+.cp-fun-est.confere{background:var(--green-l);color:var(--green-text)}.cp-fun-est.saiu{background:var(--red-l);color:var(--red-text)}.cp-fun-est.mudou{background:var(--warn-l);color:var(--warn-text)}
+.cp-fun-link{font-size:12.5px;font-weight:700;color:var(--text-2);cursor:pointer;text-decoration:underline}
+.cp-fun-rodape{display:flex;flex-direction:column;gap:8px;margin:14px 0 6px}
+.cp-fun-opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.cp-fun-opt{font-size:12px;font-weight:600;border:1px dashed var(--border-2);border-radius:var(--r-md);padding:6px 9px;cursor:pointer;color:var(--text-1);user-select:none}
+.cp-fun-opt.on{border:1.5px solid var(--navy);background:#EEF2FF}
+@media(min-width:768px){.cp-fun-rodape{flex-direction:row}.cp-fun-rodape .btn{width:auto!important}}

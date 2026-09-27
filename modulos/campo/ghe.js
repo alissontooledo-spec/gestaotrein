@@ -26,6 +26,9 @@ const amb = () => (ghe()?.ambientes || []).find(a => a.uid === _amb) || null;
 const altG = (fn) => D.alterarGhe(_av, _gid, fn);
 const altR = (fn) => altG(g => { const r = g.riscos.find(x => x.uid === _risco); if (r) fn(r); });
 const altA = (fn) => altG(g => { const a = g.ambientes.find(x => x.uid === _amb); if (a) fn(a); });
+/* v202: ambiente sem nome = o ambiente do próprio GHE (mostra o nome do GHE). */
+const nomeAmb = (g, a) => a?.nome || g?.nome || '';
+const ambVazio = () => ({ uid: D.novoId(), nome: '', paredes: [], piso: [], forro: [], teto_telhado: [], iluminacao: [], ventilacao: [], outro: '', observacao: '' });
 
 const colunasConclusao = (r) => {
   if (!r.nao_listado) { const c = _cat?.risco(r.codigo); if (Array.isArray(c?.dados?.colunas_conclusao)) return c.dados.colunas_conclusao; }
@@ -55,11 +58,19 @@ function tags(tipo, lista, sugestoes, travado) {
     ${sug.length && !travado ? `<div class="cp-sug"><span class="cp-sug-lbl">Do SOC</span>${sug.slice(0, 40).map(s => `<span class="cp-sug-it" data-acao="campo:sug:${nomeCampo}:${esc(s.nome)}">${esc(s.nome)}${s.n != null ? ` <small>${s.n}</small>` : ''}</span>`).join('')}</div>` : ''}`;
 }
 function sugestoesSoc(d, g) {
-  const s = d.av.soc; if (!s) return { setores: [], funcoes: [] };
-  const hs = (s.hierarquias || []).filter(h => h.ativa !== false);
+  const s = d.av.soc;
+  const pessoas = D.pessoasAtuais(d);   /* v203: conferência com a empresa */
+  if (!s && !pessoas) return { setores: [], funcoes: [] };
+  const nm = D.nomesSoc(s);   /* v202: código → nome */
+  let hs = (s?.hierarquias || []).filter(h => h.ativa !== false)
+    .map(h => ({ setor: nm.setor(h), cargo: nm.cargo(h), funcionarios: h.funcionarios || 0 }));
+  /* Com a lista conferida, a contagem vem dela (quem saiu não conta, quem mudou
+     conta no lugar novo, incluídos contam). Setores e funções do SOC sem
+     ninguém continuam aparecendo, com zero. */
+  if (pessoas) hs = [...hs.map(h => ({ ...h, funcionarios: 0 })), ...pessoas.map(p => ({ setor: p.setor, cargo: p.funcao, funcionarios: 1 }))];
   const cont = (campo, filtro = () => true) => {
     const m = new Map();
-    for (const h of hs.filter(filtro)) m.set(h[campo], (m.get(h[campo]) || 0) + (h.funcionarios || 0));
+    for (const h of hs.filter(filtro)) m.set(h[campo], (m.get(h[campo]) || 0) + h.funcionarios);
     return [...m.entries()].filter(([n]) => n).map(([nome, n]) => ({ nome, n })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   };
   const setores = cont('setor');
@@ -76,7 +87,7 @@ function passo1(d, g, trav) {
     <div class="cp-sec"><div class="cp-sec-tit">Setores e funções</div>
       <label class="cp-lbl">Setores <span class="obr">*</span></label>${tags('setor', g.setores || [], sug.setores, trav)}
       <label class="cp-lbl" style="margin-top:14px">Funções</label>${tags('funcao', g.funcoes || [], sug.funcoes, trav)}
-      ${d.av.soc ? '<div class="cp-ajuda">Os números ao lado das sugestões são quantos funcionários o SOC tem naquele setor ou função. Setores e funções sem ninguém também aparecem.</div>' : ''}</div>
+      ${d.av.soc || D.pessoasAtuais(d) ? `<div class="cp-ajuda">${D.pessoasAtuais(d) ? 'Os números ao lado das sugestões são quantos funcionários há naquele setor ou função, pela conferência com a empresa.' : 'Os números ao lado das sugestões são quantos funcionários o SOC tem naquele setor ou função.'} Setores e funções sem ninguém também aparecem.</div>` : ''}</div>
     <div class="cp-sec"><div class="cp-sec-tit">Atividade proibida para menor de 18 anos?</div>${seg('menor', [['S', 'Sim'], ['N', 'Não']], g.menor18 === true ? 'S' : g.menor18 === false ? 'N' : '', { travado: trav })}</div>
     <div class="cp-sec"><div class="cp-sec-tit">Descrição das atividades</div>${area('g.descricao', g.descricao, { ph: 'O que as pessoas deste GHE fazem no dia a dia. Dica: use o microfone do teclado para ditar.', travado: trav })}</div>
     ${trav ? '' : `<div style="margin:4px 0 14px">${btn(ico('lixo') + ' Excluir este GHE', 'campo:ghe-apagar', { cls: 'btn-ghost btn-sm', estilo: 'color:var(--red)' })}</div>`}`;
@@ -84,22 +95,28 @@ function passo1(d, g, trav) {
 
 /* ── Passo 2: ambientes ─────────────────────────────────────────────────── */
 function passo2(d, g, trav) {
+  /* v202: um GHE tem, na maioria das vezes, UM ambiente — que é o próprio GHE.
+     Então não se pede nome: o ambiente leva o nome do GHE. Só quando o técnico
+     diz que há mais de um ambiente é que aparecem as abas e o nome de cada um. */
   const lista = g.ambientes || [];
   if (!_amb || !lista.some(a => a.uid === _amb)) _amb = lista[0]?.uid || null;
   const a = amb();
-  const pills = lista.map(x => `<span class="cp-amb-pill ${x.uid === _amb ? 'on' : ''}" data-acao="campo:amb-sel:${x.uid}">${(D.GRUPOS_AMBIENTE.some(([k]) => (x[k] || []).length)) ? `<span class="ok">${I.check}</span>` : ''}${esc(x.nome || 'Sem nome')}</span>`).join('')
-    + (trav ? '' : `<span class="cp-amb-pill" data-acao="campo:amb-novo"><span style="display:flex">${I.plus}</span>Novo ambiente</span>`);
-  if (!a) return `<div class="cp-amb-lista">${pills}</div>${nota('Cadastre os ambientes onde este GHE trabalha (ex.: escritório, galpão, banheiros). É opcional, mas ajuda a descrever os riscos.')}`;
+  if (!a) return nota(trav ? 'Nenhum ambiente registrado neste GHE.' : 'Carregando o ambiente…');
+  const varios = lista.length > 1;
+  const pills = varios ? `<div class="cp-amb-lista">${lista.map(x => `<span class="cp-amb-pill ${x.uid === _amb ? 'on' : ''}" data-acao="campo:amb-sel:${x.uid}">${(D.GRUPOS_AMBIENTE.some(([k]) => (x[k] || []).length)) ? `<span class="ok">${I.check}</span>` : ''}${esc(nomeAmb(g, x))}</span>`).join('')}
+    ${trav ? '' : `<span class="cp-amb-pill" data-acao="campo:amb-novo"><span style="display:flex">${I.plus}</span>Outro ambiente</span>`}</div>` : '';
   const grupo = (k, t) => `<div class="cp-grupo"><div class="cp-grupo-tit">${t} <small>marque todos que houver</small></div><div class="cp-opts">${
     _cat.opcoes(k).map(o => opt(`amb-opt:${k}:${o}`, o, (a[k] || []).includes(o), trav)).join('')}</div></div>`;
-  return `<div class="cp-amb-lista">${pills}</div>
-    <div class="cp-sec"><div class="cp-sec-tit">Ambiente <span class="obr">*</span></div>${inp('a.nome', a.nome, { ph: 'Ex.: Escritório, Galpão de produção', travado: trav })}</div>
-    <div class="cp-sec"><div class="cp-sec-tit">Descrição do ambiente</div>
+  return `${pills}
+    ${varios ? `<div class="cp-sec"><div class="cp-sec-tit">Nome deste ambiente</div>${inp('a.nome', a.nome, { ph: g.nome, travado: trav })}</div>` : ''}
+    <div class="cp-sec"><div class="cp-sec-tit">${varios ? 'Descrição do ambiente' : `Ambiente de trabalho do GHE ${esc(g.nome)}`}</div>
       ${D.GRUPOS_AMBIENTE.map(([k, t]) => grupo(k, t)).join('')}
       <div class="cp-grupo"><div class="cp-grupo-tit">Outro <small>se não estiver na lista</small></div>${inp('a.outro', a.outro, { ph: 'Ex.: exaustor no teto', travado: trav })}</div></div>
     <div class="cp-sec"><div class="cp-sec-tit">Observações e fotos</div>${area('a.observacao', a.observacao, { ph: 'Opcional', travado: trav })}
       <div style="margin-top:10px">${fotos(d, f => f.ghe_id === g.id && f.alvo === 'ambiente' && f.alvo_uid === a.uid, { chave: 'ambiente:' + a.uid, travado: trav })}</div></div>
-    ${trav ? '' : `<div style="margin:4px 0 14px">${btn(ico('lixo') + ' Excluir este ambiente', 'campo:amb-apagar', { cls: 'btn-ghost btn-sm', estilo: 'color:var(--red)' })}</div>`}`;
+    ${trav ? '' : varios
+      ? `<div style="margin:4px 0 14px">${btn(ico('lixo') + ' Excluir este ambiente', 'campo:amb-apagar', { cls: 'btn-ghost btn-sm', estilo: 'color:var(--red)' })}</div>`
+      : `<div style="margin:4px 0 14px">${btn(I.plus + ' Este GHE trabalha em mais de um ambiente', 'campo:amb-novo', { cls: 'btn-ghost btn-sm' })}</div>`}`;
 }
 
 /* ── Passo 3: riscos ────────────────────────────────────────────────────── */
@@ -152,7 +169,7 @@ function riscoAberto(d, g, r, trav) {
   if (r.pendente) tags.push('<span class="badge badge-warn">Para depois</span>');
   if (r.nao_listado) tags.push('<span class="badge badge-gray">Não listado</span>');
   if (c?.dados?.observacao_impressa) tags.push(`<span class="badge badge-gray">${esc(c.dados.observacao_impressa)}</span>`);
-  const ambientes = [['Todos', 'Todos os ambientes'], ...(g.ambientes || []).map(a => [a.nome, a.nome])];
+  const ambientes = [['Todos', 'Todos os ambientes'], ...(g.ambientes || []).map(a => [nomeAmb(g, a), nomeAmb(g, a)])];
   const med = r.medicao || {}, ilu = r.iluminacao || {};
   const nomeConc = { ins: 'Insalubridade', per: 'Periculosidade', ae: 'Aposentadoria especial' };
   const graus = ['10%', '20%', '40%'];
@@ -191,7 +208,7 @@ function riscoAberto(d, g, r, trav) {
       <div class="cp-rhead-nome">${esc(r.nome)}</div><div class="cp-rhead-tags">${tags.join('')}</div></div></div></div>
     ${pendBox}
     <div class="cp-sec"><div class="cp-sec-tit">Onde e como</div>
-      ${(g.ambientes || []).length ? `<label class="cp-lbl">Ambiente</label><select class="cp-inp" data-acao="campo:r-amb"${trav ? ' disabled' : ''}>${ambientes.map(([v, l]) => `<option value="${esc(v)}" ${v === (r.ambiente || 'Todos') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div style="height:12px"></div>` : ''}
+      ${(g.ambientes || []).length > 1 ? `<label class="cp-lbl">Ambiente</label><select class="cp-inp" data-acao="campo:r-amb"${trav ? ' disabled' : ''}>${ambientes.map(([v, l]) => `<option value="${esc(v)}" ${v === (r.ambiente || 'Todos') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div style="height:12px"></div>` : ''}
       <label class="cp-lbl">Análise qualitativa</label>${area('r.analise', r.analise, { ph: 'Como a exposição acontece: atividade, frequência, duração.', travado: trav })}
       <div class="cp-grid2" style="margin-top:12px"><div><label class="cp-lbl">Fonte geradora / produto</label>${inp('r.fonte', r.fonte, { travado: trav })}</div>
         <div><label class="cp-lbl">EPC existente</label>${inp('r.epc', r.epc, { travado: trav })}</div></div>
@@ -336,7 +353,9 @@ export async function acao(nome, valor, redesenhar) {
   const rolarTopo = () => { try { document.getElementById('mainBody')?.scrollTo?.(0, 0); window.scrollTo(0, 0); } catch { /* ok */ } };
 
   switch (nome) {
-    case 'campo:passo': { const n = Math.min(4, Math.max(1, Number(a1) || 1)); _passo.set(_gid, n); _risco = null; redesenhar(); rolarTopo(); return true; }
+    case 'campo:passo': { const n = Math.min(4, Math.max(1, Number(a1) || 1)); _passo.set(_gid, n); _risco = null;
+      if (n === 2 && !(g.ambientes || []).length && D.podeEditar(d)) altG(x => { x.ambientes = [ambVazio()]; });   // v202
+      redesenhar(); rolarTopo(); return true; }
     case 'campo:fim': irPara(`campo-avaliacao:${_av}`); return true;
     case 'campo:menor': altG(x => { const v = a1 === 'S' ? true : false; x.menor18 = (x.menor18 === v) ? null : v; }); redesenhar(); return true;
     case 'campo:tag-add': adicionarTag(a1, valorVisivel(`[data-cp-enter="${a1}"]`)); return true;
@@ -348,13 +367,13 @@ export async function acao(nome, valor, redesenhar) {
     /* ambientes */
     case 'campo:amb-sel': _amb = a1; redesenhar(); return true;
     case 'campo:amb-novo': {
-      const n = { uid: D.novoId(), nome: 'Ambiente ' + ((g.ambientes || []).length + 1), paredes: [], piso: [], forro: [], teto_telhado: [], iluminacao: [], ventilacao: [], outro: '', observacao: '' };
-      altG(x => { x.ambientes = x.ambientes || []; x.ambientes.push(n); }); _amb = n.uid; redesenhar(); return true;
+      const n = { ...ambVazio(), nome: 'Ambiente ' + ((g.ambientes || []).length + 1) };
+      altG(x => { x.ambientes = x.ambientes || []; if (!x.ambientes.length) x.ambientes.push(ambVazio()); x.ambientes.push(n); }); _amb = n.uid; redesenhar(); return true;
     }
     case 'campo:amb-apagar': {
       const a = amb(); if (!a) return true;
-      if (!await confirmar(`Excluir o ambiente ${a.nome}?`)) return true;
-      altG(x => { x.ambientes = x.ambientes.filter(y => y.uid !== a.uid); for (const r of x.riscos) if (r.ambiente === a.nome) r.ambiente = 'Todos'; });
+      if (!await confirmar(`Excluir o ambiente ${nomeAmb(g, a)}?`)) return true;
+      altG(x => { x.ambientes = x.ambientes.filter(y => y.uid !== a.uid); for (const r of x.riscos) if (r.ambiente === nomeAmb(g, a)) r.ambiente = 'Todos'; });
       for (const f of d.fotos.filter(f => f.alvo === 'ambiente' && f.alvo_uid === a.uid)) D.apagarFoto(_av, f.id);
       _amb = null; redesenhar(); return true;
     }

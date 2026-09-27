@@ -538,13 +538,13 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
     else {
       tabela(
         [{ t: 'Ambiente', w: 0.19 }, { t: 'Paredes', w: 0.135 }, { t: 'Piso', w: 0.125 }, { t: 'Forro', w: 0.11 }, { t: 'Teto', w: 0.13 }, { t: 'Iluminação', w: 0.15 }, { t: 'Ventilação', w: 0.16 }],
-        ambs.map(a => [{ t: a.nome || '-', b: true }, lista(a.paredes) || '-', lista(a.piso) || '-', lista(a.forro) || '-', lista(a.teto_telhado) || '-', lista(a.iluminacao) || '-', lista(a.ventilacao) || '-']),
+        ambs.map(a => [{ t: a.nome || g.nome || '-', b: true }, lista(a.paredes) || '-', lista(a.piso) || '-', lista(a.forro) || '-', lista(a.teto_telhado) || '-', lista(a.iluminacao) || '-', lista(a.ventilacao) || '-']),
       );
       const obs = ambs.filter(a => !vazio(a.outro) || !vazio(a.observacao));
       if (obs.length) {
         y += 1.5;
         for (const a of obs) {
-          const segs = [{ t: `${a.nome}: `, b: true, c: NAVY }];
+          const segs = [{ t: `${a.nome || g.nome}: `, b: true, c: NAVY }];
           if (!vazio(a.outro)) segs.push({ t: a.outro + (vazio(a.observacao) ? '' : '. ') });
           if (!vazio(a.observacao)) segs.push({ t: a.observacao });
           for (const l of rico(segs, CW, 7.8)) { garantir(lh(7.8, 1.45)); escreverRico([l], ML, y, 7.8, C1, lh(7.8, 1.45)); y += lh(7.8, 1.45); }
@@ -624,6 +624,35 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
   paragrafo(vazio(av.observacoes) ? 'Sem observações.' : av.observacoes, 8.3, vazio(av.observacoes) ? C2 : NAVY);
   h2('Documentos solicitados à empresa', 8);
   paragrafo(vazio(av.documentos) ? 'Nenhum documento solicitado.' : av.documentos, 8.3, vazio(av.documentos) ? C2 : NAVY);
+
+  // v203: conferência do quadro de funcionários com a empresa. LGPD: no PDF
+  // saem só os nomes de quem saiu, mudou ou foi incluído (decisão 27/09).
+  const conf = Array.isArray(av.funcionarios?.lista) ? av.funcionarios.lista : [];
+  if (conf.length) {
+    const soc = conf.filter(p => p.origem === 'soc');
+    const n = (sit) => soc.filter(p => p.situacao === sit).length;
+    const inc = conf.filter(p => p.origem === 'empresa');
+    const falta = soc.filter(p => !p.situacao).length;
+    const mud = conf.filter(p => p.origem === 'empresa' || p.situacao === 'saiu' || p.situacao === 'mudou');
+    h2('Conferência do quadro de funcionários', 16);
+    const com = vazio(av.acompanhante_nome) ? 'a empresa' : av.acompanhante_nome + (vazio(av.acompanhante_cargo) ? '' : ` (${av.acompanhante_cargo})`);
+    paragrafo(`Lista de funcionários do SOC conferida com ${com} na visita de ${dataBR(av.data_visita)}. `
+      + `No SOC: ${soc.length}${SEP}conferem: ${n('confere')}${SEP}saíram: ${n('saiu')}${SEP}mudaram de setor/função: ${n('mudou')}${SEP}incluídos: ${inc.length}${SEP}total na empresa: ${soc.length - n('saiu') + inc.length}.`
+      + (falta ? ` Conferência parcial: ${falta} funcionário${falta === 1 ? '' : 's'} sem conferir.` : ''), 8.3, C1);
+    if (mud.length) {
+      y += 1.5;
+      const ond = (s, f) => [s, f].filter(x => !vazio(x)).join(SEP) || '-';
+      tabela([{ t: 'Funcionário', w: 0.34 }, { t: 'No SOC', w: 0.3 }, { t: 'Informado pela empresa', w: 0.36 }],
+        mud.sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR')).map(p => [
+          { t: p.nome || '-', b: true },
+          p.origem === 'empresa' ? { t: 'Não consta', c: C2 } : ond(p.setor, p.funcao),
+          p.situacao === 'saiu' ? { t: 'Não trabalha mais na empresa', b: true, c: VERM }
+            : p.origem === 'empresa' ? ond(p.setor, p.funcao)
+            : ond(p.novo_setor || p.setor, p.nova_funcao || p.funcao)]),
+        { size: 7.8 });
+      paragrafo('Atualizar no SOC as mudanças acima.', 7.6, C2);
+    } else paragrafo('Nenhuma mudança: a lista do SOC confere com a empresa.', 8.3, C2);
+  }
 
   if (fotosGerais.length) {
     h2('Evidências gerais', pecasFotos(fotosGerais.slice(0, 4), ML, CW, 4)[0].h);

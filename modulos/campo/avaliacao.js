@@ -36,14 +36,54 @@ function blocoSoc(d, cli, editavel) {
   }
   const usados = new Set(d.ghes.map(g => g.codigo_soc).filter(Boolean));
   const ghesSoc = (s?.ghes || []).filter(g => !usados.has(g.codigo || g.nome));
-  const resumo = s ? `<b>${(s.setores || []).filter(x => x.ativo !== false).length}</b> setores, <b>${(s.cargos || []).filter(x => x.ativo !== false).length}</b> cargos, <b>${s.total_funcionarios ?? 0}</b> funcionários e <b>${(s.ghes || []).length}</b> GHEs no SOC · trazido em ${esc(quando(s.gerado_em))}` : 'Traga os setores, cargos e GHEs cadastrados no SOC para esta empresa. Setores e cargos aparecem como sugestão ao montar cada GHE, mesmo os que ainda não têm funcionário.';
-  return `<div class="cp-sec"><div class="cp-sec-tit">Dados do SOC <span class="dir" style="color:var(--text-3)">código ${esc(cli.soc_codigo_empresa)}</span></div>
-    <div class="cp-soc-linha"><div class="t">${resumo}</div>
-      ${editavel && D.podeAcao('trazer_soc') ? btn(_ocupado === 'soc' ? 'Buscando no SOC…' : (s ? 'Atualizar' : 'Trazer do SOC'), 'campo:soc', { cls: s ? 'btn-outline btn-sm' : 'btn-navy btn-sm', travado: !!_ocupado || !D.online() }) : ''}</div>
-    ${(s?.avisos || []).length ? nota(esc(s.avisos.join(' ')), 'warn') : ''}
+  const botao = editavel ? btn(_ocupado === 'soc' ? 'Buscando no SOC…' : (s ? 'Atualizar' : 'Trazer do SOC'), 'campo:soc',
+    { cls: s ? 'btn-outline btn-sm' : 'btn-navy btn-sm', travado: !!_ocupado || !D.online() }) : '';
+  if (!s) {
+    return `<div class="cp-sec"><div class="cp-sec-tit">Dados do SOC</div>
+      <div class="cp-soc-linha"><div class="t">Traga os setores, funções e GHEs desta empresa cadastrados no SOC. Eles aparecem como sugestão ao montar cada GHE.</div>${botao}</div></div>`;
+  }
+  /* v202: o técnico vê só o que é da empresa avaliada, em linguagem simples.
+     Os avisos técnicos da busca ficam num "Detalhes" que só administrador e
+     Provedor veem (pedido do Alisson, 27/09). */
+  const nSet = (s.setores || []).filter(x => x.ativo !== false).length;
+  const nCar = (s.cargos || []).filter(x => x.ativo !== false).length;
+  const nGhe = (s.ghes || []).length;
+  const stat = (n, t) => `<div class="cp-soc-stat"><b>${n}</b><span>${t}</span></div>`;
+  const dicas = [];
+  if (!nSet) dicas.push('O SOC não tem setores cadastrados para esta empresa. Digite os setores e funções ao montar cada GHE.');
+  if (!nGhe) dicas.push('O SOC não tem GHE cadastrado para esta empresa. Crie os GHEs aqui, na visita.');
+  const perfil = ponte().perfil?.() || '';
+  const verDetalhes = ['administrador', 'provedor'].includes(perfil) && (s.avisos || []).length;
+  return `<div class="cp-sec"><div class="cp-sec-tit">Dados do SOC <span class="dir">atualizado em ${esc(quando(s.gerado_em))}</span></div>
+    <div class="cp-soc-linha"><div class="cp-soc-stats">${stat(nSet, nSet === 1 ? 'setor' : 'setores')}${stat(nCar, nCar === 1 ? 'função' : 'funções')}${stat(s.total_funcionarios ?? 0, (s.total_funcionarios ?? 0) === 1 ? 'funcionário' : 'funcionários')}${stat(nGhe, nGhe === 1 ? 'GHE' : 'GHEs')}</div>${botao}</div>
+    ${dicas.length ? `<div class="cp-soc-dica">${dicas.map(esc).join('<br>')}</div>` : ''}
+    ${verDetalhes ? `<details class="cp-soc-det"><summary>Detalhes da busca no SOC <small>só administrador vê</small></summary><ul>${s.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul><div class="cp-ajuda">Código da empresa no SOC: ${esc(cli.soc_codigo_empresa)}</div></details>` : ''}
     ${editavel && ghesSoc.length ? `<div style="margin-top:10px">${btn(`Usar ${ghesSoc.length === 1 ? 'o GHE' : 'os ' + ghesSoc.length + ' GHEs'} do SOC`, 'campo:soc-ghes', { cls: 'btn-outline btn-sm' })}
       <div class="cp-ajuda">Cria um GHE para cada GHE ativo do SOC, com setores, funções e os riscos já caracterizados lá. Você confere e completa na visita.</div></div>` : ''}
   </div>`;
+}
+
+/* v203: conferência dos funcionários com a empresa (quadro no hub). */
+function blocoFuncionarios(d, editavel) {
+  if (!D.temConferencia(d)) return '';
+  const r = D.resumoConferencia(d);
+  const alvo = `ir:campo-funcionarios:${_id}`;
+  if (!r.total) {
+    if (!editavel) return '';
+    return `<div class="cp-sec"><div class="cp-sec-tit">Funcionários — conferir com a empresa</div>
+      <div class="cp-soc-dica" style="margin-top:0">${d.av.soc ? 'O SOC não trouxe funcionários ativos desta empresa.' : 'Traga os dados do SOC para conferir a lista de funcionários com o acompanhante.'} Você também pode incluir os funcionários informados pela empresa.</div>
+      <div style="margin-top:10px">${btn('Abrir conferência', alvo, { cls: 'btn-outline btn-sm' })}</div></div>`;
+  }
+  const st = (n, t, cls = '') => `<div class="cp-soc-stat ${cls}"><b>${n}</b><span>${t}</span></div>`;
+  const pct = (n) => r.soc ? (100 * n / r.soc).toFixed(1) + '%' : '0%';
+  const comecou = r.confere + r.saiu + r.mudou + r.incluidos > 0;
+  const rotulo = !comecou ? 'Conferir com a empresa' : r.falta ? 'Continuar conferência' : 'Ver conferência';
+  return `<div class="cp-sec"><div class="cp-sec-tit">Funcionários — conferir com a empresa ${d.av.funcionarios?.conferido_em ? `<span class="dir">${esc(quando(d.av.funcionarios.conferido_em))}</span>` : ''}</div>
+    ${comecou ? `<div class="cp-soc-stats">${st(r.confere, r.confere === 1 ? 'confere' : 'conferem', 'ok')}${st(r.saiu, r.saiu === 1 ? 'saiu' : 'saíram', 'red')}${st(r.mudou, r.mudou === 1 ? 'mudou' : 'mudaram', 'warn')}${st(r.falta, r.falta === 1 ? 'falta' : 'faltam')}</div>
+      <div class="cp-conf-bar"><i style="width:${pct(r.confere)};background:var(--green)"></i><i style="width:${pct(r.saiu)};background:var(--red)"></i><i style="width:${pct(r.mudou)};background:var(--amber)"></i></div>
+      ${r.incluidos ? `<div class="cp-ajuda" style="margin-top:0">+ ${r.incluidos} funcionário${r.incluidos === 1 ? ' incluído que não estava' : 's incluídos que não estavam'} no SOC</div>` : ''}`
+      : `<div class="cp-soc-dica" style="margin-top:0"><b>${r.soc}</b> funcionário${r.soc === 1 ? '' : 's'} no SOC. Confira a lista com o acompanhante: quem saiu, quem mudou de setor ou função e quem falta.</div>`}
+    <div style="margin-top:10px">${btn(rotulo, alvo, { cls: comecou ? 'btn-outline btn-sm' : 'btn-navy btn-sm' })}</div></div>`;
 }
 
 async function telaConcluida(d, cli, tec) {
@@ -67,6 +107,7 @@ async function telaConcluida(d, cli, tec) {
       ${_progresso ? `<div class="cp-progresso">${esc(_progresso)}</div>` : ''}
       ${!d.av.pdf_path ? nota('A avaliação foi concluída, mas o PDF ainda não foi anexado. Toque em Gerar PDF (precisa de internet).', 'warn') : ''}</div>
     <div class="cp-sec"><div class="cp-sec-tit">GHEs</div>${linhas || '<div class="cp-ajuda">Sem GHE.</div>'}</div>
+    ${D.listaFuncionarios(d).length ? (() => { const rc = D.resumoConferencia(d); return `<div class="cp-sec"><div class="cp-sec-tit">Funcionários conferidos</div><div class="cp-kv"><span>No SOC</span><b>${rc.soc}</b></div><div class="cp-kv"><span>Saíram · mudaram · incluídos</span><b>${rc.saiu} · ${rc.mudou} · ${rc.incluidos}</b></div><div class="cp-kv"><span>Na empresa</span><b>${rc.naEmpresa}${rc.falta ? ` (${rc.falta} sem conferir)` : ''}</b></div>${btn('Ver lista', `ir:campo-funcionarios:${_id}`, { cls: 'btn-ghost btn-sm' })}</div>`; })() : ''}
     ${d.av.observacoes ? `<div class="cp-sec"><div class="cp-sec-tit">Observações</div><div style="font-size:13px;color:var(--text-2);white-space:pre-wrap">${esc(d.av.observacoes)}</div></div>` : ''}
   </div><div class="cp-lado" style="display:block"><div class="cp-sec"><div class="cp-sec-tit">Ações</div>
     ${D.podeAcao('nova_revisao') ? btn('Nova revisão', 'campo:revisao', { estilo: 'width:100%;margin-bottom:8px', travado: !!_ocupado || !D.online() }) : ''}
@@ -99,6 +140,7 @@ export async function render(params) {
       <div>Acompanhante<b>${esc(d.av.acompanhante_nome || 'a informar')}</b></div>
       <div>Situação<b>${sitTxt}</b></div></div></div>
     ${blocoSoc(d, cli, editavel)}
+    ${blocoFuncionarios(d, editavel)}
     ${secTit('GHEs desta empresa')}
     ${d.ghes.map(cartaoGhe).join('') || nota('Nenhum GHE ainda. Crie um GHE para cada grupo de trabalhadores com a mesma exposição (ex.: Administrativo, Produção, Serviços Gerais).')}
     ${editavel ? `<button type="button" class="cp-add-ghe" data-acao="campo:novo-ghe">${I.plus}Adicionar GHE</button>` : ''}
@@ -137,6 +179,7 @@ function modalNovoGhe(d, redesenhar) {
 async function usarGhesDoSoc(d) {
   const cat = await D.catalogo();
   const usados = new Set(d.ghes.map(g => g.codigo_soc).filter(Boolean));
+  const nm = D.nomesSoc(d.av.soc);   /* v202: código → nome */
   let n = 0;
   for (const gs of d.av.soc?.ghes || []) {
     const chave = gs.codigo || gs.nome;
@@ -154,7 +197,7 @@ async function usarGhesDoSoc(d) {
       };
     });
     D.novoGhe(d.id, { nome: gs.nome || ('GHE ' + gs.codigo), codigo_soc: chave,
-      setores: uniq((gs.hierarquias || []).map(h => h.setor)), funcoes: uniq((gs.hierarquias || []).map(h => h.cargo)), riscos });
+      setores: uniq((gs.hierarquias || []).map(nm.setor)), funcoes: uniq((gs.hierarquias || []).map(nm.cargo)), riscos });
     n++;
   }
   return n;

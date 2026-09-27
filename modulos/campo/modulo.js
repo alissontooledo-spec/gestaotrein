@@ -26,6 +26,9 @@ export default {
       rota: () => import('./ghe.js') },
     { id: 'campo-finalizar', rotulo: 'Finalizar avaliação', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
       rota: () => import('./finalizar.js') },
+    /* v203: conferência dos funcionários com a empresa. */
+    { id: 'campo-funcionarios', rotulo: 'Conferir funcionários', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./funcionarios.js') },
     /* Catálogo da ficha: só abre de verdade em Modo Suporte (Provedor). */
     { id: 'campo-catalogo', rotulo: 'Catálogo da ficha', icone: 'book', oculto: true, perfis: ['administrador'], mobile: false,
       textoDesktop: 'Editar o catálogo da ficha é trabalho de mesa. No computador esta tela abre direto.',
