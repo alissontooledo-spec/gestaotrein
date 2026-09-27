@@ -2426,7 +2426,10 @@ const _MAPA_ERROS_PT = [
 ];
 
 function traduzErroSupabase(erro, textoPadrao) {
-  const bruto = (erro && (erro.message || erro.error_description || erro.msg)) || (typeof erro === 'string' ? erro : '') || '';
+  let bruto = (erro && (erro.message || erro.error_description || erro.msg)) || (typeof erro === 'string' ? erro : '') || '';
+  // v200 (PASSO-66): regra de perfil de acesso e mensagens com código na frente.
+  if (/row-level security policy "perm_/.test(bruto)) return 'Seu perfil de acesso não permite esta alteração. Fale com o administrador.';
+  bruto = bruto.replace(/^(PERFIL_[A-Z_]+|CAMPO_PERMISSAO):\s*/, '');
   if (bruto) {
     for (const [re, pt] of _MAPA_ERROS_PT) {
       if (re.test(bruto)) return pt;
@@ -4449,6 +4452,9 @@ async function _enviarRecuperacaoSenhaLogin() {
 }
 
 async function entrarNoApp() {
+  // v200: perfil de acesso personalizado (PASSO-66). Sem ele, nada muda.
+  await _carregarPerfilAcesso();
+  _instalarGuardasDeAcao();
   // Provedor não tem org — acesso sempre liberado
   if (usuarioAtual.perfil !== 'provedor' && usuarioAtual.org_id) {
     const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome,trial_fim,logo_url,cor_primaria,cert_aplicar_cor_documentos,soc_integracao_ativa').eq('id',usuarioAtual.org_id).single();
@@ -4564,7 +4570,7 @@ async function fazerLogout() {
 // ============================================================
 const NAV = {
   provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'logs',l:'Logs / Auditoria',icon:'filesheet'},{id:'conta',l:'Minha conta',icon:'user'}],
-  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'cap'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'company'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{id:'configuracoes',l:'Configurações',icon:'settings'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'cap'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'company'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{id:'perfis',l:'Perfis de acesso',icon:'shield'},{id:'configuracoes',l:'Configurações',icon:'settings'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   // 2026-08: adicionado 'relatorios' — já estava referenciado em
   // NAV_BOTTOM.comercial (atalho do rodapé mobile) mas não existia aqui,
   // então o item nunca aparecia de verdade e o Comercial não conseguia
@@ -4606,7 +4612,7 @@ let _plataformaCarregando = null;   // promessa de _iniciarPlataforma (ver irPar
    e de modulo sem perguntar ao modulo — que pode ainda nao ter carregado. */
 const TITULOS_NATIVOS = new Set(['home','orgs','financeiro','adocao','logs','clientes',
   'colaboradores','catalogo','conformidade','turmas','agendaequipe','equipe','agenda',
-  'historico','relatorios','conta','configuracoes']);
+  'historico','relatorios','conta','configuracoes','perfis']);
 let _modulosAtivos = [];
 
 // A lista de modulos contratados muda raramente (uma venda, uma renovacao).
@@ -4677,6 +4683,9 @@ async function _iniciarPlataforma() {
       garantirJsPDF: () => _garantirJsPDF(),
       /* Provedor em Modo Suporte: libera o editor do catálogo da ficha. */
       modoSuporte: () => !!_suporteAtivo,
+      /* v200: perfis de acesso — o módulo pergunta, a casca responde. */
+      pode: (tela, nivel) => _pode(tela, nivel),
+      podeAcao: (acao) => _podeAcao(acao),
       /* A lista "Requer atencao" vive na casca porque a tela Inicio precisa
          dela sem modulo nenhum. Passar pela ponte evita a segunda copia: o
          modulo pede, nao reimplementa. */
@@ -4877,8 +4886,297 @@ function _injetarMenuDosModulos({ soCache = false } = {}) {
   itens.forEach(i => { TITULOS[i.id] = i.rotulo; });
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// PERFIS DE ACESSO (27/09/2026, v200 + PASSO-66)
+// --------------------------------------------------------------------------
+// Um perfil personalizado parte de um dos 3 padrão e só TIRA acesso. O que
+// ele não vê some do menu e da rota; o que ele não pode mudar, o banco recusa
+// (regras RESTRITIVAS "perm_" do PASSO-66). Sem perfil personalizado, nada
+// muda. _PERFIS_CATALOGO é o espelho de _perfil_catalogo() do banco.
+// ══════════════════════════════════════════════════════════════════════════
+const _PERFIS_CATALOGO = {
+  modulos: [
+    { id:'treinamentos', nome:'Treinamentos', icone:'cap', telas:[
+      ['turmas','Turmas'],['agendaequipe','Agenda da Equipe'],['clientes','Clientes'],['colaboradores','Colaboradores'],
+      ['catalogo','Catálogo'],['conformidade','Conformidade'],['relatorios','Relatórios'],['equipe','Equipe e perfis de acesso'],
+      ['configuracoes','Configurações'],['agenda','Minha agenda (turmas e visitas)'],['historico','Histórico']] },
+    { id:'crm', nome:'CRM', icone:'funnel', telas:[
+      ['crm','Painel comercial'],['crm-funil','Funil de vendas'],['crm-contatos','Contatos'],['crm-atividades','Atividades'],
+      ['crm-empresa','Contas'],['crm-conversas','Conversas (WhatsApp)'],['crm-numeros','Números de WhatsApp']] },
+    { id:'campo', nome:'Avaliação de Campo', icone:'clipboard', telas:[['campo','Avaliações de campo']] },
+  ],
+  limites: {
+    administrador: {turmas:3,agendaequipe:3,clientes:3,colaboradores:3,catalogo:3,conformidade:2,relatorios:1,equipe:3,configuracoes:2,
+                    crm:1,'crm-funil':3,'crm-contatos':3,'crm-atividades':3,'crm-empresa':2,'crm-conversas':2,'crm-numeros':2,campo:3},
+    comercial:     {turmas:3,agendaequipe:3,clientes:3,colaboradores:3,conformidade:2,relatorios:1,
+                    crm:1,'crm-funil':3,'crm-contatos':3,'crm-atividades':3,'crm-empresa':2,'crm-conversas':2,campo:3},
+    instrutor:     {agenda:2,historico:1,campo:2},
+  },
+  acoes: [
+    ['emitir_certificado','Gerar e baixar certificados',['administrador','comercial']],
+    ['exportar_relatorios','Exportar relatórios (planilha e PDF)',['administrador','comercial']],
+    ['importar_colaboradores','Importar planilha de colaboradores',['administrador','comercial']],
+    ['concluir_avaliacao','Concluir avaliação de campo',['administrador','comercial','instrutor']],
+    ['trazer_soc','Trazer dados do SOC na avaliação',['administrador','comercial','instrutor']],
+    ['nova_revisao','Criar nova revisão de avaliação',['administrador','comercial','instrutor']],
+  ],
+  niveis: ['Não vê','Só vê','Vê e edita','Edita e apaga'],
+  bases: [['administrador','Administrador','tudo da organização, inclusive Equipe'],['comercial','Comercial','operação e vendas'],['instrutor','Instrutor','só o que é dele: agenda e avaliações em que foi escalado']],
+};
+const _TELA_MODULO = {};
+_PERFIS_CATALOGO.modulos.forEach(m => m.telas.forEach(([t]) => { _TELA_MODULO[t] = m.id; }));
+// Rotas que não são tela do catálogo, mas pertencem a uma.
+const _ROTA_TELA = { 'crm-lead':'crm-funil', 'crm-funis':'crm-funil', 'crm-respostas':'crm-conversas', 'crm-numeros-status':'crm-numeros', perfis:'equipe' };
+const _telaDaRota = (rota) => rota && rota.startsWith('campo') ? 'campo' : (_ROTA_TELA[rota] || rota);
+
+function _permAtual() { return usuarioAtual && usuarioAtual._perm ? usuarioAtual._perm : null; }
+function _pode(tela, nivel = 1) {
+  const p = _permAtual();
+  if (!p) return true;
+  const mod = _TELA_MODULO[tela];
+  if (!mod) return true;                       // rota fora do catálogo: regra de sempre
+  if (p.modulos && p.modulos[mod] === false) return false;
+  return Number((p.telas || {})[tela] || 0) >= nivel;
+}
+function _podeRota(rota, nivel = 1) {
+  if (!rota || rota === 'home' || rota === 'conta') return true;
+  if (rota === 'perfis' && usuarioAtual?.perfil !== 'administrador' && usuarioAtual?.perfil !== 'provedor') return false;
+  return _pode(_telaDaRota(rota), nivel);
+}
+function _podeAcao(acao) { const p = _permAtual(); return !p || !!(p.acoes || {})[acao]; }
+// NAV do perfil, sem o que o perfil de acesso esconde (e sem seção vazia).
+function _navDoUsuario(perfil) {
+  const base = (NAV[perfil] || []).filter(i => !i.id || _podeRota(i.id));
+  return base.filter((i, k) => !i.sec || base.slice(k + 1).find(x => x.id || x.sec)?.id);
+}
+async function _carregarPerfilAcesso() {
+  usuarioAtual._perm = null; usuarioAtual._permNome = null;
+  if (!usuarioAtual.perfil_acesso_id || usuarioAtual.perfil === 'provedor') return;
+  try {
+    const { data, error } = await sb.from('perfis_acesso').select('nome,permissoes,ativo').eq('id', usuarioAtual.perfil_acesso_id).maybeSingle();
+    if (error) throw error;
+    if (data) { usuarioAtual._perm = data.permissoes || {}; usuarioAtual._permNome = data.nome; }
+  } catch (e) {
+    // Falha na leitura: fica o perfil padrão no MENU; o banco continua
+    // aplicando o perfil de acesso de verdade (regras perm_).
+    console.warn('[perfis] não consegui ler o perfil de acesso:', e?.message || e);
+  }
+}
+// Botões de ação especial: a função original só roda se o perfil permitir.
+const _GUARDAS_ACAO = {
+  exportar_relatorios: ['exportarHistoricoCSV','exportarHistoricoPDF','exportarRelatorioInstrutorCSV','exportarRelatorioInstrutorPDF','exportarRelatorioCSV','exportarRelatorioExecutivoPDF'],
+  importar_colaboradores: ['abrirModalImportacao'],
+  emitir_certificado: ['gerarCertificadoIndividual','gerarCertificadoColetivo'],
+};
+let _guardasInstaladas = false;
+function _instalarGuardasDeAcao() {
+  if (_guardasInstaladas) return;
+  _guardasInstaladas = true;
+  for (const [acao, nomes] of Object.entries(_GUARDAS_ACAO)) {
+    const rotulo = (_PERFIS_CATALOGO.acoes.find(a => a[0] === acao) || [,'esta ação'])[1];
+    for (const nome of nomes) {
+      const original = window[nome];
+      if (typeof original !== 'function') continue;
+      window[nome] = function (...args) {
+        if (!_podeAcao(acao)) { showToast(`Seu perfil de acesso não permite: ${rotulo.toLowerCase()}.`, 'error'); return; }
+        return original.apply(this, args);
+      };
+    }
+  }
+}
+// Tela em "só vê": aviso no cabeçalho e sem o botão flutuante de criar.
+function _aplicarSomenteConsulta(pagina) {
+  const h = document.getElementById('headerTitle');
+  document.getElementById('seloSomenteConsulta')?.remove();
+  if (!_permAtual() || !_podeRota(pagina, 1) || _podeRota(pagina, 2)) return;
+  if (pagina === 'home' || pagina === 'conta') return;
+  fabOcultar();
+  if (h) h.insertAdjacentHTML('beforeend', ' <span id="seloSomenteConsulta" class="badge badge-gray" style="font-size:11px;vertical-align:middle;margin-left:6px">Somente consulta</span>');
+}
+
+// ── Tela Configurações → Perfis de acesso ─────────────────────────────────
+window._perfisEstado = null;
+async function renderPerfisAcesso() {
+  setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Perfis de acesso</div>`);
+  fabOcultar();
+  const orgId = usuarioAtual.org_id;
+  const [{ data: perfis, error }, { data: usos }] = await Promise.all([
+    sb.from('perfis_acesso').select('id,nome,perfil_base,permissoes,ativo,atualizado_em').eq('org_id', orgId).order('nome'),
+    sb.from('usuarios').select('perfil,perfil_acesso_id,ativo').eq('org_id', orgId).eq('ativo', true),
+  ]);
+  if (error) {
+    setConteudo(`<div class="card"><div class="empty" style="padding:32px 20px"><div class="empty-title">Perfis de acesso indisponíveis</div>
+      <div class="empty-sub">${escapeHtml(traduzErroSupabase(error, 'Confira se o PASSO-66 foi aplicado no banco.'))}</div></div></div>`);
+    return;
+  }
+  window._perfisEstado = { perfis: perfis || [], usos: usos || [], editando: null };
+  _perfisRenderLista();
+}
+const _perfisPodeEditar = () => usuarioAtual.perfil === 'provedor' || (usuarioAtual.perfil === 'administrador' && _pode('equipe', 2));
+const _perfisModulosDaOrg = () => ['treinamentos', ...(_modulosAtivos || []).filter(m => m !== 'treinamentos')];
+function _perfisRenderLista() {
+  const st = window._perfisEstado;
+  const conta = (fn) => st.usos.filter(fn).length;
+  const pessoas = (n) => `<span class="badge badge-blue">${n} pessoa${n === 1 ? '' : 's'}</span>`;
+  const mods = (ids) => ids.map(id => `<span style="font-size:11px;font-weight:600;background:var(--gray-100);color:var(--text-2);border-radius:6px;padding:3px 8px">${escapeHtml((_PERFIS_CATALOGO.modulos.find(m => m.id === id) || {}).nome || id)}</span>`).join(' ');
+  const orgMods = _perfisModulosDaOrg();
+  const padrao = _PERFIS_CATALOGO.bases.map(([b, nome, desc]) => {
+    const temMods = orgMods.filter(m => _PERFIS_CATALOGO.modulos.find(x => x.id === m)?.telas.some(([t]) => _PERFIS_CATALOGO.limites[b][t]));
+    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:14.5px;font-weight:800;color:var(--text-1);display:flex;align-items:center;gap:8px">${nome} <span class="badge badge-gray">padrão</span></div>
+      <div style="font-size:12px;color:var(--text-3);line-height:1.45">${escapeHtml(desc)}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${mods(temMods)}</div>
+      <div>${pessoas(conta(u => u.perfil === b && !u.perfil_acesso_id))}</div></div>`;
+  }).join('');
+  const pers = st.perfis.map(p => {
+    const nomeBase = (_PERFIS_CATALOGO.bases.find(b => b[0] === p.perfil_base) || [,''])[1];
+    const ligados = orgMods.filter(m => (p.permissoes?.modulos || {})[m] !== false &&
+      (_PERFIS_CATALOGO.modulos.find(x => x.id === m)?.telas || []).some(([t]) => Number((p.permissoes?.telas || {})[t] || 0) > 0));
+    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;${p.ativo ? 'border-color:#FCD34D' : 'opacity:.7'}">
+      <div style="font-size:14.5px;font-weight:800;color:var(--text-1);display:flex;align-items:center;gap:8px">${escapeHtml(p.nome)}${p.ativo ? '' : ' <span class="badge badge-gray">desativado</span>'}</div>
+      <div style="font-size:12px;color:var(--text-3)">Parte de <b>${nomeBase}</b>.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${mods(ligados) || '<span style="font-size:12px;color:var(--text-3)">Nenhum módulo</span>'}</div>
+      <div style="display:flex;align-items:center;gap:8px">${pessoas(conta(u => u.perfil_acesso_id === p.id))}
+        <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="_perfisAbrir('${p.id}')">${_perfisPodeEditar() ? 'Editar' : 'Ver'}</button></div></div>`;
+  }).join('');
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div><div style="font-size:18px;font-weight:800;color:var(--text-1)">Perfis de acesso</div>
+      <div style="font-size:12.5px;color:var(--text-3)">Quem vê o quê no sistema. Cada pessoa da Equipe recebe um perfil.</div></div>
+      ${_perfisPodeEditar() ? `<button class="btn btn-amber" style="margin-left:auto" onclick="_perfisAbrir(null)">${ICONS.plus || ''} Novo perfil</button>` : ''}</div>
+    <div style="display:flex;gap:8px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 11px;font-size:12.5px;color:var(--text-2);line-height:1.5;margin-bottom:12px">
+      <span>Os 3 perfis padrão continuam existindo e não podem ser apagados. Um perfil novo parte de um deles e só pode <b>tirar</b> acesso, nunca dar mais do que o perfil de partida. Para dar um perfil a alguém: <b>Equipe</b> → pessoa → <b>Editar</b> → Perfil.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">${padrao}${pers}</div>
+    ${!st.perfis.length ? '<div style="font-size:12.5px;color:var(--text-3);margin-top:12px">Nenhum perfil personalizado ainda.</div>' : ''}`);
+}
+function _perfisPadraoDaBase(base) {
+  const lim = _PERFIS_CATALOGO.limites[base];
+  return { modulos: { treinamentos: true, crm: true, campo: true }, telas: { ...lim },
+    acoes: Object.fromEntries(_PERFIS_CATALOGO.acoes.filter(a => a[2].includes(base)).map(a => [a[0], true])) };
+}
+function _perfisAbrir(id) {
+  const st = window._perfisEstado;
+  const p = id ? st.perfis.find(x => x.id === id) : null;
+  const base = p?.perfil_base || 'comercial';
+  st.editando = { id: p?.id || null, nome: p?.nome || '', perfil_base: base, ativo: p ? p.ativo : true,
+    permissoes: p ? JSON.parse(JSON.stringify(p.permissoes || {})) : _perfisPadraoDaBase(base) };
+  _perfisRenderEditor();
+  window.scrollTo(0, 0);
+}
+function _perfisRenderEditor() {
+  const st = window._perfisEstado, e = st.editando, pode = _perfisPodeEditar();
+  const lim = _PERFIS_CATALOGO.limites[e.perfil_base];
+  const perm = e.permissoes; perm.modulos ||= {}; perm.telas ||= {}; perm.acoes ||= {};
+  const sw = (on, acao, travado) => `<button type="button" ${travado ? 'disabled' : `onclick="${acao}"`} aria-pressed="${on}" style="width:36px;height:20px;border-radius:999px;border:none;position:relative;cursor:${travado ? 'default' : 'pointer'};background:${on ? 'var(--green)' : 'var(--gray-300)'};flex-shrink:0;${travado ? 'opacity:.4' : ''}"><span style="position:absolute;top:2px;left:${on ? '18px' : '2px'};width:16px;height:16px;border-radius:50%;background:#fff"></span></button>`;
+  const seg = (tela, v, cap) => `<div style="display:inline-flex;flex-wrap:wrap;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;gap:2px">${
+    _PERFIS_CATALOGO.niveis.map((n, k) => `<button type="button" ${(!pode || k > cap) ? 'disabled' : `onclick="_perfisNivel('${tela}',${k})"`} style="min-height:30px;padding:0 10px;border:none;border-radius:6px;font-size:12px;font-weight:700;font-family:inherit;${k === v ? 'background:var(--amber);color:var(--navy)' : 'background:none;color:var(--text-3)'};${k > cap ? 'opacity:.35;cursor:not-allowed' : 'cursor:pointer'}">${n}</button>`).join('')}</div>`;
+  const blocos = _PERFIS_CATALOGO.modulos.filter(m => _perfisModulosDaOrg().includes(m.id)).map(m => {
+    const telas = m.telas.filter(([t]) => lim[t] !== undefined);
+    if (!telas.length) return '';
+    const ligado = perm.modulos[m.id] !== false;
+    const acoes = _PERFIS_CATALOGO.acoes.filter(a => a[2].includes(e.perfil_base) && ((m.id === 'campo') === ['concluir_avaliacao','trazer_soc','nova_revisao'].includes(a[0])));
+    return `<div style="border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-50);border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <span style="width:26px;height:26px;border-radius:6px;background:#F59E0B;color:#172541;display:flex;align-items:center;justify-content:center">${ICONS[m.icone] || ''}</span>
+        <b style="font-size:13.5px;color:var(--text-1)">${m.nome}</b>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)">Acessa este módulo ${sw(ligado, `_perfisModulo('${m.id}')`, !pode)}</span></div>
+      ${ligado ? `<div>${telas.map(([t, nome]) => `<div class="perf-linha" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+          <span style="flex:1;min-width:160px;font-size:13px;font-weight:600;color:var(--text-1)">${nome}</span>${seg(t, Math.min(Number(perm.telas[t] || 0), lim[t]), lim[t])}</div>`).join('')}
+        ${acoes.length ? `<div style="padding:8px 12px"><div style="font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Ações especiais</div>
+          ${acoes.map(([a, rot]) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12.5px;color:var(--text-1)">${sw(!!perm.acoes[a], `_perfisAcao('${a}')`, !pode)}${rot}</div>`).join('')}</div>` : ''}</div>` : ''}</div>`;
+  }).join('');
+  const usando = st.usos.filter(u => e.id && u.perfil_acesso_id === e.id).length;
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="_perfisRenderLista()">${ICONS.back} Voltar</button>
+      <div style="font-size:18px;font-weight:800;color:var(--text-1)">${e.id ? 'Perfil: ' + escapeHtml(e.nome) : 'Novo perfil'}</div></div>
+    <div class="card" style="padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Identificação</div>
+      <div class="field" style="max-width:420px"><label>Nome do perfil *</label><input type="text" id="perfNome" maxlength="60" value="${escapeHtml(e.nome)}" ${pode ? '' : 'readonly'} placeholder="Ex.: Técnico de campo, Recepção" oninput="window._perfisEstado.editando.nome=this.value"></div>
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin:10px 0 6px">Parte de qual perfil padrão</label>
+      <div class="perf-bases" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${_PERFIS_CATALOGO.bases.map(([b, nome, desc]) => `
+        <button type="button" ${pode ? `onclick="_perfisBase('${b}')"` : 'disabled'} style="text-align:left;border:1.5px solid ${b === e.perfil_base ? '#FCD34D' : 'var(--border)'};background:${b === e.perfil_base ? '#FFFBEB' : 'var(--surface)'};border-radius:var(--r-md);padding:10px 12px;font-family:inherit;cursor:${pode ? 'pointer' : 'default'}">
+          <b style="display:block;font-size:13px;color:var(--text-1)">${nome}</b><span style="font-size:12px;color:var(--text-3);line-height:1.4">${escapeHtml(desc)}</span></button>`).join('')}</div>
+      ${e.perfil_base === 'instrutor' ? '<div style="font-size:11.5px;color:var(--text-3);margin-top:6px">Quem tem este perfil aparece na agenda para ser escalado, igual a um Instrutor.</div>' : ''}
+      ${e.id && usando ? `<div style="font-size:11.5px;color:var(--warn-text);margin-top:6px">${usando} pessoa(s) usam este perfil: trocar o perfil de partida muda o perfil delas também.</div>` : ''}</div>
+    <div class="card" style="padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">O que este perfil acessa</div>
+      ${blocos}
+      <div style="font-size:11.5px;color:var(--text-3)">Opção apagada = o perfil de partida não permite. "Só vê" deixa a tela aberta, mas o sistema recusa qualquer alteração.</div></div>
+    ${pode ? `<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:20px">
+      ${e.id ? `<button class="btn btn-ghost" style="color:var(--red);margin-right:auto" onclick="_perfisApagar()">${usando ? 'Desativar' : 'Apagar perfil'}</button>` : ''}
+      <button class="btn btn-outline" onclick="_perfisRenderLista()">Cancelar</button>
+      <button class="btn btn-amber" id="btnPerfSalvar" onclick="_perfisSalvar()">Salvar perfil</button></div>` : ''}
+    <style>@media(max-width:767px){.perf-bases{grid-template-columns:1fr!important}}</style>`);
+}
+function _perfisNivel(tela, n) { window._perfisEstado.editando.permissoes.telas[tela] = n; _perfisRenderEditor(); }
+function _perfisModulo(m) { const p = window._perfisEstado.editando.permissoes; p.modulos[m] = p.modulos[m] === false; _perfisRenderEditor(); }
+function _perfisAcao(a) { const p = window._perfisEstado.editando.permissoes; p.acoes[a] = !p.acoes[a]; _perfisRenderEditor(); }
+function _perfisBase(b) {
+  const e = window._perfisEstado.editando;
+  if (b === e.perfil_base) return;
+  e.perfil_base = b;
+  const padrao = _perfisPadraoDaBase(b);
+  // mantém o que der das escolhas anteriores, dentro do limite da nova base
+  for (const t of Object.keys(padrao.telas)) if (e.permissoes.telas[t] !== undefined) padrao.telas[t] = Math.min(padrao.telas[t], e.permissoes.telas[t]);
+  padrao.modulos = { ...padrao.modulos, ...(e.permissoes.modulos || {}) };
+  e.permissoes = padrao;
+  _perfisRenderEditor();
+}
+async function _perfisSalvar() {
+  const st = window._perfisEstado, e = st.editando;
+  const nome = (e.nome || '').trim();
+  if (nome.length < 2) { showToast('Dê um nome ao perfil (ex.: Técnico de campo).', 'error'); return; }
+  const btn = document.getElementById('btnPerfSalvar'); if (btn) btn.disabled = true;
+  const reg = { nome, perfil_base: e.perfil_base, permissoes: e.permissoes };
+  const q = e.id
+    ? sb.from('perfis_acesso').update(reg).eq('id', e.id).select('id')
+    : sb.from('perfis_acesso').insert({ ...reg, org_id: usuarioAtual.org_id }).select('id');
+  const { data, error } = await q;
+  if (btn) btn.disabled = false;
+  if (error) { showToast(/duplicate|23505/.test((error.message || '') + (error.code || '')) ? 'Já existe um perfil com esse nome.' : traduzErroSupabase(error, 'Não foi possível salvar.'), 'error'); return; }
+  if (!data || !data.length) { showToast('O servidor recusou: seu perfil não permite editar perfis de acesso.', 'error'); return; }
+  showToast('Perfil salvo. Quem usa este perfil vê a mudança ao entrar de novo no sistema.', 'success');
+  await renderPerfisAcesso();
+}
+async function _perfisApagar() {
+  const st = window._perfisEstado, e = st.editando;
+  const usando = st.usos.filter(u => u.perfil_acesso_id === e.id).length;
+  if (usando) { showToast(`${usando} pessoa(s) usam este perfil. Troque o perfil delas em Equipe antes.`, 'error'); return; }
+  if (!await confirmarAcao(`Apagar o perfil "${e.nome}"?`, 'Apagar perfil', true)) return;
+  const { error } = await sb.from('perfis_acesso').delete().eq('id', e.id);
+  if (error) { showToast(traduzErroSupabase(error, 'Não foi possível apagar.'), 'error'); return; }
+  showToast('Perfil apagado.', 'success');
+  await renderPerfisAcesso();
+}
+
+// ── Equipe: select de perfil com os perfis personalizados ─────────────────
+async function _perfisDaOrg(orgId) {
+  try {
+    const { data, error } = await sb.from('perfis_acesso').select('id,nome,perfil_base').eq('org_id', orgId).eq('ativo', true).order('nome');
+    if (error) return null;               // PASSO-66 ainda não aplicado
+    return data || [];
+  } catch (e) { return null; }
+}
+function _opcoesPerfilUsuario(u, perfis) {
+  const atual = u?.perfil_acesso_id ? `${u.perfil}|${u.perfil_acesso_id}` : (u?.perfil || '');
+  return _PERFIS_CATALOGO.bases.map(([b, nome]) => {
+    const custom = (perfis || []).filter(p => p.perfil_base === b);
+    const op = (v, rot) => `<option value="${v}" ${v === atual ? 'selected' : ''}>${escapeHtml(rot)}</option>`;
+    return custom.length
+      ? `<optgroup label="${nome}">${op(b, nome + ' (padrão)')}${custom.map(p => op(`${b}|${p.id}`, p.nome)).join('')}</optgroup>`
+      : op(b, nome);
+  }).join('');
+}
+function _lerPerfilUsuario() {
+  const v = document.getElementById('mUsrPerfil')?.value || '';
+  const [perfil, perfilAcessoId] = v.split('|');
+  return { perfil, perfilAcessoId: perfilAcessoId || null };
+}
+
 function _perfilTemAcesso(pagina) {
   if (pagina === 'home') return true;
+  // 27/09 (v200): perfil de acesso personalizado esconde telas também da rota.
+  if (!_podeRota(pagina)) return false;
   const perfil = usuarioAtual?.perfil;
   const itens = NAV[perfil] || [];
   if (itens.some(i => i.id === pagina)) return true;
@@ -4914,7 +5212,7 @@ function _perfilTemAcesso(pagina) {
 // Clientes, Catálogo…) é o módulo de Treinamentos, ainda que ele não seja um
 // módulo de verdade no código — é a leitura correta do ponto de vista de quem
 // usa, e é o que o mockup mostra.
-const MENU_CONFIG_IDS = ['equipe', 'configuracoes', 'conta'];
+const MENU_CONFIG_IDS = ['equipe', 'perfis', 'configuracoes', 'conta'];
 
 // Os nomes de icone dos modulos (nucleo/icones.js) nao sao os do app (ICONS).
 // Este mapa e a traducao — pequeno de proposito: icone novo sem traducao cai
@@ -5018,8 +5316,11 @@ function _moduloAtivo(validos) {
   // organização, ou perfil que não enxerga aquele módulo. Nesses casos volta
   // para Treinamentos em vez de abrir uma aba vazia.
   if (v !== 'base' && !(validos && validos.indexOf(v) >= 0)) v = 'base';
+  // v200: perfil de acesso sem Treinamentos abre direto no primeiro módulo dele.
+  if (v === 'base' && !_baseVisivel() && validos && validos.length) v = validos[0];
   return v;
 }
+function _baseVisivel() { const p = _permAtual(); return !p || (p.modulos || {}).treinamentos !== false; }
 
 function _guardarModulo(id) {
   try { localStorage.setItem(_moduloChave(), id); } catch (e) {}
@@ -5033,7 +5334,7 @@ function trocarModulo(id) {
 function _redesenharMenuLateral() {
   const nav = document.getElementById('sidebarNav');
   if (!nav) return;
-  nav.innerHTML = _htmlMenuLateral(NAV[usuarioAtual?.perfil] || []);
+  nav.innerHTML = _htmlMenuLateral(_navDoUsuario(usuarioAtual?.perfil));
   const filtro = document.getElementById('menuFiltroInput');
   if (filtro) filtro.value = '';
   _filtrarMenuLateral('');
@@ -5046,9 +5347,10 @@ function _redesenharMenuLateral() {
 // quando precisou trocar — quem chama decide se redesenha.
 function _sincronizarModuloComRota(pagina) {
   const { ids, nomes } = _modulosDisponiveis();
-  const soItens = (NAV[usuarioAtual?.perfil] || []).filter(i => i.id);
+  const soItens = _navDoUsuario(usuarioAtual?.perfil).filter(i => i.id);
   const validos = Object.keys(nomes).filter(mid => soItens.some(i => ids[i.id] === mid));
   const alvo = ids[pagina] || 'base';
+  if (alvo === 'base' && !_baseVisivel()) return false;   // v200
   if (alvo !== 'base' && validos.indexOf(alvo) < 0) return false;
   if (alvo === _moduloAtivo(validos)) return false;
   _guardarModulo(alvo);
@@ -5094,7 +5396,7 @@ function _htmlMenuLateral(itens) {
   const ativo = _moduloAtivo(comItens);
   const base = soItens.filter(i => !MENU_CONFIG_IDS.includes(i.id) && !idsDeModulo[i.id]);
 
-  const abas = [{ id: 'base', nome: 'Treinamentos' }]
+  const abas = (_baseVisivel() ? [{ id: 'base', nome: 'Treinamentos' }] : [])   // v200
     .concat(comItens.map(id => ({ id, nome: nomes[id] })));
 
   // 27/09 (v199): com 3 módulos as abas cortavam os nomes ("Treinam…",
@@ -5104,7 +5406,8 @@ function _htmlMenuLateral(itens) {
 
   const visiveis = ativo === 'base'
     ? base
-    : soItens.filter(i => idsDeModulo[i.id] === ativo);
+    : (_baseVisivel() ? [] : base.filter(i => i.id === 'home'))   // v200: sem Treinamentos, o Início vai junto
+        .concat(soItens.filter(i => idsDeModulo[i.id] === ativo));
 
   return seletor
     + _htmlGruposMenu(visiveis, ativo === 'base' ? '' : nomes[ativo])
@@ -5167,7 +5470,7 @@ function _htmlConfigMenu(config) {
 
 function configurarNavegacao() {
   const perfil = usuarioAtual.perfil;
-  const itens  = NAV[perfil] || [];
+  const itens  = _navDoUsuario(perfil);   // v200: sem o que o perfil de acesso esconde
   const bottom = NAV_BOTTOM[perfil] || [];
 
   document.getElementById('sidebarNav').innerHTML = _htmlMenuLateral(itens);
@@ -5227,7 +5530,7 @@ function marcarNavAtivo(id) {
 
 const TITULOS = {configuracoes:'Configurações',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos',
   // 26/09 (v198): rotas da Avaliação de Campo (as ocultas não passam pelo menu)
-  campo:'Avaliações de campo','campo-avaliacao':'Avaliação de campo','campo-ghe':'GHE','campo-finalizar':'Finalizar avaliação','campo-catalogo':'Catálogo da ficha'};
+  perfis:'Perfis de acesso',campo:'Avaliações de campo','campo-avaliacao':'Avaliação de campo','campo-ghe':'GHE','campo-finalizar':'Finalizar avaliação','campo-catalogo':'Catálogo da ficha'};
 
 async function irPara(pagina, params={}) {
   // Bloqueia navegação para telas fora do menu do perfil atual (ver
@@ -5297,6 +5600,7 @@ async function irPara(pagina, params={}) {
       case 'historico':     await renderHistorico(); break;
       case 'relatorios':    await renderRelatorios(); break;
       case 'conta':         await renderConta(); break;
+      case 'perfis':        await renderPerfisAcesso(); break;
       // Rota de modulo: se algum modulo carregado responde por esta pagina,
       // ele desenha. Só cai em "em breve" quando ninguem responde.
       // (o despachante de acoes das telas de modulo esta em _ligarAcoesDeModulo)
@@ -5316,6 +5620,7 @@ async function irPara(pagina, params={}) {
         if (_GRID && await _GRID.abrir(pagina, params)) break;
         renderEmBreve(TITULOS[pagina]||pagina);
     }
+    _aplicarSomenteConsulta(pagina);   // v200: tela em "só vê" no perfil de acesso
   } catch(e) {
     console.error(e);
     renderErro(traduzErroSupabase(e));
@@ -9629,6 +9934,8 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
   const campoSenha = u ? '' : `
     <div class="field"><label>Senha provisória *</label><input type="password" id="mUsrSenha" placeholder="Mínimo 6 caracteres"><div style="font-size:11px;color:var(--text-3);margin-top:4px">O usuário poderá alterar após o primeiro acesso.</div></div>`;
 
+  // v200: perfis de acesso da organização entram no mesmo seletor de Perfil.
+  const _perfisOrg = await _perfisDaOrg(orgId || usuarioAtual.org_id);
   abrirModal(u ? `Editar usuário — ${escapeHtml(u.nome)}` : `Novo usuário — ${escapeHtml(org?.nome||'')}`, `
     <div class="field"><label>Nome completo *</label><input type="text" id="mUsrNome" value="${escapeHtml(u?.nome||'')}" placeholder="Nome do usuário"></div>
     <div class="field"><label>E-mail *</label><input type="email" id="mUsrEmail" value="${escapeHtml(u?.email||'')}" placeholder="email@exemplo.com.br" ${u?'disabled style="background:var(--gray-50);color:var(--text-3)"':''}></div>
@@ -9636,10 +9943,9 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
     ${campoSenha}
     <div class="field"><label>Perfil *</label>
       <select id="mUsrPerfil" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="administrador" ${u?.perfil==='administrador'?'selected':''}>Administrador</option>
-        <option value="comercial" ${u?.perfil==='comercial'?'selected':''}>Comercial</option>
-        <option value="instrutor" ${u?.perfil==='instrutor'?'selected':''}>Instrutor</option>
-      </select></div>
+        ${_opcoesPerfilUsuario(u, _perfisOrg)}
+      </select>
+      ${(_perfisOrg || []).length ? '<div style="font-size:11px;color:var(--text-3);margin-top:4px">Perfis personalizados aparecem abaixo do perfil padrão de que partem (Configurações → Perfis de acesso).</div>' : ''}</div>
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Identificação profissional <span style="font-weight:400;text-transform:none">(exibida no certificado)</span></div>
       <div class="field"><label>Formação</label><input type="text" id="mUsrFormacao" value="${escapeHtml(u?.formacao||'')}" placeholder="Ex: Bacharel em Engenharia de Segurança do Trabalho"></div>
@@ -9763,7 +10069,7 @@ async function _toggleAtivoUsuarioGerenciado(usuarioId, orgId) {
 async function salvarUsuarioOrg() {
   const usuarioId       = _modalEditUsuarioId;
   const nome            = document.getElementById('mUsrNome')?.value.trim();
-  const perfil          = document.getElementById('mUsrPerfil')?.value;
+  const { perfil, perfilAcessoId } = _lerPerfilUsuario();   // v200
   const sigla_conselho  = document.getElementById('mUsrSiglaConselho')?.value.trim()||null;
   const conselho_classe = document.getElementById('mUsrConselho')?.value.trim()||null;
   const especialidade   = document.getElementById('mUsrEspecialidade')?.value.trim()||null;
@@ -9777,9 +10083,11 @@ async function salvarUsuarioOrg() {
     setBtnModalLoading(true);
     // Correção 2026-08-26: mesma armadilha do _toggleAtivoUsuarioGerenciado —
     // RLS que recusa devolve 0 linhas, não erro. Ver comentário lá.
-    const { data: _alterados, error } = await sb.from('usuarios').update({
-      nome, perfil, sigla_conselho, conselho_classe, especialidade, formacao, uf_registro, cpf, whatsapp,
-    }).eq('id', usuarioId).select('id');
+    const _dadosUsr = { nome, perfil, sigla_conselho, conselho_classe, especialidade, formacao, uf_registro, cpf, whatsapp };
+    // v200: só manda a coluna nova se o PASSO-66 já rodou (há o seletor com optgroup
+    // ou valor "base|id"); antes dele a coluna não existe.
+    if (perfilAcessoId || document.querySelector('#mUsrPerfil optgroup')) _dadosUsr.perfil_acesso_id = perfilAcessoId;
+    const { data: _alterados, error } = await sb.from('usuarios').update(_dadosUsr).eq('id', usuarioId).select('id');
     if (error) throw error;
     if (!_alterados || _alterados.length === 0) {
       setBtnModalLoading(false);
@@ -9826,7 +10134,7 @@ async function criarUsuarioOrg() {
   const nome            = document.getElementById('mUsrNome')?.value.trim();
   const email           = document.getElementById('mUsrEmail')?.value.trim();
   const senha           = document.getElementById('mUsrSenha')?.value;
-  const perfil          = document.getElementById('mUsrPerfil')?.value;
+  const { perfil, perfilAcessoId } = _lerPerfilUsuario();   // v200
   const sigla_conselho  = document.getElementById('mUsrSiglaConselho')?.value.trim()||null;
   const conselho_classe = document.getElementById('mUsrConselho')?.value.trim()||null;
   const especialidade   = document.getElementById('mUsrEspecialidade')?.value.trim()||null;
@@ -9859,6 +10167,11 @@ async function criarUsuarioOrg() {
     // Salvar campos profissionais diretamente na tabela usuarios
     if (resultado.userId && (sigla_conselho||conselho_classe||especialidade||formacao||uf_registro||cpf||whatsapp)) {
       await sb.from('usuarios').update({sigla_conselho,conselho_classe,especialidade,formacao,uf_registro,cpf,whatsapp}).eq('id',resultado.userId);
+    }
+    // v200: perfil de acesso personalizado vai depois de o usuário existir.
+    if (resultado.userId && perfilAcessoId) {
+      const { error: ePa } = await sb.from('usuarios').update({ perfil_acesso_id: perfilAcessoId }).eq('id', resultado.userId);
+      if (ePa) showToast('Usuário criado, mas o perfil de acesso não foi aplicado: ' + traduzErroSupabase(ePa, 'erro'), 'error');
     }
     fecharModal(); showToast(`${nome} criado com sucesso!`,'success');
   } catch(e) {
@@ -30195,7 +30508,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '199';
+  var APP_BUILD = '200';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
