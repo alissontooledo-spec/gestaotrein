@@ -5354,11 +5354,21 @@ function _redesenharMenuLateral() {
 // Mantém o seletor coerente com a tela aberta: abrir Conversas seleciona o
 // CRM sozinho, sem o usuário ter que clicar no seletor antes. Devolve true
 // quando precisou trocar — quem chama decide se redesenha.
+function _moduloDaRotaOculta(pagina) {
+  try {
+    if (typeof _GRID !== 'undefined' && _GRID) {
+      for (const m of _GRID.modulos()) if ((m.itens || []).some(i => i.id === pagina)) return m.id;
+    }
+  } catch (e) {}
+  return null;
+}
 function _sincronizarModuloComRota(pagina) {
   const { ids, nomes } = _modulosDisponiveis();
   const soItens = _navDoUsuario(usuarioAtual?.perfil).filter(i => i.id);
   const validos = Object.keys(nomes).filter(mid => soItens.some(i => ids[i.id] === mid));
-  const alvo = ids[pagina] || 'base';
+  // v206: telas de detalhe (oculto:true — ex.: campo-avaliacao, campo-ghe) não
+  // estão no menu; sem isto o seletor voltava para Treinamentos a cada clique.
+  const alvo = ids[pagina] || _moduloDaRotaOculta(pagina) || 'base';
   if (alvo === 'base' && !_baseVisivel()) return false;   // v200
   if (alvo !== 'base' && validos.indexOf(alvo) < 0) return false;
   if (alvo === _moduloAtivo(validos)) return false;
@@ -30525,7 +30535,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '205';
+  var APP_BUILD = '206';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
