@@ -248,7 +248,10 @@ async function baixar(id) {
 }
 
 export const doc = (id) => _docs.get(id) || null;
-export const podeEditar = (d) => !!d && !['concluida', 'cancelada'].includes(d.av.situacao);
+export const podeEditar = (d) => !!d && !['concluida', 'cancelada'].includes(d.av.situacao)
+  && (ponte().pode ? ponte().pode('campo', 2) !== false : true);   // v200: perfil de acesso "só vê"
+/* v200: ações especiais do perfil de acesso (sem a função na casca = liberado). */
+export const podeAcao = (a) => (ponte().podeAcao ? ponte().podeAcao(a) !== false : true);
 
 /* ── Gravação local (sempre) + envio (quando der) ────────────────────────── */
 const _timers = new Map();

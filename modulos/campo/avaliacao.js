@@ -39,7 +39,7 @@ function blocoSoc(d, cli, editavel) {
   const resumo = s ? `<b>${(s.setores || []).filter(x => x.ativo !== false).length}</b> setores, <b>${(s.cargos || []).filter(x => x.ativo !== false).length}</b> cargos, <b>${s.total_funcionarios ?? 0}</b> funcionários e <b>${(s.ghes || []).length}</b> GHEs no SOC · trazido em ${esc(quando(s.gerado_em))}` : 'Traga os setores, cargos e GHEs cadastrados no SOC para esta empresa. Setores e cargos aparecem como sugestão ao montar cada GHE, mesmo os que ainda não têm funcionário.';
   return `<div class="cp-sec"><div class="cp-sec-tit">Dados do SOC <span class="dir" style="color:var(--text-3)">código ${esc(cli.soc_codigo_empresa)}</span></div>
     <div class="cp-soc-linha"><div class="t">${resumo}</div>
-      ${editavel ? btn(_ocupado === 'soc' ? 'Buscando no SOC…' : (s ? 'Atualizar' : 'Trazer do SOC'), 'campo:soc', { cls: s ? 'btn-outline btn-sm' : 'btn-navy btn-sm', travado: !!_ocupado || !D.online() }) : ''}</div>
+      ${editavel && D.podeAcao('trazer_soc') ? btn(_ocupado === 'soc' ? 'Buscando no SOC…' : (s ? 'Atualizar' : 'Trazer do SOC'), 'campo:soc', { cls: s ? 'btn-outline btn-sm' : 'btn-navy btn-sm', travado: !!_ocupado || !D.online() }) : ''}</div>
     ${(s?.avisos || []).length ? nota(esc(s.avisos.join(' ')), 'warn') : ''}
     ${editavel && ghesSoc.length ? `<div style="margin-top:10px">${btn(`Usar ${ghesSoc.length === 1 ? 'o GHE' : 'os ' + ghesSoc.length + ' GHEs'} do SOC`, 'campo:soc-ghes', { cls: 'btn-outline btn-sm' })}
       <div class="cp-ajuda">Cria um GHE para cada GHE ativo do SOC, com setores, funções e os riscos já caracterizados lá. Você confere e completa na visita.</div></div>` : ''}
@@ -69,7 +69,7 @@ async function telaConcluida(d, cli, tec) {
     <div class="cp-sec"><div class="cp-sec-tit">GHEs</div>${linhas || '<div class="cp-ajuda">Sem GHE.</div>'}</div>
     ${d.av.observacoes ? `<div class="cp-sec"><div class="cp-sec-tit">Observações</div><div style="font-size:13px;color:var(--text-2);white-space:pre-wrap">${esc(d.av.observacoes)}</div></div>` : ''}
   </div><div class="cp-lado" style="display:block"><div class="cp-sec"><div class="cp-sec-tit">Ações</div>
-    ${btn('Nova revisão', 'campo:revisao', { estilo: 'width:100%;margin-bottom:8px', travado: !!_ocupado || !D.online() })}
+    ${D.podeAcao('nova_revisao') ? btn('Nova revisão', 'campo:revisao', { estilo: 'width:100%;margin-bottom:8px', travado: !!_ocupado || !D.online() }) : ''}
     ${btn('Voltar para a lista', 'ir:campo', { cls: 'btn-ghost', estilo: 'width:100%' })}
     ${nota('Avaliação concluída não se altera. <b>Nova revisão</b> cria uma cópia aberta (revisão ' + (d.av.revisao + 1) + ') e mantém esta no histórico.')}
 </div></div></div>`;

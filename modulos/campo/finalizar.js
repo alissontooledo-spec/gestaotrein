@@ -72,8 +72,9 @@ export async function render(params) {
         ${areaAssin('tec', aTec, !trav && !semTec.length, 'Tocar para assinar', 'Libera quando não faltar mais nada')}</div></div></div>
     ${_progresso ? nota(esc(_progresso)) : ''}
     ${!D.online() ? nota('Sem internet agora. Tudo fica guardado neste aparelho; para concluir é preciso conexão.', 'warn') : ''}
+    ${!D.podeAcao('concluir_avaliacao') ? nota('Seu perfil de acesso não conclui avaliações. Deixe tudo preenchido e assinado pelo acompanhante; quem tem permissão conclui.', 'warn') : ''}
     ${acoes([btn('Voltar', `ir:campo-avaliacao:${_id}`, { papel: 'cp-a-voltar' }),
-      btn(_ocupado ? 'Concluindo…' : 'Concluir avaliação', 'campo:concluir', { cls: 'btn-amber', papel: 'cp-a-prox', travado: trav || _ocupado || todas.length > 0 || !D.online() })])}`;
+      D.podeAcao('concluir_avaliacao') ? btn(_ocupado ? 'Concluindo…' : 'Concluir avaliação', 'campo:concluir', { cls: 'btn-amber', papel: 'cp-a-prox', travado: trav || _ocupado || todas.length > 0 || !D.online() }) : ''])}`;
 }
 
 export async function depois() {
