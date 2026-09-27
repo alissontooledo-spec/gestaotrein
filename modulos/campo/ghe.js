@@ -37,6 +37,65 @@ const colunasConclusao = (r) => {
 const temMedicao = (r) => ['fisico', 'quimico'].includes(r.categoria);
 const ehIluminacao = (r) => r.codigo === '537' || _cat?.risco(r.codigo)?.dados?.tipo_especial === 'iluminacao';
 
+/* ── v207: medição (quadro SOC × hoje) ─────────────────────────────────── */
+/* Unidade e limite de tolerância já conhecidos (o técnico pode alterar). */
+const REF_MED = {
+  '460': { un: 'dB(A)', lim: 85, acao: 80, ref: 'NR-15 Anexo 1' },
+  '461': { un: 'dB(C)', lim: 120, ref: 'NR-15 Anexo 2' },
+  '466': { un: 'm/s²', lim: 1.1, acao: 0.5, ref: 'NR-15 Anexo 8' },
+  '1001': { un: 'm/s¹,⁷⁵', lim: 21, acao: 9.1, ref: 'NR-15 Anexo 8' },
+  '534': { un: 'm/s²', lim: 5, acao: 2.5, ref: 'NR-15 Anexo 8' }
+};
+let _medEditar = false, _medRisco = null;
+const refMedicao = (r) => REF_MED[String(r?.codigo || '')] || null;
+export const numMed = (v) => { const m = String(v ?? '').replace(/\s/g, '').match(/-?\d+(?:[.,]\d+)?/); return m ? Number(m[0].replace(',', '.')) : null; };
+export const fmtNum = (n) => n == null ? '' : String(Math.round(n * 100) / 100).replace('.', ',');
+const limTexto = (ref) => ref ? `${fmtNum(ref.lim)} ${ref.un} · ${ref.ref}` : '';
+function tempoDesde(dataBrTxt) {
+  const m = String(dataBrTxt || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (!m) return '';
+  const ini = new Date(+m[3], +m[2] - 1, +m[1]), hoje = new Date();
+  let meses = (hoje.getFullYear() - ini.getFullYear()) * 12 + hoje.getMonth() - ini.getMonth() - (hoje.getDate() < ini.getDate() ? 1 : 0);
+  if (meses < 1) return 'há menos de 1 mês';
+  const a = Math.floor(meses / 12), mm = meses % 12;
+  return 'há ' + [a ? `${a} ano${a > 1 ? 's' : ''}` : '', mm ? `${mm} ${mm > 1 ? 'meses' : 'mês'}` : ''].filter(Boolean).join(' e ');
+}
+/* Número de hoje × SOC × limite → etiquetas. */
+function comparacaoMed(hoje, soc, lim, un) {
+  if (hoje == null) return '';
+  const out = [];
+  if (soc != null) {
+    const dif = Math.round((hoje - soc) * 100) / 100;
+    out.push(dif === 0 ? `<span class="cp-pill azul">Igual à última</span>`
+      : `<span class="cp-pill ${dif > 0 ? 'amb' : 'ok'}">${dif > 0 ? '▲' : '▼'} ${fmtNum(Math.abs(dif))} ${esc(un)} ${dif > 0 ? 'acima' : 'abaixo'} da última</span>`);
+  }
+  if (lim) out.push(hoje > lim ? `<span class="cp-pill ver">Acima do limite · ${Math.round(hoje / lim * 100)}% dos ${fmtNum(lim)} ${esc(un)}</span>`
+    : `<span class="cp-pill ok">Abaixo do limite · ${Math.round(hoje / lim * 100)}% dos ${fmtNum(lim)} ${esc(un)}</span>`);
+  return out.join('');
+}
+const posBarra = (v, lim) => `${Math.max(0, Math.min(100, v / (lim * 1.1) * 100)).toFixed(1)}%`;
+function caixaSoc(sm, un, lim, ref, hoje) {
+  const v = numMed(sm.valor);
+  const barra = lim && v != null ? `<div class="cp-med-barra" style="--lim:${(100 / 1.1).toFixed(1)}%;--acao:${ref?.acao && lim === ref.lim ? (ref.acao / (lim * 1.1) * 100).toFixed(1) : (100 / 1.1).toFixed(1)}%">
+      <i style="left:${posBarra(v, lim)}"></i><i class="hj" data-cp-med-mk style="left:${hoje != null ? posBarra(hoje, lim) : '0'};${hoje != null ? '' : 'display:none'}"></i></div>
+      <div class="cp-med-esc"><span>0</span><span style="left:${(100 / 1.1).toFixed(1)}%">${fmtNum(lim)} limite</span></div>
+      <span class="cp-pill ${v > lim ? 'ver' : 'ok'}">${v > lim ? 'Acima' : 'Abaixo'} do limite (${fmtNum(lim)} ${esc(un)})</span>` : '';
+  return `<div class="cp-med-soc"><div class="cp-med-t azul">${I.relogio || ''}Última no SOC</div>
+    <div class="cp-med-v">${esc(v != null ? fmtNum(v) : sm.valor)}<small>${esc(un)}</small></div>
+    ${sm.data ? `<div class="cp-med-d">em <b>${esc(sm.data)}</b>${tempoDesde(sm.data) ? ' · ' + tempoDesde(sm.data) : ''}</div>` : ''}
+    ${barra}</div>`;
+}
+/* Ao digitar o resultado: etiquetas e marcador sem redesenhar a tela. */
+function pintarComparacao(r) {
+  const med = r.medicao || {}, ref = refMedicao(r);
+  const un = med.unidade || r.soc?.medicao?.unidade || ref?.un || '';
+  const lim = numMed(med.limite) ?? ref?.lim ?? null;
+  const hoje = numMed(med.resultado), soc = numMed(r.soc?.medicao?.valor);
+  document.querySelectorAll('[data-cp-med-comp]').forEach(el => { el.innerHTML = comparacaoMed(hoje, soc, lim, un); });
+  document.querySelectorAll('[data-cp-med-mk]').forEach(el => { if (hoje != null && lim) { el.style.left = posBarra(hoje, lim); el.style.display = ''; } else el.style.display = 'none'; });
+  document.querySelectorAll('[data-acao^="campo:med-sit:"]').forEach(el => el.classList.toggle('on', el.dataset.acao === 'campo:med-sit:' + (med.situacao || '')));
+  if (med.data) document.querySelectorAll('[data-cp="r.med.data"]').forEach(el => { if (!el.value) el.value = med.data; });
+}
+
 /* ── Etapas ─────────────────────────────────────────────────────────────── */
 function etapas(g) {
   const p = passo();
@@ -175,8 +234,6 @@ function riscoAberto(d, g, r, trav) {
   const nomeConc = { ins: 'Insalubridade', per: 'Periculosidade', ae: 'Aposentadoria especial' };
   const graus = ['10%', '20%', '40%'];
   const socDica = (k) => r.soc && (k === 'ins' || k === 'per' || (k === 'ae' && 'ae' in r.soc)) ? `<span class="cp-padrao">SOC: ${r.soc[k] ? 'S' : 'N'}${k === 'ins' && r.soc.ins && r.soc.grau ? ' · ' + r.soc.grau : ''}</span>` : '';
-  /* v205: última medição do SOC como referência para a de hoje. */
-  const refMed = r.soc?.medicao?.valor ? `<div class="cp-soc-ref"><b>Última medição no SOC:</b> ${esc(r.soc.medicao.valor)}${r.soc.medicao.unidade ? ' ' + esc(r.soc.medicao.unidade) : ''}${r.soc.medicao.data ? ' em ' + esc(r.soc.medicao.data) : ''}. Registre abaixo a de hoje (ou deixe em branco se não medir).</div>` : '';
   const expoSoc = r.soc?.exposicao ? `<span class="cp-padrao">SOC: ${esc((D.EXPOSICAO.find(([k]) => k === r.soc.exposicao) || [, ''])[1])}</span>` : '';
 
   const pendBox = r.pendente ? `<div class="cp-depois"><div class="cp-sec-tit">${ico('relogio')}Completar depois</div>
@@ -187,16 +244,28 @@ function riscoAberto(d, g, r, trav) {
       ${trav ? '' : `<div style="margin-top:10px">${btn('Já resolvi, tirar das pendências', 'campo:pend-off', { cls: 'btn-outline btn-sm' })}</div>`}</div>`
     : (trav ? '' : `<div style="margin:0 0 12px">${btn(ico('relogio') + ' Não dá para completar agora · deixar para depois', 'campo:pend-on', { cls: 'btn-outline', estilo: 'width:100%;min-height:44px' })}</div>`);
 
+  /* v207: quadro "Última no SOC" × "Medição de hoje" (proposta aprovada 27/09). */
+  const refM = refMedicao(r);
+  const socM = r.soc?.medicao?.valor ? r.soc.medicao : null;
+  const unEf = med.unidade || socM?.unidade || refM?.un || '';
+  const limEf = numMed(med.limite) ?? refM?.lim ?? null;
+  const hojeN = numMed(med.resultado);
+  const padraoUL = refM && !_medEditar && (!med.unidade || med.unidade === refM.un) && (!med.limite || med.limite === limTexto(refM));
   const blocoMedicao = temMedicao(r) ? `<div class="cp-sec"><div class="cp-sec-tit">Medição <span class="dir" style="color:var(--text-3)">se houver</span></div>
-      ${refMed}
-      <div class="cp-grid3"><div><label class="cp-lbl">Resultado</label>${inp('r.med.resultado', med.resultado, { ph: 'Ex.: 82,4', travado: trav, modo: 'decimal' })}</div>
-        <div><label class="cp-lbl">Unidade</label>${inp('r.med.unidade', med.unidade, { ph: 'Ex.: dB(A)', travado: trav })}</div>
-        <div><label class="cp-lbl">Limite de referência</label>${inp('r.med.limite', med.limite, { ph: 'Ex.: 85 dB(A) · NR-15 Anexo 1', travado: trav })}</div></div>
-      <div class="cp-grid2" style="margin-top:12px"><div><label class="cp-lbl">Equipamento / método</label>${inp('r.med.metodo', med.metodo, { ph: 'Ex.: Dosímetro · NHO 01', travado: trav })}</div>
-        <div><label class="cp-lbl">Data da medição</label>${inp('r.med.data', med.data, { tipo: 'date', travado: trav })}</div></div>
-      <label class="cp-lbl" style="margin-top:12px">Resultado em relação ao limite</label>${seg('med-sit', [['abaixo', 'Abaixo do limite'], ['acima', 'Acima do limite']], med.situacao, { travado: trav })}</div>` : '';
+      <div class="cp-med${socM ? '' : ' so-hoje'}">
+        ${socM ? caixaSoc(socM, unEf, limEf, refM, hojeN) : ''}
+        <div class="cp-med-hoje"><div class="cp-med-t">Medição de hoje</div>
+          <div class="cp-med-big"><div><label class="cp-lbl">Resultado</label>${inp('r.med.resultado', med.resultado, { ph: socM ? '—' : 'Ex.: 82,4', travado: trav, modo: 'decimal' })}</div>${unEf ? `<span class="un">${esc(unEf)}</span>` : ''}</div>
+          <div class="cp-med-comp" data-cp-med-comp>${comparacaoMed(hojeN, numMed(socM?.valor), limEf, unEf)}</div>
+          <div class="cp-grid2" style="margin-top:12px"><div><label class="cp-lbl">Equipamento / método</label>${inp('r.med.metodo', med.metodo, { ph: 'Ex.: Dosímetro · NHO 01', travado: trav })}</div>
+            <div><label class="cp-lbl">Data da medição</label>${inp('r.med.data', med.data, { tipo: 'date', travado: trav })}</div></div>
+          ${padraoUL ? `<button type="button" class="cp-med-mais" ${trav ? 'disabled' : 'data-acao="campo:med-editar"'}>Unidade e limite: ${esc(refM.un)} · ${esc(limTexto(refM))} ${trav ? '' : '<span>(alterar)</span>'}</button>`
+            : `<div class="cp-grid2" style="margin-top:12px"><div><label class="cp-lbl">Unidade</label>${inp('r.med.unidade', med.unidade, { ph: 'Ex.: dB(A)', travado: trav })}</div>
+            <div><label class="cp-lbl">Limite de referência</label>${inp('r.med.limite', med.limite, { ph: 'Ex.: 85 dB(A) · NR-15 Anexo 1', travado: trav })}</div></div>`}
+          <label class="cp-lbl" style="margin-top:12px">Resultado em relação ao limite</label>${seg('med-sit', [['abaixo', 'Abaixo do limite'], ['acima', 'Acima do limite']], med.situacao, { travado: trav })}
+        </div></div></div>` : '';
   const blocoIlu = ehIluminacao(r) ? `<div class="cp-sec"><div class="cp-sec-tit">Iluminância (NHO 11)</div>
-      ${temMedicao(r) ? '' : refMed}
+      ${!temMedicao(r) && socM ? `<div class="cp-med" style="margin-bottom:12px">${caixaSoc(socM, socM.unidade || 'lux', null, null, null)}<div class="cp-ajuda" style="align-self:center">Referência da última medição no SOC. Registre ao lado a de hoje.</div></div>` : ''}
       <div class="cp-grid3"><div><label class="cp-lbl">Nível encontrado (lux)</label>${inp('r.ilu.nivel_encontrado', ilu.nivel_encontrado, { travado: trav, modo: 'decimal' })}</div>
         <div><label class="cp-lbl">Nível mínimo (lux)</label>${inp('r.ilu.nivel_minimo', ilu.nivel_minimo, { travado: trav, modo: 'decimal' })}</div>
         <div><label class="cp-lbl">IRC</label>${inp('r.ilu.irc', ilu.irc, { travado: trav, modo: 'decimal' })}</div></div></div>` : '';
@@ -282,6 +351,7 @@ export async function render(params) {
   const p = passo();
   const r = p === 3 ? risco() : null;
   if (p === 3 && _risco && !r) _risco = null;
+  if (_medRisco !== _risco) { _medRisco = _risco; _medEditar = false; }   // v207
 
   let corpo;
   if (r) corpo = riscoAberto(d, g, r, trav);
@@ -303,7 +373,24 @@ function digitar(chave, valor) {
   if (chave === 'g.descricao') return altG(g => { g.descricao = v; });
   if (chave.startsWith('a.')) return altA(a => { a[chave.slice(2)] = v; });
   if (chave === 'r.pend.texto') return altR(r => { if (r.pendente) r.pendente.texto = v; });
-  if (chave.startsWith('r.med.')) return altR(r => { r.medicao = { ...(r.medicao || {}), [chave.slice(6)]: v }; });
+  if (chave.startsWith('r.med.')) {
+    altR(r => {
+      const m = { ...(r.medicao || {}), [chave.slice(6)]: v };
+      /* v207: ao digitar o resultado, completa unidade, limite, data e a situação (se o técnico não escolheu). */
+      if (chave === 'r.med.resultado' && numMed(v) != null) {
+        const ref = refMedicao(r);
+        if (ref && !m.unidade) m.unidade = ref.un;
+        if (ref && !m.limite) m.limite = limTexto(ref);
+        if (!m.data) { const h = new Date(); m.data = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`; }
+        const lim = numMed(m.limite) ?? ref?.lim;
+        if (lim && (!m.situacao || m.sit_auto)) { m.situacao = numMed(v) > lim ? 'acima' : 'abaixo'; m.sit_auto = true; }
+      }
+      if (chave === 'r.med.limite' && m.sit_auto && numMed(m.resultado) != null && numMed(v)) m.situacao = numMed(m.resultado) > numMed(v) ? 'acima' : 'abaixo';
+      r.medicao = m;
+    });
+    const r = risco(); if (r) pintarComparacao(r);
+    return;
+  }
   if (chave.startsWith('r.ilu.')) return altR(r => { r.iluminacao = { ...(r.iluminacao || {}), [chave.slice(6)]: v }; });
   if (chave.startsWith('r.')) return altR(r => { r[chave.slice(2)] = v; });
 }
@@ -415,7 +502,8 @@ export async function acao(nome, valor, redesenhar) {
       redesenhar(); return true;
     }
     case 'campo:r-amb': altR(r => { r.ambiente = valor || 'Todos'; }); return true;
-    case 'campo:med-sit': altR(r => { const m = r.medicao || {}; r.medicao = { ...m, situacao: m.situacao === a1 ? null : a1 }; }); redesenhar(); return true;
+    case 'campo:med-sit': altR(r => { const m = r.medicao || {}; r.medicao = { ...m, situacao: m.situacao === a1 ? null : a1, sit_auto: false }; }); redesenhar(); return true;
+    case 'campo:med-editar': _medEditar = true; redesenhar(); return true;
     case 'campo:padrao': {
       altR(r => { const c = _cat.risco(r.codigo); const pad = c?.dados?.padrao || {}; for (const k of colunasConclusao(r)) if (pad[k] && !r[k]) r[k] = pad[k]; });
       redesenhar(); return true;

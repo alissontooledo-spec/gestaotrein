@@ -9,34 +9,53 @@
 
 import * as sessao from '../../nucleo/sessao.js';
 import * as D from './dados.js';
-import { I, esc, ico, secTit, nota, dataCurta, fmtCnpj, selo, ligarTela } from './comum.js';
+import { I, esc, ico, secTit, nota, dataCurta, fmtCnpj, selo, ligarTela, avisar } from './comum.js';
 
 let _busca = '', _sit = 'abertas', _tec = '';
 let _preparando = false;
 
 const kpi = (ic, n, l, cor) => `<div class="turmas-kpi"><div style="color:var(--text-3);width:14px;height:14px">${I[ic]}</div><div style="font-size:18px;font-weight:800;color:${cor || 'var(--navy)'};margin-top:4px">${n}</div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--text-3)">${l}</div></div>`;
-const PROG = { agendada: 0, em_andamento: 45, aguardando: 75, concluida: 100, cancelada: 0 };
 
+/* v207 (proposta aprovada 27/09): linha larga no computador, card no celular.
+   A cor da faixa é a situação; a barra é o progresso real (riscos avaliados). */
 function cartao(a, cli, tec) {
   const r = a.resumo || {};
   const pend = (r.pendencias || []).length;
   const aberta = !['concluida', 'cancelada'].includes(a.situacao);
-  const botao = a.situacao === 'agendada' ? ['Iniciar', 'btn-amber'] : aberta ? ['Continuar', 'btn-amber'] : ['Abrir', 'btn-outline'];
-  const ghes = r.ghes ? `${r.ghes} GHE${r.ghes > 1 ? 's' : ''} · ${r.riscos || 0} risco${r.riscos === 1 ? '' : 's'}` : 'GHEs a definir na visita';
-  let linhaPend = '';
-  if (a._pendente) linhaPend = `<div class="cp-card-meta" style="color:var(--warn-text);font-weight:600">${I.nuvem}<span>${a._pendente} alteração(ões) ainda neste aparelho</span></div>`;
-  else if (pend) linhaPend = `<div class="cp-card-meta" style="color:var(--warn-text);font-weight:600">${I.relogio}<span>${pend} pendência${pend > 1 ? 's' : ''}: ${esc((r.pendencias || []).map(p => p.texto || p.nome).filter(Boolean).slice(0, 2).join(', '))}</span></div>`;
-  else if (a.situacao === 'concluida') linhaPend = `<div class="cp-card-meta">${I.doc}<span>${esc(a.numero || '')} · revisão ${a.revisao}${a.pdf_path ? ' · PDF pronto' : ' · PDF a gerar'}</span></div>`;
-  return `<div class="cp-card" data-acao="ir:campo-avaliacao:${a.id}">
-    <span class="cp-card-st">${selo(a.situacao)}</span>
-    <div class="cp-card-ghe">${cli?.cnpj ? 'CNPJ ' + esc(fmtCnpj(cli.cnpj)) : '&nbsp;'}</div>
-    <div class="cp-card-tit">${esc(cli?.nome || 'Empresa')}</div>
-    <div class="cp-card-meta">${I.cal}<span>${esc(dataCurta(a.data_visita, a.hora_inicio))}</span></div>
-    <div class="cp-card-meta">${I.user}<span>${esc(tec?.nome || '')}</span></div>
-    <div class="cp-card-meta">${I.pasta}<span>${esc(ghes)}</span></div>
-    ${linhaPend}
-    <div class="cp-card-prog"><div class="bar"><i class="${a.situacao === 'concluida' ? 'ok' : ''}" style="width:${PROG[a.situacao] ?? 0}%"></i></div></div>
-    <div class="cp-card-acoes"><button type="button" class="btn ${botao[1]} btn-sm" data-acao="ir:campo-avaliacao:${a.id}">${botao[0]}</button></div>
+  const nG = r.ghes || 0, nR = r.riscos || 0;
+  const ok = r.riscos_ok;                                     // PASSO-70
+  const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+  let linha, pct, st;
+  if (a.situacao === 'concluida') {
+    linha = `<span><b>${esc(a.numero || '')}</b> · revisão ${a.revisao} · ${plural(nG, 'GHE', 'GHEs')} · ${plural(nR, 'risco', 'riscos')}</span>`;
+    pct = 100; st = `${I.check}Concluída · ${a.pdf_path ? 'PDF pronto' : 'PDF a gerar'}`;
+  } else if (a.situacao === 'cancelada') {
+    linha = '<span>Visita cancelada na agenda</span>'; pct = 0; st = 'Cancelada';
+  } else if (!nG) {
+    linha = '<span>GHEs a definir na visita</span>'; pct = 0; st = a.situacao === 'agendada' ? 'Agendada · começa na visita' : 'Em andamento';
+  } else {
+    const feitos = ok ?? null;
+    pct = feitos != null && nR ? Math.round(feitos / nR * 100) : ({ em_andamento: 45, aguardando: 75 }[a.situacao] ?? 0);
+    linha = feitos != null
+      ? `<span><b>${feitos} de ${nR}</b> ${nR === 1 ? 'risco avaliado' : 'riscos avaliados'} · ${plural(nG, 'GHE', 'GHEs')}</span><b>${pct}%</b>`
+      : `<span>${plural(nG, 'GHE', 'GHEs')} · ${plural(nR, 'risco', 'riscos')}</span>`;
+    const falta = [];
+    if (feitos != null && nR - feitos > 0) falta.push(plural(nR - feitos, 'risco', 'riscos'));
+    if (!a.assinatura_tec_path) falta.push('as assinaturas');
+    st = pend ? `${I.relogio}Aguardando · ${plural(pend, 'pendência', 'pendências')}: ${esc((r.pendencias || []).map(p => p.texto || p.nome).filter(Boolean).slice(0, 2).join(', '))}`
+      : falta.length ? `Em andamento · falta${falta.length > 1 || (feitos != null && nR - feitos > 1) ? 'm' : ''} ${falta.join(' e ')}`
+      : 'Pronta para concluir';
+  }
+  if (a._pendente) st = `${I.nuvem}${a._pendente} alteração(ões) ainda neste aparelho`;
+  const botoes = a.situacao === 'agendada' ? [['Iniciar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
+    : aberta ? [['Continuar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
+    : [...(a.pdf_path ? [['PDF', 'btn-outline', `campo:pdf-lista:${a.id}`]] : []), ['Abrir', 'btn-outline', `ir:campo-avaliacao:${a.id}`]];
+  return `<div class="cp-av ${esc(a.situacao)}" data-acao="ir:campo-avaliacao:${a.id}">
+    <span class="cp-av-fx"></span>
+    <div class="cp-av-emp"><div class="cp-av-st">${selo(a.situacao)}</div><b>${esc(cli?.nome || 'Empresa')}</b><span>${cli?.cnpj ? 'CNPJ ' + esc(fmtCnpj(cli.cnpj)) : '&nbsp;'}</span></div>
+    <div class="cp-av-info"><div>${I.cal}<span>${esc(dataCurta(a.data_visita, a.hora_inicio))}</span></div><div>${I.user}<span>${esc(tec?.nome || '')}</span></div></div>
+    <div class="cp-av-prog"><div class="l">${linha}</div><div class="bar"><i style="width:${pct}%"></i></div><div class="s">${st}</div></div>
+    <div class="cp-av-acoes">${botoes.map(([t, c, ac]) => `<button type="button" class="btn ${c} btn-sm" data-acao="${ac}">${t}</button>`).join('')}</div>
   </div>`;
 }
 
@@ -94,8 +113,8 @@ export async function render() {
       ${gestor ? `<div class="turmas-filtros-cta">${window.__GRID_PONTE?.modoSuporte?.() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-catalogo">Catálogo da ficha</button>' : ''}<button type="button" class="btn btn-amber" data-acao="ir:agendaequipe">${ico('plus')}Agendar visita</button></div>` : ''}
     </div>
     ${!lista.length ? nota(esc(vazioTxt)) : ''}
-    ${abertas.length ? secTit('Em aberto') + `<div class="cp-lista">${abertas.map(a => cartao(a, clis[a.cliente_id], usus[a.tecnico_id])).join('')}</div>` : ''}
-    ${fechadas.length ? secTit(_sit === 'cancelada' ? 'Canceladas' : 'Concluídas', 'var(--green)') + `<div class="cp-lista">${fechadas.slice(0, 60).map(a => cartao(a, clis[a.cliente_id], usus[a.tecnico_id])).join('')}</div>` : ''}
+    ${abertas.length ? secTit(`Em aberto · ${abertas.length}`) + `<div class="cp-lista2">${abertas.map(a => cartao(a, clis[a.cliente_id], usus[a.tecnico_id])).join('')}</div>` : ''}
+    ${fechadas.length ? secTit(`${_sit === 'cancelada' ? 'Canceladas' : 'Concluídas'} · ${fechadas.length}`, 'var(--green)') + `<div class="cp-lista2">${fechadas.slice(0, 60).map(a => cartao(a, clis[a.cliente_id], usus[a.tecnico_id])).join('')}</div>` : ''}
     ${lista.length && !abertas.length && !fechadas.length ? nota('Nenhuma avaliação com esses filtros.') : ''}
     ${lista.length && _sit === 'abertas' && !fechadas.length ? `<div style="text-align:center;margin:14px 0"><button type="button" class="btn btn-ghost btn-sm" data-acao="campo:sit:concluida">Ver concluídas</button></div>` : ''}
   `;
@@ -121,5 +140,13 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:busca') { _busca = valor || ''; redesenhar(); return true; }
   if (nome === 'campo:sit') { _sit = valor || 'abertas'; redesenhar(); return true; }
   if (nome === 'campo:tec') { _tec = valor || ''; redesenhar(); return true; }
+  if (nome === 'campo:pdf-lista') {   /* v207: atalho para o PDF da concluída */
+    try {
+      const url = await D.linkPdfPorId(valor);
+      if (!url) throw new Error('O PDF desta avaliação ainda não foi gerado.');
+      window.open(url, '_blank');
+    } catch (e) { avisar(D.traduzirErro(e), 'erro'); }
+    return true;
+  }
   return false;
 }

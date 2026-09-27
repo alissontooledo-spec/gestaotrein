@@ -680,6 +680,14 @@ export async function linkPdf(d) {
   const { data } = await sb().storage.from('campo').createSignedUrl(d.av.pdf_path, 600, { download: true });
   return data?.signedUrl || null;
 }
+/* v207: link do PDF a partir da lista (sem abrir a avaliação). */
+export async function linkPdfPorId(id) {
+  const { data: av, error } = await sb().from('campo_avaliacoes').select('pdf_path').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!av?.pdf_path) return null;
+  const { data } = await sb().storage.from('campo').createSignedUrl(av.pdf_path, 600, { download: true });
+  return data?.signedUrl || null;
+}
 export async function novaRevisao(id) {
   const { data, error } = await sb().rpc('campo_nova_revisao', { p_id: id });
   if (error) throw new Error(traduzirErro(error));
