@@ -20,6 +20,12 @@ export function iniciar({ sb = null, origem = 'exemplo', exemplo = {} } = {}) {
   _sb = sb; _origem = origem; _exemplo = exemplo;
 }
 
+/* 26/09 (v198) — o cliente do banco para módulos que têm camada de dados
+   própria (Avaliação de Campo: trabalha sem internet e sincroniza depois,
+   o que não cabe em listar/gravar). Continua sendo UM cliente só, o mesmo
+   da casca: organização e permissão seguem aplicadas pela RLS. */
+export const cliente = () => _sb;
+
 /* Em modo banco, carrega as etapas reais do funil padrao da organizacao e
    substitui a lista do nucleo. Feito uma vez, na entrada do modulo — as telas
    comparam etapa a cada render e nao podem esperar consulta. */
