@@ -5050,14 +5050,20 @@ function _instalarGuardasDeTela() {
   }
 }
 // Esconde os botões que o perfil não pode usar (a lista é por sessão).
-let _seletorBloqueado = null, _chaveBloqueio = null, _obsBloqueio = null, _rafBloqueio = 0;
+let _seletorBloqueado = null, _seletorNeutro = null, _chaveBloqueio = null, _obsBloqueio = null, _rafBloqueio = 0;
+const _SO_BOTAO = new Set(['_agEquipeEscolherTipoAgendamento']);
 function _seletorDosBloqueados() {
   const p = _permAtual();
   const chave = p ? (usuarioAtual?.id || '') + JSON.stringify(p) : '';
   if (chave === _chaveBloqueio) return _seletorBloqueado;
   _chaveBloqueio = chave;
   const nomes = p ? _GUARDAS_TELA.filter(([, telas, nivel]) => !_podeAlguma(telas, nivel)).map(([n]) => n) : [];
-  _seletorBloqueado = nomes.length ? nomes.flatMap(n => [`[data-action="${n}"]`, `[onclick^="${n}("]`, `[onclick*=" ${n}("]`, `[onclick*=";${n}("]`]).join(',') : null;
+  // v212: em algumas telas a mesma função está num bloco que também mostra
+  // conteúdo (ex.: o nome do instrutor na Agenda da Equipe abre "agendar").
+  // Esses blocos NÃO somem — só os botões; o clique continua recusado.
+  const sel = (n, pre) => [`${pre}[data-action="${n}"]`, `${pre}[onclick^="${n}("]`, `${pre}[onclick*=" ${n}("]`, `${pre}[onclick*=";${n}("]`];
+  _seletorBloqueado = nomes.length ? nomes.flatMap(n => _SO_BOTAO.has(n) ? [...sel(n, 'button'), ...sel(n, 'a')] : sel(n, '')).join(',') : null;
+  _seletorNeutro = nomes.filter(n => _SO_BOTAO.has(n)).flatMap(n => sel(n, 'div')).join(',') || null;
   return _seletorBloqueado;
 }
 function _esconderBloqueados() {
@@ -5065,6 +5071,7 @@ function _esconderBloqueados() {
   const sel = _seletorDosBloqueados();
   if (!sel) return;
   document.querySelectorAll(sel).forEach(el => { if (el.style.display !== 'none') { el.style.display = 'none'; el.setAttribute('data-perfil-oculto', '1'); } });
+  if (_seletorNeutro) document.querySelectorAll(_seletorNeutro).forEach(el => { if (el.style.cursor !== 'default') { el.style.cursor = 'default'; el.removeAttribute('title'); } });
 }
 function _ligarOcultacaoPorPerfil() {
   _instalarGuardasDeTela();
@@ -5736,7 +5743,8 @@ async function renderHome() {
   const p = usuarioAtual.perfil;
   if (p==='provedor')      return renderHomeProvedor();
   if (p==='administrador') return renderHomeAdmin();
-  if (p==='comercial')     return renderHomeComercial();
+  // v211: o Comercial vê o mesmo Início do Administrador (pedido do Alisson, 28/09).
+  if (p==='comercial')     return renderHomeAdmin({ comercial: true });
   if (p==='instrutor')     return renderHomeInstrutor();
 }
 
@@ -7266,7 +7274,8 @@ async function _lerTudo(montar) {
   return { data: tudo, error: null };
 }
 
-async function renderHomeAdmin() {
+async function renderHomeAdmin(opcoes = {}) {
+  const _ehComercial = !!opcoes.comercial;   // v211
   const oi = usuarioAtual.org_id;
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
@@ -7505,7 +7514,8 @@ async function renderHomeAdmin() {
   ];
   const onboardingFeitos    = onboardingItens.filter(i => i.done).length;
   const onboardingCompleto  = onboardingFeitos === onboardingItens.length;
-  const htmlOnboarding = onboardingCompleto ? '' : `
+  // v211: "Primeiros passos" (catálogo, equipe) é tarefa do administrador.
+  const htmlOnboarding = (onboardingCompleto || _ehComercial) ? '' : `
     <div class="gi-passos-card">
       <div style="min-width:0">
         <b>Primeiros passos na plataforma</b>
@@ -7521,7 +7531,7 @@ async function renderHomeAdmin() {
       : new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}).replace('.','');
   })();
   const mensagemDoDia = await _buscarMensagemDoDia();
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${escapeHtml(usuarioAtual.nome)}</div><div class="mh-badge">Administrador</div>`);
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${escapeHtml(usuarioAtual.nome)}</div><div class="mh-badge">${_ehComercial ? 'Comercial' : 'Administrador'}</div>`);
   // Badge do menu: turmas com pendência (mesmo dado do alerta acima; a
   // sidebar é elemento único, fora do dual-DOM — ver _setSidebarBadge)
   _setSidebarBadge('turmas', comPendencia.length);
@@ -30616,7 +30626,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '210';
+  var APP_BUILD = '212';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
