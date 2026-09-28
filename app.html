@@ -661,6 +661,10 @@ body.modo-suporte-ativo .sino-painel{top:calc(60px + var(--suporte-h,34px))}
   .detail-sidebar{margin-bottom:0}
   .detail-actions{flex-direction:row}
   .detail-actions .btn{flex:0 0 auto;padding:8px 16px;font-size:13px}
+  /* v209: na coluna lateral (280px) os botões quebram linha em vez de sumir atrás do painel
+     (ex.: "Ver conta no CRM" no cadastro do cliente ficava escondido). */
+  .detail-sidebar .detail-actions{flex-wrap:wrap}
+  .detail-sidebar .detail-actions .btn{flex:1 1 auto;white-space:nowrap}
 }
 @media(min-width:1280px){.detail-page{max-width:920px}}
 @media(max-width:767px){
@@ -4462,6 +4466,7 @@ async function entrarNoApp() {
   // v200: perfil de acesso personalizado (PASSO-66). Sem ele, nada muda.
   await _carregarPerfilAcesso();
   _instalarGuardasDeAcao();
+  _ligarOcultacaoPorPerfil();   // v210
   // Provedor não tem org — acesso sempre liberado
   if (usuarioAtual.perfil !== 'provedor' && usuarioAtual.org_id) {
     const {data:org} = await sb.from('organizacoes').select('ativo,plano,assinatura_vencimento,nome,trial_fim,logo_url,cor_primaria,cert_aplicar_cor_documentos,soc_integracao_ativa').eq('id',usuarioAtual.org_id).single();
@@ -4993,6 +4998,82 @@ function _instalarGuardasDeAcao() {
     }
   }
 }
+// ── v210: botões de gravar/apagar respeitam o perfil de acesso ─────────────
+// Antes, uma tela em "Só vê" mostrava o selo "Somente consulta", mas os botões
+// Editar / Excluir / Adicionar continuavam na tela (e parte das tabelas da
+// turma nem era travada no banco — PASSO-71). Agora cada função de gravação
+// tem a tela e o nível que exige: sem o nível, o botão some e a função recusa.
+// [nome da função ou do data-action, telas (qualquer uma serve), nível]
+const _TURMA_T = ['turmas', 'agenda'], _AGENDA_T = ['agendaequipe', 'agenda'], _COLAB_T = ['colaboradores', 'turmas', 'agenda'];
+const _GUARDAS_TELA = [
+  // Turmas — editar (2)
+  ...['abrirModalTurma','salvarTurma','editarTurma','cancelarTurma','abrirModalCancelarTurma','confirmarCancelarTurma','finalizarTurma',
+      'addAgendamento','abrirModalAgendamento','editarAgendamento','salvarAgendamento','avisarAgendamento',
+      'addParticipante','abrirModalAddParticipante','_confirmarAdicionarParticipantes','reabrirModalParticipante',
+      'adicionarEmTurmaExistente','abrirModalAdicionarEmTurmaExistente','confirmarAdicionarEmTurma',
+      'cadastroRapidoColab','abrirCadastroRapidoColab','salvarCadastroRapido','abrirCadastroRapidoColabExec','salvarCadastroRapidoExec',
+      'iniciarExecucaoSessao','abrirExecucaoSessao','abrirAssinatura','confirmarAssinatura','_avaliarParticipante','_confirmarReprovacao',
+      '_artEditarNumero','salvarArtNumero','removerArquivoArt','_confirmarLiberacaoArt','liberarEnvioSemArt','marcarEnvioComoConcluido',
+      'abrirModalReaproveitamentoAssinaturas','_confirmarReaproveitamentoAssinaturas','editarAnotacoes','salvarAnotacoes',
+      'removerEvidencia','removerEvidenciaPendente','agendarReciclagem','_agRapidaSalvarTurmaEAgendamento'].map(n => [n, _TURMA_T, 2]),
+  // Turmas — apagar (3)
+  ...['excluirTurma','abrirModalExcluirTurma','confirmarExcluirTurma','excluirAgendamento','removerParticipante','_tvRemoverSelecionados'].map(n => [n, _TURMA_T, 3]),
+  // Agenda da Equipe
+  ...['abrirModalCompromisso','salvarCompromisso','cancelarCompromisso','concluirCompromisso','_agEquipeEscolherTipoAgendamento'].map(n => [n, _AGENDA_T, 2]),
+  // Clientes
+  ...['abrirModalCliente','salvarCliente','editarCliente','toggleCliente','abrirModalClienteRapido','salvarClienteRapido','executarImportacaoClientes'].map(n => [n, ['clientes'], 2]),
+  // Colaboradores
+  ...['abrirModalColab','salvarColab','editarColab','executarImportacao','executarImportacaoSOC','_socWsAbrirModal','_socWsConfirmarImportacao'].map(n => [n, _COLAB_T, 2]),
+  ...['abrirTreinoExternoColab','abrirTreinoExternoConf','salvarTreinoExterno'].map(n => [n, ['colaboradores', 'conformidade'], 2]),
+  // Catálogo
+  ...['abrirModalCatalogo','salvarCatalogo','editarCatalogo','duplicarCatalogo','arquivarCatalogo','desarquivarCatalogo'].map(n => [n, ['catalogo'], 2]),
+  // Conformidade
+  ...['confSalvarStatus','_confSalvarStatus','confCancelarStatus','_confCancelarStatus','reabrirPendencia'].map(n => [n, ['conformidade'], 2]),
+  // Equipe
+  ...['toggleUsuarioEquipe','_toggleAtivoUsuarioGerenciado'].map(n => [n, ['equipe'], 2]),
+];
+const _NOME_TELA = t => { for (const m of _PERFIS_CATALOGO.modulos) for (const [id, nome] of m.telas) if (id === t) return nome; return t; };
+const _podeAlguma = (telas, nivel) => telas.some(t => _pode(t, nivel));
+function _instalarGuardasDeTela() {
+  for (const [nome, telas, nivel] of _GUARDAS_TELA) {
+    const original = window[nome];
+    if (typeof original !== 'function' || original.__guardaTela) continue;
+    const guarda = function (...args) {
+      if (!_podeAlguma(telas, nivel)) {
+        showToast(`Seu perfil de acesso${usuarioAtual?._permNome ? ' (' + usuarioAtual._permNome + ')' : ''} ${nivel >= 3 ? 'não permite apagar' : 'permite só consultar'} em ${_NOME_TELA(telas[0])}.`, 'error');
+        return;
+      }
+      return original.apply(this, args);
+    };
+    guarda.__guardaTela = true;
+    window[nome] = guarda;
+  }
+}
+// Esconde os botões que o perfil não pode usar (a lista é por sessão).
+let _seletorBloqueado = null, _chaveBloqueio = null, _obsBloqueio = null, _rafBloqueio = 0;
+function _seletorDosBloqueados() {
+  const p = _permAtual();
+  const chave = p ? (usuarioAtual?.id || '') + JSON.stringify(p) : '';
+  if (chave === _chaveBloqueio) return _seletorBloqueado;
+  _chaveBloqueio = chave;
+  const nomes = p ? _GUARDAS_TELA.filter(([, telas, nivel]) => !_podeAlguma(telas, nivel)).map(([n]) => n) : [];
+  _seletorBloqueado = nomes.length ? nomes.flatMap(n => [`[data-action="${n}"]`, `[onclick^="${n}("]`, `[onclick*=" ${n}("]`, `[onclick*=";${n}("]`]).join(',') : null;
+  return _seletorBloqueado;
+}
+function _esconderBloqueados() {
+  _rafBloqueio = 0;
+  const sel = _seletorDosBloqueados();
+  if (!sel) return;
+  document.querySelectorAll(sel).forEach(el => { if (el.style.display !== 'none') { el.style.display = 'none'; el.setAttribute('data-perfil-oculto', '1'); } });
+}
+function _ligarOcultacaoPorPerfil() {
+  _instalarGuardasDeTela();
+  if (_obsBloqueio || typeof MutationObserver === 'undefined') { _esconderBloqueados(); return; }
+  _obsBloqueio = new MutationObserver(() => { if (_permAtual() && !_rafBloqueio) _rafBloqueio = requestAnimationFrame(_esconderBloqueados); });
+  _obsBloqueio.observe(document.body, { childList: true, subtree: true });
+  _esconderBloqueados();
+}
+
 // Tela em "só vê": aviso no cabeçalho e sem o botão flutuante de criar.
 function _aplicarSomenteConsulta(pagina) {
   const h = document.getElementById('headerTitle');
@@ -30535,7 +30616,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '208';
+  var APP_BUILD = '210';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
