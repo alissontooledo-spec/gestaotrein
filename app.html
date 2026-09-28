@@ -7441,6 +7441,18 @@ async function renderHomeAdmin(opcoes = {}) {
     .slice(0,5);
   const tMapHome = {};
   tAll.forEach(t=>{ tMapHome[t.id]=t; });
+  // v214: a "próxima agenda" também mostra os compromissos (visitas técnicas,
+  // reuniões, particulares…) — antes só as aulas de treinamento apareciam.
+  const _fimProx = (() => { const x = new Date(hoje); x.setDate(x.getDate() + 60); return dataLocalISO(x); })();
+  const [compsProxRaw, { data: _usrNomes }] = await Promise.all([
+    _compCarregarPeriodoOrg(hojeStr, _fimProx),
+    sb.from('usuarios').select('id,nome').eq('org_id', oi).then(r => r, () => ({ data: [] })),
+  ]);
+  const _nomeUsr = {}; (_usrNomes || []).forEach(u => { _nomeUsr[u.id] = u.nome; });
+  const proxAgenda = [
+    ...proxSessoes.map(s => ({ k: 's', data: s.data, hora: s.hora_inicio || '', s })),
+    ...(compsProxRaw || []).filter(c => !c.concluido).map(c => ({ k: 'c', data: c.data, hora: c.hora_inicio || '', c })),
+  ].sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora)).slice(0, 6);
 
   // Atividade recente — turmas criadas recentemente
   const recentes = [...tAll].sort((a,b)=>b.created_at>a.created_at?1:-1).slice(0,3);
@@ -7631,10 +7643,21 @@ async function renderHomeAdmin(opcoes = {}) {
 
     <div class="gi-grid2 gi-par">
       <section class="gi-painel">
-        <div class="gi-painel-h"><h3>Próximas aulas</h3><button class="gi-link" data-nav="agendaequipe">Ver agenda completa</button></div>
-        ${proxSessoes.length === 0
-          ? `<div class="gi-vazio">Nenhuma aula agendada a partir de hoje.</div>`
-          : `<div class="gi-corpo">${proxSessoes.map(s => {
+        <div class="gi-painel-h"><h3>Próxima agenda</h3><button class="gi-link" data-nav="agendaequipe">Ver agenda completa</button></div>
+        ${proxAgenda.length === 0
+          ? `<div class="gi-vazio">Nada agendado a partir de hoje.</div>`
+          : `<div class="gi-corpo">${proxAgenda.map(({ k, s, c }) => {
+              if (k === 'c') {
+                const tp = _compTipo(c.tipo), nI = _nomeUsr[c.instrutor_id] || '';
+                return `<div class="gi-row gi-aula" data-action="verCompromisso" data-id="${c.id}">
+                <div class="gi-data"><small>${_diaRot(c.data)}</small><b>${c.hora_inicio ? c.hora_inicio.slice(0,5) : '--:--'}</b></div>
+                <div class="gi-main">
+                  <b>${escapeHtml(c.titulo || tp.label)}</b>
+                  <small>${escapeHtml(tp.label)}${c.clientes?.nome ? ' · ' + escapeHtml(c.clientes.nome) : ''}${c.local ? ' · ' + escapeHtml(c.local) : ''}${nI ? `<span class="gi-instr-m"> · ${escapeHtml(nI)}</span>` : ''}</small>
+                </div>
+                ${nI ? `<span class="gi-instr" title="Instrutor">${escapeHtml(nI)}</span>` : ''}
+              </div>`;
+              }
               const t = tMapHome[s.turma_id];
               const nomeInstr = s.instrutor_id ? (s.usuarios?.nome || 'Instrutor definido') : '';
               return `<div class="gi-row gi-aula" data-action="verTurma" data-id="${s.turma_id}">
@@ -17518,6 +17541,8 @@ const COMPROMISSO_TIPOS = [
   // 26/09 (v198): visita da Avaliação de Campo. Só aparece para quem tem o
   // módulo; ao gravar, o banco cria a avaliação ligada (PASSO-64).
   { v:'visita_campo', label:'Visita técnica', icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg>' },
+  // 28/09 (v214, PASSO-72): compromisso particular do instrutor (bloqueia a agenda).
+  { v:'particular', label:'Particular', icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>' },
   { v:'outro',    label:'Outro',    icone:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M5 4h14v12l-5 5H5z"/><path d="M19 16h-5v5M9 9h6M9 13h3"/></svg>' },
 ];
 // Lista explicita de colunas — nunca select('*'), mesmo cuidado contra
@@ -17953,7 +17978,7 @@ async function salvarCompromisso() {
   if (!_compPodeGerenciar()) { showToast('Você não tem permissão para isso','error'); return; }
   const tipoEscolhido = document.getElementById('mCompTipo')?.value || 'outro';
   // Visita técnica sem título: o nome do tipo basta (o cliente já identifica).
-  const titulo      = document.getElementById('mCompTitulo')?.value.trim() || (tipoEscolhido === 'visita_campo' ? 'Visita técnica' : '');
+  const titulo      = document.getElementById('mCompTitulo')?.value.trim() || (tipoEscolhido === 'visita_campo' ? 'Visita técnica' : tipoEscolhido === 'particular' ? 'Particular' : '');
   const instrutorId = document.getElementById('mCompInstrutor')?.value || '';
   const clienteId   = document.getElementById('mCompCliente')?.value || '';
   const data        = document.getElementById('mCompData')?.value || '';
@@ -22506,6 +22531,7 @@ async function renderRelatorios() {
     {data:presencasRaw},
     {data:sessoesTodasRaw},
     confData,
+    {data:compromissosRaw},
   ] = await Promise.all([
     sb.from('turmas')
       .select('id,status,cliente_id,catalogo_id,created_at,clientes(id,nome),catalogo(nome,carga_horaria)')
@@ -22530,12 +22556,17 @@ async function renderRelatorios() {
     // regra da tela Conformidade) — busca só quando o plano já dá acesso, para
     // não gastar consulta à toa em quem ainda não tem a feature.
     planoAtinge('pro') ? calcConformidade().catch(() => null) : Promise.resolve(null),
+    // v214: compromissos da agenda (visitas técnicas, reuniões, particulares…)
+    // também entram nos relatórios. Falha → [] (a tela continua funcionando).
+    sb.from('compromissos').select('id,instrutor_id,tipo,titulo,data,hora_inicio,hora_fim,local,empresa_id,clientes(nome),concluido,cancelado')
+      .eq('org_id', oi).eq('cancelado', false).then(r => r, () => ({ data: [] })),
   ]);
 
   // Guardar globalmente para filtros e exportação
   const turmaIdsOrg = new Set((turmasRaw||[]).map(t=>t.id));
   const sessoesOrg = (sessoesRaw||[]).filter(s=>turmaIdsOrg.has(s.turma_id));
   window._relRaw = {
+    compromissos: compromissosRaw||[],   // v214
     turmas: turmasRaw||[],
     clientes: clientesRaw||[],
     // Base ÚNICA de "pessoas treinadas" em todas as telas e PDFs de
@@ -23008,10 +23039,15 @@ function _renderRelatorioView() {
     { nome: 'Aulas concluídas',  cor: '#F59E0B', vals: dadosSessoes },
     { nome: 'Pessoas treinadas', cor: '#168A59', vals: dadosPart },
   ]);
-  const instPerf = rankInst.filter(r => r.sessoes > 0 || r.turmas > 0);
+  // v214: compromissos (visitas, reuniões…) do período também contam na atuação
+  const compsGeral = _relCompPeriodo(1200);
+  const compPorInstr = {}; compsGeral.forEach(c => { if (c.instrutor_id) compPorInstr[c.instrutor_id] = (compPorInstr[c.instrutor_id] || 0) + 1; });
+  const idPorNome = {}; instrutores.forEach(u => { idPorNome[u.nome] = u.id; });
+  const instPerf = rankInst.filter(r => r.sessoes > 0 || r.turmas > 0 || compPorInstr[idPorNome[r.nome]]);
   const graficoPerf = _relGrupo(instPerf.map(r => r.nome.split(' ')[0]), [
     { nome: 'Aulas concluídas', cor: '#172541', vals: instPerf.map(r => r.sessoes) },
     { nome: 'Turmas',           cor: '#F59E0B', vals: instPerf.map(r => r.turmas) },
+    { nome: 'Compromissos',     cor: '#168A59', vals: instPerf.map(r => compPorInstr[idPorNome[r.nome]] || 0) },
   ]);
   const barrasCatH = _relBarrasH(rankCat.map(r => ({ nome: r.nome, n: r.n, sub: `${r.horas}h totais` })), '#F59E0B');
   const barrasCat = _relBarras(rankCat.map(r => ({ nome: r.nome, n: r.n, sub: `${r.horas}h totais` })));
@@ -23328,8 +23364,77 @@ function _relQuerySelectorAllVisible(sel) {
   return body ? Array.from(body.querySelectorAll(sel)) : [];
 }
 
+// ── v214: compromissos da agenda nos relatórios ──
+// Período: o mesmo das outras telas (chips ou período personalizado).
+function _relCompPeriodo(padraoMeses) {
+  const lista = (window._relRaw || {}).compromissos || [];
+  const custom = window._relPeriodoCustom;
+  if (custom) return lista.filter(c => c.data && c.data >= custom.inicio && c.data <= custom.fim);
+  const meses = window._relPeriodo || padraoMeses || 1200;
+  const hoje = new Date();
+  const corte = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth() - meses + 1, 1));
+  return lista.filter(c => c.data && c.data >= corte);
+}
+const _relCompRealizado = c => c.concluido || c.data < dataLocalISO(new Date());
+function _relCompLinha(c, nomeInstr) {
+  const tp = _compTipo(c.tipo), feito = _relCompRealizado(c);
+  const hr = c.hora_inicio ? `${c.hora_inicio.slice(0,5)}${c.hora_fim ? '–' + c.hora_fim.slice(0,5) : ''}` : '';
+  return `<div class="rel2-row" style="cursor:pointer" data-action="verCompromisso" data-id="${c.id}">
+    <div class="rel2-badge" style="background:${feito ? 'var(--green-l)' : 'var(--amber-l)'};color:${feito ? 'var(--green-text)' : 'var(--amber-text)'};font-size:14px">${tp.icone}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;color:var(--navy)">${escapeHtml(c.titulo || tp.label)}${c.titulo && c.titulo !== tp.label ? ` <span style="font-weight:500;color:var(--text-3)">· ${escapeHtml(tp.label)}</span>` : ''}</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px">${formatarData(c.data)}${hr ? ' · ' + hr : ''}${nomeInstr ? ' · ' + escapeHtml(nomeInstr) : ''}${c.clientes?.nome ? ' · ' + escapeHtml(c.clientes.nome) : ''}${c.local ? ' · ' + escapeHtml(c.local) : ''}</div>
+    </div>
+    <span class="badge ${feito ? 'badge-green' : 'badge-warn'}" style="flex-shrink:0">${feito ? 'Realizado' : 'A realizar'}</span>
+  </div>`;
+}
+function _renderRelatorioCompromissos() {
+  setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Compromissos</div>`);
+  const raw = window._relRaw || {};
+  const comps = _relCompPeriodo(6);
+  const nomes = {}; (raw.usuarios || []).forEach(u => { nomes[u.id] = u.nome; });
+  const realizados = comps.filter(_relCompRealizado).length;
+  const visitas = comps.filter(c => c.tipo === 'visita_campo').length;
+  const porTipo = {}; comps.forEach(c => { const l = _compTipo(c.tipo).label; porTipo[l] = (porTipo[l] || 0) + 1; });
+  const porInstr = {}; comps.forEach(c => { const n = nomes[c.instrutor_id] || 'Sem instrutor'; porInstr[n] = (porInstr[n] || 0) + 1; });
+  const ordem = [...comps].sort((a, b) => (b.data + (b.hora_inicio || '')).localeCompare(a.data + (a.hora_inicio || '')));
+  const MAX = 150;
+  setConteudo(`
+    ${_relHeaderNovo('Compromissos da agenda')}
+    ${_relFaixaDestinosHtml('compromissos')}
+    <div class="rel2-kpis">
+      <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val">${comps.length}</div><div class="rel2-kpi-lbl">Compromissos no período</div></div>
+      <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val" style="color:var(--green)">${realizados}</div><div class="rel2-kpi-lbl">Realizados</div></div>
+      <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val" style="color:var(--amber-h)">${comps.length - realizados}</div><div class="rel2-kpi-lbl">A realizar</div></div>
+      <div class="rel2-kpi" style="cursor:default"><div class="rel2-kpi-val">${visitas}</div><div class="rel2-kpi-lbl">Visitas técnicas</div></div>
+    </div>
+    ${_relDupla('Compromissos por tipo', _relPizza(_relFatias(Object.entries(porTipo).map(([nome, n]) => ({ nome, n }))), 'Compromissos por tipo'),
+                'Compromissos por instrutor', _relBarras(Object.entries(porInstr).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([nome, n]) => ({ nome, n }))))}
+    <div class="rel2-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="rel2-card-title" style="margin:0">Todos os compromissos do período</div>
+        <button class="btn btn-outline btn-sm" onclick="exportarCompromissosCSV()">Exportar planilha</button>
+      </div>
+      <div style="margin-top:8px">${ordem.slice(0, MAX).map(c => _relCompLinha(c, nomes[c.instrutor_id])).join('') || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum compromisso no período</div>'}</div>
+      ${ordem.length > MAX ? `<div style="font-size:11px;color:var(--text-3);padding-top:6px">Mostrando os ${MAX} mais recentes de ${ordem.length}. A planilha traz todos.</div>` : ''}
+    </div>`);
+}
+function exportarCompromissosCSV() {
+  const raw = window._relRaw || {};
+  const nomes = {}; (raw.usuarios || []).forEach(u => { nomes[u.id] = u.nome; });
+  const comps = _relCompPeriodo(6).sort((a, b) => (a.data + (a.hora_inicio || '')).localeCompare(b.data + (b.hora_inicio || '')));
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const linhas = [['Data', 'Início', 'Fim', 'Tipo', 'Título', 'Instrutor', 'Empresa', 'Local', 'Situação'].map(q).join(';')];
+  comps.forEach(c => linhas.push([formatarData(c.data), (c.hora_inicio || '').slice(0, 5), (c.hora_fim || '').slice(0, 5), _compTipo(c.tipo).label,
+    c.titulo || '', nomes[c.instrutor_id] || '', c.clientes?.nome || '', c.local || '', _relCompRealizado(c) ? 'Realizado' : 'A realizar'].map(q).join(';')));
+  const blob = new Blob(['\ufeff' + linhas.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `compromissos-${dataLocalISO(new Date())}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+
 function relIrParaDestino(destino) {
   window._relDestinoAtivo = destino;
+  if (destino === 'compromissos')      { _renderRelatorioCompromissos();     return; }   // v214
   if (destino === 'instrutores')       { _renderRelatorioInstrutoresLista(); return; }
   if (destino === 'clientes')          { _renderRelatorioClientesLista();    return; }
   if (destino === 'treinamentos')      { _renderRelatorioTreinamentosLista();return; }
@@ -23354,6 +23459,7 @@ function _relFaixaDestinosHtml(ativo) {
     { id: 'instrutores',  n: nInstrutores,  l: 'Instrutores' },
     { id: 'clientes',     n: nClientes,     l: 'Clientes' },
     { id: 'treinamentos', n: nTreinamentos, l: 'Treinamentos' },
+    { id: 'compromissos', n: _relCompPeriodo(window._relPeriodo || 1200).length, l: 'Compromissos' },   // v214
     { id: 'auditoria',    n: nCanceladas,   l: 'Auditoria' },
     { id: 'documentos',   n: nDocs,         l: 'Documentos', alerta: nDocs > 0 },
   ];
@@ -23465,14 +23571,15 @@ function _renderRelatorioInstrutoresLista() {
   // dias ministrados, que é o que mede a atuação dele.
   const porInstrutor = instrutores.map(u => {
     const m = _metricasInstrutor(u.id, tFilt, raw.sessoesTodas || [], raw.presencas || []);
-    return { id: u.id, nome: u.nome, ...m };
+    const comps = _relCompPeriodo(6).filter(c => c.instrutor_id === u.id).length;   // v214
+    return { id: u.id, nome: u.nome, ...m, comps };
   }).sort((a, b) => b.dias - a.dias);
 
   const lista = porInstrutor.map(i => `
     <button class="rel2-cli-btn" onclick="relVerInstrutor('${i.id}')">
       <div style="flex:1;min-width:0">
         <div class="rel2-cli-name">${escapeHtml(i.nome)}</div>
-        <div class="rel2-cli-meta">${i.dias} dia${i.dias !== 1 ? 's' : ''} ministrado${i.dias !== 1 ? 's' : ''} · ${i.horas}h · ${i.turmas} turma${i.turmas !== 1 ? 's' : ''} · ${i.clientes} cliente${i.clientes !== 1 ? 's' : ''}</div>
+        <div class="rel2-cli-meta">${i.dias} dia${i.dias !== 1 ? 's' : ''} ministrado${i.dias !== 1 ? 's' : ''} · ${i.horas}h · ${i.turmas} turma${i.turmas !== 1 ? 's' : ''} · ${i.clientes} cliente${i.clientes !== 1 ? 's' : ''}${i.comps ? ` · ${i.comps} compromisso${i.comps !== 1 ? 's' : ''}` : ''}</div>
       </div>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
     </button>`).join('');
@@ -23640,6 +23747,16 @@ function _renderRelatorioInstrutorDetalhe() {
           <div class="rel2-card-title">Clientes atendidos por este instrutor</div>
           ${barrasCliHtml}
         </div>
+        ${(() => {   // v214: compromissos da agenda (visitas técnicas, reuniões, particulares…)
+          const cs = _relCompPeriodo(6).filter(c => c.instrutor_id === instrutorId)
+            .sort((a, b) => (b.data + (b.hora_inicio || '')).localeCompare(a.data + (a.hora_inicio || '')));
+          const feitos = cs.filter(_relCompRealizado).length;
+          return `<div class="rel2-card">
+            <div class="rel2-card-title">Compromissos da agenda — ${cs.length} (${feitos} realizado${feitos !== 1 ? 's' : ''}, ${cs.length - feitos} a realizar)</div>
+            ${cs.slice(0, 30).map(c => _relCompLinha(c, '')).join('') || '<div style="font-size:12px;color:var(--text-3);padding:8px 0">Nenhum compromisso no período</div>'}
+            ${cs.length > 30 ? `<div style="font-size:11px;color:var(--text-3);padding-top:6px">Mostrando 30 de ${cs.length}. Veja todos na aba Compromissos.</div>` : ''}
+          </div>`;
+        })()}
         ${canceladasN ? `<div style="font-size:11px;color:var(--text-3);padding:4px 2px">${canceladasN} treinamento${canceladasN !== 1 ? 's' : ''} cancelado${canceladasN !== 1 ? 's' : ''} no período selecionado.</div>` : ''}
       </div>
     </div>`);
@@ -30659,7 +30776,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '213';
+  var APP_BUILD = '214';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
