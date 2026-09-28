@@ -5423,9 +5423,36 @@ function _guardarModulo(id) {
   try { localStorage.setItem(_moduloChave(), id); } catch (e) {}
 }
 
+// v213: escolher um módulo no seletor LEVA para ele (antes só trocava o menu
+// e a tela do módulo anterior continuava aberta). Destino: a última tela do
+// menu que a pessoa usou naquele módulo nesta sessão; na primeira vez, a
+// primeira tela do módulo (Treinamentos → Início, CRM → Painel comercial,
+// Avaliação de Campo → Avaliações de campo).
+const _ULTIMA_TELA_MOD = {};   // módulo → { pagina, params }
+function _moduloDaPagina(pagina) {
+  const { ids } = _modulosDisponiveis();
+  return ids[pagina] || _moduloDaRotaOculta(pagina) || 'base';
+}
+function _destinoDoModulo(id) {
+  const ult = _ULTIMA_TELA_MOD[id];
+  if (ult && _podeRota(ult.pagina)) return ult;
+  const { ids } = _modulosDisponiveis();
+  const itens = _navDoUsuario(usuarioAtual?.perfil).filter(i => i.id && !MENU_CONFIG_IDS.includes(i.id));
+  if (id === 'base') {
+    if (_baseVisivel()) return { pagina: 'home', params: {} };
+    const primeiro = itens.find(i => !ids[i.id]);
+    return primeiro ? { pagina: primeiro.id, params: {} } : null;
+  }
+  const primeiro = itens.find(i => ids[i.id] === id);
+  return primeiro ? { pagina: primeiro.id, params: {} } : null;
+}
 function trocarModulo(id) {
+  const antes = (typeof paginaAtual !== 'undefined' && paginaAtual) ? _moduloDaPagina(paginaAtual) : null;
   _guardarModulo(id);
   _redesenharMenuLateral();
+  if (antes === id) return;                 // já está numa tela deste módulo
+  const destino = _destinoDoModulo(id);
+  if (destino) irPara(destino.pagina, destino.params || {});
 }
 
 function _redesenharMenuLateral() {
@@ -5666,6 +5693,12 @@ async function irPara(pagina, params={}) {
   window._turmaAbertaViaHash = null;
   paginaAtual = pagina;
   window._paramsRotaAtual = params;
+  // v213: guarda a última tela do MENU usada em cada módulo (ver trocarModulo)
+  try {
+    if (pagina === 'home' || _navDoUsuario(usuarioAtual?.perfil).some(i => i.id === pagina)) {
+      _ULTIMA_TELA_MOD[_moduloDaPagina(pagina)] = { pagina, params: {} };
+    }
+  } catch (e) {}
   // O seletor de modulo segue a tela: abrir Conversas seleciona o CRM.
   if (_sincronizarModuloComRota(pagina)) _redesenharMenuLateral();
   marcarNavAtivo(pagina);
@@ -30626,7 +30659,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '212';
+  var APP_BUILD = '213';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
