@@ -14987,7 +14987,7 @@ async function abrirModalTurma(id=null, preSel=null) {
             <div class="field">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                 <label style="margin:0">Cliente *</label>
-                ${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.plus} Novo cliente</button>`:''}
+                <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${travado?'':_socBtnFormulario('mTurCli')}${podeCriarCliente?`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="abrirModalClienteRapido()">${ICONS.plus} Novo cliente</button>`:''}</div>
               </div>
               ${_comboBuscavelHtml('mTurCli', 'Buscar cliente por nome...', cliOpcoes, cliPreId, travado)}
             </div>
@@ -16927,6 +16927,9 @@ async function executarImportacaoSOC() {
     const qtd = salvos?.length || payloadColabs.length;
     fecharModal();
     showToast(`${qtd} colaborador${qtd!==1?'es':''} importado${qtd!==1?'s':''} do SOC (${empresasNovas.length} empresa${empresasNovas.length!==1?'s':''} nova${empresasNovas.length!==1?'s':''})${_empresasCompletadas>0?`, cadastro completado pela Receita Federal`:''}${empresasNovas.length>_empresasCompletadas?` — ${empresasNovas.length-_empresasCompletadas} empresa${empresasNovas.length-_empresasCompletadas!==1?'s':''} sem os dados da Receita, complete à mão`:''}${_duplicadosIgnorados>0?` — ${_duplicadosIgnorados} registro${_duplicadosIgnorados!==1?'s':''} com CPF repetido unificado${_duplicadosIgnorados!==1?'s':''}`:''}!`, 'success');
+    // v220: aberta por um formulário (Nova turma / Compromisso) → volta para
+    // ele com a empresa escolhida, sem redesenhar a tela de trás.
+    if (_socImportOrigem === 'form') { await _socFormVoltarComEmpresa(_socImportEmpresas[0]); return; }
     _clientesCache = []; // força recarregar (com as empresas novas) na próxima tela que precisar
     // Atualiza a MESMA tela de onde o import foi aberto — nunca "pula" o
     // usuário para uma tela diferente da que ele estava vendo.
@@ -16997,8 +17000,123 @@ async function _socWsChamar(acao, extra = {}) {
   return resp.data;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// v220 (29/09/2026, pedido do Alisson): "Buscar no SOC" também ao lado do
+// campo Cliente na Nova turma (Treinamentos e criação rápida da Agenda da
+// Equipe) e no Compromisso — para o operador não sair do formulário quando a
+// empresa ainda não está cadastrada.
+// Decisão do Alisson: o fluxo é EXATAMENTE o de hoje na tela de Clientes
+// (busca, lista de funcionários, executarImportacaoSOC, que também completa
+// a empresa nova com os dados da Receita Federal). Só muda o fim: em vez de
+// redesenhar Clientes, volta para o formulário.
+// O formulário aberto é guardado INTEIRO (os próprios elementos, não uma
+// cópia do HTML): tudo o que já foi digitado ou escolhido volta como estava,
+// com a empresa já escolhida no campo Cliente.
+// ═══════════════════════════════════════════════════════════════════════
+let _socFormGuardado = null;
+// Muda a cada abertura da busca e a cada volta para o formulário: uma
+// resposta do SOC que chega depois que a pessoa já voltou é ignorada, em vez
+// de desenhar por cima do formulário.
+let _socWsSeq = 0;
+
+// Enquanto a busca foi aberta por um formulário, o X da janela volta para o
+// formulário (em vez de fechar tudo e perder o que já foi preenchido).
+function _socFormBotaoX(voltaAoFormulario) {
+  const x = document.querySelector('#modalBox .modal-close');
+  if (!x) return;
+  x.disabled = false;
+  x.setAttribute('onclick', voltaAoFormulario ? '_socFormRestaurar()' : 'fecharModal()');
+}
+
+function _socBtnFormulario(comboId) {
+  if (!usuarioAtual?.orgSocIntegracaoAtiva) return '';
+  if (!['administrador','comercial'].includes(usuarioAtual.perfil)) return '';
+  return `<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--green-text);border:1px solid var(--border)" onclick="_socBuscarDoFormulario('${comboId}')">${ICONS.search} Buscar no SOC</button>`;
+}
+
+// Rótulo "Cliente *" com o botão ao lado (quando o botão pode aparecer).
+function _socRotuloCliente(rotulo, comboId) {
+  const b = _socBtnFormulario(comboId);
+  if (!b) return `<label>${rotulo}</label>`;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><label style="margin:0">${rotulo}</label>${b}</div>`;
+}
+
+function _socBuscarDoFormulario(comboId) {
+  const corpo = document.getElementById('modalCorpo');
+  const rodape = document.getElementById('modalRodape');
+  if (!corpo || !rodape) return;
+  const g = {
+    comboId,
+    titulo: document.getElementById('modalTitulo')?.textContent || '',
+    largo: !!document.getElementById('modalBox')?.classList.contains('modal-box-largo'),
+    modalId: _modalCurrentId,
+    rolagem: corpo.scrollTop,
+    corpo: document.createDocumentFragment(),
+    rodape: document.createDocumentFragment(),
+  };
+  while (corpo.firstChild) g.corpo.appendChild(corpo.firstChild);
+  while (rodape.firstChild) g.rodape.appendChild(rodape.firstChild);
+  _socFormGuardado = g;
+  _socWsAbrirModal('form');
+}
+
+// Devolve o formulário guardado para a janela. Sem formulário guardado
+// (não deveria acontecer), só fecha a janela.
+function _socFormRestaurar() {
+  const g = _socFormGuardado;
+  _socWsSeq++;
+  _socFormBotaoX(false);
+  if (!g) { fecharModal(); return null; }
+  _socFormGuardado = null;
+  const corpo = document.getElementById('modalCorpo');
+  const rodape = document.getElementById('modalRodape');
+  document.getElementById('modalTitulo').textContent = g.titulo;
+  corpo.innerHTML = ''; corpo.appendChild(g.corpo);
+  rodape.innerHTML = ''; rodape.appendChild(g.rodape);
+  document.getElementById('modalBox')?.classList.toggle('modal-box-largo', !!g.largo);
+  document.getElementById('modalOverlay').style.display = 'flex';
+  _modalCurrentId = g.modalId;
+  corpo.scrollTop = g.rolagem;
+  return g;
+}
+
+// Fim da importação aberta por um formulário: volta para ele e escolhe a
+// empresa (nova ou já existente) no campo Cliente.
+async function _socFormVoltarComEmpresa(emp) {
+  const g = _socFormRestaurar();
+  if (!g) return;
+  try {
+    if (!emp?.clienteId) throw new Error('sem cliente');
+    const {data: cli, error} = await sb.from('clientes').select('*')
+      .eq('id', emp.clienteId).eq('org_id', usuarioAtual.org_id).maybeSingle();
+    if (error) throw error;
+    if (!cli) throw new Error('cliente não encontrado');
+    if (cli.ativo === false) {
+      showToast(`${cli.nome} está inativa em Clientes. Reative o cadastro para usá-la aqui.`, 'error');
+      return;
+    }
+    const porNome = (a, b) => String(a.nome||'').localeCompare(String(b.nome||''), 'pt-BR');
+    const i = _clientesCache.findIndex(c => String(c.id) === String(cli.id));
+    if (i >= 0) _clientesCache[i] = {..._clientesCache[i], ...cli};
+    else { _clientesCache.push(cli); _clientesCache.sort(porNome); }
+    const dados = window._comboBuscavelDados[g.comboId];
+    if (dados) {
+      const j = dados.opcoes.findIndex(o => String(o.id) === String(cli.id));
+      if (j >= 0) dados.opcoes[j] = {...dados.opcoes[j], nome: cli.nome};
+      else { dados.opcoes.push({id: cli.id, nome: cli.nome}); dados.opcoes.sort(porNome); }
+    }
+    if (document.getElementById(g.comboId)) _comboBuscavelSelecionar(g.comboId, cli.id);
+  } catch (e) {
+    console.warn('Buscar no SOC (formulário): importação feita, mas não foi possível escolher a empresa.', e?.message || e);
+    showToast('A empresa foi importada. Procure pelo nome no campo Cliente para escolhê-la.', 'error');
+  }
+}
+
 function _socWsAbrirModal(origem = 'clientes') {
   _socWsOrigem = origem;
+  _socWsSeq++;
+  if (origem !== 'form') _socFormGuardado = null;
+  _socFormBotaoX(origem === 'form');
   _socWsEmpresas = []; _socWsEmpresaSelecionada = null; _socWsFuncionarios = []; _socWsSelecionados = new Set();
   abrirModal('Buscar no SOC', `
     <div style="background:var(--blue-l);border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--blue-h);line-height:1.6">
@@ -17007,7 +17125,9 @@ function _socWsAbrirModal(origem = 'clientes') {
     <div class="field"><label>Empresa (nome ou CNPJ)</label>
       <input type="text" id="mSocWsBusca" placeholder="Digite para buscar..." style="width:100%;padding:9px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit" autocomplete="off"></div>
     <div id="mSocWsResultado" class="soc-ws-lista" style="margin-top:8px;max-height:280px;overflow-y:auto;overflow-x:hidden;border:1px solid var(--border);border-radius:8px"></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
+    origem === 'form'
+      ? `<button class="btn btn-outline" onclick="_socFormRestaurar()">Voltar</button>`
+      : `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
   document.getElementById('mSocWsResultado').innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:13px">Carregando empresas do SOC...</div>';
   document.getElementById('mSocWsBusca').addEventListener('input', _socWsFiltrarEmpresas);
   _socWsCarregarEmpresas();
@@ -17052,8 +17172,10 @@ async function _socWsSelecionarEmpresa(codigo) {
   if (!_socWsEmpresaSelecionada) return;
   const box = document.getElementById('mSocWsResultado');
   box.innerHTML = '<div style="padding:14px;color:var(--text-3);font-size:13px">Carregando funcionários...</div>';
+  const seq = _socWsSeq;
   try {
     const data = await _socWsChamar('buscar_funcionarios', {codigoEmpresa: codigo});
+    if (seq !== _socWsSeq) return; // v220: a pessoa já voltou; não desenha por cima
     _socWsFuncionarios = data?.funcionarios || [];
     _socWsAbrirTelaFuncionarios();
   } catch(e) {
@@ -17173,7 +17295,13 @@ async function _socWsConfirmarImportacao() {
       soc_matricula: f.matricula != null ? String(f.matricula) : null,
     }));
     _socImportOrigem = _socWsOrigem;
-    await executarImportacaoSOC();
+    const travar = (sim) => document.querySelectorAll('#modalRodape button, #modalBox .modal-close').forEach(b => { if (b.id !== 'btnSalvarModal') b.disabled = sim; });
+    travar(true);
+    try { await executarImportacaoSOC(); }
+    finally {
+      const x = document.querySelector('#modalBox .modal-close'); if (x) x.disabled = false;
+      if (document.getElementById('mSocWsListaFunc')) travar(false);
+    }
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Importar selecionados'; }
     showToast(traduzErroSupabase(e, 'Erro ao preparar a importação.'), 'error');
@@ -18012,7 +18140,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
             </div>
             <div class="field"><label for="mCompTitulo">Título *</label>
               <input type="text" id="mCompTitulo" maxlength="120" oninput="_compAtualizarPreview()" value="${escapeHtml(cm?.titulo||'')}" placeholder="Ex.: Palestra de abertura da SIPAT" style="${_COMP_INPUT_ST}"></div>
-            <div class="field" style="margin-bottom:0"><label>Cliente *</label>
+            <div class="field" style="margin-bottom:0">${_socRotuloCliente('Cliente *','mCompCliente')}
               ${_comboBuscavelHtml('mCompCliente', 'Buscar cliente por nome...', cliOpcoes, cm?.empresa_id||'')}</div>
           </div>
         </div>
@@ -19722,7 +19850,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
           <div class="nt-ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16M14 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3"/></svg></div>
           <div class="nt-body">
             <div class="nt-title">Dados da turma</div>
-            <div class="field"><label>Cliente *</label>
+            <div class="field">${_socRotuloCliente('Cliente *','mNtCli')}
               ${_comboBuscavelHtml('mNtCli', 'Buscar cliente por nome...', cliOpcoes, null)}</div>
             <div class="field" style="margin-bottom:0"><label>Treinamento *</label>
               ${_comboBuscavelHtml('mNtCat', 'Buscar treinamento por nome...', catOpcoes, null)}</div>
@@ -31386,7 +31514,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '219';
+  var APP_BUILD = '220';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
