@@ -130,6 +130,8 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,
    linha em telas estreitas) e aplicada via --suporte-h. */
 body.modo-suporte-ativo .screen{top:var(--suporte-h,34px)}
 body.modo-suporte-ativo .sidebar{top:var(--suporte-h,34px)}
+/* v217: com a tarja de suporte, a área de conteúdo desconta a altura dela (antes o fim da página ficava escondido embaixo da tela) */
+body.modo-suporte-ativo .main-content{min-height:calc(100vh - var(--suporte-h,34px))}
 .sidebar-logo{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.05)}
 .sidebar-logo-row{display:flex;align-items:center;gap:10px}
 .sidebar-logo-icon{width:28px;height:auto;flex-shrink:0;display:block}
@@ -5923,7 +5925,8 @@ async function irPara(pagina, params={}) {
   // "?id=<id>", para qualquer rota de modulo que receba um.
   const idDaRota = params && params.id ? '?id=' + encodeURIComponent(params.id) : '';
   const novoHash = '#' + pagina + idDaRota;
-  if (location.hash !== novoHash) history.pushState({pagina}, '', novoHash);
+  // v217: ao voltar para uma tela dos Relatórios, a URL já é a da tela certa (ex.: "#relatorios?ver=instrutor&id=…") — não empilha outra
+  if (location.hash !== novoHash && !(pagina === 'relatorios' && window._rxRestaurarHash)) history.pushState({pagina}, '', novoHash);
   showLoading();
   // O esqueleto vale para a PRIMEIRA pintura de cada tela. Numa troca de tela
   // ja carregada, o conteudo anterior fica ate o novo chegar — trocar conteudo
@@ -22865,6 +22868,11 @@ async function _atualizarConformidadeTurma(turmaId, sessoesTurma) {
 // _lerTudo (partes de 1000, ordem estável por id) e é filtrado por org_id.
 async function renderRelatorios() {
   const oi = usuarioAtual.org_id;
+  // v217: ao voltar (botão Voltar do navegador/celular ou "Voltar" de dentro de uma turma),
+  // reabre a mesma tela de relatório em que a pessoa estava, lida da URL.
+  let _rxAlvo = null;
+  if (window._rxRestaurarHash) { window._rxRestaurarHash = false; _rxAlvo = location.hash; }
+  else if (window._hashInicialQuery && !window._rxHashInicialUsado && /[?&]ver=/.test(window._hashInicialQuery)) { window._rxHashInicialUsado = true; _rxAlvo = window._hashInicialQuery; }
   setMobileHeader(`<div class="mh-greeting">Análises</div><div class="mh-name">Relatórios</div>`);
   window._rxFiltro = window._rxFiltro || { cat: '', cli: '' };
 
@@ -22927,7 +22935,8 @@ async function renderRelatorios() {
   window._relPeriodoCustom = null;
   window._relComparativo = false;
   window._rxCache = null;
-  relIrParaDestino('geral');
+  if (_rxAlvo) _rxRestaurarDoHash(_rxAlvo);
+  else relIrParaDestino('geral');
 }
 
 // Documentos pendentes — mesma regra de antes (correção de 2026-08-20),
@@ -23485,9 +23494,49 @@ function _rxTabela(colunas, linhas, rodape = '') {
 }
 
 // ── Navegação entre as telas de Relatórios (sem fileira de abas) ─────────
-function relIrParaDestino(destino) {
+// ── Histórico do navegador (v217) ─────────────────────────────────────────
+// Cada tela dos Relatórios vira uma entrada no histórico ("#relatorios?ver=instrutor&id=…"),
+// como já acontece em Conformidade. Assim o Voltar do navegador (e do celular) volta para a
+// tela anterior dos Relatórios, e não para outra parte do sistema.
+const _RX_ID_DE = { instrutor: '_relInstrutorAtual', cliente: '_rxClienteAtual', treinamento: '_rxCatAtual', abertas: '_rxAbertasInstr' };
+function _rxHashDe(destino) {
+  if (!destino || destino === 'geral') return '#relatorios';
+  const k = _RX_ID_DE[destino], id = k ? (window[k] || '') : '';
+  return '#relatorios?ver=' + encodeURIComponent(destino) + (id ? '&id=' + encodeURIComponent(id) : '');
+}
+function _rxRestaurarDoHash(hash) {
+  const h = hash == null ? location.hash : hash;
+  const qi = h.indexOf('?');
+  const p = new URLSearchParams(qi >= 0 ? h.slice(qi + 1) : '');
+  const ver = p.get('ver') || 'geral', id = p.get('id') || '';
+  const k = _RX_ID_DE[ver];
+  if (k) {
+    if (ver === 'instrutor' && window._relInstrutorAtual !== id) { window._relInstrutorFiltro = { situacoes: null, clienteId: '' }; _paginaRelInstrutor = 1; }
+    window[k] = id;
+  }
+  relIrParaDestino(ver, { substituir: true });
+}
+// "Voltar" de dentro de uma turma aberta a partir dos Relatórios: volta para a tela de
+// relatório de onde a pessoa veio, com os dados lidos de novo (a turma pode ter mudado).
+function _rxVoltarDaTurma() {
+  if (typeof paginaAtual === 'undefined' || paginaAtual !== 'relatorios' || !window._rxUltimoHash) return false;
+  window._turmaAbertaViaHash = null;
+  history.pushState({ pagina: 'relatorios' }, '', window._rxUltimoHash);
+  window._rxRestaurarHash = true;
+  irPara('relatorios');
+  return true;
+}
+function relIrParaDestino(destino, opcoes) {
   window._relDestinoAtivo = destino || 'geral';
   window._rxCache = null;
+  {
+    const h = _rxHashDe(window._relDestinoAtivo);
+    window._rxUltimoHash = h;
+    if (location.hash !== h) {
+      if (opcoes && opcoes.substituir) history.replaceState({ pagina: 'relatorios' }, '', h);
+      else history.pushState({ pagina: 'relatorios' }, '', h);
+    }
+  }
   const mapa = {
     geral: _renderRelatorioView, instrutores: _renderRelatorioInstrutoresLista, instrutor: _renderRelatorioInstrutorDetalhe,
     clientes: _renderRelatorioClientesLista, cliente: _rxRenderEmpresa, treinamentos: _renderRelatorioTreinamentosLista,
@@ -23575,7 +23624,7 @@ function _renderRelatorioView() {
   const pend = (raw.pendencias || []).filter(p => b.tById[p.turma.id]);
   const nEmpPend = new Set(pend.map(p => p.turma.cliente_id).filter(Boolean)).size;
   const avisos = _rxAvisos([
-    b.abertas.length && { tipo: 'r', n: b.abertas.length, titulo: `${b.abertas.length === 1 ? 'Aula com data passada ainda não registrada' : 'Aulas com data passada ainda não registradas'}`, texto: 'O instrutor ainda não finalizou. Enquanto isso, a turma não fecha e os certificados não saem.', botao: b.abertas.length === 1 ? 'Ver a aula' : `Ver as ${b.abertas.length} aulas`, js: "relIrParaDestino('abertas')" },
+    b.abertas.length && { tipo: 'r', n: b.abertas.length, titulo: `${b.abertas.length === 1 ? 'Aula com data passada ainda não registrada' : 'Aulas com data passada ainda não registradas'}`, texto: 'O instrutor ainda não finalizou. Enquanto isso, a turma não fecha e os certificados não saem.', botao: b.abertas.length === 1 ? 'Ver a aula' : `Ver as ${b.abertas.length} aulas`, js: "_rxVerAbertasDe('')" },
     pend.length && { tipo: 'a', n: pend.length, titulo: `${pend.length === 1 ? 'Turma concluída' : 'Turmas concluídas'} com documentos pendentes`, texto: `Em ${_rxPl(nEmpPend, 'empresa')}. Falta gerar ou enviar documentos.`, botao: 'Ver turmas', js: "relIrParaDestino('documentos')" },
   ]);
 
@@ -23649,7 +23698,7 @@ function _rxDetalhados() {
     ['Compromissos', 'Visitas, reuniões e palestras da agenda', "relIrParaDestino('compromissos')"],
     ['Cancelamentos e alterações', 'O que foi cancelado ou mudado', "relIrParaDestino('auditoria')"],
     ['Documentos pendentes', 'Turmas concluídas sem documento ou sem envio', "relIrParaDestino('documentos')"],
-    ['Aulas não registradas', 'Aulas com data passada que o instrutor não finalizou', "relIrParaDestino('abertas')"],
+    ['Aulas não registradas', 'Aulas com data passada que o instrutor não finalizou', "_rxVerAbertasDe('')"],
   ];
   return `<div class="rx-sec-t">Relatórios detalhados</div><div class="rx-det">${it.map(([a, t, js]) => `<button class="rx-dt" onclick="${js}"><b>${a}</b><span>${t}</span></button>`).join('')}</div>`;
 }
@@ -23707,7 +23756,7 @@ function _renderRelatorioInstrutoresLista() {
     { t: 'Instrutor' }, { t: 'Dias de aula', a: 'r' }, { t: 'Horas', a: 'r' }, { t: 'Turmas em que atuou', a: 'r', m: 1 }, { t: 'Alunos atendidos', a: 'r', m: 1 },
     { t: 'Empresas', a: 'r', m: 1 }, { t: 'Não registradas', a: 'r' }, { t: 'Compromissos', a: 'r', m: 1 }], linhas,
     `<span>${comAula[0] && totDias ? `${_rxEsc(comAula[0].nome.split(' ')[0])} deu ${Math.round(comAula[0].dias / totDias * 100)}% dos dias de aula da equipe.` : ''}</span><span>Turmas, alunos e empresas não somam entre instrutores: o mesmo aluno pode ter aula com mais de um.</span>${notaHoras}`);
-  setConteudo(`${topo}${faixa}${nAbertas ? _rxAvisos([{ tipo: 'r', n: nAbertas, titulo: 'Aulas com data passada ainda não registradas', texto: 'Veja por instrutor na coluna "Não registradas".', botao: 'Ver as aulas', js: "relIrParaDestino('abertas')" }]) : ''}
+  setConteudo(`${topo}${faixa}${nAbertas ? _rxAvisos([{ tipo: 'r', n: nAbertas, titulo: 'Aulas com data passada ainda não registradas', texto: 'Veja por instrutor na coluna "Não registradas".', botao: 'Ver as aulas', js: "_rxVerAbertasDe('')" }]) : ''}
     ${_rxPainel('Todos os instrutores', 'Clique no nome para abrir o relatório completo, com PDF e planilha', tabela)}`);
 }
 
@@ -26013,7 +26062,7 @@ document.addEventListener('click', function(e) {
     // sem precisar de uma pilha de histórico própria. irPara() já tem seu
     // próprio guard de acesso por perfil (_perfilTemAcesso), então não
     // precisa duplicar essa checagem aqui.
-    case 'irParaOrigem':    irPara(paginaAtual); break;
+    case 'irParaOrigem':    if (!(typeof _rxVoltarDaTurma === 'function' && _rxVoltarDaTurma())) irPara(paginaAtual); break;   // v217: dos Relatórios, volta para a tela de relatório de origem
     // 2026-08-16 (correção de navegação/URL): Voltar de dentro da execução
     // (assinaturas/evidências) volta 1 nível — pro detalhe da turma —, não
     // direto pra página principal como 'irParaOrigem' faz. Ver verTurma()/
@@ -26162,6 +26211,20 @@ window.addEventListener('popstate', async (e) => {
     _confRenderTudo();
     return;
   }
+  // v217: Voltar/Avançar entre as telas dos Relatórios (painel, instrutor, empresa...).
+  // Entre telas de relatório: redesenha com os dados já carregados, sem nova consulta.
+  // Saindo de uma turma aberta a partir dos Relatórios: lê os dados de novo (a turma
+  // pode ter mudado) e reabre a tela de relatório de onde a pessoa veio.
+  if (pagina === 'relatorios' && paginaAtual === 'relatorios' && !/[?&]turma=/.test(location.hash)) {
+    if (window._turmaAbertaViaHash || !window._relRaw) {
+      window._turmaAbertaViaHash = null;
+      window._rxRestaurarHash = true;
+      await irPara('relatorios');
+    } else {
+      _rxRestaurarDoHash();
+    }
+    return;
+  }
   // 2026-08-16 (correção de navegação/URL, mesmo princípio do bloco de
   // Conformidade acima, generalizado pra qualquer página-pai que abra
   // verTurma — Turmas, Agenda, Agenda da Equipe, Início, Relatórios etc.):
@@ -26213,6 +26276,7 @@ window.addEventListener('popstate', async (e) => {
     // Avancar para a ficha de um lead abria "Nenhum lead selecionado".
     const qi = location.hash.indexOf('?');
     const idDaUrl = qi !== -1 ? new URLSearchParams(location.hash.slice(qi + 1)).get('id') : null;
+    if (pagina === 'relatorios') { window._rxRestaurarHash = true; await irPara('relatorios'); return; }   // v217: reabre a tela de relatório da URL
     await irPara(pagina, idDaUrl ? { id: idDaUrl } : {});
   }
 });
@@ -31342,7 +31406,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '216';
+  var APP_BUILD = '217';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
