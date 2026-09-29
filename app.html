@@ -14339,6 +14339,55 @@ function _tvMenuAgendamento(btn, agId, turmaId) {
   _menuDropdown(btn, items);
 }
 
+// ── v221 (29/09/2026, pedido do Alisson): folha de coleta (papel) também
+// na tela da turma, na seção Participantes, para administrador e comercial.
+// É o MESMO PDF do botão da execução da aula (baixarFolhaColeta →
+// gerarListaPresenca modo 'coleta'): todos os inscritos, linha para assinar,
+// não é gravado como documento oficial. A folha é de UM encontro (data,
+// horário e instrutor saem no cabeçalho), então:
+//   · nenhum encontro a realizar → aviso;
+//   · um só → baixa direto;
+//   · mais de um → a pessoa escolhe (o próximo vem primeiro).
+function _tvEncontrosParaColeta() {
+  const st = window._tvPart || {};
+  return (st.encontros || []).filter(e => !e.cancelada && !e.concluida);
+}
+
+async function _tvBaixarFolhaColeta() {
+  const st = window._tvPart || {};
+  if (!st.turmaId) return;
+  if (!(st.lista || []).length) { showToast('Adicione os participantes antes de baixar a folha de coleta.', 'error'); return; }
+  const todos = (st.encontros || []).filter(e => !e.cancelada);
+  if (!todos.length) { showToast('Esta turma ainda não tem agendamento. Adicione um agendamento: a folha sai com a data, o horário e o instrutor dele.', 'error', 6000); return; }
+  const abertos = _tvEncontrosParaColeta();
+  if (!abertos.length) { showToast('Todos os encontros desta turma já foram concluídos. Use a lista de presença final, em Documentos.', 'error', 6000); return; }
+  if (!navigator.onLine) { showToast('A folha de coleta precisa de conexão para ser gerada (busca as assinaturas e os dados do treinamento).', 'error', 6000); return; }
+  if (abertos.length === 1) { await gerarListaPresenca(st.turmaId, abertos[0].id, true, {modo:'coleta'}); return; }
+  const _d = new Date(); const hoje = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+  const futuro = abertos.find(e => (e.data || '') >= hoje);
+  const proximo = futuro || abertos[0];
+  const ordem = [proximo, ...abertos.filter(e => e !== proximo)];
+  const semana = ['dom','seg','ter','qua','qui','sex','sáb'];
+  const quando = (e) => {
+    if (!e.data) return 'Sem data';
+    const [a, m, d] = e.data.slice(0, 10).split('-').map(Number);
+    const dt = new Date(a, m - 1, d);
+    return `${semana[dt.getDay()]} ${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${a}${e.hora ? ' · ' + String(e.hora).slice(0, 5) : ''}`;
+  };
+  abrirModal('Baixar folha de coleta (papel)', `
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.5">A folha sai com a data, o horário e o instrutor do encontro. Escolha o encontro:</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${ordem.map(e => `<button type="button" class="btn btn-outline" style="justify-content:space-between;text-align:left;padding:11px 14px;min-height:52px" onclick="fecharModal();gerarListaPresenca('${st.turmaId}','${e.id}',true,{modo:'coleta'})">
+        <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+          <span style="font-weight:700;color:var(--text-1)">Encontro ${e.n} de ${e.total}${e === futuro ? ' · próximo' : ''}</span>
+          <span style="font-size:12px;font-weight:500;color:var(--text-3)">${escapeHtml(quando(e))}${e.instrutor ? ' · ' + escapeHtml(e.instrutor) : ''}</span>
+        </span>
+        <span style="flex:none;font-size:12px;color:var(--text-2)">Baixar</span>
+      </button>`).join('')}
+    </div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
+}
+
 // ── Participantes ────────────────────────────────────────────────
 function _tvFiltrados() {
   const lista = (window._tvPart||{}).lista || [];
@@ -14444,6 +14493,7 @@ function _tvHtmlParticipantes() {
       </div>`:''}
       <span class="tv-cont" id="tvCont">${_tvHtmlContagem()}</span>
       ${st.podeEditar&&temLista?`<button class="btn btn-outline btn-sm" id="tvSelTodos" onclick="_tvSelTodos()">${todosMarcados?'Desmarcar todos':'Selecionar todos'}</button>`:''}
+      ${st.podeEditar&&temLista?`<button class="btn btn-outline btn-sm" onclick="_tvBaixarFolhaColeta()">${ICONS.doc} Baixar folha de coleta (papel)</button>`:''}
       ${st.podeEditar?`<button class="btn btn-navy btn-sm" data-action="addParticipante" data-id="${st.turmaId}" data-cli="${st.clienteId}">${ICONS.userplus} Adicionar participante</button>`:''}
     </div>
     <div id="tvPartLista">${_tvHtmlLista()}</div>`;
@@ -14697,6 +14747,12 @@ async function verTurma(id, opts = {}) {
       turmaId: id,
       clienteId: t.cliente_id || '',
       podeEditar,
+      // v221: encontros para a "folha de coleta (papel)". A numeração
+      // "Encontro N de M" é a mesma do PDF (todos os encontros, por data).
+      encontros: agendamentos.map((a, i) => ({
+        id: a.id, n: i + 1, total: agendamentos.length, data: a.data || '', hora: a.hora_inicio || '',
+        instrutor: a.usuarios?.nome || '', concluida: !!a.concluida, cancelada: !!a.cancelada,
+      })),
       lista: participantes.map(p => ({
         id: p.id,
         colaboradorId: p.colaborador_id,
@@ -31514,7 +31570,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '220';
+  var APP_BUILD = '221';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
