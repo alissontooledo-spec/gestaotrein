@@ -51,6 +51,50 @@ export const SITUACAO = {
   aguardando: ['Aguardando informações', 'badge-warn'], concluida: ['Concluída', 'badge-green'],
   cancelada: ['Cancelada', 'badge-gray']
 };
+/* v222: matriz de risco padrão — a mesma do SOC (matriz 8, 5x5, lida em 29/09,
+   01-Requisitos/avaliacao-campo/2026-09-29-matriz-de-risco-soc.md). O nível sai
+   de Probabilidade × Severidade (grade[p-1][s-1]) e define a classificação.
+   A organização pode ter a sua (tela Matriz de risco, PASSO-73). */
+export const MATRIZ_PADRAO = {"nome": "Matriz 5x5 (padrão SOC)", "niveis": [{"codigo": "irrelevante", "nome": "Risco Irrelevante", "aceitabilidade": "aceitavel", "cor": "#7CB342", "acao": "Nenhum controle adicional é necessário."}, {"codigo": "baixo", "nome": "Risco Baixo", "aceitabilidade": "toleravel", "cor": "#CDFF9A", "acao": "Nenhum controle adicional é necessário. Pode-se considerar outra solução ou aperfeiçoar os controles existentes. Inspeção das medidas de prevenção existentes é necessária."}, {"codigo": "moderado", "nome": "Risco Moderado", "aceitabilidade": "toleravel", "cor": "#FDE260", "acao": "Desenvolver estudos para reduzir o nível de risco, reavaliando as medidas de prevenção existentes e implantando medidas adicionais, se tecnicamente possível e viável. Inspecionar as medidas existentes em intervalo pré-definido. Monitoramento ambiental e vigilância em saúde são obrigatórios."}, {"codigo": "alto", "nome": "Risco Alto", "aceitabilidade": "toleravel", "cor": "#F3975B", "acao": "Trabalhos em andamento só devem continuar com medidas administrativas e individuais complementares e supervisão competente. Desenvolver estudos para reduzir o nível de risco, com reavaliação após as ações."}, {"codigo": "critico", "nome": "Risco Crítico", "aceitabilidade": "nao_aceitavel", "cor": "#E53935", "acao": "O trabalho não deve ser iniciado ou continuado até que o risco seja reduzido por ação corretiva. Reavaliar depois da ação. Se não for possível reduzir o risco, o trabalho deve permanecer proibido."}], "grade": [["irrelevante", "baixo", "baixo", "baixo", "moderado"], ["baixo", "baixo", "moderado", "moderado", "moderado"], ["baixo", "moderado", "moderado", "moderado", "alto"], ["moderado", "moderado", "alto", "alto", "critico"], ["moderado", "alto", "alto", "critico", "critico"]], "criterios_prob": {"colunas": ["Requisitos de NRs x medidas de prevenção implementadas (alíneas a e b)", "Perfil de exposição x NR-09 (alínea d)", "Exigências da atividade (alínea c)"], "linhas": [["As medidas de controle existentes representam a melhor tecnologia ou prática de controle possível e há garantias de que sejam mantidas em longo prazo.", "Exposição estimada inferior a 10% do LEO (E < 10% LEO).", "O controle representa a melhor tecnologia ou prática de controle disponível e há garantias de que sejam mantidas em longo prazo."], ["As medidas de controle existentes estão em conformidade com as NRs, eficientes e há garantias de que sejam mantidas em longo prazo.", "Exposição estimada entre 10% e 50% do LEO.", "As medidas de controle existentes estão em conformidade com as NRs, eficientes e há garantias de que sejam mantidas em longo prazo."], ["As medidas de controle existentes são adequadas, mas apresentam pequenas deficiências ou desvios mitigados por medidas administrativas e individuais, ou não há garantias de que sejam mantidas em longo prazo.", "Exposição estimada entre 50% e 100% do LEO (nível de ação).", "As medidas de controle existentes são adequadas, mas apresentam pequenas deficiências ou desvios mitigados por medidas administrativas e individuais, ou não há garantias de que sejam mantidas em longo prazo."], ["As medidas de controle existentes apresentam desvios ou problemas significativos. A eficiência é duvidosa e não há garantias de manutenção adequada.", "Exposição estimada acima do LEO e até 500% do LEO.", "As medidas de controle existentes apresentam desvios ou problemas significativos. A eficiência é duvidosa e não há garantias de manutenção adequada."], ["Medidas de controle inexistentes ou reconhecidamente inadequadas.", "Exposição estimada acima de 500% do LEO (superexposição).", "Medidas de controle inexistentes ou reconhecidamente inadequadas."]]}, "criterios_sev": {"colunas": ["Característica da lesão ou agravo", "Capacidade funcional", "Afastamento médico", "Exemplos"], "linhas": [["Lesão, sinal ou sintoma leve, com efeitos reversíveis.", "Não limita a capacidade funcional.", "Tratamento médico sem afastamento superior a um dia.", "Ferimentos superficiais, pequenos cortes e contusões, irritação dos olhos por poeira, dor de cabeça, desconforto temporário."], ["Lesão ou agravo moderado, com efeitos reversíveis.", "Não limita a capacidade funcional.", "Tratamento médico; pode haver afastamento de até 15 dias.", "Lacerações, queimaduras, entorses, fraturas de bom prognóstico, dermatite, asma, DORT em fase aguda."], ["Lesão ou agravo grave, com efeitos reversíveis.", "Pode limitar a capacidade funcional.", "Tratamento médico; pode haver afastamento superior a 15 dias.", "Lacerações, queimaduras, entorses, fraturas de bom prognóstico, dermatite, asma, DORT em fase aguda."], ["Lesão ou agravo grave, com efeitos irreversíveis.", "Limita a capacidade funcional, mas não totalmente.", "Tratamento médico; pode haver afastamento.", "PAINPSE (perda auditiva por ruído), amputação de segmentos, DORT crônicos."], ["Lesão ou agravo crítico ou fatal.", "Limita totalmente a capacidade funcional ou pode causar morte.", "Tratamento médico; pode haver afastamento.", "Amputação de membros, fraturas de mau prognóstico, envenenamento, câncer ocupacional, pneumoconiose, doenças agudas fatais."]]}};
+const matrizValida = (m) => !!m && Array.isArray(m.grade) && m.grade.length === 5 && m.grade.every(l => Array.isArray(l) && l.length === 5)
+  && Array.isArray(m.niveis) && m.niveis.length && m.grade.flat().every(c => m.niveis.some(n => n.codigo === c));
+/* Nível da matriz para P e S (1 a 5). null se faltar um dos dois. */
+export function nivelDe(m, p, s) {
+  const M = matrizValida(m) ? m : MATRIZ_PADRAO;
+  const pi = Number(p), si = Number(s);
+  if (!(pi >= 1 && pi <= 5 && si >= 1 && si <= 5)) return null;
+  const cod = M.grade[pi - 1][si - 1];
+  return M.niveis.find(n => n.codigo === cod) || null;
+}
+/* Grava no risco o nível e a classificação que a matriz dá (o técnico não escolhe). */
+export function aplicarMatriz(r, m) {
+  if (!r || r.codigo === '1068') return false;
+  const n = nivelDe(m, r.probabilidade, r.severidade);
+  const novo = n ? { codigo: n.codigo, nome: n.nome, aceitabilidade: n.aceitabilidade, acao: n.acao || '', cor: n.cor || '' } : null;
+  const classif = n ? n.aceitabilidade : (r.probabilidade && r.severidade ? r.classificacao : null);
+  const mudou = JSON.stringify(r.nivel || null) !== JSON.stringify(novo) || (r.classificacao ?? null) !== (classif ?? null);
+  if (mudou) { r.nivel = novo; r.classificacao = classif; }
+  return mudou;
+}
+/* Acerta, numa avaliação aberta, os riscos que já têm P e S mas ficaram com
+   nível/classificação diferente da matriz (feitos antes da v222). */
+export function normalizarMatriz(id, m) {
+  const d = _docs.get(id); if (!d || !podeEditar(d)) return 0;
+  let n = 0;
+  for (const g of d.ghes) {
+    const copia = JSON.parse(JSON.stringify(g.riscos || []));
+    if (copia.some(r => aplicarMatriz(r, m))) { alterarGhe(id, g.id, x => { x.riscos.forEach(r => aplicarMatriz(r, m)); }); n++; }
+  }
+  return n;
+}
+
+/* v222: tipos padrão do "O que falta a empresa enviar" (os mesmos do PASSO-73). */
+export const TIPOS_DOC_PADRAO = [['pgr', 'PGR vigente'], ['fispq', 'FISPQ de produto'], ['ltcat', 'LTCAT / laudo'],
+  ['lista_funcionarios', 'Lista de funcionários'], ['planta', 'Planta / layout'], ['outro', 'Outro']];
+/* v222: avaliação psicossocial fica fora por enquanto (decisão de 26/09, reforçada em 29/09):
+   risco psicossocial do SOC não entra no GHE. */
+export const ehPsicossocial = (r) => /psicossoc/.test(normNome(r?.nome || ''));
+
 /* Treinamento sugerido pelo risco encontrado (sugestão; só marca se o técnico tocar). */
 export const SUGESTAO_TREINAMENTO = { '540': 'NR-35', '562': 'NR-33', '541': 'NR-10', '1053': 'NR-11', '1022': 'NR-11',
   '553': 'NR-12', '434': 'NR-20', '542': 'NR-20', '1057': 'NR-32', '543': 'NR-26', '1079': 'NR-26', '819': 'NR-26',
@@ -103,8 +147,8 @@ export async function catalogo({ fresco = false } = {}) {
   if (online()) {
     try {
       const { data, error } = await sb().from('campo_catalogo')
-        .select('id,org_id,tipo,codigo,nome,categoria,ordem,dados,ativo').eq('ativo', true)
-        .order('tipo').order('ordem').range(0, 1999);
+        .select('id,org_id,tipo,codigo,nome,categoria,ordem,dados,ativo')
+        .order('tipo').order('ordem').range(0, 2999);   // v222: inativos também (a org esconde um padrão com ativo = false)
       if (error) throw error;
       _catalogo = montarCatalogo(data || []);
       await idbPut('cache', data || [], 'catalogo');
@@ -146,11 +190,17 @@ function montarCatalogo(linhas) {
   const por = (tipo) => {
     const m = new Map();
     for (const l of linhas.filter(x => x.tipo === tipo).sort((a, b) => (a.org_id ? 1 : 0) - (b.org_id ? 1 : 0))) m.set(l.codigo, l);
-    return [...m.values()].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    return [...m.values()].filter(l => l.ativo !== false).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
   };
   const riscos = por('risco'), treinamentos = por('treinamento'), ambiente = por('ambiente');
+  /* v222: tipos do "O que falta a empresa enviar" (PASSO-73). Sem o PASSO-73
+     no banco a lista vem vazia e a tela usa TIPOS_DOC_PADRAO. */
+  const documentos = por('documento');
+  const mz = por('matriz').find(x => x.codigo === 'padrao');
+  const matriz = matrizValida(mz?.dados) ? mz.dados : MATRIZ_PADRAO;
   return {
-    riscos, treinamentos, ambiente,
+    riscos, treinamentos, ambiente, matriz,
+    documentos: documentos.length ? documentos : TIPOS_DOC_PADRAO.map(([codigo, nome], i) => ({ codigo, nome, ordem: i })),
     risco: (cod) => riscos.find(r => r.codigo === String(cod)) || null,
     /* v206: o SOC às vezes manda o risco só com o nome ("ILUMINÂNCIA" × "Iluminação"). */
     riscoPorNome: (nome) => melhorPorNome(nome, riscos, r => r.nome),
@@ -180,17 +230,31 @@ export const qtdPendente = (doc) => !doc ? 0 : (doc.sujo.av ? 1 : 0) + Object.ke
   + Object.keys(doc.sujo.fotosNovas).length + Object.keys(doc.sujo.fotosLegenda).length + doc.sujo.fotosApagadas.length + doc.sujo.arquivos.length;
 
 const SEL_AV_BASE = 'id,org_id,numero,cliente_id,compromisso_id,tecnico_id,data_visita,hora_inicio,situacao,acompanhante_nome,acompanhante_cargo,observacoes,documentos,assinatura_acomp_path,assinatura_acomp_em,assinatura_tec_path,assinatura_tec_em,concluida_em,concluida_por,pdf_path,revisao,grupo_id,revisao_de,edicao,resumo,soc,criado_em,atualizado_em';
-/* v203: conferência de funcionários (PASSO-68). Se o banco ainda não tem a
-   coluna, o app segue como antes: lê sem ela e esconde a conferência. */
-let SEL_AV = SEL_AV_BASE + ',funcionarios';
-let _temConf = null;   // null = ainda não sabe; true/false depois da 1ª leitura
-const semColunaConf = (e) => /funcionarios/i.test(String(e?.message || '')) && /(column|coluna|42703|does not exist|schema cache)/i.test(String(e?.message || '') + ' ' + String(e?.code || ''));
+/* Colunas que dependem de um PASSO: se o banco ainda não tem a coluna, o app
+   segue como antes — lê sem ela e esconde a parte da tela que a usa.
+   v203: funcionarios (PASSO-68) · v222: pendencias_empresa (PASSO-73). */
+const _COLS_OPC = { funcionarios: null, pendencias_empresa: null };   // null = ainda não sabe
+const selAv = () => SEL_AV_BASE + Object.entries(_COLS_OPC).filter(([, v]) => v !== false).map(([k]) => ',' + k).join('');
+let SEL_AV = selAv();
+let _temConf = null;   // espelho de _COLS_OPC.funcionarios (nome antigo, usado abaixo)
+const faltaColuna = (e) => {
+  const m = String(e?.message || '') + ' ' + String(e?.code || '');
+  if (!/(column|coluna|42703|does not exist|schema cache)/i.test(m)) return null;
+  return Object.keys(_COLS_OPC).find(k => _COLS_OPC[k] !== false && new RegExp(k, 'i').test(m)) || null;
+};
 async function lerAv(fn) {
   let r = await fn(SEL_AV);
-  if (r.error && semColunaConf(r.error)) { SEL_AV = SEL_AV_BASE; _temConf = false; r = await fn(SEL_AV); }
-  else if (!r.error && _temConf === null && SEL_AV !== SEL_AV_BASE) _temConf = true;
+  for (let i = 0; i < 3 && r.error; i++) {
+    const col = faltaColuna(r.error);
+    if (!col) break;
+    _COLS_OPC[col] = false; SEL_AV = selAv(); r = await fn(SEL_AV);
+  }
+  if (!r.error) for (const k of Object.keys(_COLS_OPC)) if (_COLS_OPC[k] === null) _COLS_OPC[k] = true;
+  _temConf = _COLS_OPC.funcionarios;
   return r;
 }
+/* v222: o banco já tem a coluna do "O que falta a empresa enviar"? */
+export const temPendEmpresa = () => _COLS_OPC.pendencias_empresa !== false;
 const SEL_GHE = 'id,avaliacao_id,org_id,ordem,nome,codigo_soc,setores,funcoes,menor18,descricao,ambientes,riscos,treinamentos,edicao,criado_em,atualizado_em';
 const SEL_FOTO = 'id,avaliacao_id,ghe_id,alvo,alvo_uid,legenda,storage_path,largura,altura,tirada_em,criado_em';
 
@@ -452,7 +516,7 @@ export const assinaturaDe = (d, quem) => ({
 /* ══ Envio para o banco ═════════════════════════════════════════════════════ */
 const _enviando = new Map();
 const ehConflito = (e) => /CAMPO_CONFLITO/.test(e?.message || '');
-const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios'];
+const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios', 'pendencias_empresa'];
 const CAMPOS_GHE = ['ordem', 'nome', 'codigo_soc', 'setores', 'funcoes', 'menor18', 'descricao', 'ambientes', 'riscos', 'treinamentos'];
 
 export function sincronizar(id) {
@@ -518,7 +582,7 @@ async function _sincronizar(id) {
     /* 4. Avaliação */
     if (d.sujo.av || Object.keys(patchArq).length) {
       const patch = { ...patchArq };
-      for (const c of CAMPOS_AV) if (c in d.av && !(c === 'funcionarios' && _temConf === false)) patch[c] = d.av[c] ?? null;
+      for (const c of CAMPOS_AV) if (c in d.av && _COLS_OPC[c] !== false) patch[c] = d.av[c] ?? (c === 'pendencias_empresa' ? [] : null);
       await gravarAv(d, patch);
       for (const a of d.sujo.arquivos) { delete d.av['_assinatura_' + a.campo + '_local']; delete d.av['_assinatura_' + a.campo + '_local_em']; }
       d.sujo.arquivos = [];
@@ -647,6 +711,55 @@ export function gheCompleto(g) {
   if (rs.some(r => r.pendente)) return 'pendente';
   if (!rs.length || rs.some(r => riscoCompleto(r) !== 'ok')) return 'fazer';
   return 'ok';
+}
+
+/* ── v222: "O que falta a empresa enviar" (PASSO-73) ───────────────────────
+   av.pendencias_empresa = [{ uid, tipo, nome, detalhe, prazo (AAAA-MM-DD),
+     ghe_id, risco_uid, risco_nome, criado_em, resolvido_em }]
+   Item sem resolvido_em = em aberto → a avaliação vai para "Aguardando
+   informações" (o banco decide; aqui só o espelho para a tela). */
+export const pendEmpresa = (d) => Array.isArray(d?.av?.pendencias_empresa) ? d.av.pendencias_empresa : [];
+export const pendEmpresaAbertas = (d) => pendEmpresa(d).filter(p => p && !p.resolvido_em);
+function espelharSituacao(d) {
+  if (['concluida', 'cancelada'].includes(d.av.situacao)) return;
+  const aguardando = pendEmpresaAbertas(d).length > 0 || pendencias(d).length > 0;
+  d.av.situacao = aguardando ? 'aguardando' : (d.ghes.length ? 'em_andamento' : 'agendada');
+}
+function mudarPendEmpresa(id, fn) {
+  const d = _docs.get(id); if (!d || !podeEditar(d) || !temPendEmpresa()) return null;
+  const lista = pendEmpresa(d).map(p => ({ ...p }));
+  const r = fn(lista);
+  alterarAv(id, { pendencias_empresa: lista });
+  espelharSituacao(d);
+  return r;
+}
+export function adicionarPendEmpresa(id, item) {
+  return mudarPendEmpresa(id, (l) => { const p = { uid: novoId(), criado_em: new Date().toISOString(), resolvido_em: null, ...item }; l.push(p); return p; });
+}
+export function alterarPendEmpresa(id, uid, patch) {
+  return mudarPendEmpresa(id, (l) => { const p = l.find(x => x.uid === uid); if (p) Object.assign(p, patch); return p; });
+}
+export const resolverPendEmpresa = (id, uid) => alterarPendEmpresa(id, uid, { resolvido_em: new Date().toISOString() });
+export function removerPendEmpresa(id, uid) {
+  return mudarPendEmpresa(id, (l) => { const i = l.findIndex(x => x.uid === uid); if (i >= 0) l.splice(i, 1); });
+}
+/* "03/10" e se já passou do prazo. */
+export function prazoInfo(prazo) {
+  if (!prazo) return { txt: '', vencido: false };
+  const [a, m, dd] = String(prazo).slice(0, 10).split('-');
+  const h = new Date(); const hoje = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+  return { txt: `${dd}/${m}${a !== hoje.slice(0, 4) ? '/' + a : ''}`, vencido: String(prazo).slice(0, 10) < hoje };
+}
+
+/* ── v222: conferência rápida de um risco que veio do SOC ──────────────────
+   r.conferido = { como: 'confere' | 'mudou', em }  (informativo; quem decide
+   se o risco está completo continua sendo riscoCompleto / o banco). */
+export function marcarConferido(id, gheId, uid, como) {
+  return alterarGhe(id, gheId, g => {
+    const r = (g.riscos || []).find(x => x.uid === uid); if (!r) return;
+    r.conferido = { como, em: new Date().toISOString() };
+    if (como === 'confere' && r.soc?.exposicao && !r.exposicao) r.exposicao = r.soc.exposicao;
+  });
 }
 
 /* Concluir: exige internet (o banco confere tudo e dá o número). */

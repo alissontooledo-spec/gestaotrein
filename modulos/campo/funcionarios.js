@@ -9,7 +9,7 @@
 
 import * as D from './dados.js';
 import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
-import { esc, nota, topo, ligarTela, avisar, confirmar, ponte, btn, acoes, irPara } from './comum.js';
+import { esc, nota, topo, ligarTela, avisar, confirmar, ponte, btn, acoes, irPara, cabecalhoCelular } from './comum.js';
 
 let _id = null;
 let _filtro = null;          // 'falta' | 'todos' | 'mudancas'
@@ -63,6 +63,7 @@ export async function render(params) {
   const trav = !D.podeEditar(d);
   const lista = D.listaFuncionarios(d);
   const r = D.resumoConferencia(d);
+  cabecalhoCelular(d, cli, `${r.soc} no SOC · ${r.soc - r.falta} conferidos · ${r.saiu} saíram · ${r.mudou} mudaram`, { titulo: 'Conferir funcionários', rotulo: cli?.nome || 'Avaliação de campo' });   // v222
   if (!_filtro) _filtro = r.falta ? 'falta' : 'todos';
   const nMud = lista.filter(ehMudanca).length;
   const vis = lista.filter(p => _filtro === 'todos' ? true : _filtro === 'falta' ? (p.origem === 'soc' && !p.situacao) : ehMudanca(p));

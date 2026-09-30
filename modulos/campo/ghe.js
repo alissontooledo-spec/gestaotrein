@@ -10,17 +10,24 @@
 import * as D from './dados.js';
 import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
 import { I, esc, ico, nota, topo, seg, opt, inp, area, fotos, carregarFotos, legendarFoto, ligarTela, avisar, confirmar,
-  ponte, btn, acoes, valorVisivel, irPara, ICONE_CAT } from './comum.js';
+  ponte, btn, acoes, valorVisivel, irPara, ICONE_CAT, cabecalhoCelular, rolarTopo } from './comum.js';
+import { modalPendEmpresa } from './pendencias.js';
 
 const PASSOS = ['Identificação', 'Ambientes', 'Riscos', 'Treinamentos'];
 let _av = null, _gid = null, _risco = null, _amb = null, _busca = '', _treinTodos = false;
+/* v222: o catálogo só aparece quando o técnico pede (Adicionar risco); partes
+   do risco aberto ficam recolhidas até tocar (chave "uid:med", "uid:det"...). */
+let _addRisco = false;
+const _abertos = new Set();
 const _passo = new Map();              // gid → passo
 const _catAbertas = new Map();         // gid → Set(categorias abertas)
 let _cat = null;
 
 const doc = () => D.doc(_av);
 const ghe = () => D.ghe(_av, _gid);
-const passo = () => _passo.get(_gid) || 1;
+/* v222: GHE que veio do SOC abre direto em Riscos (setores e funções já vieram). */
+const passo = () => _passo.get(_gid) || (ghe()?.codigo_soc ? 3 : 1);
+const visiveis = (g) => (g?.riscos || []).filter(r => !D.ehPsicossocial(r));
 const risco = () => (ghe()?.riscos || []).find(r => r.uid === _risco) || null;
 const amb = () => (ghe()?.ambientes || []).find(a => a.uid === _amb) || null;
 const altG = (fn) => D.alterarGhe(_av, _gid, fn);
@@ -96,14 +103,22 @@ function pintarComparacao(r) {
   if (med.data) document.querySelectorAll('[data-cp="r.med.data"]').forEach(el => { if (!el.value) el.value = med.data; });
 }
 
-/* ── Etapas ─────────────────────────────────────────────────────────────── */
+/* ── v222: abas no lugar das etapas (com o que tem em cada uma) ─────────── */
 function etapas(g) {
   const p = passo();
-  const pend = (g.riscos || []).some(r => r.pendente);
-  const estado = (i) => i === p ? 'atual' : (i === 3 && pend ? 'pend' : (i < p ? 'feito' : ''));
-  return `<div class="cp-steps">${PASSOS.map((t, k) => `<div class="cp-step ${estado(k + 1)}" data-acao="campo:passo:${k + 1}"><span class="n">${estado(k + 1) === 'feito' ? `<span style="width:12px;height:12px;display:flex">${I.check}</span>` : k + 1}</span><span class="l">${t}</span></div>`).join('')}</div>
-    <div class="cp-steps-m"><div class="cp-steps-m-row"><span class="cp-steps-m-tit">${PASSOS[p - 1]}</span><span class="cp-steps-m-n">Passo ${p} de 4</span></div>
-    <div class="cp-steps-m-bar" style="--n:4">${PASSOS.map((_, k) => `<i class="${estado(k + 1)}" data-acao="campo:passo:${k + 1}"></i>`).join('')}</div></div>`;
+  const rs = visiveis(g);
+  const ok = rs.filter(r => D.riscoCompleto(r) === 'ok').length;
+  const pend = rs.some(r => r.pendente);
+  const ambOk = (g.ambientes || []).some(a => D.GRUPOS_AMBIENTE.some(([k]) => (a[k] || []).length));
+  const sub = [
+    `${(g.setores || []).length} ${(g.setores || []).length === 1 ? 'setor' : 'setores'}`,
+    ambOk ? 'preenchido' : 'a preencher',
+    rs.length ? `${ok} de ${rs.length}${pend ? ' · pend.' : ''}` : 'nenhum',
+    `${(g.treinamentos || []).length} marcado${(g.treinamentos || []).length === 1 ? '' : 's'}`
+  ];
+  const cls = (k) => [k + 1 === p ? 'on' : '', k === 2 && pend ? 'pend' : '', k === 2 && rs.length && ok === rs.length ? 'ok' : ''].filter(Boolean).join(' ');
+  return `<div class="cp-abas-ghe" role="tablist">${PASSOS.map((t, k) => `<button type="button" role="tab" aria-selected="${k + 1 === p}" class="${cls(k)}" data-acao="campo:passo:${k + 1}">
+    <span class="l">${['Setores', 'Ambiente', 'Riscos', 'Treinam.'][k]}</span><small>${esc(sub[k])}</small></button>`).join('')}</div>`;
 }
 const topoGhe = (d, g, cli) => topo(d, cli, { rotulo: 'GHE · ' + (cli?.nome || ''), sub: '' }).replace(
   `<div class="cp-topo-tit">${esc(cli?.nome || 'Empresa')}</div>`, `<div class="cp-topo-tit">GHE ${esc(g.nome)}</div>`);
@@ -193,30 +208,102 @@ function linhaRisco(cod, nome, r, trav) {
     <div class="cp-rrow-txt"><div class="cp-rrow-nome">${cod ? `<b>${esc(cod)}</b>` : ''}${esc(nome)}</div></div>
     ${est ? `<span class="cp-rrow-est" style="color:${est[1]}">${est[0]}</span><span class="cp-rrow-ir">${I.chevR}</span>` : ''}</div>`;
 }
+/* v222: primeiro, SÓ os riscos deste GHE, em lista de conferência. O
+   catálogo inteiro aparece quando o técnico toca em "Adicionar risco". */
 function passo3(d, g, trav) {
+  if (_addRisco && !trav) return catalogoRiscos(d, g, trav);
+  const rs = visiveis(g);
+  const psi = (g.riscos || []).length - rs.length;
+  const cartao = (r) => {
+    const e = D.riscoCompleto(r);
+    const soc = r.soc ? resumoSoc(r) : '';
+    const conf = r.conferido?.como;
+    const estado = e === 'ok' ? `<span class="badge badge-green">${conf === 'confere' ? 'Confere' : 'Completo'}</span>`
+      : e === 'pendente' ? '<span class="badge badge-warn">Falta info</span>'
+      : conf === 'mudou' ? '<span class="badge badge-warn">Mudou</span>'
+      : conf === 'confere' ? '<span class="badge badge-blue">Falta avaliar</span>' : '';
+    const faltaAval = e === 'fazer' && conf === 'confere';
+    return `<div class="cp-rl ${e === 'ok' ? 'feito' : e === 'pendente' ? 'pend' : ''}">
+      <div class="cp-rl-l1" data-acao="campo:risco-abrir:${r.uid}"><span class="cp-rl-cod">${esc(r.codigo || '—')}</span><span class="cp-rl-nome">${esc(r.nome)}</span>${estado}<span class="cp-rl-ir">${I.chevR}</span></div>
+      ${soc ? `<div class="cp-rl-s">${soc}</div>` : ''}
+      ${e === 'pendente' && r.pendente?.texto ? `<div class="cp-rl-s" style="color:var(--warn-text)">${esc(r.pendente.texto)}</div>` : ''}
+      ${!trav && !conf && e === 'fazer' ? `<div class="cp-tri">
+          <button type="button" data-acao="campo:rc-confere:${r.uid}">Confere</button>
+          <button type="button" data-acao="campo:rc-mudou:${r.uid}">Mudou</button>
+          <button type="button" data-acao="campo:rc-falta:${r.uid}">Falta info</button></div>` : ''}
+      ${!trav && faltaAval ? avaliacaoRapida(r) : ''}
+    </div>`;
+  };
+  const nOk = rs.filter(r => D.riscoCompleto(r) === 'ok').length;
+  return `${psi ? `<div class="cp-soc-dob" style="margin-bottom:10px"><div class="cp-soc-dob-tx">${psi} risco${psi === 1 ? '' : 's'} psicossocia${psi === 1 ? 'l' : 'is'} neste GHE <b>não ${psi === 1 ? 'entra' : 'entram'}</b> na avaliação (fora do escopo por enquanto).</div>${trav ? '' : btn('Tirar do GHE', 'campo:psi-tirar', { cls: 'btn-outline btn-sm' })}</div>` : ''}
+    ${rs.length ? `<div class="cp-sec-t2">Riscos deste GHE <span>${nOk} de ${rs.length}</span></div>
+      ${!trav && rs.some(r => !r.conferido && D.riscoCompleto(r) === 'fazer') ? `<div class="cp-ajuda" style="margin:-4px 0 8px"><b>Confere</b> se está igual ao que você vê, <b>Mudou</b> para alterar, <b>Falta info</b> se depende de algo.</div>` : ''}
+      ${rs.map(cartao).join('')}`
+      : nota(trav ? 'Nenhum risco neste GHE.' : 'Nenhum risco ainda. Toque em Adicionar risco encontrado.')}
+    ${trav ? '' : `<button type="button" class="cp-add" data-acao="campo:add-modo" style="margin-top:10px">${I.plus}Adicionar risco encontrado</button>`}`;
+}
+/* O que já se sabe do risco (SOC ou preenchido), em uma linha. */
+function resumoSoc(r) {
+  const ex = (D.EXPOSICAO.find(([k]) => k === (r.exposicao || r.soc?.exposicao)) || [, ''])[1];
+  const m = r.soc?.medicao;
+  const med = m?.valor ? `última medição ${m.valor}${m.unidade ? ' ' + m.unidade : ''}${m.data ? ' em ' + m.data : ''}` : '';
+  const partes = [ex && ex.toLowerCase(), r.fonte && 'fonte: ' + r.fonte, r.epi && 'EPI: ' + r.epi, med].filter(Boolean);
+  return partes.length ? `<b>SOC:</b> ${esc(partes.join(' · '))}` : '';
+}
+/* Depois do "Confere": o SOC não tem probabilidade nem severidade — o técnico
+   escolhe ali mesmo, sem abrir o risco; o nível e a classificação saem da matriz. */
+function avaliacaoRapida(r) {
+  const q = (campo, ops) => `<div class="cp-rq-seg">${ops.map(([v, l]) => `<button type="button" class="${String(r[campo] ?? '') === String(v) ? 'on' : ''}" data-acao="campo:rq:${r.uid}:${campo}:${v}">${esc(l)}</button>`).join('')}</div>`;
+  const leg = (lista, v) => { const x = lista.find(([k]) => String(k) === String(v ?? '')); return x ? `<div class="cp-rq-leg">${esc(x[1])}</div>` : ''; };
+  return `<div class="cp-rq">
+    ${!r.exposicao ? `<div class="cp-rq-l">Exposição</div>${q('exposicao', D.EXPOSICAO)}` : ''}
+    <div class="cp-rq-2"><div><div class="cp-rq-l">Probabilidade ${ajudaCrit('prob')}</div>${q('probabilidade', D.PROBABILIDADE.map(([k]) => [k, k]))}${leg(D.PROBABILIDADE, r.probabilidade)}</div>
+      <div><div class="cp-rq-l">Severidade ${ajudaCrit('sev')}</div>${q('severidade', D.SEVERIDADE.map(([k]) => [k, k]))}${leg(D.SEVERIDADE, r.severidade)}</div></div>
+    ${caixaNivel(r)}</div>`;
+}
+/* v222: nível de risco pela matriz (P × S) — o técnico não escolhe a classificação. */
+const NOME_ACEIT = { aceitavel: 'Aceitável', toleravel: 'Tolerável', nao_aceitavel: 'Não aceitável' };
+function caixaNivel(r) {
+  const n = D.nivelDe(_cat?.matriz, r.probabilidade, r.severidade);
+  if (!n) return `<div class="cp-nivel vazio">Nível de risco: escolha a probabilidade e a severidade.</div>`;
+  return `<div class="cp-nivel" style="--nv:${esc(n.cor || '#D2D7E1')}"><i></i><div><b>${esc(n.nome)}</b><span>${esc(NOME_ACEIT[n.aceitabilidade] || '')} · pela matriz de risco</span></div></div>`;
+}
+const ajudaCrit = (k) => `<button type="button" class="cp-ajuda-bt" data-acao="campo:crit:${k}" aria-label="Ver os critérios">?</button>`;
+function modalCriterios(k) {
+  const p = ponte(); const M = _cat?.matriz || D.MATRIZ_PADRAO;
+  const c = k === 'prob' ? M.criterios_prob : M.criterios_sev;
+  const nomes = k === 'prob' ? D.PROBABILIDADE : D.SEVERIDADE;
+  if (!c?.linhas?.length) return;
+  p.abrirModal(k === 'prob' ? 'Probabilidade: como escolher' : 'Severidade: como escolher', `<div class="cp-crit">${c.linhas.map((l, i) => `
+    <div class="cp-crit-it"><div class="cp-crit-n"><b>${i + 1}</b> ${esc((nomes[i] || [])[1] || '')}</div>
+      ${l.map((t, j) => t ? `<div class="cp-crit-l"><span>${esc(c.colunas?.[j] || '')}</span>${esc(t)}</div>` : '').join('')}</div>`).join('')}</div>`,
+    `<button class="btn btn-navy" onclick="fecharModal()">Fechar</button>`);
+}
+
+/* Catálogo completo (modo "Adicionar risco"). */
+function catalogoRiscos(d, g, trav) {
   const q = _busca.trim().toLowerCase();
-  const abertas = _catAbertas.get(g.id) || new Set((g.riscos || []).map(r => r.categoria));
+  const abertas = _catAbertas.get(g.id) || new Set();
   _catAbertas.set(g.id, abertas);
   const cats = [...D.CATEGORIAS, ['outro', 'Outros']];
   const blocos = cats.map(([k, nomeCat]) => {
-    const meus = (g.riscos || []).filter(r => r.categoria === k);
-    const doCat = _cat.riscos.filter(c => c.categoria === k && !meus.some(r => r.codigo === c.codigo));
+    const meus = visiveis(g).filter(r => r.categoria === k);
+    const doCat = _cat.riscos.filter(c => c.categoria === k && !D.ehPsicossocial(c) && !meus.some(r => r.codigo === c.codigo));
     const casa = (cod, nome) => !q || String(cod || '').includes(q) || String(nome).toLowerCase().includes(q);
     const linhasMeus = meus.filter(r => casa(r.codigo, r.nome)).map(r => linhaRisco(r.codigo, r.nome, r, trav));
-    const linhasCat = trav ? [] : doCat.filter(c => casa(c.codigo, c.nome)).map(c => linhaRisco(c.codigo, c.nome, null, trav));
+    const linhasCat = doCat.filter(c => casa(c.codigo, c.nome)).map(c => linhaRisco(c.codigo, c.nome, null, trav));
     if (q && !linhasMeus.length && !linhasCat.length) return '';
-    if (!q && k === 'outro' && !meus.length && trav) return '';
     const aberta = q || abertas.has(k);
-    const nPend = meus.filter(r => r.pendente).length;
-    const sub = meus.length ? `${meus.length} encontrado${meus.length > 1 ? 's' : ''}${nPend ? ` · ${nPend} para depois` : ''}` : 'nenhum encontrado';
+    const sub = meus.length ? `${meus.length} já neste GHE` : `${doCat.length} no catálogo`;
     return `<div class="cp-cat${aberta ? ' aberta' : ''}"><div class="cp-cat-head" data-acao="campo:cat:${k}"><span class="cp-cat-ic">${I[ICONE_CAT[k]] || I.alerta}</span>
       <div><div class="cp-cat-nome">${esc(nomeCat)}</div><div class="cp-cat-sub">${sub}</div></div><span class="cp-cat-chev">${aberta ? I.chevU : I.chevD}</span></div>
       ${aberta ? linhasMeus.join('') + linhasCat.join('') : ''}</div>`;
   }).join('');
-  return `<div class="cp-cat-busca"><span>${I.busca}</span><input type="search" id="cpBuscaRisco" data-acao="campo:busca-risco" value="${esc(_busca)}" placeholder="Buscar risco por código ou nome..."></div>
-    ${trav ? '' : nota('Toque nos riscos que você <b>encontrou</b> neste GHE. Cada risco tocado abre para preencher.')}
+  return `<div class="cp-add-topo"><b>Adicionar risco encontrado</b>${btn('Fechar catálogo', 'campo:add-modo', { cls: 'btn-outline btn-sm' })}</div>
+    <div class="cp-cat-busca"><span>${I.busca}</span><input type="search" id="cpBuscaRisco" data-acao="campo:busca-risco" value="${esc(_busca)}" placeholder="Buscar risco por código ou nome..."></div>
+    ${nota('Toque no risco que você <b>encontrou</b> neste GHE: ele entra no GHE e abre para preencher.')}
     <div style="height:10px"></div>${blocos || nota('Nenhum risco com essa busca.')}
-    ${trav ? '' : `<button type="button" class="cp-add" data-acao="campo:nao-listado">${I.plus}Adicionar risco não listado</button>`}`;
+    <button type="button" class="cp-add" data-acao="campo:nao-listado">${I.plus}Adicionar risco não listado</button>`;
 }
 
 /* Risco aberto */
@@ -241,6 +328,8 @@ function riscoAberto(d, g, r, trav) {
       <label class="cp-lbl">O que falta</label>${area('r.pend.texto', r.pendente.texto, { ph: 'Ex.: FISPQ do desinfetante que a empresa vai enviar por e-mail', travado: trav, alto: 64 })}
       <label class="cp-lbl" style="margin-top:10px">Quem vai resolver</label>${seg('pend-quem', [['empresa', 'A empresa'], ['tecnico', 'Eu (técnico)']], r.pendente.quem, { travado: trav })}
       <div class="cp-ajuda">Aparece nas pendências da avaliação. O que você já sabe pode ser preenchido agora.</div>
+      ${!trav && D.temPendEmpresa() && r.pendente.quem === 'empresa' && !D.pendEmpresaAbertas(d).some(p => p.risco_uid === r.uid)
+        ? `<div style="margin-top:8px">${btn(ico('plus') + ' Pôr na lista do que a empresa vai enviar', 'campo:pe-risco', { cls: 'btn-ghost btn-sm' })}</div>` : ''}
       ${trav ? '' : `<div style="margin-top:10px">${btn('Já resolvi, tirar das pendências', 'campo:pend-off', { cls: 'btn-outline btn-sm' })}</div>`}</div>`
     : (trav ? '' : `<div style="margin:0 0 12px">${btn(ico('relogio') + ' Não dá para completar agora · deixar para depois', 'campo:pend-on', { cls: 'btn-outline', estilo: 'width:100%;min-height:44px' })}</div>`);
 
@@ -277,41 +366,73 @@ function riscoAberto(d, g, r, trav) {
       ${!trav && cols.some(k => pad[k]) ? `<div style="margin-top:10px">${btn('Usar o padrão da ficha', 'campo:padrao', { cls: 'btn-ghost btn-sm' })}</div>` : ''}
       <div class="cp-ajuda">Se depender de documento (ex.: FISPQ), deixe em branco. Só é exigido para concluir a avaliação.</div></div>` : '';
 
-  const principal = `
-    <div class="cp-sec"><div class="cp-rhead"><span class="cp-rhead-ic">${I[ICONE_CAT[r.categoria]] || I.alerta}</span><div>
-      <div class="cp-rhead-cod">${r.codigo ? 'CÓDIGO ' + esc(r.codigo) + ' · ' : ''}GHE ${esc(g.nome).toUpperCase()}</div>
-      <div class="cp-rhead-nome">${esc(r.nome)}</div><div class="cp-rhead-tags">${tags.join('')}</div></div></div></div>
-    ${pendBox}
-    <div class="cp-sec"><div class="cp-sec-tit">Onde e como</div>
+  /* ── v222: risco aberto compacto ─────────────────────────────────────────
+     1º o que é obrigatório e costuma mudar na visita (avaliação de hoje);
+     o que veio do SOC aparece resumido, com Editar; medição, fotos e
+     conclusão ficam recolhidas até tocar. Setas passam de um risco a outro. */
+  const lista = visiveis(g);
+  const pos = lista.findIndex(x => x.uid === r.uid);
+  const ab = (k) => _abertos.has(`${r.uid}:${k}`);
+  const dobra = (k, titulo, resumo, corpo, abrirSempre = false) => (abrirSempre || ab(k))
+    ? `<div class="cp-sec"><div class="cp-sec-tit">${titulo}${abrirSempre ? '' : `<span class="dir"><button type="button" class="cp-link" data-acao="campo:dobra:${k}">Recolher</button></span>`}</div>${corpo}</div>`
+    : `<button type="button" class="cp-dobra" data-acao="campo:dobra:${k}"><span>${titulo}</span><small>${resumo}</small>${I.chevD}</button>`;
+  const nFotos = d.fotos.filter(f => f.ghe_id === g.id && f.alvo === 'risco' && f.alvo_uid === r.uid).length;
+  const kvs = [['Análise', r.analise], ['Fonte', r.fonte], ['EPC', r.epc], ['EPI', r.epi],
+    ['EPI eficaz', (D.EFICAZ.find(([k]) => k === r.epi_eficaz) || [, ''])[1]], ['Medidas', r.medidas_adm]];
+  const temDet = kvs.some(([, v]) => String(v || '').trim());
+  const editarDet = !temDet || ab('det');
+  const detEditavel = `
       ${(g.ambientes || []).length > 1 ? `<label class="cp-lbl">Ambiente</label><select class="cp-inp" data-acao="campo:r-amb"${trav ? ' disabled' : ''}>${ambientes.map(([v, l]) => `<option value="${esc(v)}" ${v === (r.ambiente || 'Todos') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div style="height:12px"></div>` : ''}
       <label class="cp-lbl">Análise qualitativa</label>${area('r.analise', r.analise, { ph: 'Como a exposição acontece: atividade, frequência, duração.', travado: trav })}
       <div class="cp-grid2" style="margin-top:12px"><div><label class="cp-lbl">Fonte geradora / produto</label>${inp('r.fonte', r.fonte, { travado: trav })}</div>
         <div><label class="cp-lbl">EPC existente</label>${inp('r.epc', r.epc, { travado: trav })}</div></div>
-      <label class="cp-lbl" style="margin-top:12px">Medidas administrativas / recomendações</label>${area('r.medidas_adm', r.medidas_adm, { travado: trav, alto: 60 })}</div>
-    ${blocoMedicao}${blocoIlu}
-    <div class="cp-sec"><div class="cp-sec-tit">Avaliação</div>
+      <div class="cp-grid2" style="margin-top:12px"><div><label class="cp-lbl">EPI (e CA)</label>${inp('r.epi', r.epi, { ph: 'Ex.: Protetor auricular · CA 12345', travado: trav })}</div>
+        <div><label class="cp-lbl">EPI eficaz?</label>${seg('r:epi_eficaz', D.EFICAZ.map(([k]) => [k, k]), r.epi_eficaz, { travado: trav })}${legenda(D.EFICAZ, r.epi_eficaz)}</div></div>
+      <label class="cp-lbl" style="margin-top:12px">Medidas administrativas / recomendações</label>${area('r.medidas_adm', r.medidas_adm, { travado: trav, alto: 60 })}`;
+  const detResumo = `${kvs.filter(([, v]) => String(v || '').trim()).map(([k, v]) => `<div class="cp-kv cp-kv-l"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}
+      ${trav ? '' : `<div style="margin-top:8px">${btn('Editar', 'campo:dobra:det', { cls: 'btn-outline btn-sm' })}</div>`}`;
+  const medResumo = r.medicao?.resultado ? `hoje ${esc(r.medicao.resultado)} ${esc(r.medicao.unidade || '')}${r.medicao.situacao ? ' · ' + (r.medicao.situacao === 'acima' ? 'acima do limite' : 'abaixo do limite') : ''}`
+    : r.soc?.medicao?.valor ? `última no SOC: ${esc(r.soc.medicao.valor)} ${esc(r.soc.medicao.unidade || '')}` : 'se houver';
+  const concResumo = cols.map(k => r[k] ? `${{ ins: 'Insalub.', per: 'Pericul.', ae: 'AE' }[k]} ${r[k]}` : '').filter(Boolean).join(' · ') || 'pode ficar para o escritório';
+
+  const principal = `
+    ${lista.length > 1 ? `<div class="cp-rnav">
+      <button type="button" class="cp-rnav-b" ${pos > 0 ? `data-acao="campo:risco-abrir:${lista[pos - 1].uid}"` : 'disabled'} aria-label="Risco anterior">${I.chevL}</button>
+      <span>Risco ${pos + 1} de ${lista.length}</span>
+      <button type="button" class="cp-rnav-b" ${pos >= 0 && pos < lista.length - 1 ? `data-acao="campo:risco-abrir:${lista[pos + 1].uid}"` : 'disabled'} aria-label="Próximo risco">${I.chevR}</button></div>` : ''}
+    <div class="cp-sec cp-rhead-sec"><div class="cp-rhead"><span class="cp-rhead-ic">${I[ICONE_CAT[r.categoria]] || I.alerta}</span><div>
+      <div class="cp-rhead-cod">${r.codigo ? 'CÓDIGO ' + esc(r.codigo) + ' · ' : ''}GHE ${esc(g.nome).toUpperCase()}</div>
+      <div class="cp-rhead-nome">${esc(r.nome)}</div><div class="cp-rhead-tags">${tags.join('')}</div></div></div></div>
+    ${r.pendente ? pendBox : ''}
+    <div class="cp-sec"><div class="cp-sec-tit">Avaliação de hoje</div>
       <label class="cp-lbl">Exposição <span class="obr">*</span>${expoSoc}</label>${seg('r:exposicao', D.EXPOSICAO.map(([k, l]) => [k, l]), r.exposicao, { travado: trav })}
-      <div class="cp-grid2" style="margin-top:14px"><div><label class="cp-lbl">Probabilidade <span class="obr">*</span></label>${seg('r:probabilidade', D.PROBABILIDADE.map(([k]) => [k, k]), r.probabilidade, { travado: trav })}${legenda(D.PROBABILIDADE, r.probabilidade)}</div>
-        <div><label class="cp-lbl">Severidade <span class="obr">*</span></label>${seg('r:severidade', D.SEVERIDADE.map(([k]) => [k, k]), r.severidade, { travado: trav })}${legenda(D.SEVERIDADE, r.severidade)}</div></div>
-      <label class="cp-lbl" style="margin-top:14px">Classificação do risco <span class="obr">*</span></label>${seg('r:classificacao', D.CLASSIFICACAO, r.classificacao, { travado: trav })}
-      <div class="cp-grid2" style="margin-top:14px"><div><label class="cp-lbl">EPI (e CA)</label>${inp('r.epi', r.epi, { ph: 'Ex.: Protetor auricular · CA 12345', travado: trav })}</div>
-        <div><label class="cp-lbl">EPI eficaz?</label>${seg('r:epi_eficaz', D.EFICAZ.map(([k]) => [k, k]), r.epi_eficaz, { travado: trav })}${legenda(D.EFICAZ, r.epi_eficaz)}</div></div></div>
-    ${conc}
-    <div class="cp-sec"><div class="cp-sec-tit">Evidências</div>
-      ${fotos(d, f => f.ghe_id === g.id && f.alvo === 'risco' && f.alvo_uid === r.uid, { chave: 'risco:' + r.uid, travado: trav })}
-      <div class="cp-ajuda">Fotos que comprovam o que foi visto (fonte, EPI, rótulo do produto, medidor).</div></div>
+      <div class="cp-grid2" style="margin-top:14px"><div><label class="cp-lbl">Probabilidade <span class="obr">*</span> ${ajudaCrit('prob')}</label>${seg('r:probabilidade', D.PROBABILIDADE.map(([k]) => [k, k]), r.probabilidade, { travado: trav })}${legenda(D.PROBABILIDADE, r.probabilidade)}</div>
+        <div><label class="cp-lbl">Severidade <span class="obr">*</span> ${ajudaCrit('sev')}</label>${seg('r:severidade', D.SEVERIDADE.map(([k]) => [k, k]), r.severidade, { travado: trav })}${legenda(D.SEVERIDADE, r.severidade)}</div></div>
+      <div style="margin-top:14px">${caixaNivel(r)}</div></div>
+    ${editarDet
+      ? `<div class="cp-sec"><div class="cp-sec-tit">Onde e como${temDet && !trav ? `<span class="dir"><button type="button" class="cp-link" data-acao="campo:dobra:det">Recolher</button></span>` : ''}</div>${detEditavel}</div>`
+      : `<div class="cp-sec"><div class="cp-sec-tit">${r.soc ? 'Como está no SOC' : 'Onde e como'}</div>${detResumo}</div>`}
+    ${temMedicao(r) ? dobra('med', 'Medição', medResumo, blocoMedicao.replace(/^<div class="cp-sec"><div class="cp-sec-tit">Medição <span class="dir" style="color:var\(--text-3\)">se houver<\/span><\/div>/, '').replace(/<\/div>$/, '')) : ''}
+    ${blocoIlu ? dobra('ilu', 'Iluminância (NHO 11)', ilu.nivel_encontrado ? `hoje ${esc(ilu.nivel_encontrado)} lux` : (r.soc?.medicao?.valor ? `última no SOC: ${esc(r.soc.medicao.valor)}` : 'se houver'),
+        blocoIlu.replace(/^<div class="cp-sec"><div class="cp-sec-tit">Iluminância \(NHO 11\)<\/div>/, '').replace(/<\/div>$/, '')) : ''}
+    ${cols.length ? dobra('conc', 'Conclusão (insalub., pericul., AE)', concResumo,
+        conc.replace(/^<div class="cp-sec"><div class="cp-sec-tit">Conclusão <span class="dir" style="color:var\(--text-3\)">pode ficar para o escritório<\/span><\/div>/, '').replace(/<\/div>$/, '')) : ''}
+    ${dobra('fotos', 'Fotos e evidências', nFotos ? `${nFotos} foto${nFotos === 1 ? '' : 's'}` : 'nenhuma · tocar para abrir',
+        `${fotos(d, f => f.ghe_id === g.id && f.alvo === 'risco' && f.alvo_uid === r.uid, { chave: 'risco:' + r.uid, travado: trav })}
+        <div class="cp-ajuda">Fotos que comprovam o que foi visto (fonte, EPI, rótulo do produto, medidor).</div>`, nFotos > 0)}
     ${trav ? '' : `<div class="cp-risco-rem">${btn(ico('lixo') + ' Tirar este risco do GHE', 'campo:risco-rem', { cls: 'btn-ghost btn-sm', estilo: 'color:var(--red)' })}</div>`}`;
 
   const lado = `<div class="cp-lado">
     <div class="cp-sec"><div class="cp-sec-tit">GHE ${esc(g.nome)}</div><div class="cp-kv"><span>Setores</span><b>${esc((g.setores || []).join(', ') || '-')}</b></div><div class="cp-kv"><span>Funções</span><b>${(g.funcoes || []).length}</b></div><div class="cp-kv"><span>Ambientes</span><b>${(g.ambientes || []).length}</b></div></div>
-    <div class="cp-sec"><div class="cp-sec-tit">Riscos encontrados</div>${(g.riscos || []).map(x => {
+    <div class="cp-sec"><div class="cp-sec-tit">Riscos encontrados</div>${lista.map(x => {
       const e = D.riscoCompleto(x);
       return `<div class="cp-mini-r ${x.uid === r.uid ? 'atual' : ''}" data-acao="campo:risco-abrir:${x.uid}" style="cursor:pointer"><span class="ic ${e === 'ok' ? 'ok' : 'al'}">${e === 'ok' ? I.check : I.alerta}</span>${esc((x.codigo ? x.codigo + ' ' : '') + x.nome)}</div>`;
     }).join('')}</div></div>`;
-  const idx = (g.riscos || []).findIndex(x => x.uid === r.uid);
-  const temProx = idx >= 0 && idx < (g.riscos || []).length - 1;
+  const temProx = pos >= 0 && pos < lista.length - 1;
   return `<div class="cp-2col"><div>${principal}</div>${lado}</div>
-    ${acoes([btn('Voltar aos riscos', 'campo:risco-fechar', { papel: 'cp-a-voltar' }), btn(temProx ? 'Próximo risco' : 'Pronto', temProx ? 'campo:risco-prox' : 'campo:risco-fechar', { cls: 'btn-amber', papel: 'cp-a-prox' })])}`;
+    ${acoes([btn('Voltar', 'campo:risco-fechar', { papel: 'cp-a-voltar' }),
+      !trav && !r.pendente ? btn('Falta info', 'campo:pend-on', { papel: 'cp-a-salvar' }) : '',
+      btn(temProx ? 'Próximo risco' : 'Pronto', temProx ? 'campo:risco-prox' : 'campo:risco-fechar', { cls: 'btn-amber', papel: 'cp-a-prox' })])}`;
 }
 
 /* ── Passo 4: treinamentos ──────────────────────────────────────────────── */
@@ -337,7 +458,7 @@ function passo4(d, g, trav) {
 /* ══ Tela ═══════════════════════════════════════════════════════════════════ */
 export async function render(params) {
   const [av, gid, ruid] = String(params?.id || '').split('~');
-  if (av !== _av || gid !== _gid) { _busca = ''; _treinTodos = false; _amb = null; _risco = null; }
+  if (av !== _av || gid !== _gid) { _busca = ''; _treinTodos = false; _amb = null; _risco = null; _addRisco = false; }
   _av = av; _gid = gid;
   if (ruid) { _risco = ruid; _passo.set(gid, 3); params.id = `${av}~${gid}`; }
   const d = await D.abrir(_av);
@@ -345,8 +466,10 @@ export async function render(params) {
   const g = ghe();
   if (!g) return `${nota('Este GHE não existe mais nesta avaliação.', 'warn')}<div style="margin-top:12px">${btn('Voltar para a avaliação', `ir:campo-avaliacao:${_av}`)}</div>`;
   ligarTela({ digitar, foto, enter });
+  D.normalizarMatriz(_av, _cat.matriz);   // v222: riscos feitos antes da matriz
   const clis = await D.clientesPorId([d.av.cliente_id]);
   const cli = clis[d.av.cliente_id];
+  cabecalhoCelular(d, cli, g.codigo_soc ? `veio do SOC (GHE ${g.codigo_soc})` : '', { titulo: 'GHE ' + g.nome, rotulo: cli?.nome || 'Avaliação de campo' });
   const trav = !D.podeEditar(d);
   const p = passo();
   const r = p === 3 ? risco() : null;
@@ -359,7 +482,7 @@ export async function render(params) {
     corpo = p === 1 ? passo1(d, g, trav) : p === 2 ? passo2(d, g, trav) : p === 3 ? passo3(d, g, trav) : passo4(d, g, trav);
     corpo += acoes([
       btn(p === 1 ? 'Voltar' : 'Anterior', p === 1 ? `ir:campo-avaliacao:${_av}` : `campo:passo:${p - 1}`, { papel: 'cp-a-voltar' }),
-      p < 4 ? btn('Próximo', `campo:passo:${p + 1}`, { cls: 'btn-amber', papel: 'cp-a-prox' }) : btn('Concluir GHE', 'campo:fim', { cls: 'btn-amber', papel: 'cp-a-prox' })
+      p < 4 ? btn(`Próximo: ${['Ambiente', 'Riscos', 'Treinamentos'][p - 1]}`, `campo:passo:${p + 1}`, { cls: 'btn-amber', papel: 'cp-a-prox' }) : btn('Concluir GHE', 'campo:fim', { cls: 'btn-amber', papel: 'cp-a-prox' })
     ]);
   }
   return `${topoGhe(d, g, cli)}${trav ? nota('Avaliação concluída: só leitura.') : ''}${etapas(g)}${corpo}`;
@@ -410,6 +533,11 @@ async function foto(chave, arquivos) {
   redesenharTela();
 }
 
+/* v222: depois de "Falta info", o cursor vai direto para "O que falta". */
+function focarPendencia() {
+  setTimeout(() => { const el = [...document.querySelectorAll('[data-cp="r.pend.texto"]')].find(c => c.getBoundingClientRect().width > 0); el?.focus(); }, 60);
+}
+
 function novoRisco(c) {
   const pad = c.dados?.padrao || {};
   return { uid: D.novoId(), codigo: c.codigo, nome: c.nome, categoria: c.categoria, nao_listado: false, ambiente: 'Todos',
@@ -443,12 +571,14 @@ export async function acao(nome, valor, redesenhar) {
   if (!d || !g) return false;
   const [a1, ...resto] = String(valor ?? '').split(':');
   const a2 = resto.join(':');
-  const rolarTopo = () => { try { document.getElementById('mainBody')?.scrollTo?.(0, 0); window.scrollTo(0, 0); } catch { /* ok */ } };
+  /* v222: o celular rola dentro de #mobileBody, e o redesenho precisa terminar
+     antes de voltar ao topo (antes o passo novo abria no meio da tela). */
+  const redesenharTopo = async () => { await redesenhar(); rolarTopo(); };
 
   switch (nome) {
     case 'campo:passo': { const n = Math.min(4, Math.max(1, Number(a1) || 1)); _passo.set(_gid, n); _risco = null;
       if (n === 2 && !(g.ambientes || []).length && D.podeEditar(d)) altG(x => { x.ambientes = [ambVazio()]; });   // v202
-      redesenhar(); rolarTopo(); return true; }
+      _addRisco = false; await redesenharTopo(); return true; }
     case 'campo:fim': irPara(`campo-avaliacao:${_av}`); return true;
     case 'campo:menor': altG(x => { const v = a1 === 'S' ? true : false; x.menor18 = (x.menor18 === v) ? null : v; }); redesenhar(); return true;
     case 'campo:tag-add': adicionarTag(a1, valorVisivel(`[data-cp-enter="${a1}"]`)); return true;
@@ -480,13 +610,40 @@ export async function acao(nome, valor, redesenhar) {
       const r = novoRisco(c);
       altG(x => { x.riscos.push(r); });
       (_catAbertas.get(_gid) || new Set()).add(c.categoria);
-      _risco = r.uid; _busca = ''; redesenhar(); rolarTopo(); return true;
+      _risco = r.uid; _busca = ''; _addRisco = false; await redesenharTopo(); return true;
     }
-    case 'campo:risco-abrir': _risco = a1; _passo.set(_gid, 3); redesenhar(); rolarTopo(); return true;
-    case 'campo:risco-fechar': _risco = null; redesenhar(); return true;
+    case 'campo:risco-abrir': _risco = a1; _passo.set(_gid, 3); _addRisco = false; await redesenharTopo(); return true;
+    case 'campo:risco-fechar': _risco = null; await redesenharTopo(); return true;
     case 'campo:risco-prox': {
-      const i = g.riscos.findIndex(r => r.uid === _risco);
-      _risco = g.riscos[i + 1]?.uid || null; redesenhar(); rolarTopo(); return true;
+      const l = visiveis(g); const i = l.findIndex(r => r.uid === _risco);
+      _risco = l[i + 1]?.uid || null; await redesenharTopo(); return true;
+    }
+    /* v222: conferência rápida na lista de riscos */
+    case 'campo:add-modo': _addRisco = !_addRisco; _busca = ''; await redesenharTopo(); return true;
+    case 'campo:rc-confere': D.marcarConferido(_av, _gid, a1, 'confere'); redesenhar(); return true;
+    case 'campo:rc-mudou': D.marcarConferido(_av, _gid, a1, 'mudou'); _risco = a1; _abertos.add(`${a1}:det`); await redesenharTopo(); return true;
+    case 'campo:rc-falta':
+      altG(x => { const r = x.riscos.find(y => y.uid === a1); if (r) r.pendente = { motivo: 'documento_empresa', texto: '', quem: 'empresa' }; });
+      _risco = a1; await redesenharTopo(); focarPendencia(); return true;
+    case 'campo:rq': {
+      const [uid, campo, v] = [a1, ...a2.split(':')];
+      if (!['exposicao', 'probabilidade', 'severidade'].includes(campo)) return true;
+      altG(x => { const r = x.riscos.find(y => y.uid === uid); if (!r) return; const val = ['probabilidade', 'severidade'].includes(campo) ? Number(v) : v; r[campo] = String(r[campo]) === String(val) ? null : val; D.aplicarMatriz(r, _cat?.matriz); });
+      redesenhar(); return true;
+    }
+    case 'campo:crit': modalCriterios(a1); return true;
+    case 'campo:dobra': { const k = `${_risco}:${a1}`; _abertos.has(k) ? _abertos.delete(k) : _abertos.add(k); redesenhar(); return true; }
+    case 'campo:psi-tirar': {
+      const n = (g.riscos || []).filter(r => D.ehPsicossocial(r)).length;
+      if (!n || !await confirmar(`Tirar ${n === 1 ? 'o risco psicossocial' : `os ${n} riscos psicossociais`} deste GHE? A avaliação psicossocial fica fora por enquanto; eles continuam no SOC.`)) return true;
+      altG(x => { x.riscos = x.riscos.filter(r => !D.ehPsicossocial(r)); });
+      avisar(n === 1 ? 'Risco psicossocial retirado do GHE.' : `${n} riscos psicossociais retirados do GHE.`);
+      redesenhar(); return true;
+    }
+    case 'campo:pe-risco': {
+      const r = risco(); if (!r) return true;
+      modalPendEmpresa(d, null, redesenhar, { riscoUid: r.uid, gheId: g.id });
+      return true;
     }
     case 'campo:risco-rem': {
       const r = risco(); if (!r) return true;
@@ -498,7 +655,8 @@ export async function acao(nome, valor, redesenhar) {
     case 'campo:nao-listado': modalNaoListado(); return true;
     case 'campo:r': {
       const num = ['probabilidade', 'severidade'].includes(a1);
-      altR(r => { const v = num ? Number(a2) : a2; r[a1] = (String(r[a1]) === String(v)) ? null : v; if (a1 === 'ins' && r.ins !== 'S') r.grau = null; });
+      if (a1 === 'classificacao') return true;   // v222: a classificação vem da matriz
+      altR(r => { const v = num ? Number(a2) : a2; r[a1] = (String(r[a1]) === String(v)) ? null : v; if (a1 === 'ins' && r.ins !== 'S') r.grau = null; if (num) D.aplicarMatriz(r, _cat?.matriz); });
       redesenhar(); return true;
     }
     case 'campo:r-amb': altR(r => { r.ambiente = valor || 'Todos'; }); return true;
@@ -508,7 +666,7 @@ export async function acao(nome, valor, redesenhar) {
       altR(r => { const c = _cat.risco(r.codigo); const pad = c?.dados?.padrao || {}; for (const k of colunasConclusao(r)) if (pad[k] && !r[k]) r[k] = pad[k]; });
       redesenhar(); return true;
     }
-    case 'campo:pend-on': altR(r => { r.pendente = { motivo: 'documento_empresa', texto: '', quem: 'empresa' }; }); redesenhar(); return true;
+    case 'campo:pend-on': altR(r => { r.pendente = { motivo: 'documento_empresa', texto: '', quem: 'empresa' }; }); await redesenharTopo(); focarPendencia(); return true;
     case 'campo:pend-off': altR(r => { r.pendente = null; }); redesenhar(); return true;
     case 'campo:pend-motivo': altR(r => { if (r.pendente) { r.pendente.motivo = a1; if (a1 === 'estudar' || a1 === 'medicao') r.pendente.quem = 'tecnico'; } }); redesenhar(); return true;
     case 'campo:pend-quem': altR(r => { if (r.pendente) r.pendente.quem = a1; }); redesenhar(); return true;

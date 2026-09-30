@@ -22,6 +22,7 @@
 import * as sessao from '../../nucleo/sessao.js';
 import * as D from './dados.js';
 import { I, esc, ico, nota, fmtCnpj, selo, ligarTela, avisar } from './comum.js';
+import { modalPendEmpresa } from './pendencias.js';
 
 const CHAVE_MODO = 'grid:campo:modo';
 const COLUNAS = [
@@ -122,10 +123,22 @@ function levantamento(a) {
   return out;
 }
 
+/* v222: "O que falta a empresa enviar" (resumo.pend_empresa, PASSO-73). */
+const pendEmp = (a) => Array.isArray(a.resumo?.pend_empresa) ? a.resumo.pend_empresa : [];
+function faixaEsperando(a) {
+  const l = pendEmp(a); if (!l.length) return '';
+  const hoje = hojeIso();
+  const venc = l.some(p => p.prazo && String(p.prazo).slice(0, 10) < hoje);
+  const pz = (p) => { if (!p.prazo) return ''; const [, m, d] = String(p.prazo).slice(0, 10).split('-'); return ` · ${String(p.prazo).slice(0, 10) < hoje ? 'era para' : 'prometido para'} ${d}/${m}`; };
+  return `<div class="cp-cd-esp${venc ? ' venc' : ''}"><b>${venc ? 'Prazo vencido' : 'Esperando da empresa'}</b>${l.slice(0, 2).map(p => `<span>${esc(p.nome || 'Documento')}${esc(pz(p))}</span>`).join('')}${l.length > 2 ? `<span>+ ${l.length - 2} ${l.length - 2 === 1 ? 'item' : 'itens'}</span>` : ''}</div>`;
+}
+const podeMarcar = () => (window.__GRID_PONTE?.pode ? window.__GRID_PONTE.pode('campo', 2) !== false : true);
+
 function botoes(a, compacto) {
+  const nEsp = pendEmp(a).length;
   const lst = a.situacao === 'agendada' ? [['Iniciar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
-    : a.situacao === 'em_andamento' ? [['Continuar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
-    : a.situacao === 'aguardando' ? [['Abrir', 'btn-outline', `ir:campo-avaliacao:${a.id}`]]
+    : a.situacao === 'em_andamento' ? [...(compacto && D.temPendEmpresa() && podeMarcar() ? [['Falta algo?', 'btn-outline', `campo:falta-lista:${a.id}`]] : []), ['Continuar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
+    : a.situacao === 'aguardando' ? [...(nEsp === 1 && podeMarcar() ? [['Chegou', 'btn-outline', `campo:chegou-lista:${a.id}`]] : []), ['Continuar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
     : a.situacao === 'concluida'
       ? [...(a.pdf_path ? [['PDF', 'btn-outline', `campo:pdf-lista:${a.id}`]] : []), ...(compacto ? [] : [['Abrir', 'btn-outline', `ir:campo-avaliacao:${a.id}`]])]
       : compacto ? [] : [['Abrir', 'btn-outline', `ir:campo-avaliacao:${a.id}`]];
@@ -147,6 +160,7 @@ function cartaoQuadro(a, cli, tec) {
     <div class="cp-cd-t"><span>${esc(a.numero || 'Sem número')}</span>${etiquetaRevisao(a)}</div>
     <div class="cp-cd-n">${esc(cli?.nome || 'Empresa')}</div>
     ${linhaData}${prog}
+    ${faixaEsperando(a)}
     ${lv.status ? `<div class="cp-cd-s ${lv.tom}">${lv.tom === 'nuvem' ? I.nuvem : ''}<span>${esc(lv.status)}</span></div>` : ''}
     <div class="cp-cd-f"><span class="cp-avt">${esc(iniciais(tec?.nome))}</span><span class="cp-cd-tec">${esc(tec?.nome || 'Técnico')}</span>${botoes(a, true)}</div>
   </div>`;
@@ -157,7 +171,8 @@ function linhaLista(a, cli, tec) {
   const lev = lv.barra
     ? `<div class="cp-tbar"><div class="cp-pb"><i style="width:${lv.pct}%"></i></div><small>${lv.pct}%</small></div><div class="cp-tsub">${lv.barra}</div>`
     : `<span>${esc(lv.resumo)}</span>`;
-  const st = lv.status ? `<div class="cp-tsub ${lv.tom}">${esc(lv.status)}</div>` : '';
+  const st = (lv.status ? `<div class="cp-tsub ${lv.tom}">${esc(lv.status)}</div>` : '')
+    + (pendEmp(a).length ? `<div class="cp-tsub laranja">Esperando da empresa: ${esc(pendEmp(a).map(p => p.nome).slice(0, 3).join(', '))}</div>` : '');
   const quando = atrasada(a) ? `<span class="cp-atr">Era para ${esc(quandoVisita(a.data_visita, a.hora_inicio))}</span>` : esc(quandoVisita(a.data_visita, a.hora_inicio));
   return `<tr class="cp-tr ${esc(a.situacao)}" data-acao="ir:campo-avaliacao:${a.id}">
     <td class="cp-tn">${esc(a.numero || 'Sem número')}${etiquetaRevisao(a)}</td>
@@ -240,7 +255,7 @@ export async function render() {
       </select>` : ''}
       ${gestor && tecnicos.length > 1 ? `<select class="turmas-filtro-select" data-acao="campo:tec"><option value="">Todos os técnicos</option>${tecnicos.map(([id, nome]) => `<option value="${id}" ${id === _tec ? 'selected' : ''}>${esc(nome)}</option>`).join('')}</select>` : ''}
       ${seg}
-      ${gestor ? `<div class="turmas-filtros-cta">${window.__GRID_PONTE?.modoSuporte?.() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-catalogo">Catálogo da ficha</button>' : ''}<button type="button" class="btn btn-amber" data-acao="ir:agendaequipe">${ico('plus')}Agendar visita</button></div>` : ''}
+      ${gestor ? `<div class="turmas-filtros-cta">${window.__GRID_PONTE?.modoSuporte?.() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-catalogo">Catálogo da ficha</button>' : ''}${(perfil === 'administrador' || perfil === 'provedor') && D.temPendEmpresa() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-matriz">Matriz de risco</button><button type="button" class="btn btn-outline" data-acao="ir:campo-tipos">Tipos de documento</button>' : ''}<button type="button" class="btn btn-amber" data-acao="ir:agendaequipe">${ico('plus')}Agendar visita</button></div>` : ''}
     </div>`;
 
   if (!lista.length) return topo + nota(esc(vazioTxt));
@@ -330,6 +345,20 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:col') { _colCel = valor || ''; redesenhar(); return true; }
   if (nome === 'campo:ver-concluidas') { _modo = 'lista'; _sit = 'concluida'; redesenhar(); return true; }
   if (nome === 'campo:ver-canceladas') { _modo = 'lista'; _sit = 'cancelada'; redesenhar(); return true; }
+  /* v222: marcar pelo quadro, sem abrir a avaliação */
+  if (nome === 'campo:falta-lista' || nome === 'campo:chegou-lista') {
+    try {
+      const d = await D.abrir(valor);
+      const aposSalvar = async () => { try { await D.sincronizar(valor); } catch (e) { avisar(D.traduzirErro(e), 'erro'); } redesenhar(); };
+      if (nome === 'campo:falta-lista') { await modalPendEmpresa(d, null, redesenhar, { aposSalvar }); return true; }
+      const ab = D.pendEmpresaAbertas(d);
+      if (ab.length !== 1) { window.GRID?.tratarAcao?.('ir:campo-avaliacao:' + valor); return true; }
+      D.resolverPendEmpresa(valor, ab[0].uid);
+      avisar(`${ab[0].nome}: marcado como recebido.`);
+      await aposSalvar();
+    } catch (e) { avisar(D.traduzirErro(e), 'erro'); }
+    return true;
+  }
   if (nome === 'campo:pdf-lista') {   /* v207: atalho para o PDF da concluída */
     try {
       const url = await D.linkPdfPorId(valor);

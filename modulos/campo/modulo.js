@@ -29,6 +29,11 @@ export default {
     /* v203: conferência dos funcionários com a empresa. */
     { id: 'campo-funcionarios', rotulo: 'Conferir funcionários', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
       rota: () => import('./funcionarios.js') },
+    /* v222: tipos do "O que falta a empresa enviar" — o administrador edita (PASSO-73). */
+    { id: 'campo-tipos', rotulo: 'Tipos de documento', icone: 'clipboard', oculto: true, perfis: ['administrador'], mobile: true,
+      rota: () => import('./tipos.js') },
+    { id: 'campo-matriz', rotulo: 'Matriz de risco', icone: 'clipboard', oculto: true, perfis: ['administrador'], mobile: true,
+      rota: () => import('./matriz.js') },
     /* Catálogo da ficha: só abre de verdade em Modo Suporte (Provedor). */
     { id: 'campo-catalogo', rotulo: 'Catálogo da ficha', icone: 'book', oculto: true, perfis: ['administrador'], mobile: false,
       textoDesktop: 'Editar o catálogo da ficha é trabalho de mesa. No computador esta tela abre direto.',

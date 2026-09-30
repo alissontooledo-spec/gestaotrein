@@ -369,7 +369,11 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
   }
   const nrNum = s => parseInt(String(s || '').replace(/\D/g, ''), 10) || 999;
   const treinLista = [...trein.values()].sort((a, b) => nrNum(a.nr) - nrNum(b.nr) || a.nome.localeCompare(b.nome, 'pt-BR'));
-  const documentos = String(av.documentos || '').split(/\n|;/).map(t => t.replace(/^\s*[-•*\d.)]+\s*/, '').trim()).filter(Boolean);
+  /* v222: o que a empresa ainda não enviou (lista estruturada, PASSO-73) vem primeiro. */
+  const dataBrPdf = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+  const pendEmp = (Array.isArray(av.pendencias_empresa) ? av.pendencias_empresa : []).filter(p => p && !p.resolvido_em)
+    .map(p => `${p.nome || 'Documento'}${p.detalhe ? ': ' + p.detalhe : ''}${p.risco_nome ? ` (risco ${p.risco_nome})` : ''}${p.prazo ? ` · prometido para ${dataBrPdf(p.prazo)}` : ''}`);
+  const documentos = [...pendEmp, ...String(av.documentos || '').split(/\n|;/).map(t => t.replace(/^\s*[-•*\d.)]+\s*/, '').trim()).filter(Boolean)];
   const conf = Array.isArray(av.funcionarios?.lista) ? av.funcionarios.lista : [];
   const mudancas = conf.filter(p => p.origem === 'empresa' || p.situacao === 'saiu' || p.situacao === 'mudou');
 
@@ -626,6 +630,8 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
     if (r.exposicao) f.push({ t: 'Exposição ' }, { t: `${EXPO_TXT[r.exposicao] || ''} (${(EXPOSICAO[r.exposicao] || '').toLowerCase()})`, b: true, c: NAVY }, { t: '. ' });
     if (r.probabilidade) f.push({ t: 'Chance de causar dano: ' }, { t: PROB_TXT[r.probabilidade] || '', b: true, c: NAVY }, { t: r.severidade ? '; ' : '. ' });
     if (r.severidade) f.push({ t: 'se acontecer, lesão ' }, { t: SEV_TXT[r.severidade] || '', b: true, c: NAVY }, { t: '. ' });
+    /* v222: nível pela matriz de risco (P × S) */
+    if (r.nivel?.nome) f.push({ t: 'Nível de risco pela matriz: ' }, { t: `${r.nivel.nome}${CLASSIF[r.nivel.aceitabilidade] ? ' (' + CLASSIF[r.nivel.aceitabilidade][0].toLowerCase() + ')' : ''}`, b: true, c: NAVY }, { t: '. ' });
     const sitMed = r.medicao?.situacao || (r.iluminacao?.nivel_minimo && !vazio(r.iluminacao?.nivel_encontrado) ? (Number(r.iluminacao.nivel_encontrado) >= Number(r.iluminacao.nivel_minimo) ? 'atende' : 'abaixo_min') : null);
     if (sitMed === 'abaixo') f.push({ t: 'O nível medido está ' }, { t: 'abaixo do limite', b: true, c: VERDE }, { t: ' da lei.' });
     if (sitMed === 'acima') f.push({ t: 'O nível medido está ' }, { t: 'acima do limite', b: true, c: VERM }, { t: ' da lei.' });
@@ -646,7 +652,7 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
     };
     const k = stRisco(r);
     if (k === 'R' || k === 'A' || util(r.medidas_adm)) {
-      const txt = util(r.medidas_adm) ? r.medidas_adm : k === 'R' ? 'Corrigir antes de continuar a atividade.' : 'Reforçar as medidas de controle deste risco no prazo de até 90 dias.';
+      const txt = util(r.medidas_adm) ? r.medidas_adm : util(r.nivel?.acao) ? r.nivel.acao : k === 'R' ? 'Corrigir antes de continuar a atividade.' : 'Reforçar as medidas de controle deste risco no prazo de até 90 dias.';
       destaque([{ t: 'O que fazer: ', b: true, c: NAVY }, { t: txt }], k === 'V' ? VERDE_BG : k === 'R' ? VERM_BG : AMBAR_BG);
     }
     const prot = [];

@@ -10,7 +10,7 @@
 import * as D from './dados.js';
 import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
 import { I, esc, nota, topo, inp, area, fotos, carregarFotos, legendarFoto, ligarTela, avisar, confirmar,
-  btn, acoes, colherAssinatura, dataBr, quando, irPara } from './comum.js';
+  btn, acoes, colherAssinatura, dataBr, quando, irPara, cabecalhoCelular } from './comum.js';
 import { gerarEAnexar, baixarBlob, nomeArquivo } from './pdfgerar.js';
 
 let _id = null, _ocupado = false, _progresso = '';
@@ -29,7 +29,9 @@ export async function render(params) {
   ligarTela({ digitar, foto });
   const [clis, usus] = await Promise.all([D.clientesPorId([d.av.cliente_id]), D.usuariosPorId([d.av.tecnico_id])]);
   const cli = clis[d.av.cliente_id], tec = usus[d.av.tecnico_id];
+  cabecalhoCelular(d, cli, 'Assinaturas e conclusão');
   const trav = !D.podeEditar(d);
+  const esperando = D.temPendEmpresa() ? D.pendEmpresaAbertas(d) : [];
 
   const semTec = D.faltas(d, { semAssinaturaTec: true }).filter(f => !f.assinatura);
   const todas = D.faltas(d);
@@ -60,7 +62,10 @@ export async function render(params) {
       <label class="cp-lbl">Acompanhante (nome e cargo)</label>
       <div class="cp-grid2">${inp('av.acompanhante_nome', d.av.acompanhante_nome, { ph: 'Nome de quem acompanhou', travado: trav })}${inp('av.acompanhante_cargo', d.av.acompanhante_cargo, { ph: 'Cargo', travado: trav })}</div>
       <label class="cp-lbl" style="margin-top:12px">Observações gerais</label>${area('av.observacoes', d.av.observacoes, { ph: 'O que vale para a empresa toda.', travado: trav })}
-      <label class="cp-lbl" style="margin-top:12px">Documentos recebidos ou pedidos à empresa</label>${area('av.documentos', d.av.documentos, { ph: 'Ex.: FISPQ do desinfetante (pedida), PGR vigente (recebido)', travado: trav, alto: 60 })}</div>
+      ${esperando.length ? `<label class="cp-lbl" style="margin-top:12px">Esperando da empresa</label>
+        <div class="cp-ajuda" style="margin:0 0 6px">Pode concluir mesmo assim: o que ainda não chegou sai no PDF, em "Documentos que a empresa precisa enviar".</div>
+        ${esperando.map(p => `<div class="cp-kv" data-acao="ir:campo-avaliacao:${_id}" style="cursor:pointer"><span>${esc(p.nome)}${p.detalhe ? ' · ' + esc(p.detalhe) : ''}</span><b>${p.prazo ? 'prometido para ' + esc(D.prazoInfo(p.prazo).txt) : ''}</b></div>`).join('')}` : ''}
+      <label class="cp-lbl" style="margin-top:12px">${D.temPendEmpresa() ? 'Outros documentos (texto livre)' : 'Documentos recebidos ou pedidos à empresa'}</label>${area('av.documentos', d.av.documentos, { ph: 'Ex.: FISPQ do desinfetante (pedida), PGR vigente (recebido)', travado: trav, alto: 60 })}</div>
     <div class="cp-sec"><div class="cp-sec-tit">Fotos gerais</div>
       ${fotos(d, f => f.alvo === 'geral', { chave: 'geral:', travado: trav })}</div>
     <div class="cp-sec"><div class="cp-sec-tit">Assinaturas</div><div class="cp-assins">

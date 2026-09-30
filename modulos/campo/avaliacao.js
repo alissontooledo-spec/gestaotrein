@@ -6,10 +6,12 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as D from './dados.js';
-import { I, esc, ico, secTit, nota, topo, dataBr, quando, selo, ligarTela, avisar, confirmar, ponte, btn, acoes, carregarFotos, irPara } from './comum.js';
+import { I, esc, ico, secTit, nota, topo, dataBr, quando, selo, ligarTela, avisar, confirmar, ponte, btn, acoes, carregarFotos, irPara,
+  cabecalhoCelular } from './comum.js';
+import { blocoEsperando, modalPendEmpresa } from './pendencias.js';
 import { gerarEAnexar, baixarBlob, nomeArquivo } from './pdfgerar.js';
 
-let _id = null, _ocupado = '', _progresso = '';
+let _id = null, _ocupado = '', _progresso = '', _socAberto = false;
 
 const idDe = (p) => String(p?.id || '').split('~')[0];
 
@@ -21,15 +23,21 @@ function cartaoGhe(g) {
   const cats = Object.entries(porCat).map(([k, n]) => `<span class="cp-hub-cat">${esc(D.NOME_CATEGORIA[k] || k)} ${n}</span>`).join('');
   const pend = (g.riscos || []).filter(r => r.pendente).length;
   const set = (g.setores || []).join(', '), fun = (g.funcoes || []).join(', ');
-  return `<div class="cp-hub-ghe" data-acao="ir:campo-ghe:${_id}~${g.id}">
+  /* v222: progresso do GHE (riscos completos / total, sem psicossocial) */
+  const rsv = (g.riscos || []).filter(r => !D.ehPsicossocial(r));
+  const ok = rsv.filter(r => D.riscoCompleto(r) === 'ok').length;
+  const pct = rsv.length ? Math.round(ok / rsv.length * 100) : 0;
+  return `<div class="cp-hub-ghe cp-ghe-${st}" data-acao="ir:campo-ghe:${_id}~${g.id}">
     <div class="cp-hub-ghe-l1"><span class="cp-hub-ghe-nome">GHE ${esc(g.nome)}</span><span class="badge ${c}">${t}</span><span class="cp-rrow-ir" style="color:var(--text-3);display:flex;width:16px">${I.chevR}</span></div>
     <div class="cp-hub-ghe-meta">${set ? `<b>Setores:</b> ${esc(set)}<br>` : '<b>Setores:</b> a informar<br>'}${fun ? `<b>Funções:</b> ${esc(fun)}` : ''}</div>
     ${cats ? `<div class="cp-hub-cats">${cats}</div>` : `<div class="cp-hub-ghe-meta">Nenhum risco marcado ainda.</div>`}
     ${pend ? `<div class="cp-card-meta" style="color:var(--warn-text);font-weight:600">${I.relogio}<span>${pend} risco${pend > 1 ? 's' : ''} para completar depois</span></div>` : ''}
+    ${(g.riscos || []).length > rsv.length ? `<div class="cp-hub-ghe-meta" style="color:var(--warn-text)">${(g.riscos || []).length - rsv.length} risco(s) psicossocial(is) do SOC neste GHE: abra o GHE, aba Riscos, e toque em Tirar do GHE.</div>` : ''}
+    ${rsv.length ? `<div class="cp-ghe-prog"><div class="cp-pb"><i style="width:${pct}%"></i></div><span>${ok} de ${rsv.length} riscos</span></div>` : ''}
   </div>`;
 }
 
-function blocoSoc(d, cli, editavel) {
+function blocoSoc(d, cli, editavel, { semGhes = false } = {}) {
   const s = d.av.soc;
   if (!cli?.soc_codigo_empresa) {
     return `<div class="cp-sec"><div class="cp-sec-tit">Dados do SOC</div>${nota('Este cliente não tem o código da empresa no SOC. Com o código preenchido no cadastro de Clientes, dá para trazer setores, cargos e GHEs de lá.')}</div>`;
@@ -59,7 +67,7 @@ function blocoSoc(d, cli, editavel) {
     ${dicas.length ? `<div class="cp-soc-dica">${dicas.map(esc).join('<br>')}</div>` : ''}
     ${verDetalhes ? `<details class="cp-soc-det"><summary>Detalhes da busca no SOC <small>só administrador vê</small></summary><ul>${s.avisos.map(a => `<li>${esc(a)}</li>`).join('')}</ul><div class="cp-ajuda">Código da empresa no SOC: ${esc(cli.soc_codigo_empresa)}</div></details>` : ''}
   </div>
-  ${editavel && ghesSoc.length ? blocoGhesSoc(d, ghesSoc) : ''}`;
+  ${editavel && ghesSoc.length && !semGhes ? blocoGhesSoc(d, ghesSoc) : ''}`;
 }
 
 /* v205: GHEs que já existem no SOC — o técnico escolhe de qual partir. */
@@ -71,7 +79,8 @@ function blocoGhesSoc(d, ghesSoc) {
   const cartao = (gs) => {
     const hs = (gs.hierarquias || []).filter(h => !inativas.has(`${h.unidade}|${h.setor}|${h.cargo}`));
     const set = uniq(hs.map(nm.setor)), fun = uniq(hs.map(nm.cargo));
-    const rs = gs.riscos || [];
+    const rs = (gs.riscos || []).filter(r => !D.ehPsicossocial(r));   // v222: psicossocial fica fora
+    const nPsi = (gs.riscos || []).length - rs.length;
     const datas = rs.map(r => r.medicao?.data).filter(Boolean);
     const ult = datas.sort((a, b) => dataOrd(b).localeCompare(dataOrd(a)))[0];
     const idx = todos.indexOf(gs);
@@ -79,6 +88,7 @@ function blocoGhesSoc(d, ghesSoc) {
       <div class="n">${esc(gs.codigo ? 'GHE ' + gs.codigo + ' · ' : '')}${esc(gs.nome || '')}</div>
       <div class="s">${set.length ? 'Setores: ' + esc(set.join(', ')) : 'Sem setor no SOC'}${fun.length ? ' · Funções: ' + esc(fun.join(', ')) : ''}</div>
       <div class="s">${rs.length ? `${rs.length} risco${rs.length === 1 ? '' : 's'}: ` + esc(rs.slice(0, 4).map(r => (r.codigo ? r.codigo + ' ' : '') + r.nome).join(', ')) + (rs.length > 4 ? '…' : '') : 'Sem risco caracterizado no SOC'}</div>
+      ${nPsi ? `<div class="s" style="color:var(--text-3)">${nPsi} risco${nPsi === 1 ? '' : 's'} psicossocia${nPsi === 1 ? 'l' : 'is'} do SOC não ${nPsi === 1 ? 'entra' : 'entram'} (fora do escopo por enquanto)</div>` : ''}
       ${ult ? `<span class="cp-ghe-soc-med">Última medição: ${esc(ult)}</span>` : ''}
       <div style="margin-top:8px">${btn('Começar a partir deste GHE', `campo:soc-ghe:${idx}`, { cls: 'btn-navy btn-sm' })}</div></div>`;
   };
@@ -92,28 +102,7 @@ const dataOrd = (t) => { const m = String(t || '').match(/^(\d{2})\/(\d{2})\/(\d
 /* "Grau médio (20%)" / "20" → "20%" (graus da ficha). */
 const grauSoc = (t) => { const m = String(t || '').match(/\b(10|20|40)\b/); return m ? m[1] + '%' : null; };
 
-/* v203: conferência dos funcionários com a empresa (quadro no hub). */
-function blocoFuncionarios(d, editavel) {
-  if (!D.temConferencia(d)) return '';
-  const r = D.resumoConferencia(d);
-  const alvo = `ir:campo-funcionarios:${_id}`;
-  if (!r.total) {
-    if (!editavel) return '';
-    return `<div class="cp-sec"><div class="cp-sec-tit">Funcionários — conferir com a empresa</div>
-      <div class="cp-soc-dica" style="margin-top:0">${d.av.soc ? 'O SOC não trouxe funcionários ativos desta empresa.' : 'Traga os dados do SOC para conferir a lista de funcionários com o acompanhante.'} Você também pode incluir os funcionários informados pela empresa.</div>
-      <div style="margin-top:10px">${btn('Abrir conferência', alvo, { cls: 'btn-outline btn-sm' })}</div></div>`;
-  }
-  const st = (n, t, cls = '') => `<div class="cp-soc-stat ${cls}"><b>${n}</b><span>${t}</span></div>`;
-  const pct = (n) => r.soc ? (100 * n / r.soc).toFixed(1) + '%' : '0%';
-  const comecou = r.confere + r.saiu + r.mudou + r.incluidos > 0;
-  const rotulo = !comecou ? 'Conferir com a empresa' : r.falta ? 'Continuar conferência' : 'Ver conferência';
-  return `<div class="cp-sec"><div class="cp-sec-tit">Funcionários — conferir com a empresa ${d.av.funcionarios?.conferido_em ? `<span class="dir">${esc(quando(d.av.funcionarios.conferido_em))}</span>` : ''}</div>
-    ${comecou ? `<div class="cp-soc-stats">${st(r.confere, r.confere === 1 ? 'confere' : 'conferem', 'ok')}${st(r.saiu, r.saiu === 1 ? 'saiu' : 'saíram', 'red')}${st(r.mudou, r.mudou === 1 ? 'mudou' : 'mudaram', 'warn')}${st(r.falta, r.falta === 1 ? 'falta' : 'faltam')}</div>
-      <div class="cp-conf-bar"><i style="width:${pct(r.confere)};background:var(--green)"></i><i style="width:${pct(r.saiu)};background:var(--red)"></i><i style="width:${pct(r.mudou)};background:var(--amber)"></i></div>
-      ${r.incluidos ? `<div class="cp-ajuda" style="margin-top:0">+ ${r.incluidos} funcionário${r.incluidos === 1 ? ' incluído que não estava' : 's incluídos que não estavam'} no SOC</div>` : ''}`
-      : `<div class="cp-soc-dica" style="margin-top:0"><b>${r.soc}</b> funcionário${r.soc === 1 ? '' : 's'} no SOC. Confira a lista com o acompanhante: quem saiu, quem mudou de setor ou função e quem falta.</div>`}
-    <div style="margin-top:10px">${btn(rotulo, alvo, { cls: comecou ? 'btn-outline btn-sm' : 'btn-navy btn-sm' })}</div></div>`;
-}
+/* v222: a conferência de funcionários abre pelo quadro do topo (a seção antiga saiu). */
 
 async function telaConcluida(d, cli, tec) {
   const r = d.av.resumo || {};
@@ -137,6 +126,7 @@ async function telaConcluida(d, cli, tec) {
       ${!d.av.pdf_path ? nota('A avaliação foi concluída, mas o PDF ainda não foi anexado. Toque em Gerar PDF (precisa de internet).', 'warn') : ''}</div>
     <div class="cp-sec"><div class="cp-sec-tit">GHEs</div>${linhas || '<div class="cp-ajuda">Sem GHE.</div>'}</div>
     ${D.listaFuncionarios(d).length ? (() => { const rc = D.resumoConferencia(d); return `<div class="cp-sec"><div class="cp-sec-tit">Funcionários conferidos</div><div class="cp-kv"><span>No SOC</span><b>${rc.soc}</b></div><div class="cp-kv"><span>Saíram · mudaram · incluídos</span><b>${rc.saiu} · ${rc.mudou} · ${rc.incluidos}</b></div><div class="cp-kv"><span>Na empresa</span><b>${rc.naEmpresa}${rc.falta ? ` (${rc.falta} sem conferir)` : ''}</b></div>${btn('Ver lista', `ir:campo-funcionarios:${_id}`, { cls: 'btn-ghost btn-sm' })}</div>`; })() : ''}
+    ${D.pendEmpresaAbertas(d).length ? `<div class="cp-sec"><div class="cp-sec-tit">Documentos que a empresa ainda vai enviar</div>${D.pendEmpresaAbertas(d).map(p => `<div class="cp-kv"><span>${esc(p.nome)}${p.detalhe ? ' · ' + esc(p.detalhe) : ''}</span><b>${p.prazo ? 'prometido para ' + esc(D.prazoInfo(p.prazo).txt) : ''}</b></div>`).join('')}<div class="cp-ajuda">Saem no PDF, na página de pendências.</div></div>` : ''}
     ${d.av.observacoes ? `<div class="cp-sec"><div class="cp-sec-tit">Observações</div><div style="font-size:13px;color:var(--text-2);white-space:pre-wrap">${esc(d.av.observacoes)}</div></div>` : ''}
   </div><div class="cp-lado" style="display:block"><div class="cp-sec"><div class="cp-sec-tit">Ações</div>
     ${D.podeAcao('nova_revisao') ? btn('Nova revisão', 'campo:revisao', { estilo: 'width:100%;margin-bottom:8px', travado: !!_ocupado || !D.online() }) : ''}
@@ -152,35 +142,80 @@ export async function render(params) {
   const d = await D.abrir(_id);
   const [clis, usus] = await Promise.all([D.clientesPorId([d.av.cliente_id]), D.usuariosPorId([d.av.tecnico_id])]);
   const cli = clis[d.av.cliente_id], tec = usus[d.av.tecnico_id];
+  const hora = d.av.hora_inicio ? ' · ' + String(d.av.hora_inicio).slice(0, 5) : '';
+  cabecalhoCelular(d, cli, `${dataBr(d.av.data_visita)}${hora} · ${tec?.nome || ''}`);
   if (d.av.situacao === 'concluida') return telaConcluida(d, cli, tec);
 
   const editavel = D.podeEditar(d);
+  if (editavel) { try { D.normalizarMatriz(_id, (await D.catalogo()).matriz); } catch { /* sem catálogo no aparelho: acerta ao abrir o GHE */ } }   // v222
   const pend = D.pendencias(d);
   const pronta = !pend.length && d.ghes.length && d.ghes.every(g => D.gheCompleto(g) === 'ok');
   const sitTxt = d.av.situacao === 'cancelada' ? selo('cancelada')
     : pronta ? '<b style="color:var(--green-text)">Pronta para concluir</b>' : selo(d.av.situacao);
+  const s = d.av.soc;
+  const semSoc = !s && !!cli?.soc_codigo_empresa;
 
   return `${topo(d, cli)}
     ${d.av.situacao === 'cancelada' ? nota('Esta visita foi cancelada na agenda. Para retomar, reative o compromisso na Agenda da Equipe.', 'red') : ''}
     ${d.av.revisao > 1 ? nota(`Revisão ${d.av.revisao} da avaliação ${esc(d.av.numero || '')}. Ao concluir, ela substitui a anterior.`) : ''}
-    <div class="cp-sec"><div class="cp-visita">
-      <div>Data<b>${esc(dataBr(d.av.data_visita))}${d.av.hora_inicio ? ' · ' + esc(String(d.av.hora_inicio).slice(0, 5)) : ''}</b></div>
-      <div>Técnico<b>${esc(tec?.nome || '')}</b></div>
-      <div>Acompanhante<b>${esc(d.av.acompanhante_nome || 'a informar')}</b></div>
-      <div>Situação<b>${sitTxt}</b></div></div></div>
-    ${blocoSoc(d, cli, editavel)}
-    ${blocoFuncionarios(d, editavel)}
-    ${secTit('GHEs desta empresa')}
-    ${d.ghes.map(cartaoGhe).join('') || nota('Nenhum GHE ainda. Crie um GHE para cada grupo de trabalhadores com a mesma exposição (ex.: Administrativo, Produção, Serviços Gerais).')}
+    ${quadros(d)}
+    ${blocoEsperando(d, editavel)}
+    ${semSoc && editavel ? blocoSoc(d, cli, editavel) : ''}
+    <div class="cp-sec-t2" id="cpGhes">GHEs desta empresa <span>${d.ghes.length}</span></div>
+    ${d.ghes.map(cartaoGhe).join('') || nota('Nenhum GHE ainda. Comece por um GHE do SOC (abaixo) ou crie um para cada grupo de trabalhadores com a mesma exposição (ex.: Administrativo, Produção, Serviços Gerais).')}
+    ${editavel ? blocoGhesSocResumo(d) : ''}
     ${editavel ? `<button type="button" class="cp-add-ghe" data-acao="campo:novo-ghe">${I.plus}Adicionar GHE</button>` : ''}
-    ${pend.length ? `<div class="cp-sec"><div class="cp-sec-tit">Pendências para concluir <span class="dir" style="color:var(--text-3)">${pend.length} aberta${pend.length > 1 ? 's' : ''}</span></div>
+    ${pend.length ? `<div class="cp-sec" style="margin-top:12px"><div class="cp-sec-tit">Riscos para completar depois <span class="dir" style="color:var(--text-3)">${pend.length} aberto${pend.length > 1 ? 's' : ''}</span></div>
       ${pend.map(({ ghe, risco }) => `<div class="cp-pend" data-acao="ir:campo-ghe:${_id}~${ghe.id}~${risco.uid}" style="cursor:pointer"><span class="cp-pend-ic">${I.relogio}</span>
         <div><div class="cp-pend-t">${esc(D.NOME_CATEGORIA[risco.categoria] || '')} ${esc(risco.codigo || '')} · ${esc(risco.nome)}</div>
         <div class="cp-pend-s">GHE ${esc(ghe.nome)} · ${esc(risco.pendente.texto || (D.MOTIVOS_PENDENCIA.find(m => m[0] === risco.pendente.motivo) || [, 'Para depois'])[1])}</div></div>
         <span class="badge ${risco.pendente.quem === 'empresa' ? 'badge-blue' : 'badge-gray'} cp-pend-quem">${risco.pendente.quem === 'empresa' ? 'Empresa' : 'Técnico'}</span></div>`).join('')}
       <div class="cp-ajuda">Pendências não travam a visita: você sai da empresa, resolve depois e volta para concluir.</div></div>` : ''}
+    <details class="cp-dobra-sec">
+      <summary>Dados da visita e do SOC <small>${esc(d.av.acompanhante_nome ? 'acompanhante: ' + d.av.acompanhante_nome : 'acompanhante a informar')}</small></summary>
+      <div class="cp-sec" style="margin:8px 0 0"><div class="cp-visita">
+        <div>Data<b>${esc(dataBr(d.av.data_visita))}${esc(hora)}</b></div>
+        <div>Técnico<b>${esc(tec?.nome || '')}</b></div>
+        <div>Acompanhante<b>${esc(d.av.acompanhante_nome || 'a informar')}</b></div>
+        <div>Situação<b>${sitTxt}</b></div></div></div>
+      ${semSoc && editavel ? '' : blocoSoc(d, cli, editavel, { semGhes: true })}
+    </details>
     ${acoes([btn('Voltar', 'ir:campo', { papel: 'cp-a-voltar' }),
-      d.av.situacao !== 'cancelada' ? btn('Finalizar avaliação', `ir:campo-finalizar:${_id}`, { cls: 'btn-amber', papel: 'cp-a-prox', travado: !d.ghes.length }) : ''])}`;
+      d.av.situacao !== 'cancelada' ? btn('Assinaturas e conclusão', `ir:campo-finalizar:${_id}`, { cls: 'btn-amber', papel: 'cp-a-prox', travado: !d.ghes.length }) : ''])}`;
+}
+
+/* v222: 4 quadros do topo — o que falta, com um toque cada. */
+function quadros(d) {
+  const rsv = d.ghes.flatMap(g => (g.riscos || []).filter(r => !D.ehPsicossocial(r)));
+  const gOk = d.ghes.filter(g => D.gheCompleto(g) === 'ok').length;
+  const conf = D.temConferencia(d) ? D.resumoConferencia(d) : null;
+  const abertas = D.temPendEmpresa() ? D.pendEmpresaAbertas(d).length : 0;
+  const nAss = (d.av.acompanhante_nome ? 1 : 0) + 1;
+  const feitas = (d.av.acompanhante_nome && D.assinaturaDe(d, 'acomp').path ? 1 : 0) + (D.assinaturaDe(d, 'tec').path ? 1 : 0);
+  const q = (cls, ic, num, rot, acao) => `<button type="button" class="cp-q ${cls}" ${acao ? `data-acao="${acao}"` : 'disabled'}><span class="cp-q-ic">${I[ic]}</span><span class="cp-q-tx"><b>${num}</b><span>${rot}</span></span></button>`;
+  const gheTx = d.ghes.length ? `${gOk} de ${d.ghes.length}` : '0';
+  const gheRot = d.ghes.length ? `${d.ghes.length === 1 ? 'GHE completo' : 'GHEs completos'}${rsv.length ? ` · ${rsv.filter(r => D.riscoCompleto(r) === 'ok').length}/${rsv.length} riscos` : ''}` : 'GHE criado';
+  const confTx = conf && conf.soc ? `${conf.soc - conf.falta} de ${conf.soc}` : conf && conf.total ? String(conf.total) : '—';
+  return `<div class="cp-qs">
+    ${q(d.ghes.length && gOk === d.ghes.length ? 'ok' : 'az', 'predio', gheTx, gheRot, d.ghes.length === 1 ? `ir:campo-ghe:${_id}~${d.ghes[0].id}` : 'campo:ir-ghes')}
+    ${conf ? q(conf.soc && !conf.falta ? 'ok' : 'az', 'pessoas', confTx, 'funcionários conferidos', `ir:campo-funcionarios:${_id}`) : ''}
+    ${D.temPendEmpresa() ? q(abertas ? 'al' : 'ci', 'relogio', String(abertas), abertas > 1 ? 'itens esperando da empresa' : 'esperando da empresa', D.podeEditar(d) || abertas ? 'campo:pe-quadro' : '') : ''}
+    ${q(feitas === nAss ? 'ok' : 'ci', 'pen', `${feitas} de ${nAss}`, nAss === 1 ? 'assinatura' : 'assinaturas', `ir:campo-finalizar:${_id}`)}
+  </div>`;
+}
+
+/* v222: GHEs do SOC ainda não usados — uma linha; "Ver" abre a lista. */
+function blocoGhesSocResumo(d) {
+  const s = d.av.soc; if (!s) return '';
+  const usados = new Set(d.ghes.map(g => g.codigo_soc).filter(Boolean));
+  const livres = (s.ghes || []).filter(g => !usados.has(g.codigo || g.nome));
+  if (!livres.length) return '';
+  const nomes = livres.slice(0, 3).map(g => g.nome || ('GHE ' + g.codigo)).join(', ') + (livres.length > 3 ? '…' : '');
+  return `<div class="cp-soc-dob${_socAberto ? ' aberto' : ''}">
+      <span class="cp-soc-dob-ic">${I.doc}</span>
+      <div class="cp-soc-dob-tx"><b>${livres.length} ${livres.length === 1 ? 'GHE do SOC' : 'GHEs do SOC'}</b> ainda não ${livres.length === 1 ? 'usado' : 'usados'}<br><small>${esc(nomes)}</small></div>
+      ${btn(_socAberto ? 'Fechar' : 'Ver', 'campo:soc-ver', { cls: _socAberto ? 'btn-outline btn-sm' : 'btn-navy btn-sm' })}</div>
+    ${_socAberto ? blocoGhesSoc(d, livres) : ''}`;
 }
 
 export function depois() { carregarFotos(D.doc(_id)); }
@@ -219,7 +254,7 @@ async function usarGhesDoSoc(d, soIdx = null) {
     const chave = gs.codigo || gs.nome;
     if (usados.has(chave)) continue;
     const uniq = (xs) => [...new Set(xs.filter(Boolean))];
-    const riscos = (gs.riscos || []).map(rs => {
+    const riscos = (gs.riscos || []).filter(rs => !D.ehPsicossocial(rs)).map(rs => {
       /* v206: sem código (ou código fora do catálogo) → casa pelo nome */
       const c = (rs.codigo && cat.risco(rs.codigo)) || cat.riscoPorNome(rs.nome);
       return {
@@ -246,6 +281,18 @@ export async function acao(nome, valor, redesenhar) {
   const d = D.doc(_id);
   if (!d) return false;
   if (nome === 'campo:novo-ghe') { modalNovoGhe(d, redesenhar); return true; }
+  /* v222 */
+  if (nome === 'campo:soc-ver') { _socAberto = !_socAberto; redesenhar(); return true; }
+  if (nome === 'campo:ir-ghes') { document.querySelectorAll('#cpGhes').forEach(el => { if (el.getBoundingClientRect().width) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); return true; }
+  if (nome === 'campo:pe-quadro') {
+    const ab = D.pendEmpresaAbertas(d);
+    if (ab.length) { document.querySelectorAll('#cpEsperando').forEach(el => { if (el.getBoundingClientRect().width) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); return true; }
+    if (D.podeEditar(d)) modalPendEmpresa(d, null, redesenhar);
+    return true;
+  }
+  if (nome === 'campo:pe-novo') { modalPendEmpresa(d, null, redesenhar); return true; }
+  if (nome === 'campo:pe-editar') { modalPendEmpresa(d, D.pendEmpresa(d).find(p => p.uid === valor) || null, redesenhar); return true; }
+  if (nome === 'campo:pe-chegou') { D.resolverPendEmpresa(_id, valor); avisar('Marcado como recebido.'); redesenhar(); return true; }
   if (nome === 'campo:soc') {
     _ocupado = 'soc'; redesenhar();
     try {

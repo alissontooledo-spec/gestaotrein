@@ -78,9 +78,30 @@ export function topo(d, cli, { rotulo = 'Avaliação de riscos ambientais', sub 
   const end = cli ? [cli.logradouro || cli.endereco, cli.numero, cli.bairro].filter(Boolean).join(', ') : '';
   const cid = cli ? [cli.cidade, cli.uf].filter(Boolean).join('/') : '';
   const linha = sub ?? [cli?.cnpj ? 'CNPJ ' + fmtCnpj(cli.cnpj) : '', end, cid].filter(Boolean).join(' · ');
-  return `<div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">${esc(rotulo)}</div>
+  return `<div class="cp-topo${temCabecalhoCelular() ? ' cp-topo-desk' : ''}"><div class="cp-topo-txt"><div class="cp-topo-emp">${esc(rotulo)}</div>
     <div class="cp-topo-tit">${esc(cli?.nome || 'Empresa')}</div>${linha ? `<div class="cp-topo-sub">${esc(linha)}</div>` : ''}</div>${syncHtml(d)}</div>`;
 }
+/* v222: no celular, o cabeçalho azul do app mostra a empresa (em vez de
+   "Boa noite, nome") e o cartão de topo some — sobra mais tela para o
+   trabalho. No computador nada muda. A casca volta o cabeçalho padrão ao
+   abrir qualquer tela de módulo. */
+export function cabecalhoCelular(d, cli, linha = '', { titulo = '', rotulo = 'Avaliação de campo' } = {}) {
+  const p = ponte();
+  if (!p.cabecalhoMobile) return;
+  p.cabecalhoMobile(`<div class="cp-mh"><div class="mh-greeting">${esc(rotulo)}</div>
+    <div class="cp-mh-nome">${esc(titulo || cli?.nome || 'Empresa')}</div>
+    <div class="cp-mh-sub">${linha ? `<span>${esc(linha)}</span>` : ''}${d ? syncHtml(d) : ''}</div></div>`);
+}
+export const temCabecalhoCelular = () => !!ponte().cabecalhoMobile;
+/* Volta ao começo da tela depois de trocar de passo/risco (a tela do celular
+   rola dentro de #mobileBody, a do computador dentro de #mainBody). */
+export function rolarTopo() {
+  try {
+    for (const id of ['mobileBody', 'mainBody']) document.getElementById(id)?.scrollTo?.(0, 0);
+    window.scrollTo(0, 0);
+  } catch { /* ok */ }
+}
+
 export function fmtCnpj(v) {
   const s = String(v || '').replace(/\D/g, '');
   return s.length === 14 ? `${s.slice(0, 2)}.${s.slice(2, 5)}.${s.slice(5, 8)}/${s.slice(8, 12)}-${s.slice(12)}` : (v || '');
