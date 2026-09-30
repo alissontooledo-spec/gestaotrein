@@ -15,6 +15,7 @@
 
 import * as sessao from '../../nucleo/sessao.js';
 import * as P from './plano.js';
+import * as C from './coerencia.js';
 import { cliente as clienteBanco } from '../../nucleo/dados.js';
 
 const sb = () => {
@@ -711,6 +712,9 @@ export function faltas(d, { semAssinaturaTec = false } = {}) {
     if (!['aceitavel', 'toleravel', 'nao_aceitavel'].includes(r.classificacao)) sem.push('classificação');
     for (const c of CONCLUSOES[r.categoria] || []) if (!['S', 'N'].includes(r[c])) sem.push({ ins: 'insalubridade', per: 'periculosidade', ae: 'aposentadoria especial' }[c]);
     if (sem.length) f.push({ texto: `${rot}: falta ${sem.join(', ')}`, ghe: g.id, risco: r.uid });
+    /* v226: alertas de coerência pendentes (só no app; o banco não confere). */
+    const pc = C.pendentes(r);
+    if (!sem.length && pc.length) f.push({ texto: `${rot}: confira a classificação (${pc.map(x => x.id).join(', ')}): corrija ou justifique`, ghe: g.id, risco: r.uid, coerencia: true });
   }
   if (d.av.acompanhante_nome && !assinaturaDe(d, 'acomp').path) f.push({ texto: `Assinatura do acompanhante (${d.av.acompanhante_nome})`, assinatura: 'acomp' });
   if (!semAssinaturaTec && !assinaturaDe(d, 'tec').path) f.push({ texto: 'Assinatura do técnico', assinatura: 'tec' });

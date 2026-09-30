@@ -9,6 +9,7 @@ import * as D from './dados.js';
 import * as sessao from '../../nucleo/sessao.js';
 import { gerarPdfAvaliacao } from './pdf.js';
 import * as P from './plano.js';
+import * as C from './coerencia.js';
 
 const WINANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
 export function pdfSafe(t) {
@@ -63,6 +64,7 @@ export async function montarDados(d) {
     danos: (r) => P.danosDe(r, cat),
     baseLegal: (r) => P.baseLegalRisco(r, cat),
     normasDe: P.normasDe,
+    justificado: (r) => C.justificado(r),   // v226
     revisoes,
     emitidoEm: new Date().toISOString(),
     assinaturas: { acomp: await assin('acomp'), tec: await assin('tec') },

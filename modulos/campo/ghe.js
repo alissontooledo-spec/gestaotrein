@@ -13,6 +13,8 @@ import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
 import { I, esc, ico, nota, topo, seg, opt, inp, area, fotos, carregarFotos, legendarFoto, ligarTela, avisar, confirmar,
   ponte, btn, acoes, valorVisivel, irPara, ICONE_CAT, cabecalhoCelular, rolarTopo } from './comum.js';
 import { modalPendEmpresa } from './pendencias.js';
+import * as C from './coerencia.js';
+import * as sessao from '../../nucleo/sessao.js';
 
 const PASSOS = ['Identificação', 'Ambientes', 'Riscos', 'Treinamentos'];
 let _av = null, _gid = null, _risco = null, _amb = null, _busca = '', _treinTodos = false;
@@ -264,10 +266,40 @@ function avaliacaoRapida(r) {
 }
 /* v222: nível de risco pela matriz (P × S) — o técnico não escolhe a classificação. */
 const NOME_ACEIT = { aceitavel: 'Aceitável', toleravel: 'Tolerável', nao_aceitavel: 'Não aceitável' };
-function caixaNivel(r) {
+function caixaNivel(r, trav = false) {
   const n = D.nivelDe(_cat?.matriz, r.probabilidade, r.severidade);
   if (!n) return `<div class="cp-nivel vazio">Nível de risco: escolha a probabilidade e a severidade.</div>`;
-  return `<div class="cp-nivel" style="--nv:${esc(n.cor || '#D2D7E1')}"><i></i><div><b>${esc(n.nome)}</b><span>${esc(NOME_ACEIT[n.aceitabilidade] || '')} · pela matriz de risco</span></div></div>`;
+  return `<div class="cp-nivel" style="--nv:${esc(n.cor || '#D2D7E1')}"><i></i><div><b>${esc(n.nome)}</b><span>${esc(NOME_ACEIT[n.aceitabilidade] || '')} · pela matriz de risco</span></div></div>${blocoCoerencia(r, trav)}`;
+}
+/* v226: alertas de coerência da classificação (coerencia.js). Avisa, não decide. */
+function blocoCoerencia(r, trav) {
+  const todos = C.alertas(r); if (!todos.length) return '';
+  const pend = C.pendentes(r), infos = todos.filter(a => a.info), j = r.justif_ps;
+  const li = (a) => `<li><b>${esc(a.id)}</b> · ${esc(a.texto)}</li>`;
+  let h = '';
+  if (pend.length) h += `<div class="cp-coer"><b>Confira a classificação</b><ul>${pend.map(li).join('')}</ul>
+    ${trav ? '' : `<div class="cp-coer-bts">${pend.some(a => a.id === 'R1') ? btn('Registrar medidas', `campo:coer-med:${r.uid}`, { cls: 'btn-outline btn-sm' }) : ''}${btn('Manter e justificar', `campo:coer-just:${r.uid}`, { cls: 'btn-amber btn-sm' })}</div>`}</div>`;
+  else if (C.justificado(r)) h += `<div class="cp-coer ok"><b>Classificação justificada</b> ${esc(j.texto)}<span class="cp-coer-q">${esc([j.por, j.em ? new Date(j.em).toLocaleDateString('pt-BR') : ''].filter(Boolean).join(' · '))}</span>
+    ${trav ? '' : btn('Editar', `campo:coer-just:${r.uid}`, { cls: 'btn-ghost btn-sm' })}</div>`;
+  if (infos.length) h += `<div class="cp-coer info">${infos.map(a => esc(a.texto)).join('<br>')}</div>`;
+  return h;
+}
+function modalJustificar(uid) {
+  const g = D.doc(_av)?.ghes.find(x => x.id === _gid); const r = g?.riscos.find(x => x.uid === uid); if (!r) return;
+  const al = C.alertas(r).filter(a => !a.info);
+  const p = ponte();
+  p.abrirModal('Manter a classificação', `<div style="font-size:13px;color:var(--text-2);margin-bottom:10px">${al.map(a => `<div style="margin-bottom:6px"><b>${esc(a.id)}</b> · ${esc(a.texto)}</div>`).join('')}</div>
+    <div class="field"><label>Por que P${esc(r.probabilidade)} e S${esc(r.severidade)} estão corretos aqui? (fica registrado e sai no relatório)</label>
+    <textarea id="cpCoerTxt" rows="3" maxlength="300" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font:inherit">${esc(r.justif_ps?.texto || '')}</textarea></div>`,
+    p.botoes('Salvar justificativa', 'cpCoerOk'));
+  setTimeout(() => document.getElementById('cpCoerTxt')?.focus(), 60);
+  p.aoConfirmar('cpCoerOk', () => {
+    const t = document.getElementById('cpCoerTxt')?.value.trim() || '';
+    if (t.length < 10) { avisar('Escreva a justificativa (pelo menos 10 letras).', 'erro'); return; }
+    const u = sessao.usuario() || {};
+    altG(x => { const rr = x.riscos.find(y => y.uid === uid); if (rr) rr.justif_ps = { texto: t.slice(0, 300), regras: C.alertas(rr).filter(a => !a.info).map(a => a.id), por: u.nome || '', por_id: u.id || null, em: new Date().toISOString() }; });
+    p.fecharModal(); avisar('Justificativa registrada.'); redesenharTela();
+  });
 }
 const ajudaCrit = (k) => `<button type="button" class="cp-ajuda-bt" data-acao="campo:crit:${k}" aria-label="Ver os critérios">?</button>`;
 function modalCriterios(k) {
@@ -412,7 +444,7 @@ function riscoAberto(d, g, r, trav) {
       <label class="cp-lbl">Exposição <span class="obr">*</span>${expoSoc}</label>${seg('r:exposicao', D.EXPOSICAO.map(([k, l]) => [k, l]), r.exposicao, { travado: trav })}
       <div class="cp-grid2" style="margin-top:14px"><div><label class="cp-lbl">Probabilidade <span class="obr">*</span> ${ajudaCrit('prob')}</label>${seg('r:probabilidade', D.PROBABILIDADE.map(([k]) => [k, k]), r.probabilidade, { travado: trav })}${legenda(D.PROBABILIDADE, r.probabilidade)}</div>
         <div><label class="cp-lbl">Severidade <span class="obr">*</span> ${ajudaCrit('sev')}</label>${seg('r:severidade', D.SEVERIDADE.map(([k]) => [k, k]), r.severidade, { travado: trav })}${legenda(D.SEVERIDADE, r.severidade)}</div></div>
-      <div style="margin-top:14px">${caixaNivel(r)}</div></div>
+      <div style="margin-top:14px">${caixaNivel(r, trav)}</div></div>
     ${editarDet
       ? `<div class="cp-sec"><div class="cp-sec-tit">Onde e como${temDet && !trav ? `<span class="dir"><button type="button" class="cp-link" data-acao="campo:dobra:det">Recolher</button></span>` : ''}</div>${detEditavel}</div>`
       : `<div class="cp-sec"><div class="cp-sec-tit">${r.soc ? 'Como está no SOC' : 'Onde e como'}</div>${detResumo}</div>`}
@@ -636,6 +668,8 @@ export async function acao(nome, valor, redesenhar) {
       redesenhar(); return true;
     }
     case 'campo:crit': modalCriterios(a1); return true;
+    case 'campo:coer-med': _risco = a1; _passo.set(_gid, 3); _addRisco = false; _abertos.add(`${a1}:det`); await redesenharTopo(); return true;
+    case 'campo:coer-just': if (D.podeEditar(d)) modalJustificar(a1); return true;
     case 'campo:dobra': { const k = `${_risco}:${a1}`; _abertos.has(k) ? _abertos.delete(k) : _abertos.add(k); redesenhar(); return true; }
     case 'campo:psi-tirar': {
       const n = (g.riscos || []).filter(r => D.ehPsicossocial(r)).length;

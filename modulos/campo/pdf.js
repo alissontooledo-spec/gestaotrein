@@ -467,6 +467,7 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
   for (const { r } of todos) { if (r.codigo === '1068') continue; const c = nivelDoRisco(r); if (c && contaNivel[c] != null) contaNivel[c]++; else semNivel++; }
   const pior = ORD_NIV.find(c => contaNivel[c] > 0) || null;
   const ehSemEpiRef = r => vazio(r.epi) || /^(n[aã]o se aplica|na|n\/a)$/i.test(String(r.epi).trim());
+  const frase0 = t => { const x = String(t ?? '').trim(); return /[.!?]$/.test(x) ? x : x + '.'; };
   const minus = t => { const s0 = String(t || '').trim(); return s0 ? s0[0].toLowerCase() + s0.slice(1) : s0; };
 
   // título de seção numerado (1, 2, 3...)
@@ -786,6 +787,10 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
       }), { size: 7.3, subSize: 6.4 });
     const pend = riscos.filter(r => r.pendente);
     if (pend.length) { y += 1; for (const r of pend) paragrafo(`Ainda falta (${r.nome}): ${r.pendente.texto || 'sem descrição'} — ${r.pendente.quem === 'empresa' ? 'depende da empresa' : 'depende do técnico'}.`, 7.6, AMAR_TXT); }
+    /* v226: justificativa do técnico quando manteve a classificação apesar do aviso de coerência. */
+    const justOk = typeof dados.justificado === 'function' ? dados.justificado : (r => !vazio(r?.justif_ps?.texto));
+    const justs = riscos.filter(r => justOk(r));
+    if (justs.length) { y += 1; for (const r of justs) paragrafo(`Justificativa da classificação (${r.nome}, severidade ${r.severidade} e probabilidade ${r.probabilidade}): ${frase0(r.justif_ps.texto)}`, 7.4, C2); }
 
     // leituras
     const lidos = riscos.filter(r => !vazio(r.medicao?.resultado) || !vazio(r.iluminacao?.nivel_encontrado));

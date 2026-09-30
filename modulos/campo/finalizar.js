@@ -8,6 +8,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as D from './dados.js';
+import * as C from './coerencia.js';
 import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
 import { I, esc, nota, topo, inp, area, fotos, carregarFotos, legendarFoto, ligarTela, avisar, confirmar,
   btn, acoes, colherAssinatura, dataBr, quando, irPara, cabecalhoCelular } from './comum.js';
@@ -48,6 +49,8 @@ export async function render(params) {
     return chk(`GHE ${esc(g.nome)} · ${(g.riscos || []).length} riscos`, c, t, cor, `ir:campo-ghe:${_id}~${g.id}`);
   }).join('');
   const conclusoesFaltando = semTec.filter(f => /insalubridade|periculosidade|aposentadoria/.test(f.texto));
+  const coer = semTec.filter(f => f.coerencia);   // v226
+  const nJust = d.ghes.reduce((n, g) => n + (g.riscos || []).filter(r => C.justificado(r)).length, 0);
   const temRegistro = !!(tec?.sigla_conselho && tec?.conselho_classe);
 
   const aAcomp = D.assinaturaDe(d, 'acomp'), aTec = D.assinaturaDe(d, 'tec');
@@ -59,6 +62,8 @@ export async function render(params) {
     <div class="cp-sec"><div class="cp-sec-tit">Situação</div>
       ${linhasGhe || chk('Nenhum GHE cadastrado', 'al', 'Falta', 'var(--warn-text)', `ir:campo-avaliacao:${_id}`)}
       ${D.temPlano() ? chk(`Plano de ação · ${nPlano} ${nPlano === 1 ? 'ação' : 'ações'}`, planoOk ? 'ok' : 'al', !nPlano ? 'Nenhuma ação' : planoOk ? 'Revisado' : 'Revisar', planoOk ? 'var(--green-text)' : 'var(--warn-text)', `ir:campo-plano:${_id}`) : ''}
+      ${coer.length || nJust ? chk('Coerência da classificação', coer.length ? 'al' : 'ok', coer.length ? `${coer.length} ${coer.length === 1 ? 'aviso' : 'avisos'} sem justificativa` : `${nJust} ${nJust === 1 ? 'justificada' : 'justificadas'}`, coer.length ? 'var(--warn-text)' : 'var(--green-text)', coer.length ? `ir:campo-ghe:${_id}~${coer[0].ghe}~${coer[0].risco}` : '') : ''}
+      ${coer.length && !trav ? nota('Corrija ou justifique os avisos de coerência para concluir. Toque na linha acima para abrir o risco.', 'warn') : ''}
       ${chk('Registro profissional do técnico', temRegistro ? 'ok' : 'al', temRegistro ? esc(`${tec.sigla_conselho} ${tec.conselho_classe}${tec.uf_registro ? '/' + tec.uf_registro : ''}`) : 'Não cadastrado', temRegistro ? 'var(--green-text)' : 'var(--warn-text)')}
       ${!temRegistro ? nota('O registro (conselho e número) do técnico sai no documento. Peça ao administrador para preencher em Equipe.', 'warn') : ''}
       ${D.pendencias(d).length ? nota('Pode colher a assinatura do acompanhante agora. Você conclui a avaliação quando as pendências forem resolvidas.', 'warn') : ''}
