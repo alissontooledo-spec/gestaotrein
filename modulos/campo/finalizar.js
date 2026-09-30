@@ -53,7 +53,7 @@ export async function render(params) {
   const aAcomp = D.assinaturaDe(d, 'acomp'), aTec = D.assinaturaDe(d, 'tec');
   const areaAssin = (quem, a, livre, textoLivre, textoTravado) => a.path
     ? `<div class="cp-assin-area feita ${trav ? '' : 'clicavel'}" data-cp-assin="${quem}" ${trav ? '' : `data-acao="campo:assinar:${quem}"`}><span style="font-size:11px;font-weight:500;color:var(--text-3)">${esc(quando(a.em))}${trav ? '' : ' · tocar para refazer'}</span></div>`
-    : `<div class="cp-assin-area ${livre ? 'clicavel' : ''}" ${livre ? `data-acao="campo:assinar:${quem}"` : 'style="opacity:.6"'}>${I.pen}${livre ? textoLivre : textoTravado}</div>`;
+    : `<div class="cp-assin-area ${livre ? 'clicavel' : ''}" data-cp-area="${quem}" ${livre ? `data-acao="campo:assinar:${quem}"` : 'style="opacity:.6"'}>${I.pen}<span>${livre ? textoLivre : textoTravado}</span></div>`;
 
   return `${topo(d, cli, { rotulo: 'Finalizar avaliação', sub: `${dataBr(d.av.data_visita)} · ${tec?.nome || ''}` })}
     <div class="cp-sec"><div class="cp-sec-tit">Situação</div>
@@ -76,7 +76,7 @@ export async function render(params) {
       ${fotos(d, f => f.alvo === 'geral', { chave: 'geral:', travado: trav })}</div>
     <div class="cp-sec"><div class="cp-sec-tit">Assinaturas</div><div class="cp-assins">
       <div class="cp-assin"><div class="cp-assin-quem">Acompanhante ${aAcomp.path ? '<span class="badge badge-green">Assinada</span>' : ''}</div>
-        <div class="cp-assin-nome">${esc(d.av.acompanhante_nome || 'Nome a informar')}</div><div class="cp-assin-sub">${esc(d.av.acompanhante_cargo || 'Assina na visita, mesmo com pendência')}</div>
+        <div class="cp-assin-nome" data-cp-acomp-nome>${esc(d.av.acompanhante_nome || 'Nome a informar')}</div><div class="cp-assin-sub">${esc(d.av.acompanhante_cargo || 'Assina na visita, mesmo com pendência')}</div>
         ${areaAssin('acomp', aAcomp, !trav && !!d.av.acompanhante_nome, 'Tocar para assinar', 'Informe o nome do acompanhante acima')}</div>
       <div class="cp-assin"><div class="cp-assin-quem">Técnico responsável ${aTec.path ? '<span class="badge badge-green">Assinada</span>' : '<span class="badge badge-gray">Ao concluir</span>'}</div>
         <div class="cp-assin-nome">${esc(tec?.nome || '')}</div><div class="cp-assin-sub">${esc(registroTec(tec))}</div>
@@ -103,11 +103,20 @@ export async function depois() {
 const CAMPOS = { 'av.acompanhante_nome': 'acompanhante_nome', 'av.acompanhante_cargo': 'acompanhante_cargo', 'av.observacoes': 'observacoes', 'av.documentos': 'documentos' };
 function digitar(chave, valor) {
   const c = CAMPOS[chave]; if (!c) return;
-  const antes = !!D.doc(_id)?.av.acompanhante_nome;
   D.alterarAv(_id, { [c]: valor });
-  /* O nome do acompanhante libera a área de assinatura dele. */
-  if (c === 'acompanhante_nome' && antes !== !!valor.trim()) {
-    clearTimeout(digitar._t); digitar._t = setTimeout(() => redesenharTela(), 600);
+  /* v224: o nome do acompanhante libera a área de assinatura dele. Antes a
+     tela era redesenhada ao digitar e o cursor saía do campo depois de 3
+     letras (relato do Alisson, 29/09). Agora só a área muda, sem redesenhar. */
+  if (c === 'acompanhante_nome') {
+    const tem = !!String(valor || '').trim();
+    document.querySelectorAll('[data-cp-acomp-nome]').forEach(el => { el.textContent = tem ? String(valor).trim() : 'Nome a informar'; });
+    if (!D.podeEditar(D.doc(_id))) return;
+    document.querySelectorAll('[data-cp-area="acomp"]').forEach(el => {
+      el.classList.toggle('clicavel', tem);
+      el.style.opacity = tem ? '' : '.6';
+      if (tem) el.setAttribute('data-acao', 'campo:assinar:acomp'); else el.removeAttribute('data-acao');
+      const t = el.querySelector('span'); if (t) t.textContent = tem ? 'Tocar para assinar' : 'Informe o nome do acompanhante acima';
+    });
   }
 }
 async function foto(chave, arquivos) {
