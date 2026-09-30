@@ -8,6 +8,7 @@
 import * as D from './dados.js';
 import * as sessao from '../../nucleo/sessao.js';
 import { gerarPdfAvaliacao } from './pdf.js';
+import * as P from './plano.js';
 
 const WINANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
 export function pdfSafe(t) {
@@ -38,6 +39,13 @@ export async function montarDados(d) {
     const t = cat.treinamento(c);
     treinamentos[c] = { nr: t?.categoria || '', nome: nomeTreinamento(t) || c };
   }
+  /* v225: revisões (controle de revisões), matriz e textos padrão do engenheiro. */
+  const revs = await D.revisoes(d.av.grupo_id).catch(() => []);
+  const nomes = await D.usuariosPorId(revs.flatMap(r => [r.concluida_por, r.tecnico_id])).catch(() => ({}));
+  const revisoes = (revs.length ? revs : [d.av]).filter(r => r.situacao !== 'cancelada' || r.id === d.av.id).map(r => ({
+    revisao: r.revisao, data: r.concluida_em || (r.id === d.av.id ? d.av.concluida_em : null),
+    motivo: r.revisao === 1 ? 'Emissão inicial' : (r.motivo_revisao || (r.id === d.av.id ? d.av.motivo_revisao : '') || 'Revisão (motivo não registrado)'),
+    responsavel: nomes[r.concluida_por]?.nome || nomes[r.tecnico_id]?.nome || tec.nome || '' })).filter(r => r.revisao <= d.av.revisao);
   const assin = async (quem) => { const a = D.assinaturaDe(d, quem); return a.path ? D.dataUrlArquivo(a.path).catch(() => null) : null; };
   return {
     org: { nome: sessao.usuario()?.org || '' },
@@ -49,7 +57,14 @@ export async function montarDados(d) {
     },
     tecnico: { nome: tec.nome, formacao: tec.formacao, sigla_conselho: tec.sigla_conselho, conselho_classe: tec.conselho_classe, uf_registro: tec.uf_registro },
     ghes: d.ghes,
-    fotos: d.fotos.map(f => ({ ...f, carregar: () => D.dataUrlFoto(f) })),
+    fotos: d.fotos.filter(f => !f.documento).map(f => ({ ...f, carregar: () => D.dataUrlFoto(f) })),   // v225: foto de documento não sai
+    fotosDocumento: d.fotos.filter(f => f.documento).length,
+    matriz: cat.matriz,
+    danos: (r) => P.danosDe(r, cat),
+    baseLegal: (r) => P.baseLegalRisco(r, cat),
+    normasDe: P.normasDe,
+    revisoes,
+    emitidoEm: new Date().toISOString(),
     assinaturas: { acomp: await assin('acomp'), tec: await assin('tec') },
     treinamentos
   };

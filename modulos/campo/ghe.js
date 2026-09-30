@@ -8,6 +8,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as D from './dados.js';
+import * as P from './plano.js';
 import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
 import { I, esc, ico, nota, topo, seg, opt, inp, area, fotos, carregarFotos, legendarFoto, ligarTela, avisar, confirmar,
   ponte, btn, acoes, valorVisivel, irPara, ICONE_CAT, cabecalhoCelular, rolarTopo } from './comum.js';
@@ -381,6 +382,7 @@ function riscoAberto(d, g, r, trav) {
     ['EPI eficaz', (D.EFICAZ.find(([k]) => k === r.epi_eficaz) || [, ''])[1]], ['Medidas', r.medidas_adm]];
   const temDet = kvs.some(([, v]) => String(v || '').trim());
   const editarDet = !temDet || ab('det');
+  const danosPad = P.danosPadrao(r, _cat);   // v225: NR-01 1.5.7.3.2 d
   const detEditavel = `
       ${(g.ambientes || []).length > 1 ? `<label class="cp-lbl">Ambiente</label><select class="cp-inp" data-acao="campo:r-amb"${trav ? ' disabled' : ''}>${ambientes.map(([v, l]) => `<option value="${esc(v)}" ${v === (r.ambiente || 'Todos') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div style="height:12px"></div>` : ''}
       <label class="cp-lbl">Análise qualitativa</label>${area('r.analise', r.analise, { ph: 'Como a exposição acontece: atividade, frequência, duração.', travado: trav })}
@@ -388,8 +390,10 @@ function riscoAberto(d, g, r, trav) {
         <div><label class="cp-lbl">EPC existente</label>${inp('r.epc', r.epc, { travado: trav })}</div></div>
       <div class="cp-grid2" style="margin-top:12px"><div><label class="cp-lbl">EPI (e CA)</label>${inp('r.epi', r.epi, { ph: 'Ex.: Protetor auricular · CA 12345', travado: trav })}</div>
         <div><label class="cp-lbl">EPI eficaz?</label>${seg('r:epi_eficaz', D.EFICAZ.map(([k]) => [k, k]), r.epi_eficaz, { travado: trav })}${legenda(D.EFICAZ, r.epi_eficaz)}</div></div>
-      <label class="cp-lbl" style="margin-top:12px">Medidas administrativas / recomendações</label>${area('r.medidas_adm', r.medidas_adm, { travado: trav, alto: 60 })}`;
-  const detResumo = `${kvs.filter(([, v]) => String(v || '').trim()).map(([k, v]) => `<div class="cp-kv cp-kv-l"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}
+      <label class="cp-lbl" style="margin-top:12px">Medidas administrativas / recomendações</label>${area('r.medidas_adm', r.medidas_adm, { travado: trav, alto: 60 })}
+      <label class="cp-lbl" style="margin-top:12px">Possíveis lesões ou agravos à saúde <span style="font-weight:500;color:var(--text-3)">(sai no relatório)</span></label>${area('r.danos', r.danos, { ph: danosPad || 'Ex.: cortes, fraturas, perda auditiva…', travado: trav, alto: 48 })}
+      ${danosPad ? `<div class="cp-ajuda">Em branco, sai o texto padrão: ${esc(danosPad)}.</div>` : ''}`;
+  const detResumo = `${[...kvs, ['Lesões', r.danos || (danosPad ? danosPad + ' (padrão)' : '')]].filter(([, v]) => String(v || '').trim()).map(([k, v]) => `<div class="cp-kv cp-kv-l"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}
       ${trav ? '' : `<div style="margin-top:8px">${btn('Editar', 'campo:dobra:det', { cls: 'btn-outline btn-sm' })}</div>`}`;
   const medResumo = r.medicao?.resultado ? `hoje ${esc(r.medicao.resultado)} ${esc(r.medicao.unidade || '')}${r.medicao.situacao ? ' · ' + (r.medicao.situacao === 'acima' ? 'acima do limite' : 'abaixo do limite') : ''}`
     : r.soc?.medicao?.valor ? `última no SOC: ${esc(r.soc.medicao.valor)} ${esc(r.soc.medicao.unidade || '')}` : 'se houver';

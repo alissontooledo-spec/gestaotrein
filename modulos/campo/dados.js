@@ -234,7 +234,7 @@ const SEL_AV_BASE = 'id,org_id,numero,cliente_id,compromisso_id,tecnico_id,data_
 /* Colunas que dependem de um PASSO: se o banco ainda não tem a coluna, o app
    segue como antes — lê sem ela e esconde a parte da tela que a usa.
    v203: funcionarios (PASSO-68) · v222: pendencias_empresa (PASSO-73). */
-const _COLS_OPC = { funcionarios: null, pendencias_empresa: null, plano: null };   // null = ainda não sabe · v223: plano (PASSO-74)
+const _COLS_OPC = { funcionarios: null, pendencias_empresa: null, plano: null, motivo_revisao: null };   // null = ainda não sabe · v223: plano (PASSO-74)
 const selAv = () => SEL_AV_BASE + Object.entries(_COLS_OPC).filter(([, v]) => v !== false).map(([k]) => ',' + k).join('');
 let SEL_AV = selAv();
 let _temConf = null;   // espelho de _COLS_OPC.funcionarios (nome antigo, usado abaixo)
@@ -258,8 +258,12 @@ async function lerAv(fn) {
 export const temPendEmpresa = () => _COLS_OPC.pendencias_empresa !== false;
 /* v223: o banco já tem o plano de ação (PASSO-74)? */
 export const temPlano = () => _COLS_OPC.plano !== false;
+/* v225: motivo da revisão e foto de documento (PASSO-75)? */
+export const temMotivoRevisao = () => _COLS_OPC.motivo_revisao !== false;
+let _fotoDoc = null;   // a tabela de fotos tem a coluna 'documento'? (null = ainda não sabe)
+export const temFotoDocumento = () => _fotoDoc !== false;
 const SEL_GHE = 'id,avaliacao_id,org_id,ordem,nome,codigo_soc,setores,funcoes,menor18,descricao,ambientes,riscos,treinamentos,edicao,criado_em,atualizado_em';
-const SEL_FOTO = 'id,avaliacao_id,ghe_id,alvo,alvo_uid,legenda,storage_path,largura,altura,tirada_em,criado_em';
+const SEL_FOTO = '*';   // v225: '*' traz a coluna 'documento' quando o PASSO-75 existe (sem quebrar antes dele)
 
 /* Lista para o painel: do banco quando há internet; senão, o que está no aparelho. */
 export async function listarAvaliacoes() {
@@ -344,6 +348,7 @@ async function baixar(id) {
   const doc = docVazio(av);
   doc.ghes = ghes || [];
   doc.fotos = fotos || [];
+  if (doc.fotos.length) _fotoDoc = 'documento' in doc.fotos[0];
   for (const g of doc.ghes) doc.base.ghes[g.id] = g.edicao ?? 0;
   doc.enviadoEm = new Date().toISOString();
   /* Mantém em cache os dados que a tela e o PDF usam offline. */
@@ -449,10 +454,11 @@ export async function adicionarFoto(id, { ghe_id = null, alvo = 'geral', alvo_ui
   guardar(d);
   return f;
 }
-export function legendarFoto(id, fotoId, legenda) {
+export function legendarFoto(id, fotoId, legenda, documento) {
   const d = _docs.get(id); if (!d || !podeEditar(d)) return;
   const f = d.fotos.find(x => x.id === fotoId); if (!f) return;
   f.legenda = legenda;
+  if (documento !== undefined) f.documento = !!documento;   // v225: foto de documento não sai no PDF
   if (!d.sujo.fotosNovas[fotoId]) d.sujo.fotosLegenda[fotoId] = true;
   guardar(d);
 }
@@ -519,7 +525,7 @@ export const assinaturaDe = (d, quem) => ({
 /* ══ Envio para o banco ═════════════════════════════════════════════════════ */
 const _enviando = new Map();
 const ehConflito = (e) => /CAMPO_CONFLITO/.test(e?.message || '');
-const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios', 'pendencias_empresa', 'plano'];
+const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios', 'pendencias_empresa', 'plano', 'motivo_revisao'];
 const CAMPOS_GHE = ['ordem', 'nome', 'codigo_soc', 'setores', 'funcoes', 'menor18', 'descricao', 'ambientes', 'riscos', 'treinamentos'];
 
 export function sincronizar(id) {
@@ -548,7 +554,9 @@ async function _sincronizar(id) {
       }
       const linha = { id: f.id, avaliacao_id: id, ghe_id: f.ghe_id, alvo: f.alvo, alvo_uid: f.alvo_uid, legenda: f.legenda || null,
         storage_path: f.storage_path, largura: f.largura, altura: f.altura, tirada_em: f.tirada_em };
-      const { error: e2 } = await sb().from('campo_fotos').insert(linha);
+      if (f.documento && _fotoDoc !== false) linha.documento = true;
+      let { error: e2 } = await sb().from('campo_fotos').insert(linha);
+      if (e2 && linha.documento && /documento/i.test(e2.message || '')) { _fotoDoc = false; delete linha.documento; ({ error: e2 } = await sb().from('campo_fotos').insert(linha)); }
       if (e2 && !/duplicate key|23505/.test((e2.message || '') + (e2.code || ''))) throw e2;
       delete f._local;
       delete d.sujo.fotosNovas[fid];
@@ -556,7 +564,13 @@ async function _sincronizar(id) {
     }
     for (const fid of Object.keys(d.sujo.fotosLegenda)) {
       const f = d.fotos.find(x => x.id === fid);
-      if (f) { const { error } = await sb().from('campo_fotos').update({ legenda: f.legenda || null }).eq('id', fid); if (error) throw error; }
+      if (f) {
+        const patchF = { legenda: f.legenda || null };
+        if ('documento' in f && _fotoDoc !== false) patchF.documento = !!f.documento;
+        let { error } = await sb().from('campo_fotos').update(patchF).eq('id', fid);
+        if (error && 'documento' in patchF && /documento/i.test(error.message || '')) { _fotoDoc = false; delete patchF.documento; ({ error } = await sb().from('campo_fotos').update(patchF).eq('id', fid)); }
+        if (error) throw error;
+      }
       delete d.sujo.fotosLegenda[fid];
     }
     for (const fid of [...d.sujo.fotosApagadas]) {
@@ -804,10 +818,19 @@ export async function linkPdfPorId(id) {
   const { data } = await sb().storage.from('campo').createSignedUrl(av.pdf_path, 600, { download: true });
   return data?.signedUrl || null;
 }
-export async function novaRevisao(id) {
-  const { data, error } = await sb().rpc('campo_nova_revisao', { p_id: id });
+export async function novaRevisao(id, motivo = '') {
+  /* v225: o motivo vai para o "Controle de revisões" do PDF (PASSO-75). Sem o PASSO-75, cria sem motivo. */
+  let { data, error } = await sb().rpc('campo_nova_revisao', { p_id: id, p_motivo: String(motivo || '').slice(0, 500) || null });
+  if (error && /p_motivo|function|schema cache|PGRST202/i.test((error.message || '') + (error.code || ''))) ({ data, error } = await sb().rpc('campo_nova_revisao', { p_id: id }));
   if (error) throw new Error(traduzirErro(error));
   return data;
+}
+/* v225: todas as revisões da avaliação (quadro "Controle de revisões" do PDF). */
+export async function revisoes(grupoId) {
+  if (!online()) return [];
+  let r = await sb().from('campo_avaliacoes').select('id,revisao,situacao,concluida_em,concluida_por,tecnico_id,motivo_revisao').eq('grupo_id', grupoId).order('revisao');
+  if (r.error) r = await sb().from('campo_avaliacoes').select('id,revisao,situacao,concluida_em,concluida_por,tecnico_id').eq('grupo_id', grupoId).order('revisao');
+  return r.error ? [] : (r.data || []);
 }
 
 /* ══ SOC: hierarquia da empresa-cliente ════════════════════════════════════ */

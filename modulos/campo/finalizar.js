@@ -67,6 +67,7 @@ export async function render(params) {
     <div class="cp-sec"><div class="cp-sec-tit">Informações gerais da avaliação</div>
       <label class="cp-lbl">Acompanhante (nome e cargo)</label>
       <div class="cp-grid2">${inp('av.acompanhante_nome', d.av.acompanhante_nome, { ph: 'Nome de quem acompanhou', travado: trav })}${inp('av.acompanhante_cargo', d.av.acompanhante_cargo, { ph: 'Cargo', travado: trav })}</div>
+      ${d.av.revisao > 1 && D.temMotivoRevisao() ? `<label class="cp-lbl" style="margin-top:12px">Motivo desta revisão (sai no relatório)</label>${inp('av.motivo_revisao', d.av.motivo_revisao, { ph: 'Ex.: inclusão do plano de ação', travado: trav })}` : ''}
       <label class="cp-lbl" style="margin-top:12px">Observações gerais</label>${area('av.observacoes', d.av.observacoes, { ph: 'O que vale para a empresa toda.', travado: trav })}
       ${esperando.length ? `<label class="cp-lbl" style="margin-top:12px">Esperando da empresa</label>
         <div class="cp-ajuda" style="margin:0 0 6px">Pode concluir mesmo assim: o que ainda não chegou sai no PDF, em "Documentos que a empresa precisa enviar".</div>
@@ -100,7 +101,7 @@ export async function depois() {
   }
 }
 
-const CAMPOS = { 'av.acompanhante_nome': 'acompanhante_nome', 'av.acompanhante_cargo': 'acompanhante_cargo', 'av.observacoes': 'observacoes', 'av.documentos': 'documentos' };
+const CAMPOS = { 'av.motivo_revisao': 'motivo_revisao', 'av.acompanhante_nome': 'acompanhante_nome', 'av.acompanhante_cargo': 'acompanhante_cargo', 'av.observacoes': 'observacoes', 'av.documentos': 'documentos' };
 function digitar(chave, valor) {
   const c = CAMPOS[chave]; if (!c) return;
   D.alterarAv(_id, { [c]: valor });

@@ -53,6 +53,13 @@ export async function render(params) {
       : lista.length ? nota('Confira as ações e toque em <b>Revisei o plano</b>. Sem isso não dá para concluir a avaliação.', 'warn') : ''}
     ${r.semNivel.length ? nota(`${r.semNivel.length === 1 ? 'Um risco ainda não tem' : r.semNivel.length + ' riscos ainda não têm'} probabilidade e severidade, e por isso não ${r.semNivel.length === 1 ? 'entra' : 'entram'} no plano: ${esc(r.semNivel.slice(0, 4).map(x => `${x.risco} (GHE ${x.ghe})`).join(', '))}${r.semNivel.length > 4 ? '…' : ''}.`, 'warn') : ''}`;
 
+  /* v225 (engenheiro): a empresa tem AEP (NR-17)? Sem AEP, o plano pede para fazê-la primeiro. */
+  const temErgo = d.ghes.some(g => (g.riscos || []).some(x => x.categoria === 'ergonomico' && x.codigo !== '1068'));
+  const blocoAep = temErgo ? `<div class="cp-sec cp-pa-aep"><div class="cp-lbl" style="margin:0 0 8px">A empresa tem Avaliação Ergonômica Preliminar (AEP) registrada?</div>
+      ${seg('pa-aep', [['S', 'Sim'], ['N', 'Não']], pl.aep, { travado: !ed })}
+      <div class="cp-ajuda">${pl.aep === 'S' ? 'As medidas ergonômicas saem da AEP da empresa. Se forem insuficientes, o plano pede a AET.'
+        : pl.aep === 'N' ? 'O plano pede primeiro a AEP (NR-17, item 17.3.1). As medidas ergonômicas vêm depois dela.'
+        : 'Sem resposta, o GRID considera que a empresa não tem AEP e pede para fazê-la primeiro.'}</div></div>` : '';
   const cartoes = lista.map(a => cartao(a, ed)).join('') || nota(d.ghes.length
     ? 'Nenhuma ação: todos os riscos avaliados estão no nível Irrelevante e não há treinamento marcado. Se precisar, crie uma ação.'
     : 'Cadastre os GHEs e os riscos primeiro. O plano sai deles.');
@@ -62,6 +69,7 @@ export async function render(params) {
         ${ed ? btn('Voltar ao plano', `campo:pa-voltar:${x.chave}`, { cls: 'btn-ghost btn-sm' }) : ''}</div>`).join('')}</div></details>` : '';
 
   return `${cabec}
+    ${blocoAep}
     <div class="cp-sec-t2">Ações <span>${lista.length}</span></div>
     ${cartoes}
     ${ed ? `<button type="button" class="cp-add-ghe" data-acao="campo:pa-nova">${I.plus}Nova ação</button>` : ''}
@@ -73,8 +81,9 @@ export async function render(params) {
 function cartao(a, ed) {
   const aberto = a.chave === _aberta;
   const sub = a.origem === 'risco'
-    ? `GHE ${a.ghe} · ${a.risco}${a.risco_soc ? ' (' + a.risco_soc + ')' : ''}${a.nivel?.nome ? ' · ' + a.nivel.nome.replace(/^Risco\s+/i, '') + (a.nivel.p ? ` (${a.nivel.p}×${a.nivel.s})` : '') : ''}`
+    ? `GHE ${a.ghe} · ${a.risco}${a.nivel?.nome ? ' · ' + a.nivel.nome.replace(/^Risco\s+/i, '') + (a.nivel.p ? ` (S${a.nivel.s} · P${a.nivel.p})` : '') : ''}`
     : a.origem === 'treinamento' ? `${a.toda_empresa ? 'Toda a empresa' : 'GHE ' + a.ghe} · ${(a.trein || []).length} treinamento${(a.trein || []).length === 1 ? '' : 's'}${a.pessoas ? ' · ' + a.pessoas + ' pessoas' : ''}`
+    : a.origem === 'aep' ? `${a.toda_empresa ? 'Toda a empresa' : 'GHE ' + a.ghe} · Ergonomia (NR-17)`
     : `${a.ghe ? 'GHE ' + a.ghe : 'Toda a empresa'} · escrita por você`;
   const ex = P.excede(a);
   const avisos = [a.orfa ? 'O risco desta ação saiu da avaliação. Tire do plano ou mantenha.' : '',
@@ -161,6 +170,9 @@ export async function acao(nome, valor, redesenhar) {
   if (!ed) { avisar('Esta avaliação não pode mais ser alterada.', 'erro'); return true; }
   const mexer = (fn) => D.alterarPlano(_id, (pl) => { const it = pl.acoes.find(a => a.chave === _aberta); if (it) fn(it, pl); });
   switch (nome) {
+    case 'campo:pa-aep':
+      if (['S', 'N'].includes(valor)) { D.alterarPlano(_id, pl => { pl.aep = pl.aep === valor ? null : valor; }); await D.atualizarPlano(_id); }
+      redesenhar(); return true;
     case 'campo:pa-prio': if (P.NOME_PRIO[valor]) mexer(it => P.editar(it, 'prioridade', valor, _ctx)); redesenhar(); return true;
     case 'campo:pa-cat': mexer(it => P.editar(it, 'categoria', it.categoria === valor ? null : valor, _ctx)); redesenhar(); return true;
     case 'campo:pa-rel': mexer(it => { const s = new Set(it.relatorios || []); s.has(valor) ? s.delete(valor) : s.add(valor);

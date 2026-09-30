@@ -114,9 +114,9 @@ export function fotos(d, filtro, { chave, travado = false, rotulo = 'Tirar foto'
   const lista = d.fotos.filter(filtro);
   return `<div class="cp-fotos">${lista.map(f => `<div class="cp-foto" data-cp-img="${f.id}">
       ${travado ? '' : `<button type="button" class="cp-foto-x" data-acao="campo:foto-apagar:${f.id}" aria-label="Apagar foto">${I.x}</button>`}
-      <span data-acao="campo:foto-legenda:${f.id}">${esc(f.legenda || (travado ? '' : 'Pôr legenda'))}</span></div>`).join('')}
+      <span data-acao="campo:foto-legenda:${f.id}">${f.documento ? '<b class="cp-foto-doc">Documento · fora do PDF</b> ' : ''}${esc(f.legenda || (travado ? '' : 'Pôr legenda'))}</span></div>`).join('')}
     ${travado ? '' : `<label class="cp-foto-add">${I.cam}${esc(rotulo)}<input type="file" accept="image/*" capture="environment" multiple data-cp-foto="${esc(chave)}"></label>`}
-  </div>`;
+  </div>${travado ? '' : '<div class="cp-foto-lgpd">Não fotografe rostos nem documentos pessoais (LGPD).</div>'}`;
 }
 export async function carregarFotos(d) {
   if (!d) return;
@@ -132,11 +132,17 @@ export async function carregarFotos(d) {
 export function legendarFoto(d, fotoId, redesenhar) {
   const f = d.fotos.find(x => x.id === fotoId); if (!f) return;
   const p = ponte();
-  p.abrirModal('Legenda da foto', `<div class="field"><label>O que a foto mostra</label>
-    <input type="text" id="cpLegenda" maxlength="160" value="${esc(f.legenda || '')}" placeholder="Ex.: armário de produtos de limpeza"></div>`,
+  /* v225: a legenda sai no registro fotográfico do PDF; foto de documento fica só no GRID. */
+  p.abrirModal('Legenda da foto', `<div class="field"><label>O que a foto mostra (sai no relatório)</label>
+    <input type="text" id="cpLegenda" maxlength="160" value="${esc(f.legenda || '')}" placeholder="Ex.: leitura do luxímetro no balcão"></div>
+    ${D.temFotoDocumento() ? `<label style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--text-1);cursor:pointer;margin-top:4px">
+      <input type="checkbox" id="cpFotoDoc" ${f.documento ? 'checked' : ''} style="width:20px;height:20px;margin-top:1px;flex-shrink:0">
+      <span><b>É foto de documento</b><br><span style="font-size:12px;color:var(--text-3)">Fica guardada no GRID e não sai no PDF.</span></span></label>` : ''}
+    <div style="font-size:12px;color:var(--text-3);margin-top:10px">Não fotografe rostos nem documentos pessoais (LGPD).</div>`,
     p.botoes('Salvar', 'cpLegendaOk'));
   p.aoConfirmar('cpLegendaOk', async () => {
-    D.legendarFoto(d.id, fotoId, document.getElementById('cpLegenda')?.value.trim() || '');
+    const cx = document.getElementById('cpFotoDoc');
+    D.legendarFoto(d.id, fotoId, document.getElementById('cpLegenda')?.value.trim() || '', cx ? cx.checked : undefined);
     p.fecharModal(); redesenhar();
   });
 }

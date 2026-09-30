@@ -119,7 +119,7 @@ async function telaConcluida(d, cli, tec) {
   <div class="cp-2col"><div>
     <div class="cp-sec"><div class="cp-sec-tit">Documento</div>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span class="cp-rhead-ic" style="background:var(--gray-100);border-color:var(--border);color:var(--navy)">${I.doc}</span>
-      <div style="flex:1;min-width:200px"><div style="font-size:14px;font-weight:700;color:var(--text-1)">Avaliação de Riscos Ambientais · ${esc(cli?.nome || '')}</div>
+      <div style="flex:1;min-width:200px"><div style="font-size:14px;font-weight:700;color:var(--text-1)">Relatório de Avaliação de Riscos Ocupacionais · ${esc(cli?.nome || '')}</div>
       <div style="font-size:12px;color:var(--text-3)">${r.ghes || d.ghes.length} GHEs · nº ${esc(d.av.numero || '')} · revisão ${d.av.revisao}</div></div>
       ${d.av.pdf_path ? btn(_ocupado === 'pdf' ? 'Baixando…' : 'Baixar PDF', 'campo:pdf-baixar', { cls: 'btn-amber', travado: !!_ocupado })
         : btn(_ocupado === 'pdf' ? 'Gerando…' : 'Gerar PDF', 'campo:pdf-gerar', { cls: 'btn-amber', travado: !!_ocupado || !D.online() })}</div>
@@ -163,7 +163,7 @@ export async function render(params) {
 
   return `${topo(d, cli)}
     ${d.av.situacao === 'cancelada' ? nota('Esta visita foi cancelada na agenda. Para retomar, reative o compromisso na Agenda da Equipe.', 'red') : ''}
-    ${d.av.revisao > 1 ? nota(`Revisão ${d.av.revisao} da avaliação ${esc(d.av.numero || '')}. Ao concluir, ela substitui a anterior.`) : ''}
+    ${d.av.revisao > 1 ? nota(`Revisão ${d.av.revisao} da avaliação ${esc(d.av.numero || '')}${d.av.motivo_revisao ? ` · motivo: <b>${esc(d.av.motivo_revisao)}</b>` : ''}. Ao concluir, ela substitui a anterior.`) : ''}
     ${quadros(d)}
     ${blocoEsperando(d, editavel)}
     ${semSoc && editavel ? blocoSoc(d, cli, editavel) : ''}
@@ -342,12 +342,21 @@ export async function acao(nome, valor, redesenhar) {
     return true;
   }
   if (nome === 'campo:revisao') {
-    if (!await confirmar('Criar a revisão ' + (d.av.revisao + 1) + ' desta avaliação? A atual fica guardada no histórico e a nova abre para edição.')) return true;
-    try {
-      const novo = await D.novaRevisao(_id);
-      avisar('Revisão criada.');
-      irPara(`campo-avaliacao:${novo}`);
-    } catch (e) { avisar(D.traduzirErro(e), 'erro'); }
+    /* v225: o motivo sai no quadro "Controle de revisões" do PDF. */
+    const p = ponte();
+    p.abrirModal(`Criar a revisão ${d.av.revisao + 1}`, `<div style="font-size:13px;color:var(--text-2);margin-bottom:10px">A revisão ${d.av.revisao} fica guardada no histórico e a nova abre para edição.</div>
+      <div class="field"><label>Motivo da revisão * (sai no relatório)</label><input type="text" id="cpRevMotivo" maxlength="200" placeholder="Ex.: inclusão do plano de ação; troca do acompanhante"></div>`,
+      p.botoes('Criar revisão', 'cpRevOk'));
+    setTimeout(() => document.getElementById('cpRevMotivo')?.focus(), 60);
+    p.aoConfirmar('cpRevOk', async () => {
+      const motivo = document.getElementById('cpRevMotivo')?.value.trim() || '';
+      if (!motivo) { avisar('Escreva o motivo da revisão.', 'erro'); return; }
+      try {
+        const novo = await D.novaRevisao(_id, motivo);
+        p.fecharModal(); avisar('Revisão criada.');
+        irPara(`campo-avaliacao:${novo}`);
+      } catch (e) { avisar(D.traduzirErro(e), 'erro'); }
+    });
     return true;
   }
   return false;
