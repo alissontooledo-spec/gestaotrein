@@ -1084,6 +1084,31 @@ body.sidebar-mini .mod-head{justify-content:center;padding:9px 0;margin:8px 6px 
 body.sidebar-mini .mod-head .seta,body.sidebar-mini .mod-head .cnt{display:none}
 body.sidebar-mini .mod-bloco .mod-itens{display:block}
 /* contexto do encontro na tela de execucao (2026-09-04) */
+/* v227: folha de presença em papel, caixa "Presente" e envio em segundo plano */
+.exec-folha{border:1.5px dashed #FCD34D;background:#FFFBEB;border-radius:var(--r-md);padding:12px 14px;margin:0 0 12px}
+.exec-folha.papel{border-style:solid;border-color:var(--border);background:var(--surface)}
+.exec-folha-t{font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}
+.exec-folha-dica{font-size:13px;color:#92400E;line-height:1.5}
+.exec-folha-ok{font-size:13px;color:var(--green-text);background:var(--green-l);border-radius:var(--r-md);padding:8px 10px;line-height:1.45;margin-bottom:8px}
+.exec-folha-bts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.exec-folha-arq{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:var(--r-md);padding:8px 10px;margin-top:6px;background:var(--surface)}
+.exec-folha-arq .ic{flex-shrink:0;font-size:10px;font-weight:800;color:var(--text-2);background:var(--gray-100);border-radius:6px;padding:8px 6px;min-width:38px;text-align:center}
+.exec-folha-arq .nm{flex:1;min-width:0;cursor:pointer}.exec-folha-arq .nm b{display:block;font-size:13px;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exec-folha-arq .nm small{font-size:11.5px;color:var(--text-3)}
+.exec-folha-x{flex-shrink:0;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer}
+.exec-ck{flex-shrink:0;width:30px;height:30px;border-radius:8px;border:2px solid var(--border-2);background:var(--surface);cursor:pointer;position:relative;padding:0}
+.exec-ck.on{background:var(--green);border-color:var(--green)}
+.exec-ck.on:after{content:"";position:absolute;left:9px;top:4px;width:7px;height:13px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg)}
+.exec-ck[disabled]{cursor:default;opacity:.7}
+.envio-bg-chip{position:fixed;right:18px;bottom:18px;z-index:9000;display:none;align-items:flex-start;gap:12px;max-width:380px;background:var(--navy);color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 10px 30px rgba(15,23,42,.28);font-size:13px;line-height:1.45}
+.envio-bg-chip .ic{flex-shrink:0;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;background:rgba(255,255,255,.14)}
+.envio-bg-chip.ok .ic{background:var(--green)}.envio-bg-chip.erro{background:#7F1D1D}.envio-bg-chip.erro .ic{background:rgba(255,255,255,.2)}
+.envio-bg-chip .tx{flex:1;min-width:0}.envio-bg-chip .tx b{display:block;font-size:13.5px}.envio-bg-chip .tx span{display:block;color:#D6DAE3;font-size:12.5px}
+.envio-bg-chip .lk{margin-top:8px;background:#fff;color:var(--navy);border:0;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12.5px;cursor:pointer}
+.envio-bg-chip .x{flex-shrink:0;background:transparent;border:0;color:#D6DAE3;font-size:15px;cursor:pointer;padding:2px 4px}
+.envio-bg-chip .spin,.envio-bg-mini{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#F59E0B;animation:envioBgGira .9s linear infinite;vertical-align:-2px}
+@keyframes envioBgGira{to{transform:rotate(360deg)}}
+@media (max-width:767px){.envio-bg-chip{left:12px;right:12px;bottom:84px;max-width:none}}
 .exec-contexto{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 18px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 16px;margin-bottom:16px}
 .exec-ctx-i.wide{grid-column:1/-1}
 .exec-ctx-i .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:3px}
@@ -4190,6 +4215,9 @@ function confirmarAcao(mensagem, tituloBotao, danger) {
 // TOAST / LOADING / SCREEN
 // ============================================================
 function showToast(msg, tipo='info', dur=3500) {
+  // v227: durante o envio em segundo plano, os "gerado!" de cada documento
+  // viram ruído — o andamento aparece no aviso do canto da tela.
+  if (window._envioBg && tipo === 'success') return;
   const c = document.getElementById('toast-container');
   const t = document.createElement('div');
   t.className = `toast ${tipo}`;
@@ -4215,6 +4243,8 @@ function esqueletoConteudo() {
 }
 
 function showLoading(msg='Carregando...') {
+  // v227: envio em segundo plano — nada de tela travada; a etapa vai para o aviso.
+  if (window._envioBg) return;
   document.getElementById('loadingText').textContent = msg;
   document.getElementById('loading-overlay').classList.add('show');
 }
@@ -5291,7 +5321,9 @@ const _GUARDAS_TELA = [
       'iniciarExecucaoSessao','abrirExecucaoSessao','abrirAssinatura','confirmarAssinatura','_avaliarParticipante','_confirmarReprovacao',
       '_artEditarNumero','salvarArtNumero','removerArquivoArt','_confirmarLiberacaoArt','liberarEnvioSemArt','marcarEnvioComoConcluido',
       'abrirModalReaproveitamentoAssinaturas','_confirmarReaproveitamentoAssinaturas','editarAnotacoes','salvarAnotacoes',
-      'removerEvidencia','removerEvidenciaPendente','agendarReciclagem','_agRapidaSalvarTurmaEAgendamento'].map(n => [n, _TURMA_T, 2]),
+      'removerEvidencia','removerEvidenciaPendente','agendarReciclagem','_agRapidaSalvarTurmaEAgendamento',
+      'anexarFolhaPapel','removerFolhaPapel','_alternarPresencaPapel','_execIncluirParticipante'].map(n => [n, _TURMA_T, 2]),   // v227: folha em papel e novo participante
+  ['_giResolverAvisoEmpresa', _COLAB_T, 2],
   // Turmas — apagar (3)
   ...['excluirTurma','abrirModalExcluirTurma','confirmarExcluirTurma','excluirAgendamento','removerParticipante','_tvRemoverSelecionados'].map(n => [n, _TURMA_T, 3]),
   // Agenda da Equipe
@@ -7795,6 +7827,8 @@ function _giAvisosHtml(av, docs) {
       texto: 'Todas as aulas foram registradas, mas não há data marcada nem conclusão.', botao: 'Revisar', js: "irParaTurmasFiltradas('em_andamento')" },
     av.cadastro && { tipo: 'a', n: av.cadastro, titulo: av.cadastro === 1 ? 'Turma com cadastro incompleto' : 'Turmas com cadastro incompleto',
       texto: `Pendências: ${av.cadastroTexto}.`, botao: 'Ver turmas', js: 'irParaTurmasComPendencia()' },
+    docs && docs.empresa && { tipo: 'a', n: docs.empresa, titulo: docs.empresa === 1 ? 'Participante de outra empresa incluído na aula' : 'Participantes de outra empresa incluídos na aula',
+      texto: 'O instrutor incluiu pessoas cadastradas em outra empresa. Confirme se o cadastro muda de empresa.', botao: 'Revisar', js: '_giAbrirAvisosEmpresa()' },
     docs && docs.n && { tipo: 'a', n: docs.n, titulo: docs.n === 1 ? 'Turma concluída com documentos pendentes' : 'Turmas concluídas com documentos pendentes',
       texto: 'Falta gerar ou enviar a lista, o certificado coletivo ou individuais.', botao: 'Ver turmas', js: podeRel ? "_giIrRelatorios('documentos')" : "irParaTurmasFiltradas('concluida')" },
   ].filter(Boolean);
@@ -7913,7 +7947,12 @@ async function _giCarregarDocsPendentes(token, oi, dd, d) {
     const pend = _rxPendenciasDocumentos(dd.turmas, docR.data || [], envR.data || [], doOrg(dd.sessoes), doOrg(presR.data), doOrg(partR.data), doOrg(avR.data));
     docs = { n: pend.length };
   } catch (e) { console.warn('Documentos pendentes indisponível:', e?.message || e); docs = { n: 0, erro: true }; }
+  // v227 (PASSO-76): pessoas de outra empresa incluídas pelo instrutor. Sem o PASSO-76, fica vazio.
+  try { const rAv = await sb.rpc('participante_avisos_abertos'); window._giAvisosEmpresa = rAv.error ? [] : (rAv.data || []); }
+  catch (e) { window._giAvisosEmpresa = []; }
+  docs.empresa = window._giAvisosEmpresa.length;
   if (token !== window._giToken || typeof paginaAtual === 'undefined' || paginaAtual !== 'home') return;
+  window._giUltimosAvisos = { av: d.avisos, docs };
   _setElBoth('giAvisos', _giAvisosHtml(d.avisos, docs));
 }
 
@@ -21051,13 +21090,14 @@ async function _cacheExecSalvar(turmaId, dados) {
   const existente = await _cacheExecCarregar(turmaId).catch(()=>null);
   const porSessao = {...(existente?.porSessao||{})};
   if (dados.sessaoAtivaId) {
-    porSessao[dados.sessaoAtivaId] = {presencas: dados.presencas||[], evidencias: dados.evidencias||[]};
+    porSessao[dados.sessaoAtivaId] = {presencas: dados.presencas||[], evidencias: dados.evidencias||[], folhas: dados.folhas||[]};
   }
   return new Promise((resolve, reject) => {
     const tx = db.transaction(CACHE_EXEC_STORE, 'readwrite');
     tx.objectStore(CACHE_EXEC_STORE).put({
       turmaId, t: dados.t, ultimaSessaoId: dados.sessaoAtivaId||null, porSessao,
       resumoEnc: dados.resumoEnc || existente?.resumoEnc || null,
+      temFolha: dados.temFolha ?? existente?.temFolha ?? false,
       salvo_em:new Date().toISOString(),
     });
     tx.oncomplete = () => resolve();
@@ -21227,6 +21267,8 @@ async function _sincronizarFilaOffline() {
       else if (item.tipo === 'art_numero') await _enviarArtNumero(item);
       else if (item.tipo === 'art_arquivo') await _enviarArtArquivo(item);
       else if (item.tipo === 'avaliacao') await _enviarAvaliacao(item);
+      else if (item.tipo === 'folha_papel') await _enviarFolhaPapel(item);          // v227
+      else if (item.tipo === 'presenca_papel') await _gravarPresencaPapel(item);    // v227
       else if (item.tipo === 'finalizar_sessao') await _enviarFinalizarSessao(item);
       await _filaRemover(item.id);
       ok++;
@@ -21290,6 +21332,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
   try {
     let t, presencas, evidencias, sessaoAtiva, deCache = false, resumoEnc = null;
     let catFlags = {exige_art:false, exige_avaliacao:false}, artTurma = null, avaliacoes = [];
+    let folhas = [], temFolha = false;   // v227: folha em papel
     window._execSemCacheDoEncontro = false;
     const hoje = dataLocalISO();
 
@@ -21335,11 +21378,16 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
       // porque um erro ali (coluna/tabela ainda não migrada) derrubaria a
       // execução inteira para o caminho offline. Aqui, no pior caso, as
       // três voltam vazias e a tela fica idêntica à de antes.
-      const [_rCat, _rArt, _rAval] = await Promise.all([
+      const [_rCat, _rArt, _rAval, _rFolha] = await Promise.all([
         sb.from('turmas').select('catalogo(exige_art,exige_avaliacao)').eq('id', turmaId).maybeSingle(),
         sb.from('turma_art').select('*').eq('turma_id', turmaId).maybeSingle(),
         sb.from('turma_avaliacoes').select('colaborador_id,resultado,observacao').eq('turma_id', turmaId),
+        // v227 (PASSO-76): folha de presença assinada em papel deste encontro
+        sessaoIdAtiva ? sb.from('sessao_folhas_papel').select('id,arquivo_path,nome_original,tipo_mime,tamanho,enviado_em').eq('sessao_id', sessaoIdAtiva).order('enviado_em')
+                      : Promise.resolve({ data: [], error: null }),
       ]);
+      temFolha = !_rFolha?.error;
+      folhas   = _rFolha?.data || [];
       catFlags   = _rCat?.data?.catalogo || {exige_art:false, exige_avaliacao:false};
       artTurma   = _rArt?.data || null;
       avaliacoes = _rAval?.data || [];
@@ -21352,7 +21400,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         if (!rRes.error) resumoEnc = rRes.data || null;
       } catch(e) {}
 
-      try { await _cacheExecSalvar(turmaId, {t, sessaoAtivaId: sessaoIdAtiva, presencas, evidencias, catFlags, artTurma, avaliacoes, resumoEnc}); } catch(e) {}
+      try { await _cacheExecSalvar(turmaId, {t, sessaoAtivaId: sessaoIdAtiva, presencas, evidencias, catFlags, artTurma, avaliacoes, resumoEnc, folhas, temFolha}); } catch(e) {}
 
     } catch(erroRede) {
       const snap = await _cacheExecCarregar(turmaId).catch(()=>null);
@@ -21370,6 +21418,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
       if (subSnap) {
         presencas = subSnap.presencas||[];
         evidencias = subSnap.evidencias||[];
+        folhas = subSnap.folhas||[];
       } else {
         // Este encontro específico nunca foi aberto online neste
         // dispositivo — não há como saber quem já assinou; melhor mostrar
@@ -21383,6 +21432,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
       artTurma   = snap.artTurma   || null;
       avaliacoes = snap.avaliacoes || [];
       resumoEnc  = snap.resumoEnc  || null;
+      temFolha   = !!snap.temFolha;
       deCache = true;
     }
 
@@ -21414,6 +21464,8 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
     window._execPresencas = {};
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
     window._execEvidencias = evidencias||[];
+    window._execTemFolha = !!temFolha;     // v227: o banco já tem o PASSO-76?
+    window._execFolhasLista = (folhas||[]).slice();
 
     // Mescla itens ainda não sincronizados DESTE ENCONTRO (sobreviventes de
     // uma sessão offline anterior) no estado local, marcados como
@@ -21427,6 +21479,11 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
           window._execPresencas[it.colId] = {colaborador_id:it.colId, presente:true, assinatura_path:null, assinado_em:it.criado_em, _pendente:true};
         } else if (it.tipo === 'evidencia') {
           window._execEvidencias.push({id:'pendente-'+it.id, tipo:it.tipoEvidencia, arquivo_path:it.path, url_temp:URL.createObjectURL(it.blob), _pendente:true});
+        } else if (it.tipo === 'folha_papel') {
+          window._execFolhasLista.push({id:'pendente-'+it.id, arquivo_path:it.path, nome_original:it.nomeOriginal, tipo_mime:it.contentType, tamanho:it.tamanho, url_temp:URL.createObjectURL(it.blob), _pendente:true});
+        } else if (it.tipo === 'presenca_papel') {
+          const _ant = window._execPresencas[it.colId];
+          if (!(_ant && _ant.assinatura_path)) window._execPresencas[it.colId] = {...(_ant||{}), colaborador_id:it.colId, presente:!!it.presente, forma:'papel', assinatura_path:null, _filaPapel:true};
         }
       });
     } catch(e) { /* IndexedDB indisponível — segue sem mesclar */ }
@@ -21464,6 +21521,8 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
     const totalPartExec  = (t.turma_participantes||[]).length;
     const assinCountExec = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
     const evidCountExec  = window._execEvidencias.length;
+    const _papelExec     = _execModoPapel();   // v227
+    const _verboExec     = _papelExec ? 'presentes' : 'assinaram';
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
@@ -21509,7 +21568,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         <div class="exec-stepper" id="execStepper">
           <div class="exec-step current" data-step="1" onclick="execIrEtapa(1,this)">
             <div class="exec-step-c">1</div>
-            <div class="exec-step-txt"><div class="exec-step-l">Presenças</div><div class="exec-step-s" id="execSubPresenca">${totalPartExec?`${assinCountExec}/${totalPartExec} assinaram`:'—'}</div></div>
+            <div class="exec-step-txt"><div class="exec-step-l">Presenças</div><div class="exec-step-s" id="execSubPresenca">${totalPartExec?`${assinCountExec}/${totalPartExec} ${_verboExec}`:'—'}</div></div>
           </div>
           <div class="exec-step-line"></div>
           <div class="exec-step" data-step="2" onclick="execIrEtapa(2,this)">
@@ -21534,12 +21593,13 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
           <div id="abaPresenca" class="exec-panel active" data-step="1">
             <div class="card">
               <div class="card-title">${catFlags.exige_avaliacao ? 'Presença e avaliação' : 'Quem participou?'}</div>
-              <div style="font-size:12px;color:var(--text-2);margin:4px 0 12px">${catFlags.exige_avaliacao ? 'Colete a assinatura e registre o resultado da avaliação de cada aluno.' : 'Toque em "Assinar" para coletar a assinatura de cada aluno.'}</div>
-              ${totalPartExec ? `<div class="exec-countbadge" id="execCountBadge">${assinCountExec} de ${totalPartExec} assinaram</div>` : ''}
+              <div class="exec-sub-pres" data-aval="${catFlags.exige_avaliacao ? 1 : 0}" style="font-size:12px;color:var(--text-2);margin:4px 0 12px">${_execSubPresTexto(!!catFlags.exige_avaliacao)}</div>
+              <div id="painelFolhaPapel">${_htmlPainelFolha()}</div>
+              ${totalPartExec ? `<div class="exec-countbadge" id="execCountBadge">${assinCountExec} de ${totalPartExec} ${_verboExec}</div>` : ''}
               ${!sessaoAtiva?.concluida ? `
               <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-                <button class="btn btn-amber btn-sm" onclick="abrirCadastroRapidoColabExec()">+ Novo colaborador</button>
-                ${totalPartExec ? `<button class="btn btn-outline btn-sm" onclick="baixarFolhaColeta()">Baixar folha de coleta (papel)</button>` : ''}
+                <button class="btn btn-amber btn-sm" onclick="abrirCadastroRapidoColabExec()">+ Novo participante</button>
+                ${totalPartExec && !window._execTemFolha ? `<button class="btn btn-outline btn-sm" onclick="baixarFolhaColeta()">Baixar folha de coleta (papel)</button>` : ''}
               </div>` : ''}
               ${_htmlBuscaPresencas(totalPartExec)}
               <div id="listaPresencas">
@@ -21595,10 +21655,14 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
                   <span style="font-size:14px;font-weight:600">${totalPartExec}</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;padding:12px;background:var(--gray-50);border-radius:var(--r-md)">
-                  <span style="font-size:14px;color:var(--text-2)">Com assinatura</span>
+                  <span style="font-size:14px;color:var(--text-2)" id="totalAssinadosRot">${_papelExec ? 'Presentes' : 'Com assinatura'}</span>
                   <span style="font-size:14px;font-weight:600" id="totalAssinados">
                     ${assinCountExec}
                   </span>
+                </div>
+                <div id="linhaFolhaResumo" style="display:${_papelExec ? 'flex' : 'none'};justify-content:space-between;padding:12px;background:var(--green-l);border-radius:var(--r-md)">
+                  <span style="font-size:14px;color:var(--green-text)">Folha em papel</span>
+                  <span style="font-size:14px;font-weight:600;color:var(--green-text)" id="totalFolhas">${_execFolhas().length} ${_execFolhas().length === 1 ? 'página anexada' : 'páginas anexadas'}</span>
                 </div>
                 ${catFlags.exige_avaliacao ? `
                 <div style="display:flex;justify-content:space-between;padding:12px;background:var(--red-l);border-radius:var(--r-md);border:1px solid #FECACA" id="linhaReprovados">
@@ -21740,14 +21804,23 @@ function _execAtualizarResumoEtapas() {
   const assinCount = Object.values(window._execPresencas||{}).filter(p=>p.assinatura_path||p.presente).length;
   const evidCount  = (window._execEvidencias||[]).length;
 
+  const _papel = _execModoPapel(), _verbo = _papel ? 'presentes' : 'assinaram';   // v227
   const subP = execEl('execSubPresenca');
-  if (subP) subP.textContent = totalPart ? `${assinCount}/${totalPart} assinaram` : '—';
+  if (subP) subP.textContent = totalPart ? `${assinCount}/${totalPart} ${_verbo}` : '—';
   const subE = execEl('execSubEvidencias');
   if (subE) subE.textContent = `${evidCount} registrada${evidCount===1?'':'s'}`;
   const badge = execEl('execCountBadge');
-  if (badge) badge.textContent = totalPart ? `${assinCount} de ${totalPart} assinaram` : '';
+  if (badge) badge.textContent = totalPart ? `${assinCount} de ${totalPart} ${_verbo}` : '';
   const totalAssinEl = execEl('totalAssinados');
   if (totalAssinEl) totalAssinEl.textContent = assinCount;
+  const rotAssin = execEl('totalAssinadosRot');
+  if (rotAssin) rotAssin.textContent = _papel ? 'Presentes' : 'Com assinatura';
+  const linhaFolha = execEl('linhaFolhaResumo');
+  if (linhaFolha) {
+    linhaFolha.style.display = _papel ? 'flex' : 'none';
+    const nF = _execFolhas().length, tf = execEl('totalFolhas');
+    if (tf) tf.textContent = `${nF} ${nF === 1 ? 'página anexada' : 'páginas anexadas'}`;
+  }
   const totalEvEl = execEl('totalEvidencias');
   if (totalEvEl) totalEvEl.textContent = evidCount;
 
@@ -21883,7 +21956,9 @@ function _htmlListaPresencas(participantes) {
     // Destaque visual (borda âmbar) pra quem ainda falta assinar — Jornada em
     // Etapas Guiadas, 2026-08-20 — ajuda a achar rápido quem falta numa turma
     // grande, sem precisar de um filtro separado.
-    const faltaAssinar = !assinou && !pendente;
+    // v227: modo papel — quem não assinou no celular ganha a caixa "Presente".
+    const papelLinha = _execModoPapel() && !(presen && presen.assinatura_path) && !pendente;
+    const faltaAssinar = !assinou && !pendente && !papelLinha;
     // 2026-08-28 — avaliação: o controle SÓ existe depois da assinatura
     // coletada. Numa linha ainda em branco não há o que avaliar, e mostrar
     // "Reprovado" ali seria ruído + risco de toque errado no celular.
@@ -21905,16 +21980,20 @@ function _htmlListaPresencas(participantes) {
 
     return `
       <div class="exec-prow${podeAvaliar ? ' exec-prow-aval' : ''}"${reprovado ? ' style="border-left:3px solid var(--red);background:#FFF5F5"' : faltaAssinar ? ' style="border-left:3px solid var(--amber);background:var(--amber-l)"' : ''}>
-        <div class="li-icon" style="background:${pendente?'var(--amber-l)':reprovado?'var(--red-l)':assinou?'var(--green-l)':'var(--gray-100)'};color:${pendente?'var(--amber-text)':reprovado?'var(--red-text)':assinou?'var(--green)':'var(--text-3)'};font-size:12px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
+        ${papelLinha
+          ? `<button type="button" class="exec-ck${presen?.presente ? ' on' : ''}" role="checkbox" aria-checked="${presen?.presente ? 'true' : 'false'}" aria-label="Presente: ${escapeHtml(col.nome||'')}" ${window._execSessaoConcluida ? 'disabled' : `onclick="_alternarPresencaPapel('${p.colaborador_id}')"`}></button>`
+          : `<div class="li-icon" style="background:${pendente?'var(--amber-l)':reprovado?'var(--red-l)':assinou?'var(--green-l)':'var(--gray-100)'};color:${pendente?'var(--amber-text)':reprovado?'var(--red-text)':assinou?'var(--green)':'var(--text-3)'};font-size:12px;font-weight:700;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center">
           ${pendente?'⏳':assinou?'✓':iniciais(col.nome||'?')}
-        </div>
+        </div>`}
         <div class="li-info">
           <div class="li-title">${escapeHtml(col.nome||'—')}</div>
-          <div class="li-sub"${reprovado?' style="color:var(--red-text)"':''}>${p.cargo_vinculo||col.cargo||''}${pendente?' · Aguardando conexão':presen&&presen.assinatura_path?' · Assinado':presen&&presen.presente&&!presen.assinatura_path?' · Presente':''}${reprovado?' · <b>Reprovado na avaliação</b>':''}${(podeAvaliar && semAvaliacao)?' · <span style="color:var(--amber-text);font-weight:600">avaliação pendente</span>':''}${aprovado?' · Aprovado':''}</div>
+          <div class="li-sub"${reprovado?' style="color:var(--red-text)"':''}>${p.cargo_vinculo||col.cargo||''}${pendente?' · Aguardando conexão':presen&&presen.assinatura_path?(_execModoPapel()?' · Assinou no celular':' · Assinado'):papelLinha?(presen&&presen.presente?' · Presente · pela folha':' · Faltou'):presen&&presen.presente&&!presen.assinatura_path?' · Presente':''}${reprovado?' · <b>Reprovado na avaliação</b>':''}${(podeAvaliar && semAvaliacao)?' · <span style="color:var(--amber-text);font-weight:600">avaliação pendente</span>':''}${aprovado?' · Aprovado':''}</div>
           ${htmlObs}
         </div>
         <div class="exec-pact">
-          ${pendente
+          ${papelLinha
+            ? (podeAvaliar ? htmlAval : '')
+            : pendente
             ?`<span class="badge" style="background:var(--amber-l);color:var(--amber-text)" title="Guardado localmente — será enviado quando a internet voltar">⏳ Pendente</span>`
             :assinou
             ?(podeAvaliar ? htmlAval : `<span class="badge badge-green">✓ Assinou</span>`)
@@ -22354,52 +22433,461 @@ async function baixarFolhaColeta() {
 // coletar a assinatura dele offline exigiria reconciliar depois um ID
 // temporario com o ID real do banco em todos os itens da fila que
 // dependessem dele — risco maior que o ganho para o objetivo deste ajuste.
-function abrirCadastroRapidoColabExec() {
-  if (!navigator.onLine) {
-    showToast('Cadastrar um novo colaborador exige conexão. Tente novamente quando a internet voltar.', 'error', 6000);
-    return;
+// ════════════════════════════════════════════════════════════════
+// v227 (PASSO-76) — NOVO PARTICIPANTE PELO CPF + FOLHA DE PRESENÇA EM PAPEL
+// Proposta aprovada em 30/09: 08-Propostas-visuais/propostas-visuais-folha-
+// papel-e-novo-participante-v227.html.
+// ════════════════════════════════════════════════════════════════
+
+// ---- Novo participante: primeiro o CPF, depois o GRID diz o que fazer ----
+// Antes o botão sempre tentava CRIAR um cadastro: se o CPF já existia na
+// organização (mesma empresa fora da turma, ou outra empresa/CNPJ) o banco
+// recusava ("CPF já cadastrado") e o instrutor ficava sem saída. Agora o
+// banco procura pelo CPF (só os números) e devolve a situação; a inclusão
+// também é feita pelo banco (turma_incluir_participante), que registra quem
+// incluiu e avisa o administrador quando a pessoa é de outra empresa.
+// Continua só-online (mesma decisão de 2026-09-01).
+function _cpfDigitos(v) { return String(v || '').replace(/\D/g, '').slice(0, 11); }
+function _cpfValidoJs(v) {
+  const d = _cpfDigitos(v);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  for (const n of [9, 10]) {
+    let s = 0; for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i);
+    if (((s * 10) % 11) % 10 !== Number(d[n])) return false;
   }
-  abrirModal('Novo colaborador', `
-    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Cadastro rápido — vinculado automaticamente à empresa desta turma e adicionado direto à lista de presença.</div>
-    <div class="field"><label>Nome completo *</label>
-      <input type="text" id="mExecCRNome" placeholder="Nome completo"></div>
-    <div class="field"><label>CPF *</label>
-      <input type="text" id="mExecCRCpf" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this)"></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCadastroRapidoExec()">Cadastrar e adicionar</button>`);
+  return true;
 }
 
-async function salvarCadastroRapidoExec() {
-  const nome = document.getElementById('mExecCRNome')?.value.trim();
-  if (!nome) { showToast('Nome é obrigatório','error'); return; }
-  const cpf  = document.getElementById('mExecCRCpf')?.value.trim() || '';
-  // CPF obrigatorio neste fluxo (pedido do Alisson, 2026-09-01) — diferente
-  // do cadastro rapido do Administrador, onde continua opcional.
-  if (cpf.replace(/\D/g,'').length !== 11) { showToast('CPF é obrigatório (11 dígitos).','error'); return; }
-  const turmaId   = window._execTurmaId;
-  const clienteId = window._execClienteId;
-  if (!turmaId) { showToast('Turma não encontrada — reabra a execução.','error'); return; }
-  try {
-    setBtnModalLoading(true);
-    const {data:col, error} = await sb.from('colaboradores')
-      .insert({nome, cpf, cliente_id: clienteId||null, org_id: usuarioAtual.org_id}).select().single();
-    if (error) throw error;
-    const {data:cli} = clienteId ? await sb.from('clientes').select('nome').eq('id',clienteId).single() : {data:null};
-    const {data:novoParticipante, error:e2} = await sb.from('turma_participantes').insert({
-      turma_id: turmaId, colaborador_id: col.id, org_id: usuarioAtual.org_id,
-      empresa_vinculo: cli?.nome || null
-    }).select('*, colaboradores(*)').single();
-    if (e2) throw e2;
-    window._execParticipantes = [...(window._execParticipantes||[]), novoParticipante || {colaborador_id:col.id, turma_id:turmaId, colaboradores:col}];
-    fecharModal();
-    showToast(`${nome} cadastrado e adicionado à lista!`,'success');
-    _execRedesenharBusca();
-    _execRedesenharLista();
-    _execAtualizarResumoEtapas();
-  } catch(e) {
-    setBtnModalLoading(false);
-    showToast(e.code==='23505' ? 'CPF já cadastrado no sistema' : (e.message||'Erro ao cadastrar'), 'error');
+function abrirCadastroRapidoColabExec() {
+  if (!navigator.onLine) {
+    showToast('Incluir um participante exige conexão. Tente novamente quando a internet voltar.', 'error', 6000);
+    return;
   }
+  window._execNovoCpf = { cpf: '', res: null, seq: 0, legado: false };
+  abrirModal('Novo participante', `
+    <div style="font-size:12.5px;color:var(--text-2);margin-bottom:12px;line-height:1.5">Digite o CPF. O GRID confere os números e procura o cadastro antes de incluir.</div>
+    <div class="field"><label>CPF do participante *</label>
+      <input type="text" id="mExecCRCpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14" oninput="mascararCpf(this);_execCpfDigitado(this.value)"></div>
+    <div id="mExecCRRes"></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
+  setTimeout(() => document.getElementById('mExecCRCpf')?.focus(), 80);
+}
+
+function _execCpfResHtml(r, cpf) {
+  const nome = escapeHtml(r?.nome || '');
+  const caixa = (fundo, cor, borda, titulo, corpo) => `<div style="background:${fundo};color:${cor};border:1px solid ${borda};border-radius:var(--r-md);padding:11px 13px;font-size:13px;line-height:1.5;margin-top:4px"><div style="font-weight:700;margin-bottom:3px">${titulo}</div>${corpo}</div>`;
+  const botao = (rot, cls = 'btn-navy') => `<button type="button" class="btn ${cls} btn-sm" id="mExecCRBtn" style="margin-top:10px" onclick="_execIncluirParticipante()">${rot}</button>`;
+  switch (r?.situacao) {
+    case 'buscando': return `<div style="font-size:12.5px;color:var(--text-3);margin-top:4px">Procurando o cadastro…</div>`;
+    case 'cpf_invalido': return caixa('var(--red-l)', 'var(--red-text)', 'var(--red-l)', 'CPF inválido', 'Os números não formam um CPF válido. Confira com o participante.');
+    case 'na_turma': return caixa('var(--blue-l)', 'var(--blue-text)', 'var(--blue-l)', 'Já está nesta lista', `${nome}.<div><button type="button" class="btn btn-outline btn-sm" style="margin-top:10px" onclick="_execIrAoParticipante()">Ir até ${nome.split(' ')[0] || 'a pessoa'}</button></div>`);
+    case 'mesma_empresa': return caixa('var(--green-l)', 'var(--green-text)', 'var(--green-l)', 'Cadastrado nesta empresa', `${nome}. É esta pessoa?<div>${botao('Sim, adicionar à lista')}</div>`);
+    case 'outra_empresa': return caixa('#FFFBEB', '#92400E', '#FCD34D', 'Cadastrado em outra empresa', `${nome}. É esta pessoa?<div style="font-size:12px;margin-top:4px">Ela entra nesta turma pela empresa desta turma. O cadastro dela não muda agora: o administrador recebe um aviso para confirmar se ela mudou de empresa.</div><div>${botao('Sim, adicionar à lista', 'btn-amber')}</div>`);
+    case 'nao_encontrado': return `<div style="font-size:12.5px;color:var(--text-2);margin:2px 0 10px">CPF não encontrado. Informe os dados para cadastrar nesta empresa.</div>
+      <div class="field"><label>Nome completo *</label><input type="text" id="mExecCRNome" placeholder="Nome completo" maxlength="200"></div>
+      <div class="field"><label>Cargo</label><input type="text" id="mExecCRCargo" placeholder="Ex.: Operador, Eletricista" maxlength="120"></div>
+      ${botao('Cadastrar e adicionar')}`;
+    case 'erro': return caixa('var(--red-l)', 'var(--red-text)', 'var(--red-l)', 'Não foi possível procurar agora', escapeHtml(r.msg || 'Tente de novo.'));
+    default: return '';
+  }
+}
+function _execCpfRender() {
+  const el = document.getElementById('mExecCRRes');
+  const st = window._execNovoCpf;
+  if (el && st) el.innerHTML = _execCpfResHtml(st.res, st.cpf);
+  if (st?.res?.situacao === 'nao_encontrado') setTimeout(() => document.getElementById('mExecCRNome')?.focus(), 30);
+}
+async function _execCpfDigitado(valor) {
+  const st = window._execNovoCpf; if (!st) return;
+  const d = _cpfDigitos(valor);
+  if (d === st.cpf && st.res) return;
+  st.cpf = d; st.res = null; const seq = ++st.seq;
+  if (d.length < 11) { _execCpfRender(); return; }
+  if (!_cpfValidoJs(d)) { st.res = { situacao: 'cpf_invalido' }; _execCpfRender(); return; }
+  st.res = { situacao: 'buscando' }; _execCpfRender();
+  try {
+    const { data, error } = await sb.rpc('turma_buscar_participante_cpf', { p_turma_id: window._execTurmaId, p_cpf: d });
+    if (seq !== st.seq) return;
+    if (error) {
+      // Banco sem o PASSO-76: volta para o cadastro de antes (só CPF novo).
+      if (error.code === 'PGRST202' || /turma_buscar_participante_cpf/.test(error.message || '')) { st.legado = true; st.res = { situacao: 'nao_encontrado' }; }
+      else st.res = { situacao: 'erro', msg: traduzErroSupabase(error, 'Erro ao procurar o CPF') };
+    } else st.res = data || { situacao: 'erro' };
+  } catch (e) { if (seq === st.seq) st.res = { situacao: 'erro', msg: e?.message || '' }; }
+  if (seq === st.seq) _execCpfRender();
+}
+function _execIrAoParticipante() {
+  const nome = window._execNovoCpf?.res?.nome || '';
+  fecharModal();
+  window._execFiltroChip = 'todos';
+  window._execFiltroBusca = nome;
+  _execRedesenharBusca(); _execRedesenharLista();
+}
+async function _execIncluirParticipante() {
+  const st = window._execNovoCpf; if (!st || !st.res) return;
+  const turmaId = window._execTurmaId;
+  if (!turmaId) { showToast('Turma não encontrada — reabra a execução.', 'error'); return; }
+  const nome = document.getElementById('mExecCRNome')?.value.trim() || null;
+  const cargo = document.getElementById('mExecCRCargo')?.value.trim() || null;
+  if (st.res.situacao === 'nao_encontrado' && (!nome || nome.length < 3)) { showToast('Informe o nome completo.', 'error'); return; }
+  const btnEl = document.getElementById('mExecCRBtn');
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Incluindo…'; }
+  try {
+    let part, situacao, nomeFinal;
+    if (st.legado) {
+      // Caminho de antes do PASSO-76 (só cadastro novo).
+      const cpfFmt = st.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+      const { data: col, error } = await sb.from('colaboradores').insert({ nome, cpf: cpfFmt, cargo, cliente_id: window._execClienteId || null, org_id: usuarioAtual.org_id }).select().single();
+      if (error) throw error;
+      const { data: cli } = window._execClienteId ? await sb.from('clientes').select('nome').eq('id', window._execClienteId).single() : { data: null };
+      const { data: np, error: e2 } = await sb.from('turma_participantes').insert({ turma_id: turmaId, colaborador_id: col.id, org_id: usuarioAtual.org_id, empresa_vinculo: cli?.nome || null, cargo_vinculo: cargo })
+        .select('*, colaboradores(*)').single();
+      if (e2) throw e2;
+      part = np; situacao = 'cadastrado'; nomeFinal = nome;
+    } else {
+      const { data: r, error } = await sb.rpc('turma_incluir_participante', { p_turma_id: turmaId, p_cpf: st.cpf, p_nome: nome, p_cargo: cargo });
+      if (error) throw error;
+      situacao = r?.situacao; nomeFinal = r?.nome || nome || '';
+      if (situacao === 'na_turma') { st.res = { situacao: 'na_turma', nome: nomeFinal }; _execCpfRender(); return; }
+      part = r?.participante;
+    }
+    if (part && !(window._execParticipantes || []).some(p => p.colaborador_id === part.colaborador_id)) {
+      window._execParticipantes = [...(window._execParticipantes || []), part];
+    }
+    fecharModal();
+    showToast(situacao === 'outra_empresa'
+      ? `${nomeFinal} entrou na lista. O administrador vai confirmar a empresa do cadastro.`
+      : `${nomeFinal} ${situacao === 'cadastrado' ? 'cadastrado e adicionado' : 'adicionado'} à lista!`, 'success', 5000);
+    // Modo papel: quem entra na lista já começa marcado como presente.
+    if (part && _execModoPapel()) await _marcarPresencaPapel(part.colaborador_id, true, { silencioso: true });
+    _execRedesenharBusca(); _execRedesenharLista(); _execAtualizarResumoEtapas();
+  } catch (e) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Tentar de novo'; }
+    showToast(e?.code === '23505' ? 'Este CPF já está cadastrado. Feche e digite o CPF de novo para o GRID localizar o cadastro.' : traduzErroSupabase(e, 'Erro ao incluir o participante'), 'error', 6000);
+  }
+}
+// Mantido pelo nome antigo (atalhos e guardas de perfil apontam para ele).
+async function salvarCadastroRapidoExec() { return _execIncluirParticipante(); }
+
+// ---- Folha de presença assinada em papel ----
+const FOLHA_MAX_BYTES = 10 * 1024 * 1024;
+const FOLHA_TIPOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+const FOLHA_MAX_ARQUIVOS = 10;
+function _execFolhas() { return window._execFolhasLista || []; }
+function _execModoPapel() { return !!window._execTemFolha && _execFolhas().length > 0; }
+function _folhaTamanho(b) { return b ? (b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB') : ''; }
+
+function _htmlPainelFolha() {
+  if (!window._execTemFolha) return '';
+  const folhas = _execFolhas();
+  const trav = !!window._execSessaoConcluida;
+  if (trav && !folhas.length) return '';
+  const papel = folhas.length > 0;
+  const itens = folhas.map(f => `
+    <div class="exec-folha-arq">
+      <span class="ic">${/pdf/.test(f.tipo_mime || '') ? 'PDF' : 'FOTO'}</span>
+      <div class="nm" onclick="abrirFolhaPapel('${f.id}')"><b>${escapeHtml(f.nome_original || 'folha')}</b><small>${_folhaTamanho(f.tamanho)}${f._pendente ? ' · aguardando conexão' : f.enviado_em ? ' · anexada ' + formatarDataHora(f.enviado_em) : ''}</small></div>
+      ${trav ? '' : `<button type="button" class="exec-folha-x" aria-label="Tirar esta página" onclick="removerFolhaPapel('${f.id}')">✕</button>`}
+    </div>`).join('');
+  const inputs = `<input type="file" id="execFolhaCam" accept="image/*" capture="environment" style="display:none" onchange="anexarFolhaPapel(this)">
+    <input type="file" id="execFolhaArq" accept="image/jpeg,image/png,image/webp,application/pdf" multiple style="display:none" onchange="anexarFolhaPapel(this)">`;
+  return `<div class="exec-folha${papel ? ' papel' : ''}">
+    <div class="exec-folha-t">Folha assinada em papel</div>
+    ${papel
+      ? `<div class="exec-folha-ok"><b>Modo papel</b> · a assinatura no celular não é necessária neste encontro. Confira pela folha quem esteve presente.</div>${itens}`
+      : `<div class="exec-folha-dica">Vai coletar as assinaturas com caneta? Baixe a folha, colha as assinaturas e anexe aqui (foto ou PDF). Com a folha anexada, não é preciso assinar no celular.</div>`}
+    ${trav ? '' : `${inputs}<div class="exec-folha-bts">
+      ${!papel && (window._execParticipantes || []).length ? `<button type="button" class="btn btn-outline btn-sm" onclick="baixarFolhaColeta()">Baixar folha de coleta</button>` : ''}
+      <button type="button" class="btn ${papel ? 'btn-outline' : 'btn-amber'} btn-sm" onclick="_execContainer().querySelector('#execFolhaCam')?.click()">${papel ? '+ Foto de outra página' : 'Tirar foto da folha'}</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="_execContainer().querySelector('#execFolhaArq')?.click()">${papel ? '+ Arquivo' : 'Anexar arquivo'}</button>
+    </div>`}
+  </div>`;
+}
+function _execSubPresTexto(aval) {
+  if (_execModoPapel()) return aval ? 'Folha anexada: desmarque quem faltou e registre o resultado da avaliação de cada aluno.' : 'Folha anexada: todos entram como presentes. Desmarque quem faltou, conferindo pela folha.';
+  return aval ? 'Colete a assinatura e registre o resultado da avaliação de cada aluno.' : 'Toque em "Assinar" para coletar a assinatura de cada aluno.';
+}
+function _execRenderPainelFolha() {
+  // A tela existe duas vezes (celular e computador): atualiza as duas.
+  document.querySelectorAll('#painelFolhaPapel').forEach(el => { el.innerHTML = _htmlPainelFolha(); });
+  document.querySelectorAll('.exec-sub-pres').forEach(el => { el.textContent = _execSubPresTexto(el.dataset.aval === '1'); });
+}
+
+async function _enviarFolhaPapel(reg) {
+  const { error: upErr } = await sb.storage.from('folhas-presenca').upload(reg.path, reg.blob, { upsert: true, contentType: reg.contentType });
+  if (upErr) throw upErr;
+  const { data, error } = await sb.from('sessao_folhas_papel').insert({
+    org_id: reg.orgId, turma_id: reg.turmaId, sessao_id: reg.sessaoId, arquivo_path: reg.path,
+    nome_original: reg.nomeOriginal || null, tipo_mime: reg.contentType, tamanho: reg.tamanho || null,
+  }).select('id,arquivo_path,nome_original,tipo_mime,tamanho,enviado_em').single();
+  if (error) throw error;
+  return data;
+}
+
+async function anexarFolhaPapel(input) {
+  const arquivos = [...(input?.files || [])];
+  if (input) input.value = '';
+  if (!arquivos.length) return;
+  const turmaId = window._execTurmaId, sessaoId = window._execSessaoId;
+  if (!turmaId || !sessaoId) { showToast('Encontro não encontrado — reabra a execução.', 'error'); return; }
+  if (window._execSessaoConcluida) { showToast('Este encontro já foi finalizado.', 'error'); return; }
+  if (_execFolhas().length + arquivos.length > FOLHA_MAX_ARQUIVOS) { showToast(`A folha pode ter no máximo ${FOLHA_MAX_ARQUIVOS} páginas/arquivos por encontro.`, 'error'); return; }
+  const primeira = !_execFolhas().length;
+  let anexadas = 0, naFila = 0;
+  showLoading('Anexando a folha...');
+  try {
+    for (const original of arquivos) {
+      const ehImg = /^image\//.test(original.type || '');
+      const file = ehImg ? await _comprimirImagemEvidencia(original, 2200, 0.82) : original;
+      const tipo = file.type || original.type || '';
+      if (!FOLHA_TIPOS.includes(tipo)) { showToast(`"${original.name}": formato não aceito. Use foto (JPG ou PNG) ou PDF.`, 'error', 6000); continue; }
+      if (file.size > FOLHA_MAX_BYTES) { showToast(`"${original.name}" passa de 10 MB.`, 'error', 6000); continue; }
+      const ext = tipo === 'application/pdf' ? 'pdf' : tipo === 'image/png' ? 'png' : tipo === 'image/webp' ? 'webp' : 'jpg';
+      const path = `${usuarioAtual.org_id}/${turmaId}/${sessaoId}/${crypto.randomUUID()}.${ext}`;
+      const nomeOriginal = String(original.name || `folha.${ext}`).slice(0, 120);
+      const reg = { tipo: 'folha_papel', turmaId, sessaoId, orgId: usuarioAtual.org_id, path, blob: file, contentType: tipo, nomeOriginal, tamanho: file.size, criado_em: new Date().toISOString() };
+      try {
+        if (!navigator.onLine) throw new Error('__offline__');
+        const row = await _enviarFolhaPapel(reg);
+        window._execFolhasLista = [..._execFolhas(), row];
+        anexadas++;
+      } catch (e) {
+        if (e.message === '__offline__' || _erroDeRede(e)) {
+          const filaId = await _filaAdicionar(reg);
+          window._execFolhasLista = [..._execFolhas(), { id: 'pendente-' + filaId, arquivo_path: path, nome_original: nomeOriginal, tipo_mime: tipo, tamanho: file.size, url_temp: URL.createObjectURL(file), _pendente: true }];
+          naFila++;
+        } else {
+          showToast(traduzErroSupabase(e, `Erro ao anexar "${original.name}"`), 'error', 6000);
+        }
+      }
+    }
+    if (primeira && _execFolhas().length) await _execMarcarTodosPresentesPapel();
+  } finally {
+    hideLoading();
+    _execRenderPainelFolha(); _execRedesenharLista(); _execAtualizarResumoEtapas(); _atualizarBadgeFilaOffline();
+  }
+  if (naFila) showToast('Sem conexão — a folha foi guardada neste aparelho e será enviada quando a internet voltar.', 'info', 6000);
+  else if (anexadas) showToast(primeira ? 'Folha anexada. Todos foram marcados como presentes: desmarque quem faltou.' : 'Página anexada.', 'success', 6000);
+}
+
+async function abrirFolhaPapel(id) {
+  const f = _execFolhas().find(x => String(x.id) === String(id)); if (!f) return;
+  if (f.url_temp) { window.open(f.url_temp, '_blank'); return; }
+  try {
+    const { data, error } = await sb.storage.from('folhas-presenca').createSignedUrl(f.arquivo_path, 600);
+    if (error) throw error;
+    window.open(data.signedUrl, '_blank');
+  } catch (e) { showToast(traduzErroSupabase(e, 'Não foi possível abrir o arquivo'), 'error'); }
+}
+
+async function removerFolhaPapel(id) {
+  const f = _execFolhas().find(x => String(x.id) === String(id)); if (!f) return;
+  const ultima = _execFolhas().length === 1;
+  const ok = await confirmarAcao(ultima
+    ? 'Tirar a folha? Sem ela, este encontro volta para a assinatura no celular e as presenças marcadas pela folha são desfeitas.'
+    : 'Tirar esta página da folha?', 'Tirar', true);
+  if (!ok) return;
+  showLoading('Tirando a folha...');
+  try {
+    if (f._pendente) {
+      try { await _filaRemover(parseInt(String(f.id).replace('pendente-', ''), 10)); } catch (e) {}
+    } else {
+      if (!navigator.onLine) throw new Error('Para tirar uma página já enviada é preciso conexão.');
+      const { error } = await sb.from('sessao_folhas_papel').delete().eq('id', f.id);
+      if (error) throw error;
+      try { await sb.storage.from('folhas-presenca').remove([f.arquivo_path]); } catch (e) {}
+    }
+    window._execFolhasLista = _execFolhas().filter(x => String(x.id) !== String(id));
+    if (!_execFolhas().length) {
+      // Volta ao celular: desfaz as presenças marcadas pela folha (nunca toca em assinatura digital).
+      for (const [colId, pr] of Object.entries(window._execPresencas || {})) {
+        if (pr && pr.forma === 'papel' && !pr.assinatura_path && pr.presente) await _marcarPresencaPapel(colId, false, { silencioso: true, sairDoPapel: true });
+      }
+    }
+    showToast(ultima ? 'Folha retirada. O encontro voltou para a assinatura no celular.' : 'Página retirada.', 'info');
+  } catch (e) {
+    showToast(traduzErroSupabase(e, 'Erro ao tirar a folha'), 'error');
+  } finally {
+    hideLoading();
+    _execRenderPainelFolha(); _execRedesenharLista(); _execAtualizarResumoEtapas(); _atualizarBadgeFilaOffline();
+  }
+}
+
+// Grava a presença marcada pela folha. Nunca mexe em quem assinou no celular.
+async function _gravarPresencaPapel(reg) {
+  const { data: ex, error: selErr } = await sb.from('presencas').select('id,assinatura_path').eq('sessao_id', reg.sessaoId).eq('colaborador_id', reg.colId).maybeSingle();
+  if (selErr) throw selErr;
+  if (ex?.assinatura_path) return;
+  const { error } = ex
+    ? await sb.from('presencas').update({ presente: !!reg.presente, forma: 'papel' }).eq('id', ex.id)
+    : await sb.from('presencas').insert({ sessao_id: reg.sessaoId, turma_id: reg.turmaId, colaborador_id: reg.colId, org_id: reg.orgId, presente: !!reg.presente, forma: 'papel' });
+  if (error) throw error;
+}
+
+async function _marcarPresencaPapel(colId, presente, opts = {}) {
+  const pr = window._execPresencas[colId];
+  if (pr && (pr.assinatura_path || (pr._pendente && pr.forma !== 'papel'))) return;   // assinatura digital manda
+  if (window._execSessaoConcluida) return;
+  if (!opts.sairDoPapel && !_execModoPapel()) return;
+  const reg = { tipo: 'presenca_papel', turmaId: window._execTurmaId, sessaoId: window._execSessaoId, colId, orgId: usuarioAtual.org_id, presente: !!presente, criado_em: new Date().toISOString() };
+  window._execPresencas[colId] = { ...(pr || {}), colaborador_id: colId, presente: !!presente, forma: 'papel', assinatura_path: null };
+  if (!opts.silencioso) { _execRedesenharLista(); _execAtualizarResumoEtapas(); }
+  try {
+    if (!navigator.onLine) throw new Error('__offline__');
+    await _gravarPresencaPapel(reg);
+  } catch (e) {
+    if (e.message === '__offline__' || _erroDeRede(e)) {
+      try { await _filaAdicionar(reg); _atualizarBadgeFilaOffline(); } catch (e2) {}
+    } else {
+      window._execPresencas[colId] = pr;
+      if (!opts.silencioso) { _execRedesenharLista(); _execAtualizarResumoEtapas(); }
+      showToast(traduzErroSupabase(e, 'Erro ao marcar a presença'), 'error');
+    }
+  }
+}
+function _alternarPresencaPapel(colId) {
+  const pr = window._execPresencas[colId];
+  _marcarPresencaPapel(colId, !(pr && pr.presente));
+}
+
+async function _execMarcarTodosPresentesPapel() {
+  const faltam = (window._execParticipantes || []).map(p => p.colaborador_id)
+    .filter(id => { const pr = window._execPresencas[id]; return !(pr && (pr.assinatura_path || pr._pendente || pr.forma === 'papel')); });
+  for (const id of faltam) await _marcarPresencaPapel(id, true, { silencioso: true });
+}
+
+// ---- Folha no PDF da lista de presença ----
+async function _folhasPapelDaSessao(sessaoId) {
+  try {
+    const { data, error } = await sb.from('sessao_folhas_papel').select('id,arquivo_path,nome_original,tipo_mime').eq('sessao_id', sessaoId).order('enviado_em');
+    return error ? [] : (data || []);
+  } catch (e) { return []; }
+}
+async function _garantirPdfLib() {
+  if (!window.PDFLib) await _carregarScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js');
+}
+function _imagemJpegComDimensoes(blob) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0);
+        resolve({ dataUrl: c.toDataURL('image/jpeg', 0.85), w: img.naturalWidth, h: img.naturalHeight });
+      } catch (e) { resolve(null); } finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+// Acrescenta as páginas da folha ao fim do PDF. Fotos entram pelo jsPDF;
+// PDFs anexados são copiados página a página com a pdf-lib. Devolve os
+// bytes finais (Uint8Array) quando houve PDF para juntar, ou null.
+async function _anexarFolhasAoPdf(doc, folhas, W, H, cores) {
+  if (!folhas.length) return null;
+  const pdfs = [];
+  const mg = 14;
+  const imagens = [];
+  for (const f of folhas) {
+    try {
+      const { data: blob, error } = await sb.storage.from('folhas-presenca').download(f.arquivo_path);
+      if (error || !blob) continue;
+      if (/pdf/.test(f.tipo_mime || '') || /\.pdf$/i.test(f.arquivo_path)) pdfs.push(await blob.arrayBuffer());
+      else { const im = await _imagemJpegComDimensoes(blob); if (im) imagens.push(im); }
+    } catch (e) { console.warn('Folha em papel não entrou no PDF:', f.arquivo_path, e?.message || e); }
+  }
+  const total = imagens.length;
+  imagens.forEach((im, i) => {
+    doc.addPage('a4', 'portrait');
+    doc.setFillColor(...cores.fundoCabecalho); doc.rect(mg, mg, W - mg * 2, 12, 'F');
+    doc.setFontSize(9.5); doc.setTextColor(...cores.textoCabecalho); doc.setFont('helvetica', 'bold');
+    doc.text(pdfSafe(`FOLHA DE PRESENCA ASSINADA EM PAPEL${total > 1 ? ` - PAGINA ${i + 1} DE ${total}` : ''}`, 90), mg + 4, mg + 8);
+    const areaW = W - mg * 2, areaH = H - mg * 2 - 18;
+    const r = Math.min(areaW / im.w, areaH / im.h);
+    const w = im.w * r, h = im.h * r;
+    try { doc.addImage(im.dataUrl, 'JPEG', mg + (areaW - w) / 2, mg + 16, w, h); } catch (e) {}
+  });
+  if (!pdfs.length) return null;
+  await _garantirPdfLib();
+  const { PDFDocument } = window.PDFLib;
+  const final = await PDFDocument.load(doc.output('arraybuffer'));
+  for (const bytes of pdfs) {
+    try {
+      const origem = await PDFDocument.load(bytes, { ignoreEncryption: true });
+      const paginas = await final.copyPages(origem, origem.getPageIndices());
+      paginas.forEach(p => final.addPage(p));
+    } catch (e) { console.warn('PDF da folha em papel não pôde ser juntado:', e?.message || e); }
+  }
+  return await final.save();
+}
+function _baixarBytesPdf(bytes, nome) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
+}
+
+// ---- Aviso ao administrador: participante de outra empresa ----
+function _giAbrirAvisosEmpresa() {
+  const lista = window._giAvisosEmpresa || [];
+  if (!lista.length) { showToast('Nenhum aviso em aberto.', 'info'); return; }
+  abrirModal('Participantes de outra empresa', `
+    <div style="font-size:12.5px;color:var(--text-2);margin-bottom:12px;line-height:1.5">O instrutor incluiu na aula pessoas cadastradas em outra empresa. Elas já estão na turma pela empresa da turma. Decida se o cadastro muda de empresa.</div>
+    ${lista.map(a => `<div class="card" style="padding:12px 14px;margin-bottom:10px">
+      <div style="font-size:13.5px;line-height:1.5"><b>${escapeHtml(a.colaborador_nome || '')}</b> entrou na turma${a.curso ? ` de <b>${escapeHtml(a.curso)}</b>` : ''} da <b>${escapeHtml(a.empresa_turma || '')}</b> em ${formatarData(String(a.criado_em || '').slice(0, 10))}. O cadastro está na <b>${escapeHtml(a.empresa_cadastro || '')}</b>.</div>
+      <div style="font-size:12px;color:var(--text-3);margin-top:4px">Incluído por ${escapeHtml(a.criado_por_nome || '—')} · CPF conferido</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-amber btn-sm" onclick="_giResolverAvisoEmpresa('${a.id}','transferir')">Transferir para ${escapeHtml(a.empresa_turma || 'a empresa da turma')}</button>
+        <button class="btn btn-outline btn-sm" onclick="_giResolverAvisoEmpresa('${a.id}','manter')">Manter na ${escapeHtml(a.empresa_cadastro || 'empresa atual')}</button>
+      </div></div>`).join('')}`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`);
+}
+async function _giResolverAvisoEmpresa(id, decisao) {
+  try {
+    const { error } = await sb.rpc('participante_aviso_resolver', { p_id: id, p_decisao: decisao });
+    if (error) throw error;
+    window._giAvisosEmpresa = (window._giAvisosEmpresa || []).filter(a => a.id !== id);
+    showToast(decisao === 'transferir' ? 'Cadastro transferido para a empresa da turma.' : 'Cadastro mantido na empresa atual.', 'success');
+    if (window._giUltimosAvisos) { window._giUltimosAvisos.docs.empresa = window._giAvisosEmpresa.length; _setElBoth('giAvisos', _giAvisosHtml(window._giUltimosAvisos.av, window._giUltimosAvisos.docs)); }
+    if (window._giAvisosEmpresa.length) _giAbrirAvisosEmpresa(); else fecharModal();
+  } catch (e) { showToast(traduzErroSupabase(e, 'Erro ao registrar a decisão'), 'error'); }
+}
+
+// ---- Gerar e enviar documentos em segundo plano ----
+// Antes: tela travada ("Gerando documentos…") até o fim e, depois, mais um
+// clique em "Confirmar envio". Agora o botão "Gerar tudo e enviar por
+// e-mail" já é a confirmação: o GRID gera e envia sozinho, mostrando o
+// andamento num aviso no canto da tela, e a pessoa continua usando o app.
+// Os PDFs são feitos no próprio aparelho, então a aba precisa ficar aberta
+// até o fim (o navegador pergunta antes de fechar).
+function _envioBgAtivo() { return !!window._envioBg; }
+function _envioBgAvisoSair(e) { if (window._envioBg) { e.preventDefault(); e.returnValue = ''; return ''; } }
+function _envioBgChip() {
+  let el = document.getElementById('envioBgChip');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'envioBgChip'; el.className = 'envio-bg-chip';
+    el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function _envioBgMostrar(estado, titulo, texto, acoes = '') {
+  const el = _envioBgChip();
+  el.className = 'envio-bg-chip ' + estado;
+  el.innerHTML = `<div class="ic">${estado === 'rodando' ? '<span class="spin"></span>' : estado === 'ok' ? '✓' : '!'}</div>
+    <div class="tx"><b>${escapeHtml(titulo)}</b><span>${escapeHtml(texto)}</span>${acoes}</div>
+    ${estado === 'rodando' ? '' : `<button type="button" class="x" aria-label="Fechar" onclick="_envioBgFechar()">✕</button>`}`;
+  el.style.display = 'flex';
+}
+function _envioBgFechar() { const el = document.getElementById('envioBgChip'); if (el) el.style.display = 'none'; }
+function _envioBgEtapa(texto) {
+  const bg = window._envioBg; if (!bg) return;
+  bg.etapa = texto;
+  _envioBgMostrar('rodando', `Gerando e enviando · ${bg.nome}`, `${texto} Pode continuar usando o GRID; não feche esta aba até terminar.`);
+}
+function _docsNaTela(turmaId) {
+  return !!document.querySelector(`#mainBody [data-docs-turma="${turmaId}"], #mobileBody [data-docs-turma="${turmaId}"]`);
 }
 
 // ---- Assinatura digital ----
@@ -22748,6 +23236,13 @@ function editarAnotacoes() {
 
 // ---- Finalizar turma ----
 async function finalizarTurma(turmaId) {
+  // v227 (PASSO-76): presença marcada pela folha exige a folha anexada.
+  const _papelMarcado = Object.values(window._execPresencas||{}).some(p => p && p.forma === 'papel' && p.presente && !p.assinatura_path);
+  if (_papelMarcado && !_execFolhas().length) {
+    showToast('Há presença marcada pela folha em papel, mas a folha assinada não foi anexada. Anexe a folha na etapa Presenças antes de finalizar.', 'error', 7000);
+    execIrEtapa(1);
+    return;
+  }
   const total   = window._execParticipantes.length;
   const assinou = Object.values(window._execPresencas).filter(p=>p.assinatura_path||p.presente).length;
   if (total > 0 && assinou === 0) {
@@ -26897,7 +27392,8 @@ function fmtValidadePDF(dtVal) {
 // Agora devolve true/false pra quem chamou poder avisar de verdade.
 async function salvarDocumentoSupabase(pdfDoc, nomeArquivo, tipo, turmaId, colaboradorId, codigoValidacao, sessaoId=null) {
   try {
-    const pdfBytes = pdfDoc.output('arraybuffer');
+    // v227: aceita também os bytes já prontos (lista de presença com a folha em PDF juntada).
+    const pdfBytes = (pdfDoc instanceof Uint8Array || pdfDoc instanceof ArrayBuffer) ? pdfDoc : pdfDoc.output('arraybuffer');
     const blob     = new Blob([pdfBytes], {type:'application/pdf'});
     const orgId    = usuarioAtual.org_id;
     const path     = `${orgId}/${turmaId}/${nomeArquivo}`;
@@ -28329,7 +28825,12 @@ function desenharFichaPresencaAvanteseg(doc, campos, W, H) {
         assinado = true;
       } catch(e){}
     }
-    if (!assinado) {
+    if (!assinado && p.papel) {
+      // v227: assinou na folha em papel (páginas no fim deste PDF).
+      doc.setFont('times','italic'); doc.setFontSize(7.5); doc.setTextColor(90,110,100);
+      doc.text('Assinado em papel (folha anexa)', colSig + 2, y + rowH*0.55);
+      doc.setFont('times','normal');
+    } else if (!assinado) {
       doc.setDrawColor(210,228,218); doc.setLineWidth(0.2);
       doc.line(colSig, y+rowH*0.76, mr-2, y+rowH*0.76);
     }
@@ -29047,7 +29548,9 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
     const apendiceAusentes = !!opts.apendiceAusentes;
 
     const inscritosTodos = t.turma_participantes || [];
-    const _assinouNoDoc  = (colId) => !!presMapGeral[colId]?.assinatura_path;
+    // v227: presença marcada pela folha em papel também entra na lista final.
+    const _papelNoDoc    = (colId) => { const pr = presMapGeral[colId]; return !!(pr && !pr.assinatura_path && pr.presente && pr.forma === 'papel'); };
+    const _assinouNoDoc  = (colId) => !!presMapGeral[colId]?.assinatura_path || _papelNoDoc(colId);
     const ausentesDoc    = inscritosTodos.filter(p => !_assinouNoDoc(p.colaborador_id));
     const participantesDoc = modoLista === 'final'
       ? inscritosTodos.filter(p => _assinouNoDoc(p.colaborador_id))
@@ -29153,6 +29656,7 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
           // entre dias (ver _calcularReaproveitamentosDisponiveis) — usado só
           // pra desenhar o indicador visual "↻" na ficha, nunca muda o dado.
           reaproveitada: !!(pr && pr.assinatura_origem_sessao_id),
+          papel: _papelNoDoc(p.colaborador_id),   // v227
         });
       }
       // 2026-08 (correção de causa raiz): antes este valor era um "8" fixo,
@@ -29356,6 +29860,11 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
         // corretamente com as fontes padrão, saía como símbolo ilegível.
         // Assinatura aparece normalmente; o rastro de auditoria continua
         // só no banco (presencas.reaproveitada_por/em + histórico).
+      } else if (_papelNoDoc(p.colaborador_id)) {
+        // v227: assinou na folha em papel (páginas no fim deste PDF).
+        doc.setFontSize(7); doc.setTextColor(...TEXT2); doc.setFont('helvetica','italic');
+        doc.text('Assinado em papel (folha anexa)', mg+110, y+9);
+        doc.setFont('helvetica','normal');
       }
       y += rowH;
     }
@@ -29410,13 +29919,24 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
         'INSCRITOS SEM ASSINATURA');
     }
 
+    // v227 (PASSO-76): as páginas da folha assinada em papel entram no fim.
+    let _bytesComFolha = null;
+    if (modoLista === 'final') {
+      const _folhasDoc = await _folhasPapelDaSessao(sessaoId);
+      if (_folhasDoc.length) {
+        _bytesComFolha = await _anexarFolhasAoPdf(doc, _folhasDoc, W, H,
+          _isAvanteseg ? {fundoCabecalho:[31,101,71], textoCabecalho:[255,255,255]} : {fundoCabecalho:NAVY, textoCabecalho:[255,255,255]});
+      }
+    }
+
     const nomeT = pdfSafe(t.catalogo?.nome||'Treinamento');
     // 2026-08-16, a pedido do Alisson: o download automatico no dispositivo
     // so acontece quando baixarAoGerar for true (padrao — preserva o botao
     // manual "Baixar PDF" de sempre). gerarTudoEnviarEmail chama esta funcao
     // com baixarAoGerar=false, pois so deve enviar por e-mail, sem baixar.
     const _prefixoArq = modoLista === 'coleta' ? 'folha-coleta' : 'lista-presenca';
-    if (baixarAoGerar) doc.save(`${_prefixoArq}-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`);
+    const _nomeArqLista = `${_prefixoArq}-${(nomeT).replace(/\s+/g,'-').toLowerCase()}-${ag?.data||''}.pdf`;
+    if (baixarAoGerar) { if (_bytesComFolha) _baixarBytesPdf(_bytesComFolha, _nomeArqLista); else doc.save(_nomeArqLista); }
 
     // A folha de coleta é material de apoio — NÃO é o documento oficial da
     // turma e por isso não é gravada em `documentos` (senão apareceria como
@@ -29425,7 +29945,7 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
       showToast('Folha de coleta gerada — use para colher assinaturas no papel. Ela não substitui a lista de presença final.','info',6000);
     } else {
     const codigo = crypto.randomUUID();
-    const salvou = await salvarDocumentoSupabase(doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
+    const salvou = await salvarDocumentoSupabase(_bytesComFolha || doc, `lista-presenca-${turmaId}-${sessaoId}.pdf`, 'lista_presenca', turmaId, null, codigo, sessaoId);
     if (salvou.ok) showToast(`Lista de presença de ${dataAula} gerada — ${totaisLista.assinados} de ${totaisLista.inscritos} com assinatura.`,'success');
     else showToast(`O PDF foi ${baixarAoGerar?'baixado':'gerado'}, mas não foi possível registrar a geração no sistema (${salvou.erro||'motivo desconhecido'}) — a lista pode continuar aparecendo como pendente. Tente gerar de novo.`,'error');
     }
@@ -30815,12 +31335,14 @@ async function renderDocumentosTurma(turmaId) {
             ${_podeLiberarArt ? `<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="liberarEnvioSemArt('${turmaId}')">Liberar envio sem o arquivo da ART</button>` : ''}`
           : destHtml
             + (_artLiberado ? `<div style="font-size:11.5px;color:var(--amber-text);background:var(--amber-l);border-radius:var(--r-md);padding:8px 12px;margin-bottom:10px">Envio liberado sem o arquivo da ART por decisão do Administrador${_artRegistro?.envio_liberado_sem_arquivo_em?` em ${formatarDataHora(_artRegistro.envio_liberado_sem_arquivo_em)}`:''} — registrado no histórico.</div>` : '')
-            + `<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail('${turmaId}')">${btnLabel}</button>` + ultimoEnvio + marcarManual;
+            + (window._envioBg && window._envioBg.turmaId === turmaId
+                ? `<button class="btn btn-navy" style="width:100%" disabled><span class="envio-bg-mini"></span> Gerando e enviando em segundo plano…</button><div style="font-size:11.5px;color:var(--text-3);margin-top:8px;text-align:center">Pode sair desta tela e continuar usando o GRID. Não feche a aba até o aviso de envio concluído.</div>`
+                : `<button class="btn btn-navy" style="width:100%" onclick="gerarTudoEnviarEmail('${turmaId}')">${btnLabel}</button>` + ultimoEnvio + marcarManual);
       }
     }
 
     const htmlEnvio = `
-      <div class="card" style="border:2px solid ${planoAtinge('pro') && todosConcluidos && emailCliente ? 'var(--navy)' : 'var(--border)'};background:rgba(23,37,65,.03)">
+      <div class="card" data-docs-turma="${turmaId}" style="border:2px solid ${planoAtinge('pro') && todosConcluidos && emailCliente ? 'var(--navy)' : 'var(--border)'};background:rgba(23,37,65,.03)">
         <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg> Envio para o cliente</div>
         <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
           Gera automaticamente os documentos pendentes e envia tudo por e-mail para a empresa cliente em uma única ação.
@@ -30871,16 +31393,31 @@ function _abrirDrawerDocumento(which) {
 // ENVIO DE DOCUMENTOS POR E-MAIL
 // ============================================================
 
-// Gera todos os documentos pendentes e envia em lote
+// Gera todos os documentos pendentes e envia em lote.
+// v227: em segundo plano — sem tela travada e sem o segundo clique em
+// "Confirmar envio" (o botão "Gerar tudo e enviar por e-mail" já é a confirmação).
 async function gerarTudoEnviarEmail(turmaId) {
   if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return; }
-  showLoading('Gerando documentos pendentes...');
+  if (window._envioBg) {
+    showToast(window._envioBg.turmaId === turmaId
+      ? 'Os documentos desta turma já estão sendo gerados e enviados. Acompanhe no aviso do canto da tela.'
+      : 'Já há um envio de documentos em andamento. Aguarde terminar para começar outro.', 'info', 6000);
+    return;
+  }
+  window._envioBg = { turmaId, nome: 'turma', etapa: '' };
+  window._envioBgUltimoErro = '';
+  window.addEventListener('beforeunload', _envioBgAvisoSair);
+  _envioBgEtapa('Preparando…');
+  if (_docsNaTela(turmaId)) renderDocumentosTurma(turmaId);   // mostra o botão "Enviando…" (sem esperar)
+  let ok = false, erroMsg = '', destino = '';
   try {
     // Carrega turma completa
     const {data:t, error} = await sb.from('turmas')
       .select('*,clientes(nome,email),catalogo(nome,carga_horaria),sessoes(*,usuarios!instrutor_id(nome)),turma_participantes(*,colaboradores(nome))')
       .eq('id', turmaId).single();
     if (error) throw error;
+    window._envioBg.nome = `${t.catalogo?.nome||'Treinamento'}${t.clientes?.nome ? ' · ' + t.clientes.nome : ''}`;
+    destino = t.clientes?.email || '';
 
     // Não gera nem envia nada (nem o e-mail automático ao cliente) se ainda
     // faltar concluir algum encontro da turma.
@@ -30906,25 +31443,27 @@ async function gerarTudoEnviarEmail(turmaId) {
     const {data:sessoesTurma} = await sb.from('sessoes').select('id,data').eq('turma_id', turmaId).order('data');
     for (const sess of (sessoesTurma||[])) {
       if (!docsMap['lista_presenca'+''+sess.id]) {
-        showLoading(`Gerando lista de presença de ${formatarData(sess.data)}...`);
+        _envioBgEtapa(`Lista de presença de ${formatarData(sess.data)}…`);
         await gerarListaPresenca(turmaId, sess.id, false);
       }
     }
 
     // Gerar certificado coletivo se pendente
     if (!docsMap['certificado_coletivo'+'']) {
-      showLoading('Gerando certificado coletivo...');
+      _envioBgEtapa('Certificado coletivo…');
       await gerarCertificadoColetivo(turmaId, false);
     }
 
     // Gerar certificados individuais pendentes — só para quem tem presença
     // em 100% dos encontros. Quem não é elegível é pulado silenciosamente
     // aqui (o resumo de quem ficou de fora já aparece na tela de documentos).
-    let pulados = 0;
+    let pulados = 0, feitos = 0;
+    const aFazer = participantes.filter(p => elegiveis.has(p.colaborador_id) && !docsMap['certificado_individual'+p.colaborador_id+'']).length;
     for (const p of participantes) {
       if (!elegiveis.has(p.colaborador_id)) { pulados++; continue; }
       if (!docsMap['certificado_individual'+p.colaborador_id+'']) {
-        showLoading(`Gerando certificado de ${escapeHtml(p.colaboradores?.nome||'participante')}...`);
+        feitos++;
+        _envioBgEtapa(`Certificado ${feitos} de ${aFazer}…`);
         await gerarCertificadoIndividual(turmaId, p.colaborador_id, false);
       }
     }
@@ -30933,18 +31472,25 @@ async function gerarTudoEnviarEmail(turmaId) {
       showToast(`${pulados} participante(s) não têm presença em todos os encontros e não receberam certificado.`, 'info', 6000);
     }
 
-    // Agora envia por e-mail (esconde o loading antes, para o modal de
-    // confirmação não ficar sobreposto à tela de "Gerando documentos...")
-    hideLoading();
-    await enviarDocumentosPorEmail(turmaId);
-
-    // Recarrega a tela de documentos para refletir estado atualizado
-    await renderDocumentosTurma(turmaId);
+    _envioBgEtapa(`Enviando o e-mail${destino ? ' para ' + destino : ''}…`);
+    ok = await enviarDocumentosPorEmail(turmaId, { semConfirmar: true });
+    if (!ok) erroMsg = window._envioBgUltimoErro || 'O e-mail não foi enviado.';
   } catch(e) {
     console.error(e);
-    showToast(traduzErroSupabase(e, 'Erro ao gerar/enviar documentos'), 'error');
+    erroMsg = traduzErroSupabase(e, 'Erro ao gerar/enviar documentos');
   } finally {
+    const nome = window._envioBg?.nome || '';
+    window._envioBg = null;
+    window.removeEventListener('beforeunload', _envioBgAvisoSair);
     hideLoading();
+    if (ok) {
+      _envioBgMostrar('ok', 'Documentos enviados', `${nome}${destino ? ' · para ' + destino : ''}.`);
+      setTimeout(() => { const el = document.getElementById('envioBgChip'); if (el && el.classList.contains('ok')) _envioBgFechar(); }, 12000);
+    } else {
+      _envioBgMostrar('erro', 'Documentos não enviados', `${nome ? nome + ': ' : ''}${erroMsg}`,
+        `<button type="button" class="lk" onclick="_envioBgFechar();renderDocumentosTurma('${turmaId}')">Abrir os documentos da turma</button>`);
+    }
+    if (_docsNaTela(turmaId)) { try { await renderDocumentosTurma(turmaId); } catch(e) {} }
   }
 }
 
@@ -31083,10 +31629,11 @@ async function revogarCertificado(turmaId, colaboradorId) {
   } finally { hideLoading(); }
 }
 
-async function enviarDocumentosPorEmail(turmaId) {
-  if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return; }
+async function enviarDocumentosPorEmail(turmaId, opts = {}) {
+  if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return false; }
+  // v227: vindo de "Gerar tudo e enviar", o próprio botão já foi a confirmação.
   // confirm() nao funciona em WebView/mobile — usar modal customizado
-  const confirmado = await new Promise(resolve => {
+  const confirmado = opts.semConfirmar ? true : await new Promise(resolve => {
     abrirModal('Confirmar envio', `
       <div style="text-align:center;padding:8px 0">
         <div style="font-size:40px;margin-bottom:12px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg></div>
@@ -31103,7 +31650,8 @@ async function enviarDocumentosPorEmail(turmaId) {
     window._resolveEnvio = resolve;
   });
   delete window._resolveEnvio;
-  if (!confirmado) return;
+  if (!confirmado) return false;
+  let _enviouOk = false;
   showLoading('Preparando documentos para envio...');
   try {
     const {data:t, error} = await sb.from('turmas')
@@ -31255,11 +31803,15 @@ async function enviarDocumentosPorEmail(turmaId) {
     sb.functions.invoke('enviar-certificados-soc', {body:{turma_id: turmaId}})
       .catch(e => console.warn('enviar-certificados-soc: não foi possível disparar (não afeta o envio já concluído):', e?.message||e));
 
-    await renderDocumentosTurma(turmaId);
+    _enviouOk = true;
+    // v227: em segundo plano, só redesenha se a pessoa ainda estiver nos documentos desta turma.
+    if (!opts.semConfirmar || _docsNaTela(turmaId)) await renderDocumentosTurma(turmaId);
   } catch(e) {
     console.error(e);
-    showToast(traduzErroSupabase(e,'Erro ao enviar documentos'), 'error');
+    window._envioBgUltimoErro = traduzErroSupabase(e,'Erro ao enviar documentos');
+    if (!opts.semConfirmar) showToast(window._envioBgUltimoErro, 'error');
   } finally { hideLoading(); }
+  return _enviouOk;
 }
 
 async function gerarTodosCertificados(turmaId) {
@@ -31465,7 +32017,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '226';
+  var APP_BUILD = '227';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
