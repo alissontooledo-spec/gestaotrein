@@ -376,6 +376,15 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
   const documentos = [...pendEmp, ...String(av.documentos || '').split(/\n|;/).map(t => t.replace(/^\s*[-•*\d.)]+\s*/, '').trim()).filter(Boolean)];
   const conf = Array.isArray(av.funcionarios?.lista) ? av.funcionarios.lista : [];
   const mudancas = conf.filter(p => p.origem === 'empresa' || p.situacao === 'saiu' || p.situacao === 'mudou');
+  /* v223: plano de ação 5W2H (PASSO-74). Avaliação sem plano (antes da v223) usa o resumo antigo. */
+  const ORD_PRI = { imediata: 0, alta: 1, media: 2, baixa: 3 };
+  const PRI = { imediata: ['Imediata', VERM_BG, VERM], alta: ['Alta', [253, 229, 210], [154, 52, 18]], media: ['Média', AMBAR_BG, AMAR_TXT], baixa: ['Baixa', VERDE_BG, VERDE] };
+  const planoAcoes = (Array.isArray(av.plano?.acoes) ? av.plano.acoes : []).slice()
+    .sort((a, b) => (parseInt(String(a.numero).replace(/\D/g, '')) || 0) - (parseInt(String(b.numero).replace(/\D/g, '')) || 0));
+  const temPlanoPdf = planoAcoes.length > 0;
+  const acaoDoRisco = new Map(planoAcoes.filter(a => a.risco_uid).map(a => [a.risco_uid, a]));
+  const ondeAcao = a => a.toda_empresa ? 'Toda a empresa' : `Grupo ${a.ghe || ''}`;
+  const cortarTxt = (t, n) => { const x = String(t ?? '').replace(/\s+/g, ' ').trim(); return x.length <= n ? x : x.slice(0, n - 1).replace(/\s+\S*$/, '') + '...'; };
 
   // "O que a empresa precisa fazer"
   const fazer = [];
@@ -389,7 +398,16 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
   for (const { g, r } of todos) {
     if (stRisco(r) === 'V' && r.medicao?.situacao === 'acima') fazer.push({ t: `${nomeGrupo(g)}: rever ${r.nome}`, d: 'A medição de hoje ficou acima do limite da lei.', prazo: ['imediato', VERM_BG, VERM] });
   }
-  if (treinLista.length) fazer.push({ t: 'Fazer os treinamentos indicados', d: `${plural(treinLista.length, 'treinamento', 'treinamentos')}, listados na última página (quem precisa e por quê).`, prazo: ['até 90 dias', AMBAR_BG, AMAR_TXT] });
+  if (temPlanoPdf) {
+    fazer.length = 0;
+    for (const a of planoAcoes.slice().sort((x, y) => (ORD_PRI[x.prioridade] ?? 9) - (ORD_PRI[y.prioridade] ?? 9))) {
+      const pr = PRI[a.prioridade] || PRI.media;
+      fazer.push({ t: `${a.numero} · ${a.o_que_base || String(a.o_que || '').replace(/\s·\s*A-\d+$/, '')}`,
+        d: `${ondeAcao(a)}${a.risco ? SEP + a.risco : ''}${a.quem ? SEP + 'responsável: ' + a.quem : ''}`,
+        prazo: [`${pr[0]} · até ${dataBrPdf(a.prazo)}`, pr[1], pr[2]] });
+    }
+  }
+  if (treinLista.length && !temPlanoPdf) fazer.push({ t: 'Fazer os treinamentos indicados', d: `${plural(treinLista.length, 'treinamento', 'treinamentos')}, listados na última página (quem precisa e por quê).`, prazo: ['até 90 dias', AMBAR_BG, AMAR_TXT] });
   if (documentos.length) fazer.push({ t: 'Enviar os documentos pedidos na visita', d: `${plural(documentos.length, 'documento', 'documentos')}, listados na última página.`, prazo: ['até 30 dias', VERDE_BG, VERDE] });
   if (mudancas.length) fazer.push({ t: 'Atualizar o cadastro de funcionários', d: `${plural(mudancas.length, 'mudança encontrada', 'mudanças encontradas')} na conferência com a empresa (última página).`, prazo: ['até 30 dias', VERDE_BG, VERDE] });
 
@@ -457,7 +475,7 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
     // contadores
     {
       const qw = (CW - 6) / 3, h = 15;
-      [[nV, 'Sob controle', 'manter como está', 'V'], [nA, 'Atenção', 'melhorar em até 90 dias', 'A'], [nR, 'Ação imediata', 'corrigir antes de continuar', 'R']].forEach(([n, t, d, k], i) => {
+      [[nV, 'Sob controle', 'manter como está', 'V'], [nA, 'Atenção', temPlanoPdf ? 'prazos no plano de ação' : 'melhorar em até 90 dias', 'A'], [nR, 'Ação imediata', 'corrigir antes de continuar', 'R']].forEach(([n, t, d, k], i) => {
         const x = ML + i * (qw + 3), st = ST[k];
         doc.setDrawColor(...LINHA); doc.setLineWidth(0.3); doc.roundedRect(x, y, qw, h, 2, 2, 'S');
         doc.setFillColor(...st.faixa); doc.rect(x, y + 0.4, 1.4, h - 0.8, 'F');
@@ -485,7 +503,7 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
       y += h;
       doc.setDrawColor(238, 241, 246); doc.setLineWidth(0.25); doc.line(ML, y, PW - MR, y);
     });
-    if (fazer.length > MAX) paragrafo(`E mais ${fazer.length - MAX} itens, detalhados nas páginas de cada grupo.`, 8, C2);
+    if (fazer.length > MAX) paragrafo(temPlanoPdf ? `E mais ${fazer.length - MAX} ${fazer.length - MAX === 1 ? 'ação' : 'ações'}, na página Plano de ação.` : `E mais ${fazer.length - MAX} itens, detalhados nas páginas de cada grupo.`, 8, C2);
 
     // resumo por grupo
     h2('Resumo por grupo de trabalhadores', 30);
@@ -651,7 +669,12 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
       } });
     };
     const k = stRisco(r);
-    if (k === 'R' || k === 'A' || util(r.medidas_adm)) {
+    const acR = acaoDoRisco.get(r.uid);
+    if (acR) {
+      const pr = PRI[acR.prioridade] || PRI.media;
+      destaque([{ t: 'O que fazer: ', b: true, c: NAVY }, { t: `${acR.o_que_base || ''}. ` }, { t: `Ação ${acR.numero} do plano de ação`, b: true, c: NAVY },
+        { t: ` · prioridade ${pr[0].toLowerCase()} · até ${dataBrPdf(acR.prazo)}.` }], acR.prioridade === 'imediata' ? VERM_BG : acR.prioridade === 'baixa' ? VERDE_BG : AMBAR_BG);
+    } else if (k === 'R' || k === 'A' || util(r.medidas_adm)) {
       const txt = util(r.medidas_adm) ? r.medidas_adm : util(r.nivel?.acao) ? r.nivel.acao : k === 'R' ? 'Corrigir antes de continuar a atividade.' : 'Reforçar as medidas de controle deste risco no prazo de até 90 dias.';
       destaque([{ t: 'O que fazer: ', b: true, c: NAVY }, { t: txt }], k === 'V' ? VERDE_BG : k === 'R' ? VERM_BG : AMBAR_BG);
     }
@@ -734,10 +757,78 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
     }
   }
 
+  // =================== v223: PLANO DE AÇÃO (5W2H) ===================
+  if (temPlanoPdf) {
+    novaPagina('Plano de ação (5W2H)');
+    paragrafo('Cada ação diz o que fazer, por quê, como, quem, onde, quando e quanto custa, como pede a NR-01 (itens 1.5.5.2.1 e 1.5.5.2.2: medidas, cronograma, acompanhamento e aferição dos resultados). A prioridade vem do nível de risco da matriz.', 8.3, C1);
+    y += 1.5;
+    {
+      const c = { imediata: 0, alta: 0, media: 0, baixa: 0 }; planoAcoes.forEach(a => { if (c[a.prioridade] != null) c[a.prioridade]++; });
+      const qw = (CW - 9) / 4, h = 12.5;
+      garantir(h + 3);
+      ['imediata', 'alta', 'media', 'baixa'].forEach((k, i) => {
+        const x = ML + i * (qw + 3), pr = PRI[k];
+        doc.setDrawColor(...LINHA); doc.setLineWidth(0.3); doc.roundedRect(x, y, qw, h, 2, 2, 'S');
+        doc.setFillColor(...pr[2]); doc.rect(x, y + 0.4, 1.4, h - 0.8, 'F');
+        fonte(15, true, pr[2]); doc.text(S(String(c[k])), x + 5, y + 7);
+        fonte(7.8, false, C1); doc.text(S(pr[0] + (c[k] === 1 ? ' · 1 ação' : '')), x + 5, y + 10.6);
+      });
+      y += h + 3;
+    }
+    const wK = 27, wT = CW - wK - 6, szT = 8.1, hlT = lh(8.1, 1.38);
+    for (const a of planoAcoes) {
+      const pr = PRI[a.prioridade] || PRI.media;
+      const porque = a.origem === 'treinamento'
+        ? (a.trein || []).map(t => `${t.nr ? t.nr + ' ' : ''}${t.nome} (${t.motivo})`).join('; ')
+        : `${a.nivel?.nome ? a.nivel.nome + (a.nivel.p ? ` (probabilidade ${a.nivel.p} x severidade ${a.nivel.s})` : '') + '. ' : ''}${cortarTxt(a.motivo, 260)}`;
+      const como = (a.medidas || []).map((m, i) => `${i + 1}) ${m}`).join(' ');
+      const linhas = [
+        ['Onde', `${ondeAcao(a)}${a.risco ? SEP + a.risco : ''}${a.pessoas ? SEP + plural(a.pessoas, 'pessoa', 'pessoas') : ''}`],
+        ['Por quê', porque],
+        ['Como', cortarTxt(como, 700)],
+        ['Quem · Quanto', `${a.quem || 'a definir pela empresa'}${SEP}${a.quanto != null && a.quanto !== '' ? 'R$ ' + Number(a.quanto).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'a orçar'}`],
+        ['Acompanhamento', cortarTxt(a.acompanhamento, 220)],
+        ['Resultado esperado', cortarTxt(a.afericao, 260)]
+      ].filter(([, t]) => !vazio(t)).map(([k, t]) => [k, quebrar(t, wT, szT)]);
+      const tit = quebrar(`${a.numero} · ${a.o_que_base || ''}`, CW - 58, 9, true);
+      const hCab = Math.max(7, tit.length * lh(9, 1.3) + 3);
+      const hCorpo = linhas.reduce((s0, [, ls]) => s0 + ls.length * hlT + 1.2, 0) + 2;
+      garantir(hCab + Math.min(hCorpo, 40));
+      if (y + hCab + hCorpo > YMAX) quebraContinua();
+      const top = y;
+      doc.setFillColor(...FUNDO); doc.rect(ML, top, CW, hCab, 'F');
+      pilula(pr[0], ML + 2.5, top + (hCab - 4.6) / 2, pr[1], pr[2], 7, 'esquerda');
+      escrever(tit, ML + 22, top + 1.6, 9, true, NAVY, { lh: lh(9, 1.3) });
+      fonte(7.8, true, C1); doc.text(S(`até ${dataBrPdf(a.prazo)}`), PW - MR - 2.5, top + hCab / 2 + 1.2, { align: 'right' });
+      y = top + hCab + 1;
+      for (const [k, ls] of linhas) {
+        escrever([S(k)], ML + 2.5, y, 7.6, true, C2, { lh: hlT });
+        escrever(ls, ML + wK + 3, y, szT, false, NAVY, { lh: hlT });
+        y += ls.length * hlT + 1.2;
+      }
+      y += 1;
+      doc.setDrawColor(...LINHA); doc.setLineWidth(0.3); doc.roundedRect(ML, top, CW, y - top, 1.5, 1.5, 'S');
+      doc.setFillColor(...pr[2]); doc.rect(ML, top + 0.3, 1.2, y - top - 0.6, 'F');
+      y += 2.6;
+    }
+    paragrafo('Situação de cada ação, data de conclusão e resultado são registrados no acompanhamento do plano (GRID e SOC).', 7.6, C2);
+  }
+
   // =================== TREINAMENTOS, PENDÊNCIAS E ASSINATURAS ===================
   novaPagina('Treinamentos, pendências e assinaturas');
-  h2('Treinamentos que a empresa precisa oferecer', 12);
-  if (!treinLista.length) paragrafo('Nenhum treinamento indicado nesta visita.', 8.6, C2);
+  h2(temPlanoPdf ? 'Treinamentos pedidos nesta avaliação' : 'Treinamentos que a empresa precisa oferecer', 12);
+  const acoesTrein = planoAcoes.filter(a => a.origem === 'treinamento' && (a.trein || []).length);
+  if (acoesTrein.length) {
+    const funcoesDe = a => { if (a.toda_empresa) return 'Toda a empresa'; const g = ghes.find(x => x.id === a.ghe_id || x.nome === a.ghe); return `Grupo ${a.ghe}${g && lista(g.funcoes) ? ': ' + lista(g.funcoes) : ''}`; };
+    tabela([{ t: 'Treinamento', w: 0.3 }, { t: 'Quem precisa', w: 0.28 }, { t: 'Por quê', w: 0.24 }, { t: 'Até quando', w: 0.18 }],
+      acoesTrein.flatMap(a => (a.trein || []).map(t => [
+        { t: `${t.nome}${t.nr ? ' (' + t.nr + ')' : ''}`, b: true },
+        `${funcoesDe(a)}${a.pessoas ? SEP + plural(a.pessoas, 'pessoa', 'pessoas') : ''}`,
+        t.motivo || '-',
+        `${dataBrPdf(a.prazo)} · ${(PRI[a.prioridade] || PRI.media)[0].toLowerCase()} (ação ${a.numero})`])),
+      { size: 8.2 });
+    paragrafo('O prazo acompanha o risco mais grave que motivou o treinamento. Carga horária, conteúdo e reciclagem seguem a NR de cada treinamento.', 7.6, C2);
+  } else if (!treinLista.length) paragrafo('Nenhum treinamento indicado nesta visita.', 8.6, C2);
   else tabela([{ t: 'Quem precisa', w: 0.3 }, { t: 'Treinamento', w: 0.45 }, { t: 'Por quê', w: 0.25 }],
     treinLista.map(t => [
       { t: t.grupos.length === ghes.length && ghes.length > 1 ? 'Todos os grupos' : t.grupos.map(n => `Grupo ${n}`).join(', '), b: true },

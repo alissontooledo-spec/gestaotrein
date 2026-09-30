@@ -6,6 +6,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as D from './dados.js';
+import * as P from './plano.js';
 import { I, esc, ico, secTit, nota, topo, dataBr, quando, selo, ligarTela, avisar, confirmar, ponte, btn, acoes, carregarFotos, irPara,
   cabecalhoCelular } from './comum.js';
 import { blocoEsperando, modalPendEmpresa } from './pendencias.js';
@@ -125,6 +126,10 @@ async function telaConcluida(d, cli, tec) {
       ${_progresso ? `<div class="cp-progresso">${esc(_progresso)}</div>` : ''}
       ${!d.av.pdf_path ? nota('A avaliação foi concluída, mas o PDF ainda não foi anexado. Toque em Gerar PDF (precisa de internet).', 'warn') : ''}</div>
     <div class="cp-sec"><div class="cp-sec-tit">GHEs</div>${linhas || '<div class="cp-ajuda">Sem GHE.</div>'}</div>
+    ${D.temPlano() && (D.planoDe(d).acoes || []).length ? (() => { const c = P.contar(D.planoDe(d).acoes);
+      return `<div class="cp-sec"><div class="cp-sec-tit">Plano de ação <span class="dir" style="color:var(--text-3)">${c.total} ${c.total === 1 ? 'ação' : 'ações'}</span></div>
+        <div class="cp-kv"><span>Imediata · Alta · Média · Baixa</span><b>${c.imediata} · ${c.alta} · ${c.media} · ${c.baixa}</b></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${btn('Lançar no SOC e acompanhar', `ir:campo-soc:${_id}`, { cls: 'btn-navy btn-sm' })}${btn('Ver o plano', `ir:campo-plano:${_id}`, { cls: 'btn-ghost btn-sm' })}</div></div>`; })() : ''}
     ${D.listaFuncionarios(d).length ? (() => { const rc = D.resumoConferencia(d); return `<div class="cp-sec"><div class="cp-sec-tit">Funcionários conferidos</div><div class="cp-kv"><span>No SOC</span><b>${rc.soc}</b></div><div class="cp-kv"><span>Saíram · mudaram · incluídos</span><b>${rc.saiu} · ${rc.mudou} · ${rc.incluidos}</b></div><div class="cp-kv"><span>Na empresa</span><b>${rc.naEmpresa}${rc.falta ? ` (${rc.falta} sem conferir)` : ''}</b></div>${btn('Ver lista', `ir:campo-funcionarios:${_id}`, { cls: 'btn-ghost btn-sm' })}</div>`; })() : ''}
     ${D.pendEmpresaAbertas(d).length ? `<div class="cp-sec"><div class="cp-sec-tit">Documentos que a empresa ainda vai enviar</div>${D.pendEmpresaAbertas(d).map(p => `<div class="cp-kv"><span>${esc(p.nome)}${p.detalhe ? ' · ' + esc(p.detalhe) : ''}</span><b>${p.prazo ? 'prometido para ' + esc(D.prazoInfo(p.prazo).txt) : ''}</b></div>`).join('')}<div class="cp-ajuda">Saem no PDF, na página de pendências.</div></div>` : ''}
     ${d.av.observacoes ? `<div class="cp-sec"><div class="cp-sec-tit">Observações</div><div style="font-size:13px;color:var(--text-2);white-space:pre-wrap">${esc(d.av.observacoes)}</div></div>` : ''}
@@ -148,6 +153,7 @@ export async function render(params) {
 
   const editavel = D.podeEditar(d);
   if (editavel) { try { D.normalizarMatriz(_id, (await D.catalogo()).matriz); } catch { /* sem catálogo no aparelho: acerta ao abrir o GHE */ } }   // v222
+  if (editavel && D.temPlano()) { try { await D.atualizarPlano(_id); } catch (e) { console.warn('[campo] plano', e?.message); } }   // v223
   const pend = D.pendencias(d);
   const pronta = !pend.length && d.ghes.length && d.ghes.every(g => D.gheCompleto(g) === 'ok');
   const sitTxt = d.av.situacao === 'cancelada' ? selo('cancelada')
@@ -200,6 +206,8 @@ function quadros(d) {
     ${q(d.ghes.length && gOk === d.ghes.length ? 'ok' : 'az', 'predio', gheTx, gheRot, d.ghes.length === 1 ? `ir:campo-ghe:${_id}~${d.ghes[0].id}` : 'campo:ir-ghes')}
     ${conf ? q(conf.soc && !conf.falta ? 'ok' : 'az', 'pessoas', confTx, 'funcionários conferidos', `ir:campo-funcionarios:${_id}`) : ''}
     ${D.temPendEmpresa() ? q(abertas ? 'al' : 'ci', 'relogio', String(abertas), abertas > 1 ? 'itens esperando da empresa' : 'esperando da empresa', D.podeEditar(d) || abertas ? 'campo:pe-quadro' : '') : ''}
+    ${D.temPlano() ? (() => { const pl = D.planoDe(d), n = (pl.acoes || []).length, rev = !!pl.revisado_em;
+      return q(n && rev ? 'ok' : n ? 'al' : 'ci', 'doc', String(n), n ? (n === 1 ? 'ação no plano' : 'ações no plano') + (rev ? ' · revisado' : ' · revisar') : 'ações no plano', `ir:campo-plano:${_id}`); })() : ''}
     ${q(feitas === nAss ? 'ok' : 'ci', 'pen', `${feitas} de ${nAss}`, nAss === 1 ? 'assinatura' : 'assinaturas', `ir:campo-finalizar:${_id}`)}
   </div>`;
 }

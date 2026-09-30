@@ -34,6 +34,13 @@ export default {
       rota: () => import('./tipos.js') },
     { id: 'campo-matriz', rotulo: 'Matriz de risco', icone: 'clipboard', oculto: true, perfis: ['administrador'], mobile: true,
       rota: () => import('./matriz.js') },
+    /* v223: plano de ação 5W2H para o SOC (PASSO-74). */
+    { id: 'campo-plano', rotulo: 'Plano de ação', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./planotela.js') },
+    { id: 'campo-soc', rotulo: 'Lançar no SOC', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./soc.js') },
+    { id: 'campo-acoes', rotulo: 'Planos de ação', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./acoes.js') },
     /* Catálogo da ficha: só abre de verdade em Modo Suporte (Provedor). */
     { id: 'campo-catalogo', rotulo: 'Catálogo da ficha', icone: 'book', oculto: true, perfis: ['administrador'], mobile: false,
       textoDesktop: 'Editar o catálogo da ficha é trabalho de mesa. No computador esta tela abre direto.',

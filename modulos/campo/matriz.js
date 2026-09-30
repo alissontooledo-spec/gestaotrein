@@ -14,6 +14,7 @@
 import { cliente } from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
 import * as D from './dados.js';
+import * as P from './plano.js';
 import { esc, nota, ligarTela, avisar, confirmar, ponte, btn, secTit, inp, area, seg } from './comum.js';
 
 const sb = () => cliente();
@@ -37,7 +38,10 @@ async function ler() {
   _linhaOrg = linhas.find(x => x.org_id) || null;
   const padrao = linhas.find(x => !x.org_id);
   _temPadrao = !!padrao;
-  return clone((_linhaOrg?.dados?.grade ? _linhaOrg.dados : null) || padrao?.dados || D.MATRIZ_PADRAO);
+  const m = clone((_linhaOrg?.dados?.grade ? _linhaOrg.dados : null) || padrao?.dados || D.MATRIZ_PADRAO);
+  /* v223: prioridade e prazo do plano de ação por nível (padrão: decisão de 29/09). */
+  for (const n of m.niveis || []) { const r = P.regrasDoNivel(m, n.codigo); n.prioridade = r.prioridade; n.prazo_dias = r.prazo_dias; }
+  return m;
 }
 
 export async function render() {
@@ -63,11 +67,13 @@ export async function render() {
       <div class="cp-mz-nv-h"><i style="background:${esc(n.cor || '#D2D7E1')}"></i>${ed ? inp(`nv.${k}.nome`, n.nome, { ph: 'Nome do nível' }) : `<b>${esc(n.nome)}</b>`}</div>
       <label class="cp-lbl">Aceitabilidade</label>${seg(`mz-aceit:${k}`, ACEIT, n.aceitabilidade, { travado: !ed })}
       <label class="cp-lbl" style="margin-top:10px">Ação (sai no PDF quando o técnico não escreve outra)</label>${area(`nv.${k}.acao`, n.acao, { travado: !ed, alto: 60 })}
+      <div class="cp-grid2" style="margin-top:10px"><div><label class="cp-lbl">Prioridade no plano de ação</label>${seg(`mz-prio:${k}`, [['', 'Sem ação'], ...P.PRIORIDADES], n.prioridade || '', { travado: !ed, amb: false })}</div>
+        <div><label class="cp-lbl">Prazo (dias depois da visita)</label>${n.prioridade ? inp(`nv.${k}.prazo_dias`, n.prazo_dias ?? '', { travado: !ed, modo: 'numeric', ph: 'Ex.: 60' }) : '<div class="cp-ajuda">Sem ação: o risco deste nível só entra no plano se a medição passar do limite ou o EPI não for eficaz.</div>'}</div></div>
     </div>`).join('');
   return `
     <div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Avaliação de Campo</div><div class="cp-topo-tit">Matriz de risco</div>
       <div class="cp-topo-sub">${_linhaOrg ? 'Matriz da sua empresa' : 'Padrão do GRID (igual à matriz 5x5 do SOC)'} · o nível sai de Probabilidade × Severidade e define a classificação.</div></div>
-      ${ed ? btn(_mudou ? 'Salvar alterações' : 'Salvo', 'campo:mz-salvar', { cls: 'btn-amber', travado: !_mudou }) : ''}</div>
+      ${ed ? btn(_mudou ? 'Salvar alterações' : 'Salvo', 'campo:mz-salvar', { cls: 'btn-amber' }) : ''}</div>
     ${ed ? '' : nota('Só o administrador altera a matriz.')}
     ${_mudou ? nota('Há alterações ainda não salvas.', 'warn') : ''}
     ${secTit('Nível de risco (toque numa casa para trocar)')}
@@ -83,9 +89,10 @@ export async function render() {
 }
 
 function digitar(chave, valor) {
-  const m = /^nv\.(\d+)\.(nome|acao)$/.exec(chave); if (!m || !_m) return;
+  const m = /^nv\.(\d+)\.(nome|acao|prazo_dias)$/.exec(chave); if (!m || !_m) return;
   const n = _m.niveis[Number(m[1])]; if (!n) return;
-  n[m[2]] = valor;
+  if (m[2] === 'prazo_dias') { const v = parseInt(String(valor).replace(/\D/g, ''), 10); if (!(v >= 1 && v <= 3650)) return; n.prazo_dias = v; }
+  else n[m[2]] = valor;
   if (!_mudou) { _mudou = true; document.querySelectorAll('[data-acao="campo:mz-salvar"]').forEach(b => { b.disabled = false; b.style.opacity = ''; b.textContent = 'Salvar alterações'; b.setAttribute('data-acao', 'campo:mz-salvar'); }); }
 }
 
@@ -108,8 +115,14 @@ export async function acao(nome, valor, redesenhar) {
     if (n && ACEIT.some(([a]) => a === v)) { n.aceitabilidade = v; _mudou = true; }
     redesenhar(); return true;
   }
+  if (nome === 'campo:mz-prio') {
+    const [k, v] = valor.split(':'); const n = _m.niveis[Number(k)];
+    if (n && (v === '' || P.NOME_PRIO[v])) { n.prioridade = v || null; n.prazo_dias = v ? (n.prazo_dias || P.PRAZO_PADRAO[v]) : null; _mudou = true; }
+    redesenhar(); return true;
+  }
   if (nome === 'campo:mz-descartar') { _m = null; redesenhar(); return true; }
   if (nome === 'campo:mz-salvar') {
+    if (!_mudou) { avisar('Nada mudou desde a última gravação.'); return true; }
     if (_m.niveis.some(n => !String(n.nome || '').trim())) { avisar('Todo nível precisa de nome.', 'erro'); return true; }
     const dados = clone(_m);
     const q = _linhaOrg

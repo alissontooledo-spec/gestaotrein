@@ -255,7 +255,7 @@ export async function render() {
       </select>` : ''}
       ${gestor && tecnicos.length > 1 ? `<select class="turmas-filtro-select" data-acao="campo:tec"><option value="">Todos os técnicos</option>${tecnicos.map(([id, nome]) => `<option value="${id}" ${id === _tec ? 'selected' : ''}>${esc(nome)}</option>`).join('')}</select>` : ''}
       ${seg}
-      ${gestor ? `<div class="turmas-filtros-cta">${window.__GRID_PONTE?.modoSuporte?.() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-catalogo">Catálogo da ficha</button>' : ''}${(perfil === 'administrador' || perfil === 'provedor') && D.temPendEmpresa() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-matriz">Matriz de risco</button><button type="button" class="btn btn-outline" data-acao="ir:campo-tipos">Tipos de documento</button>' : ''}<button type="button" class="btn btn-amber" data-acao="ir:agendaequipe">${ico('plus')}Agendar visita</button></div>` : ''}
+      ${gestor ? `<div class="turmas-filtros-cta">${window.__GRID_PONTE?.modoSuporte?.() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-catalogo">Catálogo da ficha</button>' : ''}${(perfil === 'administrador' || perfil === 'provedor') && D.temPendEmpresa() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-matriz">Matriz de risco</button><button type="button" class="btn btn-outline" data-acao="ir:campo-tipos">Tipos de documento</button>' : ''}${D.temPlano() ? '<button type="button" class="btn btn-outline" data-acao="ir:campo-acoes">Planos de ação</button>' : ''}<button type="button" class="btn btn-amber" data-acao="ir:agendaequipe">${ico('plus')}Agendar visita</button></div>` : ''}
     </div>`;
 
   if (!lista.length) return topo + nota(esc(vazioTxt));

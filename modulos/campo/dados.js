@@ -14,6 +14,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as sessao from '../../nucleo/sessao.js';
+import * as P from './plano.js';
 import { cliente as clienteBanco } from '../../nucleo/dados.js';
 
 const sb = () => {
@@ -233,7 +234,7 @@ const SEL_AV_BASE = 'id,org_id,numero,cliente_id,compromisso_id,tecnico_id,data_
 /* Colunas que dependem de um PASSO: se o banco ainda não tem a coluna, o app
    segue como antes — lê sem ela e esconde a parte da tela que a usa.
    v203: funcionarios (PASSO-68) · v222: pendencias_empresa (PASSO-73). */
-const _COLS_OPC = { funcionarios: null, pendencias_empresa: null };   // null = ainda não sabe
+const _COLS_OPC = { funcionarios: null, pendencias_empresa: null, plano: null };   // null = ainda não sabe · v223: plano (PASSO-74)
 const selAv = () => SEL_AV_BASE + Object.entries(_COLS_OPC).filter(([, v]) => v !== false).map(([k]) => ',' + k).join('');
 let SEL_AV = selAv();
 let _temConf = null;   // espelho de _COLS_OPC.funcionarios (nome antigo, usado abaixo)
@@ -255,6 +256,8 @@ async function lerAv(fn) {
 }
 /* v222: o banco já tem a coluna do "O que falta a empresa enviar"? */
 export const temPendEmpresa = () => _COLS_OPC.pendencias_empresa !== false;
+/* v223: o banco já tem o plano de ação (PASSO-74)? */
+export const temPlano = () => _COLS_OPC.plano !== false;
 const SEL_GHE = 'id,avaliacao_id,org_id,ordem,nome,codigo_soc,setores,funcoes,menor18,descricao,ambientes,riscos,treinamentos,edicao,criado_em,atualizado_em';
 const SEL_FOTO = 'id,avaliacao_id,ghe_id,alvo,alvo_uid,legenda,storage_path,largura,altura,tirada_em,criado_em';
 
@@ -516,7 +519,7 @@ export const assinaturaDe = (d, quem) => ({
 /* ══ Envio para o banco ═════════════════════════════════════════════════════ */
 const _enviando = new Map();
 const ehConflito = (e) => /CAMPO_CONFLITO/.test(e?.message || '');
-const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios', 'pendencias_empresa'];
+const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios', 'pendencias_empresa', 'plano'];
 const CAMPOS_GHE = ['ordem', 'nome', 'codigo_soc', 'setores', 'funcoes', 'menor18', 'descricao', 'ambientes', 'riscos', 'treinamentos'];
 
 export function sincronizar(id) {
@@ -582,7 +585,7 @@ async function _sincronizar(id) {
     /* 4. Avaliação */
     if (d.sujo.av || Object.keys(patchArq).length) {
       const patch = { ...patchArq };
-      for (const c of CAMPOS_AV) if (c in d.av && _COLS_OPC[c] !== false) patch[c] = d.av[c] ?? (c === 'pendencias_empresa' ? [] : null);
+      for (const c of CAMPOS_AV) if (c in d.av && _COLS_OPC[c] !== false) patch[c] = d.av[c] ?? (c === 'pendencias_empresa' ? [] : c === 'plano' ? {} : null);
       await gravarAv(d, patch);
       for (const a of d.sujo.arquivos) { delete d.av['_assinatura_' + a.campo + '_local']; delete d.av['_assinatura_' + a.campo + '_local_em']; }
       d.sujo.arquivos = [];
@@ -893,6 +896,68 @@ export function pessoasAtuais(d) {
   return l.filter(p => p.situacao !== 'saiu').map(p => p.situacao === 'mudou'
     ? { setor: p.novo_setor || p.setor, funcao: p.nova_funcao || p.funcao }
     : { setor: p.setor, funcao: p.funcao });
+}
+
+/* ══ v223: plano de ação 5W2H para o SOC (PASSO-74) ═══════════════════════
+   O plano mora na avaliação (av.plano) enquanto ela está aberta — funciona
+   sem internet e trava junto quando a avaliação é concluída. Na conclusão o
+   banco cria uma linha por ação em campo_acoes, onde o operador marca
+   "lançada no SOC" e acompanha a situação. Regras em plano.js.          */
+export const planoDe = (d) => (d?.av?.plano && typeof d.av.plano === 'object' ? d.av.plano : {});
+export async function contextoPlano(d) {
+  const cat = await catalogo();
+  const usus = await usuariosPorId([d.av.tecnico_id]).catch(() => ({}));
+  return P.contexto(d, cat, { tecnico: usus?.[d.av.tecnico_id]?.nome || '' });
+}
+/* Recalcula as sugestões e mescla com o que o técnico já mexeu. Grava só se mudou. */
+export async function atualizarPlano(id) {
+  const d = _docs.get(id); if (!d) return null;
+  const ctx = await contextoPlano(d);
+  const { itens, semNivel } = P.sugerir(d, ctx);
+  if (!podeEditar(d) || !temPlano()) return { plano: planoDe(d), semNivel, ctx, mudou: false };
+  const { plano, mudou } = P.mesclar(planoDe(d), itens, ctx);
+  if (mudou) alterarAv(id, { plano });
+  return { plano: mudou ? plano : planoDe(d), semNivel, ctx, mudou };
+}
+/* Altera o plano (fn recebe uma cópia). Qualquer mudança pede nova revisão do técnico. */
+export function alterarPlano(id, fn, { manterRevisado = false } = {}) {
+  const d = _docs.get(id); if (!d || !podeEditar(d) || !temPlano()) return null;
+  const pl = JSON.parse(JSON.stringify(planoDe(d)));
+  pl.acoes = pl.acoes || [];
+  const r = fn(pl);
+  if (!manterRevisado) { delete pl.revisado_em; delete pl.revisado_por; }
+  alterarAv(id, { plano: pl });
+  return r;
+}
+export function marcarPlanoRevisado(id) {
+  return alterarPlano(id, (pl) => { pl.revisado_em = new Date().toISOString(); pl.revisado_por = sessao.usuario()?.id || null; }, { manterRevisado: true });
+}
+export const planoRevisado = (d) => !!planoDe(d).revisado_em;
+
+/* Ações já lançadas (depois da conclusão). */
+let _temAcoes = null;
+export const temTabelaAcoes = () => _temAcoes !== false;
+const semTabela = (e) => /campo_acoes|relation .* does not exist|42P01|schema cache/i.test(String(e?.message || '') + String(e?.code || ''));
+export async function listarAcoes({ grupoId = null, clienteId = null } = {}) {
+  if (!online()) throw new Error('Para ver o plano de ação lançado é preciso internet.');
+  const tudo = [];
+  for (let de = 0; ; de += 1000) {
+    let q = sb().from('campo_acoes').select('*');
+    if (grupoId) q = q.eq('grupo_id', grupoId);
+    if (clienteId) q = q.eq('cliente_id', clienteId);
+    const { data, error } = await q.order('prazo', { ascending: true, nullsFirst: false }).order('numero').range(de, de + 999);
+    if (error) { if (semTabela(error)) { _temAcoes = false; return []; } throw error; }
+    _temAcoes = true;
+    tudo.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return tudo;
+}
+export async function gravarAcao(a, patch) {
+  const { data, error } = await sb().from('campo_acoes').update({ ...patch, edicao: a.edicao }).eq('id', a.id).select('*').maybeSingle();
+  if (error) throw new Error(ehConflito(error) ? 'Outra pessoa alterou esta ação agora há pouco. A tela foi recarregada; confira e faça de novo.' : traduzirErro(error));
+  if (!data) throw new Error('Nada foi gravado (sem permissão para alterar o plano de ação).');
+  return data;
 }
 
 /* Envia tudo que estiver pendente quando a internet voltar. */

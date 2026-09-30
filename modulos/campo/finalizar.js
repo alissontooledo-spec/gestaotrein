@@ -31,6 +31,11 @@ export async function render(params) {
   const cli = clis[d.av.cliente_id], tec = usus[d.av.tecnico_id];
   cabecalhoCelular(d, cli, 'Assinaturas e conclusão');
   const trav = !D.podeEditar(d);
+  /* v223: o plano de ação precisa estar revisado para concluir (o banco também confere, PASSO-74). */
+  if (!trav && D.temPlano()) { try { await D.atualizarPlano(_id); } catch (e) { console.warn('[campo] plano', e?.message); } }
+  const plano = D.temPlano() ? D.planoDe(d) : {};
+  const nPlano = (plano.acoes || []).length;
+  const planoOk = !D.temPlano() || !nPlano || !!plano.revisado_em;
   const esperando = D.temPendEmpresa() ? D.pendEmpresaAbertas(d) : [];
 
   const semTec = D.faltas(d, { semAssinaturaTec: true }).filter(f => !f.assinatura);
@@ -53,6 +58,7 @@ export async function render(params) {
   return `${topo(d, cli, { rotulo: 'Finalizar avaliação', sub: `${dataBr(d.av.data_visita)} · ${tec?.nome || ''}` })}
     <div class="cp-sec"><div class="cp-sec-tit">Situação</div>
       ${linhasGhe || chk('Nenhum GHE cadastrado', 'al', 'Falta', 'var(--warn-text)', `ir:campo-avaliacao:${_id}`)}
+      ${D.temPlano() ? chk(`Plano de ação · ${nPlano} ${nPlano === 1 ? 'ação' : 'ações'}`, planoOk ? 'ok' : 'al', !nPlano ? 'Nenhuma ação' : planoOk ? 'Revisado' : 'Revisar', planoOk ? 'var(--green-text)' : 'var(--warn-text)', `ir:campo-plano:${_id}`) : ''}
       ${chk('Registro profissional do técnico', temRegistro ? 'ok' : 'al', temRegistro ? esc(`${tec.sigla_conselho} ${tec.conselho_classe}${tec.uf_registro ? '/' + tec.uf_registro : ''}`) : 'Não cadastrado', temRegistro ? 'var(--green-text)' : 'var(--warn-text)')}
       ${!temRegistro ? nota('O registro (conselho e número) do técnico sai no documento. Peça ao administrador para preencher em Equipe.', 'warn') : ''}
       ${D.pendencias(d).length ? nota('Pode colher a assinatura do acompanhante agora. Você conclui a avaliação quando as pendências forem resolvidas.', 'warn') : ''}
@@ -75,11 +81,12 @@ export async function render(params) {
       <div class="cp-assin"><div class="cp-assin-quem">Técnico responsável ${aTec.path ? '<span class="badge badge-green">Assinada</span>' : '<span class="badge badge-gray">Ao concluir</span>'}</div>
         <div class="cp-assin-nome">${esc(tec?.nome || '')}</div><div class="cp-assin-sub">${esc(registroTec(tec))}</div>
         ${areaAssin('tec', aTec, !trav && !semTec.length, 'Tocar para assinar', 'Libera quando não faltar mais nada')}</div></div></div>
+    ${!planoOk && !trav ? nota(`Falta revisar o plano de ação. ${btn('Abrir o plano', `ir:campo-plano:${_id}`, { cls: 'btn-navy btn-sm' })}`, 'warn') : ''}
     ${_progresso ? nota(esc(_progresso)) : ''}
     ${!D.online() ? nota('Sem internet agora. Tudo fica guardado neste aparelho; para concluir é preciso conexão.', 'warn') : ''}
     ${!D.podeAcao('concluir_avaliacao') ? nota('Seu perfil de acesso não conclui avaliações. Deixe tudo preenchido e assinado pelo acompanhante; quem tem permissão conclui.', 'warn') : ''}
     ${acoes([btn('Voltar', `ir:campo-avaliacao:${_id}`, { papel: 'cp-a-voltar' }),
-      D.podeAcao('concluir_avaliacao') ? btn(_ocupado ? 'Concluindo…' : 'Concluir avaliação', 'campo:concluir', { cls: 'btn-amber', papel: 'cp-a-prox', travado: trav || _ocupado || todas.length > 0 || !D.online() }) : ''])}`;
+      D.podeAcao('concluir_avaliacao') ? btn(_ocupado ? 'Concluindo…' : 'Concluir avaliação', 'campo:concluir', { cls: 'btn-amber', papel: 'cp-a-prox', travado: trav || _ocupado || todas.length > 0 || !planoOk || !D.online() }) : ''])}`;
 }
 
 export async function depois() {
