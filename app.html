@@ -17999,6 +17999,7 @@ function _compParaBloco(c) {
     data: c.data, hora_inicio: c.hora_inicio, hora_fim: c.hora_fim,
     concluida: false, conflito_autorizado: false,
     tipo: c.tipo, titulo: c.titulo, local: c.local,
+    cliente: c.clientes?.nome || '', // 04/10 (v231): lista do "+N mais" da Semana
   };
 }
 
@@ -18112,15 +18113,23 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
   // partir de "O que você quer agendar?" (tem instrutorId+data no preset).
   // Editando um compromisso já existente (compromissoId setado) o rodapé
   // continua igual — só Cancelar/Salvar, como sempre foi.
-  const podeVoltarComp = !cm && preset.instrutorId && preset.data;
-  const rodapeComp = `${podeVoltarComp ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${preset.instrutorId}','${preset.data}','${preset.horaInicio||''}', ${!!preset.veioDeEscolherInstrutor})">Voltar</button>` : ''}
+  // 04/10 (v231): sem o passo "O que você quer agendar?", Voltar só existe
+  // quando o formulário veio de "Escolha o instrutor" (Mês sem filtro).
+  const podeVoltarComp = !cm && !!preset.veioDeEscolherInstrutor && !!preset.data;
+  window._agAgendamentoVeioDeEscolherInstrutor = !cm && !!preset.veioDeEscolherInstrutor;
+  const rodapeComp = `${podeVoltarComp ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherInstrutorEAgendar('${preset.data}','${preset.horaInicio||''}')">Voltar</button>` : ''}
      <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`;
 
   const instrutorSel = cm?.instrutor_id || preset.instrutorId || '';
   const instOpts = instrutores.map(i => `<option value="${i.id}" ${i.id===instrutorSel?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
-  const tipoSel  = cm?.tipo || 'reuniao';
-  const tipoOpts = COMPROMISSO_TIPOS.filter(t => t.v !== 'visita_campo' || t.v === tipoSel || _modulosAtivos.includes('campo')).map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('');
+  const tipoPreset = _agTiposCompromissoPermitidos().some(t => t.v === preset.tipo) ? preset.tipo : '';
+  const tipoSel  = cm?.tipo || tipoPreset || 'reuniao';
+  // 04/10 (v231): compromisso NOVO ganha "Treinamento (nova turma)" como 1ª
+  // opção do Tipo (troca para o formulário da turma). Editando, nada muda.
+  const tipoOpts = cm
+    ? _agTiposCompromissoPermitidos(tipoSel).map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('')
+    : _agTipoOpcoesHtml(tipoSel);
   const cliOpcoes = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
 
   // 2026-08-22 (pedido do Alisson — revisão de UX/UI): mesmo padrão
@@ -18130,7 +18139,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
   // negócio, não informação que o operador precisa ver. O campo
   // "Informações adicionais" também saiu — Observações já cobre a mesma
   // necessidade, e ter os dois só duplicava a decisão pro operador.
-  abrirModal(cm ? 'Editar compromisso' : 'Novo compromisso', `
+  abrirModal(cm ? 'Editar compromisso' : 'Novo agendamento', `
     <div class="nt-grid">
       <div>
         <div class="nt-sec">
@@ -18139,7 +18148,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
             <div class="nt-title">Compromisso</div>
             <div class="nt-2col">
               <div class="field"><label for="mCompTipo">Tipo *</label>
-                <select id="mCompTipo" onchange="_compAtualizarPreview()" style="${_COMP_INPUT_ST}">${tipoOpts}</select></div>
+                <select id="mCompTipo" onchange="${cm?'_compAtualizarPreview()':`_agTipoAgendamentoTrocou(this.value,'comp')`}" style="${_COMP_INPUT_ST}">${tipoOpts}</select></div>
               <div class="field"><label for="mCompInstrutor">Instrutor *</label>
                 <select id="mCompInstrutor" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}">
                   <option value="">Selecione o instrutor...</option>${instOpts}</select></div>
@@ -18147,7 +18156,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
             <div class="field"><label for="mCompTitulo">Título *</label>
               <input type="text" id="mCompTitulo" maxlength="120" oninput="_compAtualizarPreview()" value="${escapeHtml(cm?.titulo||'')}" placeholder="Ex.: Palestra de abertura da SIPAT" style="${_COMP_INPUT_ST}"></div>
             <div class="field" style="margin-bottom:0">${_socRotuloCliente('Cliente *','mCompCliente')}
-              ${_comboBuscavelHtml('mCompCliente', 'Buscar cliente por nome...', cliOpcoes, cm?.empresa_id||'')}</div>
+              ${_comboBuscavelHtml('mCompCliente', 'Buscar cliente por nome...', cliOpcoes, cm?.empresa_id||preset.cliente||'')}</div>
           </div>
         </div>
 
@@ -18161,7 +18170,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
               <div class="field"><label>Início *</label>
                 <input type="time" id="mCompIni" value="${cm?.hora_inicio?.slice(0,5)||preset.horaInicio||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
               <div class="field" style="margin-bottom:0"><label>Término *</label>
-                <input type="time" id="mCompFim" value="${cm?.hora_fim?.slice(0,5)||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
+                <input type="time" id="mCompFim" value="${cm?.hora_fim?.slice(0,5)||preset.horaFim||''}" onchange="_compVerificarConflito();_compAtualizarPreview()" style="${_COMP_INPUT_ST}"></div>
             </div>
             <div id="mCompConflito"></div>
           </div>
@@ -18176,11 +18185,11 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
                 <label style="margin:0">Endereço</label>
                 <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--amber-h);border:1px solid var(--border)" onclick="_compPreencherLocalComCliente()"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Usar endereço do cliente</button>
               </div>
-              <textarea id="mCompLocal" rows="2" oninput="_compAtualizarPreview()" placeholder="Endereço completo onde o compromisso será realizado" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.local||'')}</textarea>
+              <textarea id="mCompLocal" rows="2" oninput="_compAtualizarPreview()" placeholder="Endereço completo onde o compromisso será realizado" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.local||preset.local||'')}</textarea>
               <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do compromisso — pode ser diferente do endereço cadastrado do cliente.</div>
             </div>
             <div class="field" style="margin-bottom:0"><label for="mCompObs">Observações *</label>
-              <textarea id="mCompObs" rows="2" maxlength="2000" placeholder="Orientações para o instrutor" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.observacoes||'')}</textarea></div>
+              <textarea id="mCompObs" rows="2" maxlength="2000" placeholder="Orientações para o instrutor" style="${_COMP_INPUT_ST};resize:vertical">${escapeHtml(cm?.observacoes||preset.obs||'')}</textarea></div>
           </div>
         </div>
       </div>
@@ -18190,6 +18199,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
     true);
 
   _comboBuscavelRegistrar('mCompCliente', cliOpcoes, () => { _compAutoPreencherLocal(); _compAtualizarPreview(); });
+  if (!cm && preset.cliente) _compAutoPreencherLocal();
   _compAtualizarPreview();
   if (instrutorSel && (cm?.data || preset.data)) _compVerificarConflito();
 }
@@ -18560,33 +18570,66 @@ function _agEquipeEscolherInstrutorEAgendar(data, horaInicio) {
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`);
 }
 
-// Escolha "Nova turma" x "Novo compromisso" ao clicar num espaco livre da
-// linha do instrutor (visao Dia). Antes o clique abria "Nova turma" direto;
-// alteracao aprovada pelo Alisson em 2026-08-22 (Decisao 4 da proposta).
+// 04/10 (v231, pedido do Alisson): "Nova turma" e "Novo compromisso" viraram
+// uma entrada só. O passo "O que você quer agendar?" saiu: o clique abre
+// direto o formulário do último tipo usado, e o campo Tipo (o mesmo
+// <select> de sempre) traz "Treinamento (nova turma)" como 1ª opção. Trocar
+// o Tipo troca o formulário, levando instrutor, data, horário, cliente,
+// endereço e observações. O nome da função ficou o mesmo porque todos os
+// cliques da Agenda (Dia, Semana, Mês, nome do instrutor) já passam por aqui.
+// A criação da turma continua 100% em _agEquipeAbrirCriacaoRapida /
+// _agRapidaSalvarTurmaEAgendamento; abrirModalTurma (tela Turmas) não muda.
+const _AG_ULTIMO_TIPO_KEY = 'grid.agenda.ultimoTipo';
+function _agTiposCompromissoPermitidos(tipoAtual) {
+  return COMPROMISSO_TIPOS.filter(t => t.v !== 'visita_campo' || t.v === tipoAtual || _modulosAtivos.includes('campo'));
+}
+function _agUltimoTipoLer() {
+  let v = null;
+  try { v = localStorage.getItem(_AG_ULTIMO_TIPO_KEY); } catch(e) {}
+  if (v === 'turma') return 'turma';
+  if (v && _compPodeGerenciar() && _agTiposCompromissoPermitidos().some(t => t.v === v)) return v;
+  return 'turma';
+}
+function _agUltimoTipoGravar(v) {
+  try { localStorage.setItem(_AG_ULTIMO_TIPO_KEY, v); } catch(e) {}
+}
+// <option>s do campo Tipo nos dois formulários. '__turma' nunca é gravado:
+// escolher essa opção só troca para o formulário da turma.
+function _agTipoOpcoesHtml(tipoSel) {
+  const turma = `<option value="__turma" ${tipoSel==='__turma'?'selected':''}>Treinamento (nova turma)</option>`;
+  if (!_compPodeGerenciar()) return turma;
+  return turma + _agTiposCompromissoPermitidos(tipoSel).map(t => `<option value="${t.v}" ${t.v===tipoSel?'selected':''}>${t.icone} ${t.label}</option>`).join('');
+}
 function _agEquipeEscolherTipoAgendamento(instrutorId, data, horaInicio, veioDeEscolherInstrutor=false) {
-  const inst  = (window._agEquipeInstrutores||[]).find(i => i.id === instrutorId);
-  const quando = `${formatarData(data)}${horaInicio ? ' às ' + horaInicio : ''}`;
-  const cardSt = 'width:100%;text-align:left;border:1.5px solid var(--border);background:var(--surface);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;font-family:inherit;display:block';
-  // 2026-08-22 (ajuste do Alisson — "← Voltar | Cancelar"): só mostra
-  // Voltar quando esse passo veio de "Escolha o instrutor" (fluxo da Mês
-  // sem instrutor pré-selecionado). Nos demais casos (clique direto no
-  // nome/horário de um instrutor já conhecido) não existe etapa anterior
-  // pra voltar — o rodapé continua só com Cancelar, como sempre foi.
-  const rodapeTipo = `${veioDeEscolherInstrutor ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherInstrutorEAgendar('${data}','${horaInicio||''}')">Voltar</button>` : ''}
-     <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>`;
-  abrirModal('O que você quer agendar?', `
-    <div style="font-size:12.5px;color:var(--text-2);margin-bottom:14px">${escapeHtml(quando)}${inst ? ' · ' + escapeHtml(inst.nome) : ''}</div>
-    <div style="display:grid;gap:10px">
-      <button type="button" style="${cardSt}" onclick="fecharModal();_agEquipeAbrirCriacaoRapida('${instrutorId}','${data}','${horaInicio||''}', ${veioDeEscolherInstrutor})">
-        <div style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:3px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7"/></svg> Nova turma</div>
-        <div style="font-size:11.5px;color:var(--text-2);line-height:1.5">Treinamento completo — alunos, presença, evidências e certificados.</div>
-      </button>
-      <button type="button" style="${cardSt}" onclick="fecharModal();abrirModalCompromisso(null,{instrutorId:'${instrutorId}',data:'${data}',horaInicio:'${horaInicio||''}',veioDeEscolherInstrutor:${veioDeEscolherInstrutor}})">
-        <div style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:3px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M5 4h14v12l-5 5H5z"/><path d="M19 16h-5v5M9 9h6M9 13h3"/></svg> Novo compromisso</div>
-        <div style="font-size:11.5px;color:var(--text-2);line-height:1.5">Só reserva o horário — evento, palestra ou reunião. Não gera certificado.</div>
-      </button>
-    </div>`,
-    rodapeTipo);
+  const ult = _agUltimoTipoLer();
+  if (ult !== 'turma') {
+    abrirModalCompromisso(null, {instrutorId, data, horaInicio: horaInicio||'', veioDeEscolherInstrutor: !!veioDeEscolherInstrutor, tipo: ult});
+    return;
+  }
+  _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio||'', !!veioDeEscolherInstrutor);
+}
+// Campo Tipo mudou num dos dois formulários (origem 'comp' ou 'turma').
+function _agTipoAgendamentoTrocou(valor, origem) {
+  const v = id => document.getElementById(id)?.value || '';
+  const veio = !!window._agAgendamentoVeioDeEscolherInstrutor;
+  if (origem === 'comp') {
+    if (valor !== '__turma') { _agUltimoTipoGravar(valor); _compAtualizarPreview(); return; }
+    _agUltimoTipoGravar('turma');
+    const leva = { cliente: v('mCompCliente'), local: v('mCompLocal'), obs: v('mCompObs') };
+    const inst = v('mCompInstrutor'), data = v('mCompData'), ini = v('mCompIni');
+    fecharModal();
+    _agEquipeAbrirCriacaoRapida(inst, data, ini, veio, leva);
+    return;
+  }
+  if (valor === '__turma') return;
+  _agUltimoTipoGravar(valor);
+  const preset = {
+    instrutorId: v('mNtInstrutor'), data: v('mNtData'), horaInicio: v('mNtIni'), horaFim: v('mNtFim'),
+    veioDeEscolherInstrutor: veio, tipo: valor,
+    cliente: v('mNtCli'), local: v('mNtLocal'), obs: v('mNtObs'),
+  };
+  fecharModal();
+  abrirModalCompromisso(null, preset);
 }
 
 // ============================================================
@@ -18988,6 +19031,17 @@ function _agEquipeCelulaSemanaClique(event, data, instrutorId) {
 // instrutor". Em nenhum dos dois casos a visao Mes e trocada.
 function _agEquipeCelulaMesClique(event, dataISO) {
   if (event.target.closest('[data-action]')) return;
+  // 04/10 (v231): o painel "+N mais" fica dentro da célula; clique nele
+  // (título, "Abrir o dia completo") não pode abrir o agendamento.
+  if (event.target.closest('.ag-mes-popover')) return;
+  const sel = window._agEquipeInstrutorSel;
+  if (sel) { _agEquipeEscolherTipoAgendamento(sel, dataISO, null); return; }
+  _agEquipeEscolherInstrutorEAgendar(dataISO);
+}
+
+// "Agendar neste dia" do painel do Mês (v231): mesma regra do clique na
+// célula — com filtro de instrutor vai direto; sem, pergunta o instrutor.
+function _agEquipeAgendarNoDiaMes(dataISO) {
   const sel = window._agEquipeInstrutorSel;
   if (sel) { _agEquipeEscolherTipoAgendamento(sel, dataISO, null); return; }
   _agEquipeEscolherInstrutorEAgendar(dataISO);
@@ -19143,7 +19197,7 @@ function _agEquipeRenderSemana() {
       ].filter(Boolean).join(';');
       const sessoes = (sessoesPorDia[data]||[]).filter(s=>s.instrutor_id===inst.id).sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
       if (!sessoes.length) {
-        return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')" title="Clique para agendar uma turma nova com ${escapeHtml(inst.nome)} neste dia"
+        return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')" title="Clique para agendar com ${escapeHtml(inst.nome)} neste dia"
           style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F0F2F7);display:flex;align-items:center;justify-content:center;${bordaInst}">
           <span style="font-size:11px;color:var(--text-3)">Livre</span>
         </div>`;
@@ -19158,7 +19212,11 @@ function _agEquipeRenderSemana() {
         return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(titulo)}"
           style="background:${cc.bg};color:${cc.cor};border:1px solid ${cc.borda};border-radius:4px;padding:3px 5px;font-size:11px;font-weight:600;margin-bottom:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(horaTxt)} · ${escapeHtml(cliente)}</div>`;
       }).join('');
-      const extra = sessoes.length>MAX_VISIVEL ? `<div style="font-size:11px;color:var(--text-3);text-align:center">+${sessoes.length-MAX_VISIVEL}</div>` : '';
+      // 04/10 (v231, pedido do Alisson): o "+N" era só texto e o clique caía
+      // na célula, abrindo o agendamento. Agora abre a lista do dia desse
+      // instrutor (mesmo padrão do "+N mais" da visão Mês).
+      const popSemAberto = window._agEquipeSemPopover && window._agEquipeSemPopover.data===data && window._agEquipeSemPopover.inst===inst.id;
+      const extra = sessoes.length>MAX_VISIVEL ? `<div class="ag-sem-maismais" onclick="_agEquipeTogglePopoverSemana(event,'${data}','${inst.id}')" style="font-size:11px;line-height:1.3;font-weight:700;text-align:center;cursor:pointer;color:var(--amber-h);${popSemAberto?'text-decoration:underline':''}">+${sessoes.length-MAX_VISIVEL} mais</div>` : '';
       return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')"
         style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F0F2F7);overflow:hidden;${bordaInst}">${chips}${extra}</div>`;
     }).join('');
@@ -19257,9 +19315,71 @@ function _agEquipeRenderSemana() {
     </div>`;
   })();
 
-  el.innerHTML = isMobile() ? htmlMobile : html;
-  _setElResponsive('agEquipeTimeline', html, htmlMobile);
+  // 04/10 (v231): painel do "+N mais" (só existe na grade do computador).
+  const htmlComPop = html + _agEquipeHtmlPopoverSemana(sessoesPorDia, corDoInstrutorAg);
+  el.innerHTML = isMobile() ? htmlMobile : htmlComPop;
+  _setElResponsive('agEquipeTimeline', htmlComPop, htmlMobile);
 }
+
+// Painel "+N mais" da visão Semana (04/10, v231). Fica FORA das células
+// (position:fixed, no fim da grade), assim nenhum clique dentro dele cai no
+// onclick da célula. Cada linha usa o mesmo data-action dos chips (o
+// delegate central abre a turma ou o compromisso).
+window._agEquipeSemPopover = null;
+function _agEquipeTogglePopoverSemana(event, data, instId) {
+  event.stopPropagation();
+  const p = window._agEquipeSemPopover;
+  if (p && p.data === data && p.inst === instId) { window._agEquipeSemPopover = null; _agEquipeRenderSemana(); return; }
+  const r = event.currentTarget.getBoundingClientRect();
+  const LARGURA = 260, ALTURA = 260;
+  let left = r.left + r.width/2 - LARGURA/2;
+  left = Math.max(12, Math.min(left, window.innerWidth - LARGURA - 12));
+  const pos = (r.bottom + ALTURA) > window.innerHeight - 12
+    ? { left, bottom: Math.round(window.innerHeight - r.top + 4) }
+    : { left, top: Math.round(r.bottom + 4) };
+  window._agEquipeSemPopover = { data, inst: instId, pos };
+  _agEquipeRenderSemana();
+}
+function _agEquipeFecharPopoverSemana() {
+  if (!window._agEquipeSemPopover) return;
+  window._agEquipeSemPopover = null;
+  if (window._agEquipeVisao === 'semana') _agEquipeRenderSemana();
+}
+function _agEquipeHtmlPopoverSemana(sessoesPorDia, corDoInstrutor) {
+  const p = window._agEquipeSemPopover;
+  if (!p || !p.pos) return '';
+  const inst = (window._agEquipeInstrutores||[]).find(i => i.id === p.inst);
+  const itensDia = (sessoesPorDia[p.data]||[]).filter(s => s.instrutor_id === p.inst).sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
+  if (!inst || !itensDia.length) return '';
+  const dows = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const dow = dows[new Date(p.data+'T12:00:00').getDay()];
+  const totalTxt = `${itensDia.length} ${itensDia.length===1?'agendamento':'agendamentos'}`;
+  const itens = itensDia.map(s => {
+    const vi = _agItemVisual(s);
+    const cc = _agChipCores(s, vi);
+    const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
+    return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(vi.detalhe||'')}" style="display:flex;align-items:center;gap:8px;padding:7px 8px;margin:0 -8px;border-radius:6px;font-size:12.5px;cursor:pointer" onmouseover="this.style.background='var(--gray-50,#F0F2F7)'" onmouseout="this.style.background=''">
+      <span style="width:8px;height:8px;border-radius:2px;background:${cc.bg};border:1px solid ${cc.borda};flex-shrink:0"></span>
+      <b style="color:var(--text-1);width:40px;flex-shrink:0">${escapeHtml(horaTxt)}</b>
+      <span style="color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s._comp && s.cliente ? `${vi.nome} · ${s.cliente}` : (vi.nome||''))}</span>
+    </div>`;
+  }).join('');
+  const pos = p.pos;
+  return `<div class="ag-sem-popover" style="position:fixed;${pos.top!=null?'top:'+pos.top+'px':'bottom:'+pos.bottom+'px'};left:${pos.left}px;z-index:200;width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:12px 14px">
+    <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--text-1)"><span style="width:8px;height:8px;border-radius:50%;background:${corDoInstrutor[inst.id]||'var(--text-3)'};flex-shrink:0"></span>${dow}, ${p.data.slice(8,10)}/${p.data.slice(5,7)} · ${escapeHtml(inst.nome)}</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin:2px 0 8px">${totalTxt}</div>
+    ${itens}
+    <button type="button" class="btn btn-navy btn-sm" data-fecha-pop="1" style="width:100%;margin-top:10px;justify-content:center" onclick="_agEquipeFecharPopoverSemana();_agEquipeEscolherTipoAgendamento('${p.inst}','${p.data}',null)">Agendar neste dia</button>
+  </div>`;
+}
+// Fecha o painel da Semana ao clicar fora dele, ou ao escolher uma linha.
+// setTimeout: deixa o delegate central tratar o data-action antes de redesenhar.
+document.addEventListener('click', (e) => {
+  if (!window._agEquipeSemPopover) return;
+  if (e.target.closest('.ag-sem-maismais')) return;
+  if (e.target.closest('.ag-sem-popover') && !e.target.closest('[data-action]')) return;
+  setTimeout(_agEquipeFecharPopoverSemana, 0);
+});
 
 // Visão Mês: calendário tradicional (Dom–Sáb). Redesenhada em 2026-08-17
 // (pedido do Alisson — a versão anterior só mostrava bolinha+contagem, e
@@ -19359,7 +19479,7 @@ function _agEquipeRenderMes() {
     if (sessoesDia.length > MAX_VISIVEL) {
       const restante = sessoesDia.length - MAX_VISIVEL;
       maisMais = `<div class="ag-mes-maismais" onclick="_agEquipeTogglePopoverMes(event,'${dataISO}')"
-        style="font-size:10.5px;line-height:1.2;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;padding:2px 0;${popoverAberto?'color:var(--amber-h);text-decoration:underline':'color:var(--text-3)'}">+${restante} mais</div>`;
+        style="font-size:10.5px;line-height:1.2;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;padding:2px 0;${popoverAberto?'color:var(--amber-h);text-decoration:underline':'color:var(--amber-h)'}">+${restante} mais</div>`;
     }
 
     // Painel do "+N mais" — position:fixed com coordenadas já calculadas em
@@ -19372,19 +19492,24 @@ function _agEquipeRenderMes() {
         const vi = _agItemVisual(s);
         const cor = s._comp ? COMPROMISSO_COR : (corDoInstrutor[s.instrutor_id] || '#92400E');
         const horaTxt = s.hora_inicio ? s.hora_inicio.slice(0,5) : '?';
-        const cliente = vi.nome;
-        return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;cursor:pointer">
-          <span style="width:6px;height:6px;border-radius:50%;background:${cor};flex-shrink:0"></span>
-          <b style="color:var(--text-1);width:38px;flex-shrink:0">${escapeHtml(horaTxt)}</b>
+        // 04/10 (v231): mesmo desenho da lista do "+N mais" da Semana.
+        const cliente = s._comp && s.cliente ? `${vi.nome} · ${s.cliente}` : vi.nome;
+        return `<div data-action="${vi.acao}" data-id="${vi.alvoId}" title="${escapeHtml(vi.detalhe||'')}" style="display:flex;align-items:center;gap:8px;padding:7px 8px;margin:0 -8px;border-radius:6px;font-size:12.5px;cursor:pointer" onmouseover="this.style.background='var(--gray-50,#F0F2F7)'" onmouseout="this.style.background=''">
+          <span style="width:8px;height:8px;border-radius:50%;background:${cor};flex-shrink:0"></span>
+          <b style="color:var(--text-1);width:40px;flex-shrink:0">${escapeHtml(horaTxt)}</b>
           <span style="color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(cliente)}</span>
         </div>`;
       }).join('');
       const dow = diasSemanaCompleto[new Date(dataISO+'T12:00:00').getDay()];
       const totalTxt = `${sessoesDia.length} ${sessoesDia.length===1?'agendamento':'agendamentos'}`;
-      popoverHtml = `<div class="ag-mes-popover" style="position:fixed;${pos.top!=null?'top:'+pos.top+'px':'bottom:'+pos.bottom+'px'};left:${pos.left}px;z-index:200;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:10px 12px">
-        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${dow}, ${dia} de ${mesesCompleto[mes-1]} · ${totalTxt}</div>
+      // 04/10 (v231): mesmo padrão do painel da Semana (título, total,
+      // lista e "Agendar neste dia"); "Abrir o dia completo" continua.
+      popoverHtml = `<div class="ag-mes-popover" style="position:fixed;${pos.top!=null?'top:'+pos.top+'px':'bottom:'+pos.bottom+'px'};left:${pos.left}px;z-index:200;width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);padding:12px 14px;cursor:default">
+        <div style="font-size:13px;font-weight:700;color:var(--text-1)">${dow}, ${dia} de ${mesesCompleto[mes-1]}</div>
+        <div style="font-size:11.5px;color:var(--text-3);margin:2px 0 8px">${totalTxt}</div>
         ${itens}
-        <div onclick="_agEquipeAbrirDia('${dataISO}')" style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:11px;color:var(--amber-h);font-weight:700;cursor:pointer">Abrir o dia completo</div>
+        <button type="button" class="btn btn-navy btn-sm" style="width:100%;margin-top:10px;justify-content:center" onclick="_agEquipeMesPopoverDia=null;_agEquipeMesPopoverPos=null;_agEquipeRenderMes();_agEquipeAgendarNoDiaMes('${dataISO}')">Agendar neste dia</button>
+        <div onclick="_agEquipeAbrirDia('${dataISO}')" style="margin-top:8px;text-align:center;font-size:12px;color:var(--amber-h);font-weight:700;cursor:pointer">Abrir o dia completo</div>
       </div>`;
     }
 
@@ -19808,7 +19933,7 @@ function _agEquipeCliqueNaLinha(event, instrutorId) {
 // lugar de um clique num ponto exato da linha — pensado pro mobile, onde
 // acertar um X específico numa barra fina é difícil). Nesse caso o campo
 // Hora início nasce vazio e o operador digita.
-async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDeEscolherInstrutor=false) {
+async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDeEscolherInstrutor=false, leva={}) {
   if (!_clientesCache.length) {
     const {data:cd} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = cd||[];
@@ -19817,7 +19942,12 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
     const {data:cg} = await sb.from('catalogo').select('id,nome,carga_horaria').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _catalogoCache = cg||[];
   }
-  if (!_catalogoCache.length) { showToast('Cadastre o catálogo de treinamentos antes de criar turmas','error'); return; }
+  if (!_catalogoCache.length) {
+    showToast('Cadastre o catálogo de treinamentos antes de criar turmas','error');
+    // 04/10 (v231): sem catálogo, cai no compromisso em vez de não abrir nada.
+    if (_compPodeGerenciar()) abrirModalCompromisso(null, {instrutorId, data, horaInicio, veioDeEscolherInstrutor, tipo:'reuniao', cliente: leva.cliente, local: leva.local, obs: leva.obs});
+    return;
+  }
 
   const instrutores = (window._agEquipeInstrutores||[]).length ? window._agEquipeInstrutores : await _carregarInstrutores();
   const cliOpcoes  = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
@@ -19831,8 +19961,10 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
   // criação): Voltar reabre "O que você quer agendar?" com o mesmo
   // instrutor/data/horário, preservando veioDeEscolherInstrutor pra essa
   // tela também saber se deve oferecer Voltar pra "Escolha o instrutor".
-  const podeVoltarNt = !!(instrutorId && data);
-  const rodapeNt = `${podeVoltarNt ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherTipoAgendamento('${instrutorId}','${data}','${horaInicio||''}', ${!!veioDeEscolherInstrutor})">Voltar</button>` : ''}
+  // 04/10 (v231): Voltar só quando veio de "Escolha o instrutor".
+  const podeVoltarNt = !!veioDeEscolherInstrutor && !!data;
+  window._agAgendamentoVeioDeEscolherInstrutor = !!veioDeEscolherInstrutor;
+  const rodapeNt = `${podeVoltarNt ? `<button class="btn btn-outline" onclick="fecharModal();_agEquipeEscolherInstrutorEAgendar('${data}','${horaInicio||''}')">Voltar</button>` : ''}
      <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="_agRapidaSalvarTurmaEAgendamento()">Criar turma e agendar</button>`;
 
@@ -19845,7 +19977,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
   // Nenhum campo mudou de id — só o layout ao redor deles — então toda a
   // lógica de validação/gravação em _agRapidaSalvarTurmaEAgendamento segue
   // exatamente igual.
-  abrirModal('✨ Nova turma', `
+  abrirModal('Novo agendamento', `
     <div class="nt-grid">
       <div>
         <div style="background:rgba(23,37,65,.04);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-2)">
@@ -19856,8 +19988,10 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
           <div class="nt-ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v16M14 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3"/></svg></div>
           <div class="nt-body">
             <div class="nt-title">Dados da turma</div>
+            <div class="field"><label for="mNtTipo">Tipo *</label>
+              <select id="mNtTipo" onchange="_agTipoAgendamentoTrocou(this.value,'turma')" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">${_agTipoOpcoesHtml('__turma')}</select></div>
             <div class="field">${_socRotuloCliente('Cliente *','mNtCli')}
-              ${_comboBuscavelHtml('mNtCli', 'Buscar cliente por nome...', cliOpcoes, null)}</div>
+              ${_comboBuscavelHtml('mNtCli', 'Buscar cliente por nome...', cliOpcoes, leva.cliente||null)}</div>
             <div class="field" style="margin-bottom:0"><label>Treinamento *</label>
               ${_comboBuscavelHtml('mNtCat', 'Buscar treinamento por nome...', catOpcoes, null)}</div>
           </div>
@@ -19912,7 +20046,7 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
               <div style="font-size:11px;color:var(--text-3);margin-top:4px">Esse endereço aparece para o instrutor no dia do treinamento — pode ser diferente do endereço cadastrado do cliente.</div>
             </div>
             <div class="field" style="margin-bottom:0"><label>Observações</label>
-              <textarea id="mNtObs" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea></div>
+              <textarea id="mNtObs" rows="2" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;resize:vertical;outline:none">${escapeHtml(leva.obs||'')}</textarea></div>
           </div>
         </div>
       </div>
@@ -19925,6 +20059,10 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
   _comboBuscavelRegistrar('mNtCli', cliOpcoes, () => { _agRapidaAutoPreencherLocal(); _agRapidaAtualizarPreview(); });
   _comboBuscavelRegistrar('mNtCat', catOpcoes, () => { _agRapidaCalcularHoraFim(); _agRapidaAtualizarPreview(); });
 
+  // 04/10 (v231): endereço vindo do compromisso (troca de Tipo) ou do cliente.
+  const campoLocal = document.getElementById('mNtLocal');
+  if (campoLocal && leva.local) campoLocal.value = leva.local;
+  else if (leva.cliente) _agRapidaAutoPreencherLocal();
   if (instrutorId && data) _agRapidaVerificarConflito();
   _agRapidaAtualizarPreview();
 }
@@ -32033,7 +32171,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '230';
+  var APP_BUILD = '231';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
