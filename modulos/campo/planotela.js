@@ -58,7 +58,8 @@ export async function render(params) {
 
   /* v225 (engenheiro): a empresa tem AEP (NR-17)? Sem AEP, o plano pede para fazê-la primeiro. */
   const temErgo = d.ghes.some(g => (g.riscos || []).some(x => x.categoria === 'ergonomico' && x.codigo !== '1068'));
-  const blocoAep = temErgo ? `<div class="cp-sec cp-pa-aep"><div class="cp-lbl" style="margin:0 0 8px">A empresa tem Avaliação Ergonômica Preliminar (AEP) registrada?</div>
+  const blocoAep = temErgo && !ed ? `<div class="cp-sec cp-pa-aep"><div class="cp-kv" style="border:0;padding:0"><span>Avaliação Ergonômica Preliminar (AEP) registrada</span><em style="font-style:normal;font-weight:700;color:var(--text-1)">${pl.aep === 'S' ? 'Sim' : pl.aep === 'N' ? 'Não' : 'Não respondido (plano pediu a AEP)'}</em></div></div>`   // v228: travada, só leitura
+    : temErgo ? `<div class="cp-sec cp-pa-aep"><div class="cp-lbl" style="margin:0 0 8px">A empresa tem Avaliação Ergonômica Preliminar (AEP) registrada?</div>
       ${seg('pa-aep', [['S', 'Sim'], ['N', 'Não']], pl.aep, { travado: !ed })}
       <div class="cp-ajuda">${pl.aep === 'S' ? 'As medidas ergonômicas saem da AEP da empresa. Se forem insuficientes, o plano pede a AET.'
         : pl.aep === 'N' ? 'O plano pede primeiro a AEP (NR-17, item 17.3.1). As medidas ergonômicas vêm depois dela.'
@@ -117,9 +118,35 @@ function perguntasEnq(e, ed) {
   if (h && falta) h += `<div class="cp-ajuda">Responda para o plano incluir a ação de toda a empresa.</div>`;
   return h;
 }
+/* Avaliação travada (concluída): só leitura, sem botões apagados nem pedido de resposta. */
+const RESP_TXT = { S: 'Sim', N: 'Não', '?': 'Não sei' };
+function enquadramentoLeitura(e) {
+  const r = e.resp || {};
+  const kv = (rot, val) => `<div class="cp-kv"><span>${esc(rot)}</span><em>${val}</em></div>`;
+  const g = e.grau;
+  const ef = e.efetivo || {};
+  let h = kv('CNAE principal', e.cnae ? `${esc(cnaeBr(e.cnae))}${g.principal ? ` · <span class="cp-enq-gr">${g.principal}</span> ${esc({ 1: 'Leve', 2: 'Médio', 3: 'Alto', 4: 'Altíssimo' }[g.principal])}` : ''}` : 'não informado');
+  h += kv(`Funcionários${ef.fonte ? ' (' + (FONTE_EF[ef.fonte] || 'SOC') + ')' : ''}`, ef.total ?? 'não informado');
+  if (r.preponderante) h += kv('Atividade que ocupa mais trabalhadores', `${esc(cnaeBr(r.preponderante))} · grau ${g.preponderante || '-'}`);
+  if (r.terceiros) h += kv('Contratadas de forma não eventual', r.terceiros === 'S' ? `Sim${r.n_terceiros ? ' · ' + esc(r.n_terceiros) + ' trabalhadores' : ''}` : 'Não');
+  const perg = [];
+  if (e.sesmt.estado === 'obrigatorio') perg.push(['O SESMT está constituído e registrado?', r.sesmt]);
+  if (e.cipa.estado === 'cipa') perg.push(['A CIPA está constituída e com mandato em dia?', r.cipa]);
+  if (e.cipa.estado === 'nomeado') perg.push(['Há representante nomeado neste ano?', r.nomeado]);
+  const resp = perg.filter(([, v]) => v).map(([q, v]) => kv(q, RESP_TXT[v] || v)).join('');
+  const semResp = perg.length && !perg.some(([, v]) => v);
+  return `<div class="cp-sec cp-enq"><div class="cp-lbl" style="margin:0 0 8px">Enquadramento da empresa · SESMT e CIPA</div>
+      ${h}
+      <div class="cp-lbl" style="margin:14px 0 2px">Resultado</div>
+      <div data-cp-enq-res>${resultadoEnq(e)}</div>
+      ${resp ? `<div style="margin-top:10px">${resp}</div>` : ''}
+      ${semResp ? `<div class="cp-ajuda" style="margin-top:8px">Esta avaliação foi concluída sem as respostas do enquadramento. As ações de SESMT e CIPA entram numa nova revisão.</div>` : ''}
+      <div class="cp-ajuda" style="margin-top:8px">Indicativo, pelo Anexo I da NR-04 e o Quadro I da NR-05.</div></div>`;
+}
 function enquadramentoHtml(e, ed) {
   if (!e) return '';
   if (e.sem_cadastro) return `<div class="cp-sec cp-enq"><div class="cp-lbl" style="margin:0 0 8px">Enquadramento da empresa · SESMT e CIPA</div>${resultadoEnq(e)}</div>`;
+  if (!ed) return e.grau?.valor || e.cnae ? enquadramentoLeitura(e) : '';
   const r = e.resp || {};
   const t = !ed;
   const campoNum = (chave, valor, ph) => `<input class="cp-inp cp-enq-num" type="text" inputmode="numeric" data-cp="${chave}" data-cp-enter="${chave}" value="${esc(valor ?? '')}" placeholder="${esc(ph)}"${t ? ' readonly' : ''}>`;
