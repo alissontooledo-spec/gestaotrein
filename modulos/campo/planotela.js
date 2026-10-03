@@ -10,9 +10,11 @@
 
 import * as D from './dados.js';
 import * as P from './plano.js';
+import { cnaeBr, normCnae, LIMITE_SESMT, LIMITE_CIPA } from './enquadramento.js';
+import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
 import { I, esc, nota, ligarTela, avisar, confirmar, ponte, btn, acoes, seg, inp, area, irPara, cabecalhoCelular, topo, rolarTopo } from './comum.js';
 
-let _id = null, _aberta = null, _ctx = null;
+let _id = null, _aberta = null, _ctx = null, _clienteLido = null;
 
 export const PRI_CLS = { imediata: 'p-im', alta: 'p-al', media: 'p-me', baixa: 'p-ba' };
 export const pill = (prio) => `<span class="cp-pri ${PRI_CLS[prio] || ''}">${esc(P.NOME_PRIO[prio] || prio || '')}</span>`;
@@ -28,10 +30,11 @@ export async function render(params) {
   _id = String(params?.id || '').split('~')[0];
   const foco = String(params?.id || '').split('~')[1];
   if (foco) _aberta = foco;
-  ligarTela({ digitar });
+  ligarTela({ digitar, enter: enterEnq });
   if (!_id) return nota('Nenhuma avaliação selecionada.');
   const d = await D.abrir(_id);
-  const [clis] = await Promise.all([D.clientesPorId([d.av.cliente_id])]);
+  const [clis] = await Promise.all([D.clientesPorId([d.av.cliente_id], { fresco: _clienteLido !== _id })]);   // v228: CNAE atualizado ao abrir (enquadramento)
+  _clienteLido = _id;
   const cli = clis[d.av.cliente_id];
   cabecalhoCelular(d, cli, 'Plano de ação');
   if (!D.temPlano()) return nota('O plano de ação precisa do PASSO-74 no banco. Peça ao suporte do GRID.', 'warn');
@@ -60,6 +63,7 @@ export async function render(params) {
       <div class="cp-ajuda">${pl.aep === 'S' ? 'As medidas ergonômicas saem da AEP da empresa. Se forem insuficientes, o plano pede a AET.'
         : pl.aep === 'N' ? 'O plano pede primeiro a AEP (NR-17, item 17.3.1). As medidas ergonômicas vêm depois dela.'
         : 'Sem resposta, o GRID considera que a empresa não tem AEP e pede para fazê-la primeiro.'}</div></div>` : '';
+  const blocoEnq = enquadramentoHtml(_ctx?.enq, ed);
   const cartoes = lista.map(a => cartao(a, ed)).join('') || nota(d.ghes.length
     ? 'Nenhuma ação: todos os riscos avaliados estão no nível Irrelevante e não há treinamento marcado. Se precisar, crie uma ação.'
     : 'Cadastre os GHEs e os riscos primeiro. O plano sai deles.');
@@ -70,6 +74,7 @@ export async function render(params) {
 
   return `${cabec}
     ${blocoAep}
+    ${blocoEnq}
     <div class="cp-sec-t2">Ações <span>${lista.length}</span></div>
     ${cartoes}
     ${ed ? `<button type="button" class="cp-add-ghe" data-acao="campo:pa-nova">${I.plus}Nova ação</button>` : ''}
@@ -78,12 +83,78 @@ export async function render(params) {
       ed && lista.length ? btn(pl.revisado_em ? 'Plano revisado' : 'Revisei o plano', 'campo:pa-revisei', { cls: 'btn-amber', papel: 'cp-a-prox', travado: !!pl.revisado_em || lista.some(a => P.excede(a).por_que || P.excede(a).como) }) : ''])}`;
 }
 
+/* ── v228: enquadramento da empresa (SESMT e CIPA) ───────────────────────── */
+const plur = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+const FONTE_EF = { conferencia: 'SOC, conferidos na visita', soc: 'SOC', informado: 'informado na visita' };
+function resultadoEnq(e) {
+  if (e?.sem_cadastro) return `<div class="cp-enq-res nd"><b>Cadastro da empresa fora deste aparelho</b>Sem internet, o GRID não tem o CNAE desta empresa. O enquadramento aparece quando a conexão voltar; as ações já criadas continuam no plano.</div>`;
+  if (!e?.grau?.valor) return `<div class="cp-enq-res nd"><b>Não foi possível enquadrar</b>${e?.cnae ? `O CNAE ${esc(cnaeBr(e.cnae))} não está no Anexo I da NR-04. Confira o cadastro da empresa.` : 'A empresa não tem CNAE no cadastro. Informe o CNAE principal acima ou complete o cadastro do cliente.'}</div>`;
+  if (e.empregados === null) return `<div class="cp-enq-res nd"><b>Falta o número de funcionários</b>Traga a hierarquia do SOC (Dados do SOC) ou informe o número de empregados acima.</div>`;
+  const g = e.grau.valor, s = e.sesmt, c = e.cipa;
+  const ds = s.dimensionamento;
+  const sesmt = s.estado === 'obrigatorio'
+    ? `<div class="cp-enq-res ok"><b>SESMT: obrigatório</b>${plur(s.base, 'trabalhador', 'trabalhadores')}${e.terceiros ? ` (${e.empregados} + ${e.terceiros} de contratadas)` : ''}, faixa de ${esc(ds.faixa)}, grau ${g}: ${esc(ds.profissionais.map(p => `${p.qtd} ${p.profissional}${p.parcial ? ' (tempo parcial)' : ''}`).join(', '))}. Registrar no gov.br (NR-04, item 4.6.1).</div>`
+    : `<div class="cp-enq-res nd"><b>SESMT: não obrigatório</b>Grau ${g} exige a partir de ${LIMITE_SESMT[g]} trabalhadores${ds?.falta ? `. Faltam ${ds.falta}` : ''}.</div>`;
+  const dc = c.dimensionamento;
+  const cipa = {
+    cipa: () => `<div class="cp-enq-res bl"><b>CIPA: obrigatória, ${plur(dc.efetivos, 'efetivo', 'efetivos')} e ${plur(dc.suplentes, 'suplente', 'suplentes')}</b>Faixa de ${esc(dc.faixa)} empregados (NR-05, Quadro I). Treinamento mínimo: ${c.horas_treinamento} h.</div>`,
+    nomeado: () => `<div class="cp-enq-res am"><b>CIPA: não obrigatória, nomear representante</b>Grau ${g} só tem CIPA a partir de ${LIMITE_CIPA[g]} empregados. Abaixo disso, se não for atendido por SESMT, a organização nomeia um representante entre os empregados, todo ano (NR-05, itens 5.4.13 e 5.4.14). Treinamento: ${c.horas_treinamento} h, pode ser a distância.</div>`,
+    sesmt_faz: () => `<div class="cp-enq-res nd"><b>CIPA: o SESMT faz o papel</b>Fora do Quadro I da NR-05 e atendido por SESMT: o SESMT desempenha as atribuições da CIPA (item 5.4.13.1).</div>`,
+    mei: () => `<div class="cp-enq-res nd"><b>CIPA: MEI dispensado</b>O MEI não precisa nomear representante (NR-05, item 5.4.13.2).</div>`,
+    indefinido: () => `<div class="cp-enq-res nd"><b>CIPA: sem empregados</b>Sem empregados no estabelecimento, não há CIPA nem representante.</div>`
+  }[c.estado]();
+  return sesmt + cipa;
+}
+function perguntasEnq(e, ed) {
+  if (!e?.grau?.valor || e.empregados === null) return '';
+  const r = e.resp || {};
+  const q = (chave, texto, val) => `<div class="cp-lbl" style="margin:12px 0 6px">${texto}</div>${seg('pa-enq-' + chave, P.RESP_ENQ, val, { travado: !ed })}`;
+  let h = '';
+  if (e.sesmt.estado === 'obrigatorio') h += q('sesmt', 'O SESMT está constituído e registrado no gov.br?', r.sesmt);
+  if (e.cipa.estado === 'cipa') h += q('cipa', 'A CIPA está constituída e com mandato em dia?', r.cipa);
+  if (e.cipa.estado === 'nomeado') h += q('nomeado', 'Há representante nomeado neste ano?', r.nomeado);
+  const falta = (e.sesmt.estado === 'obrigatorio' && !r.sesmt) || (e.cipa.estado === 'cipa' && !r.cipa) || (e.cipa.estado === 'nomeado' && !r.nomeado);
+  if (h && falta) h += `<div class="cp-ajuda">Responda para o plano incluir a ação de toda a empresa.</div>`;
+  return h;
+}
+function enquadramentoHtml(e, ed) {
+  if (!e) return '';
+  if (e.sem_cadastro) return `<div class="cp-sec cp-enq"><div class="cp-lbl" style="margin:0 0 8px">Enquadramento da empresa · SESMT e CIPA</div>${resultadoEnq(e)}</div>`;
+  const r = e.resp || {};
+  const t = !ed;
+  const campoNum = (chave, valor, ph) => `<input class="cp-inp cp-enq-num" type="text" inputmode="numeric" data-cp="${chave}" data-cp-enter="${chave}" value="${esc(valor ?? '')}" placeholder="${esc(ph)}"${t ? ' readonly' : ''}>`;
+  const g = e.grau;
+  const linhaCnae = e.cnae_do_cadastro && g.principal
+    ? `<div class="cp-kv"><span>CNAE principal</span><em>${esc(cnaeBr(e.cnae))} · <span class="cp-enq-gr">${g.principal}</span> ${esc({ 1: 'Leve', 2: 'Médio', 3: 'Alto', 4: 'Altíssimo' }[g.principal])}</em></div>`
+    : `<div class="cp-lbl" style="margin:0 0 6px">CNAE principal da empresa (7 números)</div>${campoNum('enq.cnae', r.cnae || '', 'Ex.: 4120400')}${e.cnae && !e.cnae_do_cadastro ? '' : e.cnae ? `<div class="cp-ajuda">O CNAE do cadastro (${esc(cnaeBr(e.cnae))}) não está no Anexo I da NR-04. Confira e informe o correto.</div>` : ''}`;
+  const cands = [{ codigo: e.cnae, gr: g.principal, principal: true }, ...(g.secundarias_maiores || [])].filter(x => x.codigo && x.gr);
+  const prep = (g.secundarias_maiores || []).length || r.preponderante
+    ? `<div class="cp-lbl" style="margin:12px 0 6px">Qual atividade ocupa mais trabalhadores?</div>
+       ${seg('pa-enq-prep', cands.map(x => [x.principal ? '' : normCnae(x.codigo), `${cnaeBr(x.codigo)} · grau ${x.gr}${x.principal ? ' (principal)' : ''}`]), r.preponderante || '', { amb: false, travado: t })}
+       <div class="cp-ajuda">Vale o maior grau entre a atividade principal e a que ocupa mais trabalhadores (NR-04, item 4.5.1).</div>` : '';
+  const ef = e.efetivo || {};
+  const linhaEf = ef.total !== null && ef.fonte !== 'informado'
+    ? `<div class="cp-kv"><span>Funcionários (${FONTE_EF[ef.fonte] || 'SOC'})</span><em>${ef.total}</em></div>`
+    : `<div class="cp-lbl" style="margin:12px 0 6px">Número de empregados no estabelecimento</div>${campoNum('enq.empregados', r.empregados ?? '', ef.fonte === 'informado' ? '' : 'O SOC não trouxe')}`;
+  const unid = (ef.unidades || []).length > 1
+    ? nota(`O SOC tem ${ef.unidades.length} unidades com funcionários (${esc(ef.unidades.map(u => `${u.nome}: ${u.total}`).join('; '))}). O enquadramento é por estabelecimento (CNPJ): se forem CNPJs diferentes, confira cada um.`, 'warn') : '';
+  const ter = `<div class="cp-lbl" style="margin:12px 0 6px">Há trabalhadores de contratadas aqui, de forma não eventual?</div>${seg('pa-enq-ter', [['S', 'Sim'], ['N', 'Não']], r.terceiros, { travado: t })}
+    ${r.terceiros === 'S' ? `<div class="cp-kv" style="margin-top:8px"><span>Trabalhadores das contratadas</span><em>${campoNum('enq.n_terceiros', r.n_terceiros ?? '', '0')}</em></div>` : ''}`;
+  return `<div class="cp-sec cp-enq"><div class="cp-lbl" style="margin:0 0 8px">Enquadramento da empresa · SESMT e CIPA</div>
+      ${linhaCnae}${linhaEf}${unid}${prep}${ter}
+      <div class="cp-lbl" style="margin:14px 0 2px">Resultado</div>
+      <div data-cp-enq-res>${resultadoEnq(e)}</div>
+      ${perguntasEnq(e, ed)}
+      <div class="cp-ajuda" style="margin-top:8px">Indicativo, pelo Anexo I da NR-04 e o Quadro I da NR-05. O técnico confirma.</div></div>`;
+}
+
 function cartao(a, ed) {
   const aberto = a.chave === _aberta;
   const sub = a.origem === 'risco'
     ? `GHE ${a.ghe} · ${a.risco}${a.nivel?.nome ? ' · ' + a.nivel.nome.replace(/^Risco\s+/i, '') + (a.nivel.p ? ` (S${a.nivel.s} · P${a.nivel.p})` : '') : ''}`
     : a.origem === 'treinamento' ? `${a.toda_empresa ? 'Toda a empresa' : 'GHE ' + a.ghe} · ${(a.trein || []).length} treinamento${(a.trein || []).length === 1 ? '' : 's'}${a.pessoas ? ' · ' + a.pessoas + ' pessoas' : ''}`
     : a.origem === 'aep' ? `${a.toda_empresa ? 'Toda a empresa' : 'GHE ' + a.ghe} · Ergonomia (NR-17)`
+    : a.origem === 'obrigacao' ? `Toda a empresa · ${{ sesmt: 'SESMT (NR-04)', cipa: 'CIPA (NR-05)', nomeado: 'Representante nomeado (NR-05)' }[a.obrig] || 'Obrigação da empresa'}${a.recorrencia_meses ? ' · todo ano' : ''}`
     : `${a.ghe ? 'GHE ' + a.ghe : 'Toda a empresa'} · escrita por você`;
   const ex = P.excede(a);
   const avisos = [a.orfa ? 'O risco desta ação saiu da avaliação. Tire do plano ou mantenha.' : '',
@@ -129,6 +200,7 @@ function cartao(a, ed) {
 const CAMPO = { 'pa.o_que_base': 'o_que_base', 'pa.prazo': 'prazo', 'pa.quem': 'quem', 'pa.quanto': 'quanto', 'pa.motivo': 'motivo',
   'pa.meta': 'meta', 'pa.medidas': 'medidas', 'pa.acompanhamento': 'acompanhamento', 'pa.afericao': 'afericao', 'pa.base_legal': 'base_legal' };
 function digitar(chave, valor) {
+  if (String(chave).startsWith('enq.')) { digitarEnq(chave.slice(4), valor); return; }
   const campo = CAMPO[chave]; if (!campo || !_aberta || !_ctx) return;
   let v = valor;
   if (campo === 'medidas') v = String(valor || '').split('\n').map(x => x.trim()).filter(Boolean);
@@ -146,6 +218,21 @@ function digitar(chave, valor) {
   document.querySelectorAll('[data-pa-prev="como"]').forEach(el => { el.textContent = it.como; });
   document.querySelectorAll('[data-acao="campo:pa-revisei"]').forEach(b => { b.textContent = 'Revisei o plano'; });
 }
+
+/* v228: números do enquadramento. Grava enquanto digita e atualiza o resultado; as ações
+   aparecem quando a tela é redesenhada (Enter ou qualquer toque nas perguntas). */
+const ENQ_NUM = { n_terceiros: 6, empregados: 6, cnae: 7 };
+async function digitarEnq(k, valor) {
+  if (!(k in ENQ_NUM) || !_id) return;
+  const dig = String(valor || '').replace(/\D/g, '').slice(0, ENQ_NUM[k]);
+  const v = dig === '' ? null : (k === 'cnae' ? dig : Number(dig));
+  const vv = k === 'cnae' && v && v.length < 7 ? null : v;   // CNAE incompleto não vale (apagar também limpa)
+  D.alterarPlano(_id, pl => { pl.enq = { ...(pl.enq || {}), [k]: vv }; });
+  try { const r = await D.atualizarPlano(_id); _ctx = r?.ctx || _ctx; } catch { return; }
+  document.querySelectorAll('[data-cp-enq-res]').forEach(el => { el.innerHTML = resultadoEnq(_ctx?.enq); });
+  document.querySelectorAll('[data-acao="campo:pa-revisei"]').forEach(b => { b.textContent = 'Revisei o plano'; });
+}
+async function enterEnq(chave, valor) { if (String(chave).startsWith('enq.')) { await digitarEnq(chave.slice(4), valor); redesenharTela(); } }
 
 function pedirTexto(titulo, rotulo, aoSalvar, { ph = '', obrig = true } = {}) {
   const p = ponte();
@@ -173,6 +260,15 @@ export async function acao(nome, valor, redesenhar) {
     case 'campo:pa-aep':
       if (['S', 'N'].includes(valor)) { D.alterarPlano(_id, pl => { pl.aep = pl.aep === valor ? null : valor; }); await D.atualizarPlano(_id); }
       redesenhar(); return true;
+    case 'campo:pa-enq-ter': case 'campo:pa-enq-sesmt': case 'campo:pa-enq-cipa': case 'campo:pa-enq-nomeado': {
+      const k = { 'campo:pa-enq-ter': 'terceiros', 'campo:pa-enq-sesmt': 'sesmt', 'campo:pa-enq-cipa': 'cipa', 'campo:pa-enq-nomeado': 'nomeado' }[nome];
+      const ok = k === 'terceiros' ? ['S', 'N'] : ['S', 'N', '?'];
+      if (ok.includes(valor)) { D.alterarPlano(_id, pl => { const e = { ...(pl.enq || {}) }; e[k] = e[k] === valor ? null : valor; pl.enq = e; }); await D.atualizarPlano(_id); }
+      redesenhar(); return true;
+    }
+    case 'campo:pa-enq-prep':
+      D.alterarPlano(_id, pl => { pl.enq = { ...(pl.enq || {}), preponderante: /^\d{7}$/.test(String(valor)) ? String(valor) : null }; });
+      await D.atualizarPlano(_id); redesenhar(); return true;
     case 'campo:pa-prio': if (P.NOME_PRIO[valor]) mexer(it => P.editar(it, 'prioridade', valor, _ctx)); redesenhar(); return true;
     case 'campo:pa-cat': mexer(it => P.editar(it, 'categoria', it.categoria === valor ? null : valor, _ctx)); redesenhar(); return true;
     case 'campo:pa-rel': mexer(it => { const s = new Set(it.relatorios || []); s.has(valor) ? s.delete(valor) : s.add(valor);
@@ -180,6 +276,10 @@ export async function acao(nome, valor, redesenhar) {
     case 'campo:pa-revisei': {
       const pl = D.planoDe(d);
       if ((pl.acoes || []).some(a => !String(a.o_que_base || '').trim() || !a.prazo)) { avisar('Toda ação precisa de "O quê?" e de prazo.', 'erro'); return true; }
+      if (_ctx?.enq && !_ctx.enq.sem_cadastro) {   // v228: guarda o que entrou no enquadramento
+        const cli = (await D.clientesPorId([d.av.cliente_id]))[d.av.cliente_id];
+        D.alterarPlano(_id, p2 => { p2.enq = { ...(p2.enq || {}), foto: P.fotoEnquadramento(_ctx.enq, cli) }; });
+      }
       D.marcarPlanoRevisado(_id); avisar('Plano revisado. Já dá para concluir a avaliação.'); _aberta = null; redesenharTopo(); return true;
     }
     case 'campo:pa-restaurar':

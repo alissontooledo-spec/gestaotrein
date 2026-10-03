@@ -16,7 +16,14 @@
        365 dias — configurável na Matriz de risco da organização).
      • ação Alta sempre com medida provisória já.
    Módulo sem dependências (roda no navegador e nos testes em node).
+   v228: obrigações da empresa que não dependem de risco (origem 'obrigacao'):
+   SESMT (NR-04) e CIPA ou representante nomeado (NR-05), pelo enquadramento
+   do CNAE + número de funcionários (enquadramento.js). A ação só nasce depois
+   que o técnico responde se a empresa já tem (Sim → manter; Não → constituir;
+   Não sei → verificar). Ações "manter" anuais levam recorrencia_meses = 12.
    ══════════════════════════════════════════════════════════════════════════ */
+
+import { enquadrar, cnaeBr, normCnae, LIMITE_CIPA } from './enquadramento.js';
 
 export const LIMITE = { o_que: 100, texto: 2500, resultado: 500, quem: 300 };
 export const PRIORIDADES = [['imediata', 'Imediata'], ['alta', 'Alta'], ['media', 'Média'], ['baixa', 'Baixa']];
@@ -126,7 +133,7 @@ function nivelPS(matriz, p, s) {
 
 /* ── contexto da avaliação ──────────────────────────────────────────────── */
 /* d = documento da avaliação ({av, ghes}); cat = catálogo; extra = {tecnico}. */
-export function contexto(d, cat, { tecnico = '' } = {}) {
+export function contexto(d, cat, { tecnico = '', cliente = null } = {}) {
   const soc = d.av?.soc || {};
   const unidades = new Map((soc.unidades || []).map(u => [String(u.codigo), u.nome]));
   const socGhe = (g) => (soc.ghes || []).find(x => g.codigo_soc && (String(x.codigo) === String(g.codigo_soc) || x.nome === g.codigo_soc)) || null;
@@ -137,6 +144,7 @@ export function contexto(d, cat, { tecnico = '' } = {}) {
     tecnico,
     matriz: cat?.matriz,
     aep: ['S', 'N'].includes(d.av?.plano?.aep) ? d.av.plano.aep : null,   // v225: a empresa tem AEP (NR-17) registrada?
+    enq: enquadramentoDa(d, cliente),                                      // v228: SESMT e CIPA
     quemPadrao: [d.av?.acompanhante_nome, d.av?.acompanhante_cargo].filter(util).join(' (') + (util(d.av?.acompanhante_cargo) && util(d.av?.acompanhante_nome) ? ')' : ''),
     risco: (cod) => (cat?.risco ? cat.risco(cod) : null),
     treinamento: (cod) => (cat?.treinamento ? cat.treinamento(cod) : null),
@@ -179,6 +187,7 @@ export function sugerir(d, ctx) {
   });
   itens.push(...itensAep(d, ctx, porGhe));
   itens.push(...itensTreinamento(d, ctx, porGhe));
+  itens.push(...itensObrigacao(ctx));
   return { itens, semNivel };
 }
 
@@ -389,6 +398,174 @@ function itensTreinamento(d, ctx, porGhe) {
   return out;
 }
 
+/* ══ v228: enquadramento da empresa (SESMT e CIPA) ═══════════════════════════
+   Respostas do técnico em av.plano.enq (jsonb, sem coluna nova):
+     terceiros 'S'|'N' · n_terceiros · preponderante (CNAE) · cnae (se o cadastro
+     não tem) · empregados (se o SOC não trouxe) · sesmt|cipa|nomeado 'S'|'N'|'?'  */
+export const RESP_ENQ = [['S', 'Sim'], ['N', 'Não'], ['?', 'Não sei']];
+
+/* Efetivo da empresa: a conferência da visita (SOC − saiu + incluídos) ou o total do SOC. */
+export function efetivoDa(d) {
+  const soc = d?.av?.soc || null;
+  const lista = d?.av?.funcionarios?.lista || [];
+  const porUnidade = new Map();
+  for (const h of soc?.hierarquias || []) {
+    const n = Number(h.funcionarios) || 0; if (!n) continue;
+    porUnidade.set(String(h.unidade), (porUnidade.get(String(h.unidade)) || 0) + n);
+  }
+  const nomesU = new Map((soc?.unidades || []).map(u => [String(u.codigo), u.nome]));
+  const unidades = [...porUnidade.entries()].map(([c, n]) => ({ codigo: c, nome: nomesU.get(c) || `Unidade ${c}`, total: n }));
+  const informado = d?.av?.plano?.enq?.empregados;
+  if (informado !== undefined && informado !== null && informado !== '' && Number.isFinite(Number(informado)))
+    return { total: Math.max(0, Math.trunc(Number(informado))), fonte: 'informado', unidades };
+  if (lista.length) {
+    const doSoc = lista.filter(p => p.origem === 'soc');
+    const saiu = doSoc.filter(p => p.situacao === 'saiu').length;
+    const incl = lista.filter(p => p.origem === 'empresa').length;
+    return { total: doSoc.length - saiu + incl, fonte: 'conferencia', unidades, saiu, incluidos: incl };
+  }
+  if (soc && Number.isFinite(Number(soc.total_funcionarios)) && Number(soc.total_funcionarios) > 0)
+    return { total: Number(soc.total_funcionarios), fonte: 'soc', unidades };
+  return { total: null, fonte: null, unidades };
+}
+
+/* Enquadramento com o cadastro do cliente (cnae, cnaes_secundarios, opcao_mei) e as respostas da visita. */
+export function enquadramentoDa(d, cliente) {
+  const r = (d?.av?.plano?.enq && typeof d.av.plano.enq === 'object') ? d.av.plano.enq : {};
+  /* Avaliação concluída: vale a foto do cadastro guardada no "Revisei o plano" (o cadastro pode mudar depois). */
+  const foto = d?.av?.situacao === 'concluida' && r.foto && typeof r.foto === 'object' ? r.foto : null;
+  const cli = foto ? { cnae: foto.cnae, cnaes_secundarios: foto.cnaes_secundarios, opcao_mei: foto.opcao_mei } : cliente;
+  const cnae = normCnae(r.cnae || cli?.cnae || '') || null;
+  const ef = foto && foto.empregados != null ? { ...efetivoDa(d), total: foto.empregados, fonte: foto.fonte || 'soc' } : efetivoDa(d);
+  const nTer = r.terceiros === 'S' ? Math.max(0, Math.trunc(Number(r.n_terceiros) || 0)) : 0;
+  const e = enquadrar({ cnae, cnaesSecundarios: Array.isArray(cli?.cnaes_secundarios) ? cli.cnaes_secundarios : [],
+    preponderante: r.preponderante || null, empregados: ef.total, terceiros: nTer, mei: cli?.opcao_mei === true });
+  return { ...e, cnae, cnae_do_cadastro: !!(cli?.cnae && !r.cnae), cnae_descricao: r.cnae ? '' : (cli?.cnae_descricao || ''), efetivo: ef, resp: r,
+    sem_cadastro: !cliente && !foto };   // cadastro da empresa não está neste aparelho (sem internet)
+}
+/* Foto do que entrou no enquadramento (gravada no "Revisei o plano"). */
+export function fotoEnquadramento(e, cliente) {
+  return { cnae: e?.cnae || null, cnaes_secundarios: Array.isArray(cliente?.cnaes_secundarios) ? cliente.cnaes_secundarios : [],
+    opcao_mei: cliente?.opcao_mei === true, empregados: e?.empregados ?? null, fonte: e?.efetivo?.fonte || null };
+}
+
+const equipeTxt = (ds) => (ds?.profissionais || []).map(p => `${p.qtd} ${p.profissional.toLowerCase()}${p.parcial ? ' (tempo parcial, mínimo de 3 horas)' : ''}${p.ou_enfermeiro ? ' (pode ser enfermeiro do trabalho em tempo parcial)' : ''}`).join('; ');
+const qtdTxt = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+
+function itensObrigacao(ctx) {
+  const e = ctx.enq;
+  if (!e?.grau?.valor || e.empregados === null) return [];   // sem cadastro no aparelho: mesclar() mantém as que já existem
+  const g = e.grau.valor;
+  const r = e.resp || {};
+  const out = [];
+  const grauTxt = `Grau de risco ${g} (${e.grau.nome}), pela ${e.grau.origem === 'preponderante' ? 'atividade preponderante' : 'atividade principal'} CNAE ${cnaeBr(e.grau.origem === 'preponderante' ? r.preponderante : e.cnae)} (NR-04, Anexo I)`;
+  const efTxt = qtdTxt(e.empregados, 'empregado', 'empregados');
+  const base = (o) => ({ origem: 'obrigacao', ghe_id: null, ghe: 'Toda a empresa', ghe_soc: null, unidade: '', toda_empresa: true,
+    pessoas: e.empregados || 0, risco: null, risco_soc: null, categoria_risco: null, nivel: null, relatorios: ['PGR'], quem: ctx.quemPadrao || '', quanto: null, ...o });
+  const variante = (resp, porResp) => porResp[resp] || null;
+
+  /* SESMT (NR-04) */
+  if (e.sesmt.estado === 'obrigatorio' && r.sesmt) {
+    const ds = e.sesmt.dimensionamento;
+    const fatos = `${grauTxt} e ${qtdTxt(e.sesmt.base, 'trabalhador', 'trabalhadores')} (${efTxt}${e.terceiros ? ` e ${e.terceiros} de empresas contratadas, de forma não eventual, NR-04, item 4.5.2` : ''}): o estabelecimento precisa de SESMT, faixa de ${ds.faixa} do Anexo II.`;
+    const equipe = equipeTxt(ds);
+    const v = variante(r.sesmt, {
+      N: { prioridade: 'alta', verbo: 'implantar', categoria: 'Implementação', o_que_base: 'Constituir o SESMT conforme o Anexo II da NR-04',
+        motivo: `${fatos} A empresa informou que não tem SESMT constituído.`,
+        meta: 'SESMT constituído com a equipe mínima do Anexo II e registrado no gov.br.',
+        medidas: [`Contratar a equipe mínima do Anexo II: ${equipe}.`,
+          'Definir a modalidade do SESMT (individual, regionalizado ou estadual) conforme os estabelecimentos da empresa (NR-04, item 4.4).',
+          'Registrar o SESMT no sistema eletrônico do gov.br, com os profissionais, o grau de risco e o número de trabalhadores atendidos (NR-04, itens 4.6.1 e 4.6.1.1).',
+          'Refazer o dimensionamento quando mudar o número de trabalhadores, o CNAE ou as contratadas (NR-04, itens 4.5.1 e 4.5.2).'],
+        afericao: 'comprovante do registro no gov.br e contratos dos profissionais.' },
+      S: { prioridade: 'baixa', verbo: 'manter', categoria: 'Inspeção', o_que_base: 'Manter o SESMT dimensionado e registrado (NR-04)',
+        motivo: `${fatos} A empresa informou que o SESMT está constituído.`,
+        meta: 'SESMT com a equipe mínima e o registro no gov.br atualizados.',
+        medidas: [`Conferir se a equipe atende ao Anexo II: ${equipe}.`,
+          'Manter atualizados no gov.br os profissionais, o grau de risco e o número de trabalhadores atendidos (NR-04, item 4.6.1.1).',
+          'Refazer o dimensionamento quando mudar o número de trabalhadores, o CNAE ou as contratadas (NR-04, itens 4.5.1 e 4.5.2).'],
+        afericao: 'registro do SESMT no gov.br atualizado.' },
+      '?': { prioridade: 'media', verbo: 'verificar', categoria: 'Inspeção', o_que_base: 'Verificar o SESMT exigido pelo Anexo II da NR-04',
+        motivo: `${fatos} A situação do SESMT não foi confirmada na visita.`,
+        meta: 'situação do SESMT confirmada e, se faltar, constituído.',
+        medidas: ['Confirmar se o SESMT está constituído e registrado no gov.br (NR-04, item 4.6.1).',
+          `Se não estiver, contratar a equipe mínima do Anexo II: ${equipe}.`],
+        afericao: 'comprovante do registro no gov.br.' }
+    });
+    if (v) {
+      if (e.cipa.estado === 'sesmt_faz') v.medidas.push('Como o estabelecimento não se enquadra no Quadro I da NR-05, o SESMT desempenha as atribuições da CIPA (NR-05, item 5.4.13.1).');
+      out.push(base({ chave: 'o:sesmt', obrig: 'sesmt', ordem: 700000, ...v, acompanhamento: acompanhamentoPadrao(v.prioridade),
+        base_legal: 'NR-04, itens 4.2, 4.4, 4.5 e 4.6 e Anexos I e II', recorrencia_meses: null }));
+    }
+  }
+
+  /* CIPA (NR-05, Quadro I) */
+  const h = e.cipa.horas_treinamento;
+  if (e.cipa.estado === 'cipa' && r.cipa) {
+    const dc = e.cipa.dimensionamento;
+    const fatos = `${grauTxt} e ${efTxt}: a NR-05 exige CIPA com ${qtdTxt(dc.efetivos, 'efetivo', 'efetivos')} e ${qtdTxt(dc.suplentes, 'suplente', 'suplentes')} (Quadro I, faixa de ${dc.faixa} empregados).`;
+    const v = variante(r.cipa, {
+      N: { prioridade: 'alta', verbo: 'implantar', o_que_base: 'Constituir a CIPA conforme o Quadro I da NR-05',
+        motivo: `${fatos} A empresa informou que não tem CIPA constituída.`,
+        meta: 'CIPA eleita, empossada e treinada, com calendário de reuniões.',
+        medidas: [`Constituir a CIPA com o dimensionamento do Quadro I (${qtdTxt(dc.efetivos, 'efetivo', 'efetivos')} e ${qtdTxt(dc.suplentes, 'suplente', 'suplentes')}), com representantes da organização designados e representantes dos empregados eleitos (NR-05, itens 5.4.1 a 5.4.5).`,
+          'Conduzir o processo eleitoral conforme o item 5.5 da NR-05 e dar posse aos eleitos.',
+          `Treinar titulares e suplentes antes da posse; no primeiro mandato, em até 30 dias após a posse; carga mínima de ${h} horas (NR-05, itens 5.7.1, 5.7.1.1 e 5.7.4).`,
+          'Realizar as reuniões ordinárias mensais e registrar em ata (NR-05, item 5.6.1).',
+          'Guardar a documentação da CIPA por no mínimo 5 anos (NR-05, item 5.9.2).'],
+        afericao: 'atas da eleição e da posse, certificados do treinamento e calendário de reuniões.', recorrencia_meses: null },
+      S: { prioridade: 'baixa', verbo: 'manter', o_que_base: 'Manter a CIPA: eleição anual, treinamento e reuniões (NR-05)',
+        motivo: `${fatos} A empresa informou que a CIPA está constituída. O mandato é de 1 ano (NR-05, item 5.4.6).`,
+        meta: 'CIPA com mandato em dia, integrantes treinados e reuniões registradas.',
+        medidas: ['Convocar a eleição do próximo mandato com no mínimo 60 dias antes do término do mandato atual (NR-05, item 5.5.1).',
+          `Treinar os novos integrantes antes da posse, com carga mínima de ${h} horas (NR-05, itens 5.7.1 e 5.7.4); treinamento feito há menos de 2 anos na mesma organização pode ser aproveitado (item 5.7.3).`,
+          'Manter as reuniões ordinárias mensais com ata (NR-05, item 5.6.1).',
+          `Conferir o dimensionamento no Quadro I a cada eleição (hoje: ${qtdTxt(dc.efetivos, 'efetivo', 'efetivos')} e ${qtdTxt(dc.suplentes, 'suplente', 'suplentes')}).`],
+        afericao: 'atas da eleição, da posse e das reuniões; certificados do treinamento.', recorrencia_meses: 12 },
+      '?': { prioridade: 'media', verbo: 'verificar', o_que_base: 'Verificar a CIPA exigida pelo Quadro I da NR-05',
+        motivo: `${fatos} A situação da CIPA não foi confirmada na visita.`,
+        meta: 'situação da CIPA confirmada e, se faltar, constituída.',
+        medidas: ['Confirmar se a CIPA está constituída, com mandato em dia e integrantes treinados (NR-05, itens 5.4.6 e 5.7).',
+          'Se não estiver, constituir a CIPA conforme o Quadro I e o item 5.5 da NR-05.'],
+        afericao: 'atas da eleição e da posse.', recorrencia_meses: null }
+    });
+    if (v) out.push(base({ chave: 'o:cipa', obrig: 'cipa', ordem: 700100, categoria: 'CIPA', ...v, acompanhamento: acompanhamentoPadrao(v.prioridade),
+      base_legal: 'NR-05, itens 5.4, 5.5, 5.6, 5.7 e Quadro I; NR-04, Anexo I' }));
+  }
+
+  /* Representante nomeado (NR-05, item 5.4.13) */
+  if (e.cipa.estado === 'nomeado' && r.nomeado) {
+    const lim = LIMITE_CIPA[g];
+    const fatos = `${grauTxt} e ${efTxt}: o estabelecimento não se enquadra no Quadro I da NR-05 (CIPA a partir de ${lim} empregados no grau ${g}). Se não for atendido por SESMT (inclusive regionalizado, estadual ou compartilhado, NR-04, item 4.4), a organização deve nomear um representante entre os empregados (NR-05, item 5.4.13); se for, o SESMT desempenha as atribuições da CIPA (item 5.4.13.1).`;
+    const v = variante(r.nomeado, {
+      N: { prioridade: 'alta', verbo: 'implantar', o_que_base: 'Nomear o representante da organização na NR-05',
+        motivo: `${fatos} A empresa informou que não há representante nomeado.`,
+        meta: 'representante nomeado, com a nomeação formalizada e o treinamento feito.',
+        medidas: ['Nomear, entre os empregados, o representante da organização para auxiliar nas ações de prevenção em segurança e saúde no trabalho, e formalizar a nomeação e a forma de atuação (NR-05, itens 5.4.13 e 5.4.14).',
+          `Treinar o representante antes de assumir, com carga mínima de ${h} horas; pode ser a distância ou semipresencial (NR-05, itens 5.7.1, 5.7.4 e 5.7.4.3).`,
+          'Renovar a formalização da nomeação a cada ano (NR-05, item 5.4.14).'],
+        afericao: 'termo de nomeação assinado e certificado do treinamento.', recorrencia_meses: null },
+      S: { prioridade: 'baixa', verbo: 'manter', o_que_base: 'Renovar a nomeação do representante da NR-05',
+        motivo: `${fatos} A empresa informou que há representante nomeado. A nomeação é formalizada a cada ano (NR-05, item 5.4.14).`,
+        meta: 'nomeação renovada e representante treinado.',
+        medidas: ['Formalizar de novo a nomeação e a forma de atuação do representante (NR-05, item 5.4.14).',
+          `Se houver troca de representante, treinar o novo antes de assumir, com carga mínima de ${h} horas (NR-05, itens 5.7.1 e 5.7.4).`,
+          `Acompanhar o número de empregados: a CIPA passa a ser obrigatória a partir de ${lim} empregados no grau ${g}.`],
+        afericao: 'termo de nomeação do ano assinado.', recorrencia_meses: 12 },
+      '?': { prioridade: 'media', verbo: 'verificar', o_que_base: 'Verificar a nomeação do representante da NR-05',
+        motivo: `${fatos} A nomeação não foi confirmada na visita.`,
+        meta: 'nomeação confirmada e, se faltar, feita.',
+        medidas: ['Confirmar se há representante nomeado neste ano, com termo de nomeação e treinamento (NR-05, itens 5.4.13, 5.4.14 e 5.7.1).',
+          'Se não houver, nomear e treinar o representante.'],
+        afericao: 'termo de nomeação assinado.', recorrencia_meses: null }
+    });
+    if (v) out.push(base({ chave: 'o:nomeado', obrig: 'nomeado', ordem: 700100, categoria: 'CIPA', ...v, acompanhamento: acompanhamentoPadrao(v.prioridade),
+      base_legal: 'NR-05, itens 5.4.13, 5.4.14 e 5.7; NR-04, Anexo I' }));
+  }
+  for (const it of out) if (it.recorrencia_meses) it.acompanhamento = `${it.acompanhamento.replace(/\.$/, '')}; ação anual, repetir a cada ${it.recorrencia_meses} meses.`;
+  return out;
+}
+
 /* ── textos para o SOC ──────────────────────────────────────────────────── */
 const ACEIT = { aceitavel: 'aceitável', toleravel: 'tolerável', nao_aceitavel: 'não aceitável' };
 const NOME_P = { 1: 'altamente improvável', 2: 'improvável', 3: 'pouco provável', 4: 'provável', 5: 'altamente provável' };
@@ -456,7 +633,7 @@ export const excede = (it) => ({
 const CAMPOS_AUTO = ['o_que_base', 'motivo', 'meta', 'medidas', 'acompanhamento', 'afericao', 'base_legal', 'prioridade',
   'categoria', 'relatorios', 'quem', 'quanto'];
 const CAMPOS_FIXOS = ['origem', 'ghe_id', 'ghe', 'ghe_soc', 'unidade', 'toda_empresa', 'pessoas', 'ordem', 'risco', 'risco_soc',
-  'categoria_risco', 'risco_uid', 'nivel', 'fonte', 'danos', 'verbo', 'trein'];
+  'categoria_risco', 'risco_uid', 'nivel', 'fonte', 'danos', 'verbo', 'trein', 'obrig', 'recorrencia_meses'];
 /* JSON com chaves em ordem (para comparar planos). */
 export const estavel = (v) => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(c => [c, x[c]])) : x);
 const numDe = (n) => parseInt(String(n || '').replace(/\D/g, ''), 10) || 0;
@@ -480,7 +657,7 @@ export function mesclar(plano, sugestoes, ctx) {
     const s = sug.get(a.chave);
     const ed = new Set(a.editados || []);
     if (!s) {
-      if (a.origem === 'manual') out.push(a);
+      if (a.origem === 'manual' || (a.origem === 'obrigacao' && ctx?.enq?.sem_cadastro)) out.push(a);   // v228: sem o cadastro (offline), não tira
       else if (ed.size) out.push({ ...a, orfa: true });
       continue;   // sugestão que sumiu e ninguém mexeu: sai
     }

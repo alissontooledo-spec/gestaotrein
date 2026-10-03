@@ -290,15 +290,20 @@ export async function listarAvaliacoes() {
 }
 
 /* Empresas e pessoas que aparecem nas telas (com cópia no aparelho). */
-export async function clientesPorId(ids) {
+export async function clientesPorId(ids, { fresco = false } = {}) {
   const uniq = [...new Set(ids.filter(Boolean))];
   const guard = (await idbGet('cache', 'clientes')) || {};
-  const faltam = uniq.filter(i => !guard[i]);
+  /* v228: o enquadramento (SESMT/CIPA) usa o CNAE do cadastro. Cópia sem CNAE (_v < 2)
+     ou com mais de 6 horas é buscada de novo quando há internet. */
+  const velho = (c) => !c || c._v !== 2 || !(Date.now() - (c._em || 0) < 6 * 3600e3);
+  const faltam = uniq.filter(i => fresco || velho(guard[i]));
   if (faltam.length && online()) {
+    const BASE = 'id,nome,cnpj,logradouro,numero,bairro,cidade,uf,endereco,soc_codigo_empresa';
     for (let i = 0; i < faltam.length; i += 200) {
-      const { data } = await sb().from('clientes')
-        .select('id,nome,cnpj,logradouro,numero,bairro,cidade,uf,endereco,soc_codigo_empresa').in('id', faltam.slice(i, i + 200));
-      for (const c of data || []) guard[c.id] = c;
+      const ids = faltam.slice(i, i + 200);
+      let { data, error } = await sb().from('clientes').select(BASE + ',cnae,cnae_descricao,cnaes_secundarios,porte,opcao_mei').in('id', ids);
+      if (error) ({ data } = await sb().from('clientes').select(BASE).in('id', ids));
+      for (const c of data || []) guard[c.id] = { ...c, _v: 2, _em: Date.now() };
     }
     await idbPut('cache', guard, 'clientes');
   }
@@ -933,8 +938,8 @@ export function pessoasAtuais(d) {
 export const planoDe = (d) => (d?.av?.plano && typeof d.av.plano === 'object' ? d.av.plano : {});
 export async function contextoPlano(d) {
   const cat = await catalogo();
-  const usus = await usuariosPorId([d.av.tecnico_id]).catch(() => ({}));
-  return P.contexto(d, cat, { tecnico: usus?.[d.av.tecnico_id]?.nome || '' });
+  const [usus, clis] = await Promise.all([usuariosPorId([d.av.tecnico_id]).catch(() => ({})), clientesPorId([d.av.cliente_id]).catch(() => ({}))]);
+  return P.contexto(d, cat, { tecnico: usus?.[d.av.tecnico_id]?.nome || '', cliente: clis?.[d.av.cliente_id] || null });
 }
 /* Recalcula as sugestões e mescla com o que o técnico já mexeu. Grava só se mudou. */
 export async function atualizarPlano(id) {

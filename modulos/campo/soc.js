@@ -53,14 +53,14 @@ export async function render(params) {
     ? 'Esta avaliação foi concluída sem plano de ação (antes da versão 223, ou sem riscos que pedem ação).'
     : 'O plano vai para o SOC depois que a avaliação é concluída. Até lá, ele fica na tela Plano de ação da avaliação.')}
     <div style="margin-top:10px">${btn('Voltar para a avaliação', `ir:campo-avaliacao:${_id}`, { cls: 'btn-ghost' })}</div>`;
-  if (foco && foco !== _focoAplicado) { const f = _acoes.find(a => a.numero === foco); if (f) _sel = f.id; _focoAplicado = foco; }   // só na chegada
+  if (foco && foco !== _focoAplicado) { const f = _acoes.find(a => a.numero === foco && a.situacao !== 'concluida') || _acoes.find(a => a.numero === foco); if (f) _sel = f.id; _focoAplicado = foco; }   // só na chegada (v228: ação anual repete o número; vale a aberta)
   if (!_acoes.some(a => a.id === _sel)) _sel = (_acoes.find(a => estadoSoc(a)[0] === 'lancar') || _acoes.find(a => estadoSoc(a)[0] === 'atualizar') || _acoes[0]).id;
   const a = _acoes.find(x => x.id === _sel);
   const nOk = _acoes.filter(x => estadoSoc(x)[0] === 'ok').length;
   const lista = _acoes.map(x => { const [, t, c] = estadoSoc(x);
     return `<button type="button" class="cp-soc-it${x.id === _sel ? ' on' : ''}" data-acao="campo:soc-sel:${x.id}">
       <span class="n">${esc(x.numero || '')}</span><span class="tx"><b>${esc(String(x.o_que || '').replace(/\s·\s*A-\d+$/, ''))}</b>
-      <span>${pill(x.prioridade)} <span class="cp-sit ${c}">${esc(t)}</span>${vencida(x) ? ' <span class="cp-sit s-ver">vencida</span>' : ''}${x.situacao !== 'pendente' ? ` <span class="cp-sit s-and">${esc(P.NOME_SIT[x.situacao] || x.situacao)}</span>` : ''}</span></span></button>`; }).join('');
+      <span>${pill(x.prioridade)} <span class="cp-sit ${c}">${esc(t)}</span>${vencida(x) ? ' <span class="cp-sit s-ver">vencida</span>' : ''}${x.recorrencia_meses ? ` <span class="cp-sit s-ano">${x.recorrencia_meses === 12 ? 'todo ano' : 'a cada ' + x.recorrencia_meses + ' meses'}</span>` : ''}${x.situacao !== 'pendente' ? ` <span class="cp-sit s-and">${esc(P.NOME_SIT[x.situacao] || x.situacao)}</span>` : ''}</span></span></button>`; }).join('');
   return `${cab()}
     <div class="cp-soc">
       <div class="cp-soc-lista"><div class="cp-soc-lh"><b>${_acoes.length} ${_acoes.length === 1 ? 'ação' : 'ações'}</b><span>${nOk} no SOC</span></div>
@@ -163,6 +163,12 @@ async function salvar(a, patch, okMsg, redesenhar) {
   try {
     const novo = await D.gravarAcao(a, patch);
     _acoes = _acoes.map(x => x.id === a.id ? novo : x);
+    /* v228 (PASSO-77): ação anual concluída → o banco cria a do próximo ciclo; desfeita a conclusão, o banco a tira. */
+    if (a.recorrencia_meses && patch.situacao && patch.situacao !== a.situacao) {
+      await carregar().catch(() => {});
+      const prox = _acoes.find(x => x.anterior_id === novo.id);
+      if (patch.situacao === 'concluida' && prox) okMsg = `${okMsg || ''} Ação anual: a do próximo ciclo já foi criada, com prazo ${P.dataBr(prox.prazo)}. Lance no SOC quando chegar a hora.`.trim();
+    }
     if (okMsg) avisar(okMsg);
   } catch (e) {
     avisar(e.message || String(e), 'erro');
