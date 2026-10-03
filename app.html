@@ -3762,10 +3762,10 @@ async function _consultarCnpjBrasilApi(raw, {tentativas = 3, timeoutMs = 12000, 
 // que um update nunca apague informação que já exista no registro.
 function _dadosClienteDoCnpj(d) {
   const cnaesSec = Array.isArray(d.cnaes_secundarios)
-    ? d.cnaes_secundarios.map(x=>({codigo:String(x.codigo||''),descricao:x.descricao||''})).filter(x=>x.codigo)
+    ? d.cnaes_secundarios.map(x=>({codigo:x.codigo?_cnaeDig(x.codigo):'',descricao:x.descricao||''})).filter(x=>x.codigo)
     : [];
   const dados = {
-    cnae: d.cnae_fiscal ? String(d.cnae_fiscal) : null,
+    cnae: d.cnae_fiscal ? _cnaeDig(d.cnae_fiscal) : null,
     cnae_descricao: d.cnae_fiscal_descricao || null,
     cnaes_secundarios: cnaesSec.length ? cnaesSec : null,
     cep: d.cep || null,
@@ -3801,10 +3801,10 @@ async function buscarCnpjModal(cnpjId, nomeId, cidadeId, ufId, emailId, cnaeId, 
     const cidade = d.municipio || '';
     const uf = d.uf || '';
     const email = d.email || '';
-    const cnae = d.cnae_fiscal ? String(d.cnae_fiscal) : '';
+    const cnae = d.cnae_fiscal ? _cnaeDig(d.cnae_fiscal) : '';
     const cnaeDesc = d.cnae_fiscal_descricao || '';
     const cnaesSecundarios = Array.isArray(d.cnaes_secundarios)
-      ? d.cnaes_secundarios.map(x=>({codigo:String(x.codigo||''),descricao:x.descricao||''})).filter(x=>x.codigo)
+      ? d.cnaes_secundarios.map(x=>({codigo:x.codigo?_cnaeDig(x.codigo):'',descricao:x.descricao||''})).filter(x=>x.codigo)
       : [];
     const setVal = (id, val) => { if(!id) return; const el=document.getElementById(id); if(el && val!==undefined && val!==null && val!=='') el.value=val; };
     setVal(nomeId, nome);
@@ -4011,7 +4011,7 @@ const CNAE_GR_MAP = {
   '39':[3,3], '41':[1,3], '42':[3,4], '43':[3,4], '45':[2,3], '46':[2,3],
   '47':[1,3], '49':[3,3], '50':[3,3], '51':[3,3], '52':[3,3], '53':[2,2],
   '55':[2,2], '56':[2,2], '58':[3,3], '59':[2,2], '60':[2,2], '61':[2,2],
-  '62':[2,2], '63':[1,2], '64':[1,1], '65':[1,1], '66':[1,1], '68':[1,1],
+  '62':[2,2], '63':[2,2], '64':[1,1], '65':[1,1], '66':[1,1], '68':[1,1],
   '69':[1,1], '70':[1,1], '71':[1,2], '72':[2,2], '73':[1,1], '74':[1,2],
   '75':[3,3], '77':[1,1], '78':[1,1], '79':[1,1], '80':[3,3], '81':[1,3],
   '82':[1,2], '84':[1,1], '85':[2,2], '86':[1,3], '87':[1,1], '88':[1,1],
@@ -4024,9 +4024,25 @@ const GR_LABEL = {1:'Leve', 2:'Médio', 3:'Alto', 4:'Altíssimo'};
 // Grau de Risco é atrelado à atividade PRINCIPAL do estabelecimento (é o que
 // vale para dimensionamento de SESMT/CIPA) — diferente das NRs aplicáveis,
 // aqui não consideramos CNAEs secundários.
+// v228: a BrasilAPI manda o CNAE como NÚMERO e perde o zero da frente
+// ("0710301" vira 710301). Toda leitura de CNAE passa por aqui.
+function _cnaeDig(c) {
+  const d = String(c ?? '').replace(/\D/g, '');
+  return d.length === 6 ? '0' + d : d;   // subclasse tem 7 números
+}
+// v228: grau EXATO pela classe do CNAE (5 primeiros números) — Anexo I da NR-04,
+// 673 classes do texto oficial (mesma tabela de modulos/campo/enquadramento.js).
+// Sem a classe na tabela, cai na faixa da divisão (CNAE_GR_MAP).
+const CNAE_GR_CLASSE = '011133,011213,011303,011483,011563,011643,011993,012113,012293,013183,013263,013343,013423,013513,013933,014153,014233,015123,015213,015393,015473,015553,015983,016103,016283,016363,017093,021013,022094,023063,031163,031243,032133,032213,050034,060004,071034,072194,072274,072354,072434,072514,072944,081004,089164,089244,089324,089914,091064,099044,101123,101213,101393,102013,103173,103253,103333,104143,104223,104313,105113,105203,105383,106193,106273,106353,106433,106513,106603,106943,107163,107243,108133,108213,109113,109293,109373,109453,109533,109613,109963,111193,111273,111353,112163,112243,121073,122043,131113,131203,131383,131463,132193,132273,132353,133083,134053,135113,135293,135373,135453,135963,141182,141262,141342,141422,142152,142232,151063,152112,152972,153193,153273,153353,153943,154083,161023,162183,162263,162343,162933,171093,172143,172223,173112,173202,173382,174192,174272,174942,181133,181213,181303,182113,182293,183003,191013,192173,192253,193143,193223,201183,201263,201343,201423,201933,202153,202233,202913,203123,203213,203393,204013,205173,205253,206143,206223,206312,207113,207203,207383,209163,209244,209323,209413,209913,211063,212113,212203,212383,221113,221293,221963,222183,222263,222343,222933,231173,231253,231923,232064,233034,234194,234273,234944,239153,239234,239913,241134,241214,242114,242294,242374,242454,243184,243934,244154,244234,244314,244914,245124,245214,251104,251283,251363,252173,252253,253144,253224,253904,254113,254203,254383,255014,259183,259264,259343,259933,261083,262133,262213,263113,263293,264003,265153,265233,266043,267013,268093,271043,272103,272283,273173,273253,273333,274063,275113,275973,279023,281193,281273,281353,281433,281513,282163,282243,282323,282413,282593,282913,283133,283213,283303,284023,285183,285263,285343,285423,286153,286233,286313,286403,286583,286663,286913,291073,292043,293013,294173,294253,294333,294413,294503,294923,295063,301133,301213,303183,303263,304153,304233,305043,309113,309203,309973,310123,310213,310393,310472,321163,321243,322053,323023,324003,325073,329143,329223,329903,331123,331213,331393,331473,331553,331633,331713,331983,332103,332953,351153,351233,351313,351403,352043,353013,360063,370113,370293,381143,381223,382113,382203,383193,383273,383943,390053,411071,412043,421114,421204,421383,422194,422274,422354,429104,429284,429953,431184,431264,431343,431933,432153,432233,432913,433043,439164,439913,451112,451292,452003,453072,454122,454212,454393,461172,461252,461332,461412,461502,461682,461762,461842,461922,462142,462222,462312,463112,463202,463382,463462,463542,463622,463712,463972,464192,464272,464352,464432,464512,464602,464782,464942,465163,465243,466133,466213,466303,466483,466563,466993,467113,467293,467373,467453,467963,468183,468263,468343,468423,468513,468693,468773,468933,469152,469232,469312,471132,471212,471302,472112,472293,472372,472452,472962,473183,473263,474152,474231,474312,474402,475121,475211,475391,475471,475551,475631,475711,475981,476101,476281,476361,477172,477251,477331,477411,478141,478221,478311,478493,478572,478901,479032,491163,491243,492133,492213,492303,492483,492993,493023,494003,495073,501143,501223,502113,502203,503013,509123,509983,511113,511293,512003,513073,521173,521253,522143,522223,522313,522903,523113,523203,523973,524013,525083,531052,532022,551082,559062,561122,561212,562012,581153,581233,581313,581913,582123,582213,582393,582983,591112,591202,591382,591462,592012,601012,602172,602252,611082,612052,613022,614182,614262,614342,619062,620152,620232,620312,620402,620912,631192,631942,639172,639922,641071,642121,642211,642391,642471,643101,643281,643361,643441,643521,643611,643791,643871,644091,645061,646111,646201,646381,647011,649131,649211,649301,649991,651111,651201,652011,653081,654131,654211,655021,661181,661261,661341,661931,662151,662231,662911,663041,681021,682181,682261,691171,691251,692061,701071,702041,711111,711201,711971,712012,721002,722072,731141,731221,731901,732031,741021,742002,749011,750013,771101,771951,772171,772251,772331,772921,773141,773221,773311,773901,774031,781081,782051,783021,791121,791211,799021,801113,801293,802003,803073,811172,811252,812143,812223,812903,813031,821131,821992,822022,823002,829112,829202,829972,841161,841241,841321,842131,842211,842301,842481,842561,843021,851122,851212,851392,852012,853172,853252,853332,854142,854222,855032,859112,859292,859372,859962,861013,862163,862243,863053,864023,865002,866071,869091,871151,871231,872041,873011,880061,900192,900272,900351,910152,910232,910312,920031,931151,931232,931312,931912,932122,932982,941111,941201,942011,943081,949101,949281,949361,949951,951183,951263,952153,952913,960172,960252,960332,960922,970052,990081';
+let _grClasseMap = null;
 function _grauRiscoParaCnae(cnae) {
-  const divisao = String(cnae||'').replace(/\D/g,'').slice(0,2);
-  return CNAE_GR_MAP[divisao] || null;
+  const dig = _cnaeDig(cnae);
+  if (dig.length >= 5) {
+    if (!_grClasseMap) _grClasseMap = new Map(CNAE_GR_CLASSE.split(',').map(x => [x.slice(0,5), Number(x.slice(5))]));
+    const g = _grClasseMap.get(dig.slice(0,5));
+    if (g) return [g, g];
+  }
+  return CNAE_GR_MAP[dig.slice(0,2)] || null;
 }
 
 function _htmlGrauRisco(cnae) {
@@ -4042,7 +4058,7 @@ function _htmlGrauRisco(cnae) {
         <span style="font-size:22px;font-weight:700;color:var(--navy)">${faixa}</span>
         <span style="font-size:12px;color:var(--text-2)">${rotulo}</span>
       </div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.4">Referência por divisão de CNAE (Anexo I da NR-4, 2022) — usado para dimensionamento de SESMT/CIPA. Tabela em revisão pelo MTE; não substitui o enquadramento oficial feito por profissional de SST.</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.4">Pela classe do CNAE no Anexo I da NR-4 (Portaria 2.318/2022); faixa só quando o CNAE está incompleto. Usado para dimensionar SESMT e CIPA. Tabela em revisão pelo MTE; não substitui o enquadramento oficial feito por profissional de SST.</div>
     </div>`;
 }
 
@@ -4061,7 +4077,7 @@ function verDetalheNR(nr) {
 
 // Retorna as NRs mapeadas para a divisão (2 dígitos) de um código CNAE.
 function _nrsParaCnae(cnae) {
-  const divisao = String(cnae||'').replace(/\D/g,'').slice(0,2);
+  const divisao = _cnaeDig(cnae).slice(0,2);   // v228: com o zero da frente
   return CNAE_NR_MAP[divisao] || [];
 }
 
@@ -32017,7 +32033,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '227';
+  var APP_BUILD = '228';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
