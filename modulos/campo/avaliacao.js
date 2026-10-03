@@ -33,7 +33,8 @@ function cartaoGhe(g) {
     <div class="cp-hub-ghe-meta">${set ? `<b>Setores:</b> ${esc(set)}<br>` : '<b>Setores:</b> a informar<br>'}${fun ? `<b>Funções:</b> ${esc(fun)}` : ''}</div>
     ${cats ? `<div class="cp-hub-cats">${cats}</div>` : `<div class="cp-hub-ghe-meta">Nenhum risco marcado ainda.</div>`}
     ${pend ? `<div class="cp-card-meta" style="color:var(--warn-text);font-weight:600">${I.relogio}<span>${pend} risco${pend > 1 ? 's' : ''} para completar depois</span></div>` : ''}
-    ${(g.riscos || []).length > rsv.length ? `<div class="cp-hub-ghe-meta" style="color:var(--warn-text)">${(g.riscos || []).length - rsv.length} risco(s) psicossocial(is) do SOC neste GHE: abra o GHE, aba Riscos, e toque em Tirar do GHE.</div>` : ''}
+    ${(g.riscos || []).length > rsv.length ? (() => { const n = (g.riscos || []).length - rsv.length;   // v230: botão direto, sem instrução escrita
+      return `<div class="cp-hub-psi"><span>${n} ${n === 1 ? 'risco psicossocial do SOC fica' : 'riscos psicossociais do SOC ficam'} fora da avaliação</span>${D.podeEditar(D.doc(_id)) ? `<button type="button" class="btn btn-outline btn-sm" data-acao="campo:psi-tirar-hub:${g.id}">Tirar do GHE</button>` : ''}</div>`; })() : ''}
     ${rsv.length ? `<div class="cp-ghe-prog"><div class="cp-pb"><i style="width:${pct}%"></i></div><span>${ok} de ${rsv.length} riscos</span></div>` : ''}
   </div>`;
 }
@@ -186,8 +187,21 @@ export async function render(params) {
         <div>Situação<b>${sitTxt}</b></div></div></div>
       ${semSoc && editavel ? '' : blocoSoc(d, cli, editavel, { semGhes: true })}
     </details>
-    ${acoes([btn('Voltar', 'ir:campo', { papel: 'cp-a-voltar' }),
-      d.av.situacao !== 'cancelada' ? btn('Assinaturas e conclusão', `ir:campo-finalizar:${_id}`, { cls: 'btn-amber', papel: 'cp-a-prox', travado: !d.ghes.length }) : ''])}`;
+    ${(() => { const px = proximoPasso(d, editavel);
+      return acoes([btn('Voltar', 'ir:campo', { papel: 'cp-a-voltar' }),
+        d.av.situacao !== 'cancelada' ? btn(px.rot, px.acao, { cls: 'btn-amber', papel: 'cp-a-prox' }) : '']); })()}`;
+}
+
+/* v230: o botão principal diz o próximo passo da visita (antes era sempre "Assinaturas e conclusão"). */
+const curto = (t, n = 22) => { const s = String(t || ''); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
+export function proximoPasso(d, editavel = true) {
+  if (!d.ghes.length) return editavel ? { rot: 'Adicionar o primeiro GHE', acao: 'campo:novo-ghe' } : { rot: 'Assinaturas e conclusão', acao: `ir:campo-finalizar:${_id}` };
+  const g = d.ghes.find(x => !['ok', 'pendente'].includes(D.gheCompleto(x)));
+  if (g && editavel) return { rot: `Continuar: GHE ${curto(g.nome, 14)}`, acao: `ir:campo-ghe:${_id}~${g.id}` };
+  const conf = D.temConferencia(d) ? D.resumoConferencia(d) : null;
+  if (conf && conf.soc && conf.falta && editavel) return { rot: 'Continuar: conferir funcionários', acao: `ir:campo-funcionarios:${_id}` };
+  if (D.temPlano() && editavel) { const pl = D.planoDe(d); if ((pl.acoes || []).length && !pl.revisado_em) return { rot: 'Continuar: revisar o plano', acao: `ir:campo-plano:${_id}` }; }
+  return { rot: 'Assinaturas e conclusão', acao: `ir:campo-finalizar:${_id}` };
 }
 
 /* v222: 4 quadros do topo — o que falta, com um toque cada. */
@@ -289,6 +303,14 @@ export async function acao(nome, valor, redesenhar) {
   const d = D.doc(_id);
   if (!d) return false;
   if (nome === 'campo:novo-ghe') { modalNovoGhe(d, redesenhar); return true; }
+  if (nome === 'campo:psi-tirar-hub') {   // v230: tirar os psicossociais direto do cartão do GHE
+    const g = d.ghes.find(x => x.id === valor); if (!g) return true;
+    const n = (g.riscos || []).filter(r => D.ehPsicossocial(r)).length;
+    if (!n || !await confirmar(`Tirar ${n === 1 ? 'o risco psicossocial' : `os ${n} riscos psicossociais`} do GHE ${g.nome}? A avaliação psicossocial fica fora por enquanto; eles continuam no SOC.`)) return true;
+    D.alterarGhe(_id, g.id, x => { x.riscos = x.riscos.filter(r => !D.ehPsicossocial(r)); });
+    avisar(n === 1 ? 'Risco psicossocial retirado do GHE.' : `${n} riscos psicossociais retirados do GHE.`);
+    redesenhar(); return true;
+  }
   /* v222 */
   if (nome === 'campo:soc-ver') { _socAberto = !_socAberto; redesenhar(); return true; }
   if (nome === 'campo:ir-ghes') { document.querySelectorAll('#cpGhes').forEach(el => { if (el.getBoundingClientRect().width) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); return true; }

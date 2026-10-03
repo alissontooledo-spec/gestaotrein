@@ -21,6 +21,7 @@ let _av = null, _gid = null, _risco = null, _amb = null, _busca = '', _treinTodo
 /* v222: o catálogo só aparece quando o técnico pede (Adicionar risco); partes
    do risco aberto ficam recolhidas até tocar (chave "uid:med", "uid:det"...). */
 let _addRisco = false;
+let _ambAberto = new Map();   // v230: grupo do ambiente aberto (um por vez)
 const _abertos = new Set();
 const _passo = new Map();              // gid → passo
 const _catAbertas = new Map();         // gid → Set(categorias abertas)
@@ -183,8 +184,17 @@ function passo2(d, g, trav) {
   const varios = lista.length > 1;
   const pills = varios ? `<div class="cp-amb-lista">${lista.map(x => `<span class="cp-amb-pill ${x.uid === _amb ? 'on' : ''}" data-acao="campo:amb-sel:${x.uid}">${(D.GRUPOS_AMBIENTE.some(([k]) => (x[k] || []).length)) ? `<span class="ok">${I.check}</span>` : ''}${esc(nomeAmb(g, x))}</span>`).join('')}
     ${trav ? '' : `<span class="cp-amb-pill" data-acao="campo:amb-novo"><span style="display:flex">${I.plus}</span>Outro ambiente</span>`}</div>` : '';
-  const grupo = (k, t) => `<div class="cp-grupo"><div class="cp-grupo-tit">${t} <small>marque todos que houver</small></div><div class="cp-opts">${
-    _cat.opcoes(k).map(o => opt(`amb-opt:${k}:${o}`, o, (a[k] || []).includes(o), trav)).join('')}</div></div>`;
+  /* v230: grupos recolhidos com o resumo do que foi marcado; abre um por vez (antes eram 2,6 telas de caixinhas). */
+  const chaveAmb = `${g.id}:${a.uid}`;
+  if (!_ambAberto.has(chaveAmb)) _ambAberto.set(chaveAmb, (D.GRUPOS_AMBIENTE.find(([k]) => !(a[k] || []).length) || [null])[0]);
+  const aberto = _ambAberto.get(chaveAmb);
+  const grupo = (k, t) => {
+    const sel = a[k] || [];
+    const on = aberto === k;
+    return `<div class="cp-grupo cp-amb-g${on ? ' aberto' : ''}"><button type="button" class="cp-amb-gh" data-acao="campo:amb-grupo:${k}">
+        <span class="cp-amb-gt">${t}</span><span class="cp-amb-gr${sel.length ? ' ok' : ''}">${sel.length ? esc(sel.join(', ')) : 'nada marcado'}</span><span class="cp-amb-gc">${I.chevD}</span></button>
+      ${on ? `<div class="cp-opts">${_cat.opcoes(k).map(o => opt(`amb-opt:${k}:${o}`, o, sel.includes(o), trav)).join('')}</div>` : ''}</div>`;
+  };
   return `${pills}
     ${varios ? `<div class="cp-sec"><div class="cp-sec-tit">Nome deste ambiente</div>${inp('a.nome', a.nome, { ph: g.nome, travado: trav })}</div>` : ''}
     <div class="cp-sec"><div class="cp-sec-tit">${varios ? 'Descrição do ambiente' : `Ambiente de trabalho do GHE ${esc(g.nome)}`}</div>
@@ -625,6 +635,7 @@ export async function acao(nome, valor, redesenhar) {
       D.apagarGhe(_av, _gid); irPara(`campo-avaliacao:${_av}`); return true;
     /* ambientes */
     case 'campo:amb-sel': _amb = a1; redesenhar(); return true;
+    case 'campo:amb-grupo': { const k = `${_gid}:${_amb}`; _ambAberto.set(k, _ambAberto.get(k) === a1 ? null : a1); redesenhar(); return true; }   // v230
     case 'campo:amb-novo': {
       const n = { ...ambVazio(), nome: 'Ambiente ' + ((g.ambientes || []).length + 1) };
       altG(x => { x.ambientes = x.ambientes || []; if (!x.ambientes.length) x.ambientes.push(ambVazio()); x.ambientes.push(n); }); _amb = n.uid; redesenhar(); return true;

@@ -80,12 +80,12 @@ export async function render(params) {
   const vazio = !lista.length ? nota(d.av.soc ? 'O SOC não trouxe funcionários ativos desta empresa. Inclua os funcionários informados pela empresa.' : 'Traga os dados do SOC na avaliação para ter a lista, ou inclua os funcionários informados pela empresa.')
     : !vis.length ? nota(_filtro === 'falta' ? 'Todos já foram conferidos.' : 'Nenhuma mudança até agora.') : '';
   return `${topo(d, cli, { rotulo: 'Conferir funcionários', sub: `${r.soc} no SOC · ${r.confere} ${r.confere === 1 ? 'confere' : 'conferem'} · ${r.saiu} ${r.saiu === 1 ? 'saiu' : 'saíram'} · ${r.mudou} ${r.mudou === 1 ? 'mudou' : 'mudaram'} · ${r.incluidos} ${r.incluidos === 1 ? 'incluído' : 'incluídos'}` })}
-    ${trav ? '' : `<div class="cp-ajuda" style="margin:0 2px 10px">Leia a lista com o acompanhante. Marque quem confere, quem saiu da empresa e quem mudou de setor ou função. Nada é alterado no SOC: as mudanças saem no PDF para o escritório atualizar.</div>`}
+    ${trav ? '' : `<div class="cp-ajuda" style="margin:0 2px 10px">Leia a lista com o acompanhante. Se está tudo certo, toque em <b>Todos conferem</b>; depois marque só quem saiu ou mudou. Nada é alterado no SOC: as mudanças saem no PDF.</div>
+      ${r.falta ? `<div class="cp-fun-todos">${btn(`Todos conferem (${r.falta})`, 'campo:fun-todos', { cls: 'btn-navy', estilo: 'width:100%;min-height:48px;font-size:15px' })}</div>` : ''}`}
     ${lista.length ? `<div class="cp-fun-chips">${chip('falta', 'Falta conferir', r.falta)}${chip('todos', 'Todos', lista.length)}${chip('mudancas', 'Mudanças', nMud)}</div>
       ${lista.length > 8 ? `<input class="cp-inp cp-fun-busca" type="search" data-cp="busca" placeholder="Procurar pelo nome" value="${esc(_busca)}" autocomplete="off">` : ''}` : ''}
     ${vazio}${blocos}
-    ${trav ? '' : `<div class="cp-fun-rodape">${btn('+ Funcionário que não está no SOC', 'campo:fun-incluir', { cls: 'btn-outline', estilo: 'border-style:dashed;width:100%' })}
-      ${r.falta ? btn(`Todos os que faltam conferem (${r.falta})`, 'campo:fun-todos', { cls: 'btn-outline', estilo: 'width:100%' }) : ''}</div>`}
+    ${trav ? '' : `<div class="cp-fun-rodape">${btn('+ Funcionário que não está no SOC', 'campo:fun-incluir', { cls: 'btn-outline', estilo: 'border-style:dashed;width:100%' })}</div>`}
     ${acoes([voltar])}`;
 }
 
