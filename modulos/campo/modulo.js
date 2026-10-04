@@ -41,6 +41,9 @@ export default {
       rota: () => import('./soc.js') },
     { id: 'campo-acoes', rotulo: 'Planos de ação', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
       rota: () => import('./acoes.js') },
+    /* v232: consulta de agentes do Laudomiro (insalubridade, aposentadoria especial, eSocial). */
+    { id: 'campo-agentes', rotulo: 'Consultar agente', icone: 'book', perfis: TODOS, mobile: true,
+      rota: () => import('./agentes.js') },
     /* Catálogo da ficha: só abre de verdade em Modo Suporte (Provedor). */
     { id: 'campo-catalogo', rotulo: 'Catálogo da ficha', icone: 'book', oculto: true, perfis: ['administrador'], mobile: false,
       textoDesktop: 'Editar o catálogo da ficha é trabalho de mesa. No computador esta tela abre direto.',

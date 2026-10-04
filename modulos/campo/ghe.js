@@ -13,6 +13,7 @@ import { redesenhar as redesenharTela } from '../../nucleo/navegacao.js';
 import { I, esc, ico, nota, topo, seg, opt, inp, area, fotos, carregarFotos, legendarFoto, ligarTela, avisar, confirmar,
   ponte, btn, acoes, valorVisivel, irPara, ICONE_CAT, cabecalhoCelular, rolarTopo } from './comum.js';
 import { modalPendEmpresa } from './pendencias.js';
+import * as LM from './laudomiro.js';
 import * as C from './coerencia.js';
 import * as sessao from '../../nucleo/sessao.js';
 
@@ -402,7 +403,10 @@ function riscoAberto(d, g, r, trav) {
         <div><label class="cp-lbl">Nível mínimo (lux)</label>${inp('r.ilu.nivel_minimo', ilu.nivel_minimo, { travado: trav, modo: 'decimal' })}</div>
         <div><label class="cp-lbl">IRC</label>${inp('r.ilu.irc', ilu.irc, { travado: trav, modo: 'decimal' })}</div></div></div>` : '';
 
+  /* v232: o Laudomiro mostra o que a base diz do agente, sem marcar nada. */
+  const agLm = r.categoria === 'quimico' ? LM.doRisco(r.nome) : null;
   const conc = cols.length ? `<div class="cp-sec"><div class="cp-sec-tit">Conclusão <span class="dir" style="color:var(--text-3)">pode ficar para o escritório</span></div>
+      ${agLm ? LM.dicaRiscoHtml(agLm, r.medicao) : ''}
       <div class="cp-conc">${cols.map(k => `<div class="cp-conc-it"><div class="t">${nomeConc[k]}${pad[k] ? `<span class="cp-padrao">padrão da ficha: ${esc(pad[k])}</span>` : ''}${socDica(k)}</div>
         ${seg('r:' + k, [['S', 'Sim'], ['N', 'Não']], r[k], { travado: trav })}
         ${k === 'ins' && r.ins === 'S' ? `<div class="cp-seg-leg">Grau</div>${seg('r:grau', graus.map(x => [x, x]), r.grau, { travado: trav })}` : ''}</div>`).join('')}</div>
@@ -440,6 +444,7 @@ function riscoAberto(d, g, r, trav) {
   const medResumo = r.medicao?.resultado ? `hoje ${esc(r.medicao.resultado)} ${esc(r.medicao.unidade || '')}${r.medicao.situacao ? ' · ' + (r.medicao.situacao === 'acima' ? 'acima do limite' : 'abaixo do limite') : ''}`
     : r.soc?.medicao?.valor ? `última no SOC: ${esc(r.soc.medicao.valor)} ${esc(r.soc.medicao.unidade || '')}` : 'se houver';
   const concResumo = cols.map(k => r[k] ? `${{ ins: 'Insalub.', per: 'Pericul.', ae: 'AE' }[k]} ${r[k]}` : '').filter(Boolean).join(' · ') || 'pode ficar para o escritório';
+  const concResumoLm = agLm ? ` · Laudomiro: ${esc(LM.insal(agLm).v.toLowerCase())}, aposentadoria ${esc(LM.apos(agLm).v.toLowerCase())}` : '';
 
   const principal = `
     ${lista.length > 1 ? `<div class="cp-rnav">
@@ -461,7 +466,7 @@ function riscoAberto(d, g, r, trav) {
     ${temMedicao(r) ? dobra('med', 'Medição', medResumo, blocoMedicao.replace(/^<div class="cp-sec"><div class="cp-sec-tit">Medição <span class="dir" style="color:var\(--text-3\)">se houver<\/span><\/div>/, '').replace(/<\/div>$/, '')) : ''}
     ${blocoIlu ? dobra('ilu', 'Iluminância (NHO 11)', ilu.nivel_encontrado ? `hoje ${esc(ilu.nivel_encontrado)} lux` : (r.soc?.medicao?.valor ? `última no SOC: ${esc(r.soc.medicao.valor)}` : 'se houver'),
         blocoIlu.replace(/^<div class="cp-sec"><div class="cp-sec-tit">Iluminância \(NHO 11\)<\/div>/, '').replace(/<\/div>$/, '')) : ''}
-    ${cols.length ? dobra('conc', 'Conclusão (insalub., pericul., AE)', concResumo,
+    ${cols.length ? dobra('conc', 'Conclusão (insalub., pericul., AE)', concResumo + concResumoLm,
         conc.replace(/^<div class="cp-sec"><div class="cp-sec-tit">Conclusão <span class="dir" style="color:var\(--text-3\)">pode ficar para o escritório<\/span><\/div>/, '').replace(/<\/div>$/, '')) : ''}
     ${dobra('fotos', 'Fotos e evidências', nFotos ? `${nFotos} foto${nFotos === 1 ? '' : 's'}` : 'nenhuma · tocar para abrir',
         `${fotos(d, f => f.ghe_id === g.id && f.alvo === 'risco' && f.alvo_uid === r.uid, { chave: 'risco:' + r.uid, travado: trav })}
@@ -613,6 +618,14 @@ function modalNaoListado() {
 }
 
 export async function acao(nome, valor, redesenhar) {
+  if (nome === 'campo:lm-ficha') {
+    const a = LM.porId(valor); if (!a) return true;
+    const p = ponte();
+    p.abrirModal('Laudomiro', LM.fichaHtml(a, { compacta: true }),
+      `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
+       <button class="btn btn-navy" onclick="fecharModal();window.GRID&&window.GRID.tratarAcao('ir:campo-agentes:${esc(a.id)}')">Abrir a ficha completa</button>`);
+    return true;
+  }
   const d = doc(); const g = ghe();
   if (!d || !g) return false;
   const [a1, ...resto] = String(valor ?? '').split(':');
