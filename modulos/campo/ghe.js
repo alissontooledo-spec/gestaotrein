@@ -660,7 +660,15 @@ export async function acao(nome, valor, redesenhar) {
       for (const f of d.fotos.filter(f => f.alvo === 'ambiente' && f.alvo_uid === a.uid)) D.apagarFoto(_av, f.id);
       _amb = null; redesenhar(); return true;
     }
-    case 'campo:amb-opt': altA(a => { a[a1] = a[a1] || []; const i = a[a1].indexOf(a2); if (i >= 0) a[a1].splice(i, 1); else a[a1].push(a2); }); redesenhar(); return true;
+    case 'campo:amb-opt': {
+      let marcou = false;
+      altA(a => { a[a1] = a[a1] || []; const i = a[a1].indexOf(a2); if (i >= 0) a[a1].splice(i, 1); else { a[a1].push(a2); marcou = true; } });
+      /* v234: marcou num grupo → abre sozinho o próximo grupo ainda vazio (o anterior fica com o resumo) */
+      if (marcou) { const at = amb(); const ks = D.GRUPOS_AMBIENTE.map(([k]) => k); const i = ks.indexOf(a1);
+        const prox = [...ks.slice(i + 1), ...ks.slice(0, i)].find(k => !(at?.[k] || []).length);
+        if (at) _ambAberto.set(`${_gid}:${at.uid}`, prox || null); }
+      redesenhar(); return true;
+    }
     /* riscos */
     case 'campo:cat': { const s = _catAbertas.get(_gid) || new Set(); s.has(a1) ? s.delete(a1) : s.add(a1); _catAbertas.set(_gid, s); redesenhar(); return true; }
     case 'campo:busca-risco': _busca = valor || ''; redesenhar(); return true;

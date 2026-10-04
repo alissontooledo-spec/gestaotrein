@@ -41,7 +41,10 @@ export function percentualDoLimite(r) {
   return lim && lim > 0 ? 100 * res / lim : null;
 }
 
-const semMedida = (r) => vazio(r.epc) && vazio(r.epi) && vazio(r.medidas_adm);
+/* v234 (decisão do Alisson, 04/10): "Nada a acrescentar" (como o SOC registra) quer dizer que as
+   medidas existentes continuam como estão; não é "sem medida". Se mudou, o técnico informa. */
+const nadaAcrescentar = (t) => /^nada a acrescentar\.?$/i.test(String(t ?? '').trim());
+const semMedida = (r) => vazio(r.epc) && vazio(r.epi) && vazio(r.medidas_adm) && ![r.epc, r.epi, r.medidas_adm].some(nadaAcrescentar);
 
 /* Lista os avisos do risco: [{id, texto, info}] (info = só informativo, não pede justificativa). */
 export function alertas(r) {

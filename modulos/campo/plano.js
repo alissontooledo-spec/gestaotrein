@@ -646,8 +646,12 @@ export function prazoPadrao(it, ctx) {
   return somarDias(ctx.data, dias ?? PRAZO_PADRAO[it.prioridade]);
 }
 
+/* v234: o "Quem?" padrão (nome do acompanhante) não conta como mudança do plano:
+   digitar o acompanhante depois de revisar não pode apagar o "Revisei o plano". */
+const semQuem = (l) => (l || []).map(({ quem, ...x }) => x);
 export function mesclar(plano, sugestoes, ctx) {
-  const antes = estavel(plano?.acoes || []);
+  const antesQ = estavel(plano?.acoes || []);
+  const antes = estavel(semQuem(plano?.acoes || []));
   const disp = new Set((plano?.dispensadas || []).map(x => x.chave));
   const atuais = new Map((plano?.acoes || []).map(a => [a.chave, a]));
   const sug = new Map(sugestoes.filter(s => !disp.has(s.chave)).map(s => [s.chave, s]));
@@ -677,9 +681,10 @@ export function mesclar(plano, sugestoes, ctx) {
   for (const a of out) compor(a, ctx);
   out.sort((x, y) => numDe(x.numero) - numDe(y.numero));
   const novo = { ...(plano || {}), acoes: out };
-  const mudou = estavel(out) !== antes;
+  const mudou = estavel(semQuem(out)) !== antes;
+  const mudouQuem = !mudou && estavel(out) !== antesQ;
   if (mudou) { delete novo.revisado_em; delete novo.revisado_por; }
-  return { plano: novo, mudou };
+  return { plano: novo, mudou, mudouQuem };
 }
 
 /* Ação escrita à mão pelo técnico. */

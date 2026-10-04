@@ -788,6 +788,13 @@ export function marcarConferido(id, gheId, uid, como) {
     const r = (g.riscos || []).find(x => x.uid === uid); if (!r) return;
     r.conferido = { como, em: new Date().toISOString() };
     if (como === 'confere' && r.soc?.exposicao && !r.exposicao) r.exposicao = r.soc.exposicao;
+    /* v234 (decisão do Alisson, 04/10): "Confere" = igual ao SOC, inclusive insalubridade,
+       periculosidade e aposentadoria. Se mudou, o técnico altera no risco. */
+    if (como === 'confere' && r.soc) for (const k of CONCLUSOES[r.categoria] || []) {
+      if (['S', 'N'].includes(r[k]) || (k === 'ae' && !('ae' in r.soc))) continue;
+      r[k] = r.soc[k] ? 'S' : 'N';
+      if (k === 'ins' && r.ins === 'S' && r.soc.grau && !r.grau) r.grau = r.soc.grau;
+    }
   });
 }
 
@@ -950,9 +957,9 @@ export async function atualizarPlano(id) {
   const ctx = await contextoPlano(d);
   const { itens, semNivel } = P.sugerir(d, ctx);
   if (!podeEditar(d) || !temPlano()) return { plano: planoDe(d), semNivel, ctx, mudou: false };
-  const { plano, mudou } = P.mesclar(planoDe(d), itens, ctx);
-  if (mudou) alterarAv(id, { plano });
-  return { plano: mudou ? plano : planoDe(d), semNivel, ctx, mudou };
+  const { plano, mudou, mudouQuem } = P.mesclar(planoDe(d), itens, ctx);
+  if (mudou || mudouQuem) alterarAv(id, { plano });   // v234: só o "Quem?" mudou → grava e mantém o "revisado"
+  return { plano: mudou || mudouQuem ? plano : planoDe(d), semNivel, ctx, mudou };
 }
 /* Altera o plano (fn recebe uma cópia). Qualquer mudança pede nova revisão do técnico. */
 export function alterarPlano(id, fn, { manterRevisado = false } = {}) {
