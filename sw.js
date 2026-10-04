@@ -20,7 +20,7 @@
 // version.json e o `APP_BUILD` dentro do app.html — os três com o mesmo
 // número. É o único passo manual do processo.
 
-const BUILD    = '232';
+const BUILD    = '233';
 const CACHE    = 'grid-' + BUILD;
 const FALLBACK = './app.html';
 
@@ -84,6 +84,8 @@ const CODIGO = [
   './modulos/campo/laudomiro.js',     // v232
   './modulos/campo/agentes.js',       // v232
   './modulos/campo/agentes-base.js',  // v232
+  './modulos/campo/encerrar.js',      // v233
+  './modulos/campo/escritorio.js',    // v233
   './modulos/treinamentos/modulo.js',
   './nucleo/config.js',
   './nucleo/dados.js',
