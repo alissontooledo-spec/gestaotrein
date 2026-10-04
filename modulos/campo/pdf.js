@@ -1003,7 +1003,9 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
     if (!vazio(av.acompanhante_nome)) assinantes.push({
       img: dados.assinaturas?.acomp, nome: String(av.acompanhante_nome).trim(),
       papel: [av.acompanhante_cargo, 'acompanhante pela empresa'].filter(x => !vazio(x)).map(x => String(x).trim()).join(SEP),
-      quando: av.assinatura_acomp_em ? `Assinado em ${dataHoraBR(av.assinatura_acomp_em)}` : 'Sem assinatura registrada',
+      quando: av.assinatura_acomp_em ? `Assinado em ${dataHoraBR(av.assinatura_acomp_em)}`
+        : !vazio(av.visita?.motivo_sem_assinatura) ? `Não assinou: ${String(av.visita.motivo_sem_assinatura).trim()}`   // v233 (PASSO-78)
+        : 'Sem assinatura registrada',
     });
     const colW = (CW - 10) / 2, hImg = 18;
     const textos = assinantes.map(a => [

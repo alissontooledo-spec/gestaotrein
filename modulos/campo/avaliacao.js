@@ -166,6 +166,7 @@ export async function render(params) {
     ${d.av.situacao === 'cancelada' ? nota('Esta visita foi cancelada na agenda. Para retomar, reative o compromisso na Agenda da Equipe.', 'red') : ''}
     ${d.av.revisao > 1 ? nota(`Revisão ${d.av.revisao} da avaliação ${esc(d.av.numero || '')}${d.av.motivo_revisao ? ` · motivo: <b>${esc(d.av.motivo_revisao)}</b>` : ''}. Ao concluir, ela substitui a anterior.`) : ''}
     ${quadros(d)}
+    ${blocoVisita(d, editavel)}
     ${blocoEsperando(d, editavel)}
     ${semSoc && editavel ? blocoSoc(d, cli, editavel) : ''}
     <div class="cp-sec-t2" id="cpGhes">GHEs desta empresa <span>${d.ghes.length}</span></div>
@@ -196,12 +197,31 @@ export async function render(params) {
 const curto = (t, n = 22) => { const s = String(t || ''); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
 export function proximoPasso(d, editavel = true) {
   if (!d.ghes.length) return editavel ? { rot: 'Adicionar o primeiro GHE', acao: 'campo:novo-ghe' } : { rot: 'Assinaturas e conclusão', acao: `ir:campo-finalizar:${_id}` };
+  /* v233: visita encerrada → o resto é no escritório. */
+  if (D.temVisita() && D.visitaEncerrada(d)) return { rot: 'Abrir o escritório', acao: `ir:campo-escritorio:${_id}` };
   const g = d.ghes.find(x => !['ok', 'pendente'].includes(D.gheCompleto(x)));
   if (g && editavel) return { rot: `Continuar: GHE ${curto(g.nome, 14)}`, acao: `ir:campo-ghe:${_id}~${g.id}` };
   const conf = D.temConferencia(d) ? D.resumoConferencia(d) : null;
   if (conf && conf.soc && conf.falta && editavel) return { rot: 'Continuar: conferir funcionários', acao: `ir:campo-funcionarios:${_id}` };
+  /* v233: no campo, o passo seguinte é encerrar a visita (o plano e a conclusão vão para o escritório). */
+  if (D.temVisita() && editavel) return { rot: 'Encerrar a visita', acao: `ir:campo-encerrar:${_id}` };
   if (D.temPlano() && editavel) { const pl = D.planoDe(d); if ((pl.acoes || []).length && !pl.revisado_em) return { rot: 'Continuar: revisar o plano', acao: `ir:campo-plano:${_id}` }; }
   return { rot: 'Assinaturas e conclusão', acao: `ir:campo-finalizar:${_id}` };
+}
+
+/* v233: visita em dois tempos — encerrar na empresa, terminar no escritório. */
+function blocoVisita(d, editavel) {
+  if (!D.temVisita() || d.av.situacao === 'cancelada' || !d.ghes.length) return '';
+  if (D.visitaEncerrada(d)) {
+    const em = D.encerradaEm(d);
+    const mot = D.motivoSemAssinatura(d);
+    return `<div class="cp-visita-enc"><span class="cp-visita-enc-ic">${I.check}</span>
+      <div class="cp-visita-enc-tx"><b>Visita encerrada${em ? ' em ' + esc(quando(em)) : ''}</b><span>Falta o escritório: conclusões, plano de ação, assinatura do técnico e PDF.${mot ? ' Acompanhante não assinou: ' + esc(mot) + '.' : ''}</span></div>
+      <div class="cp-visita-enc-bt">${btn('Abrir o escritório', `ir:campo-escritorio:${_id}`, { cls: 'btn-navy btn-sm' })}${editavel ? btn('Reabrir a visita', 'campo:reabrir-visita', { cls: 'btn-ghost btn-sm' }) : ''}</div></div>`;
+  }
+  if (!editavel) return '';
+  return `<div class="cp-visita-ab"><div><b>Terminou na empresa?</b><span>Encerre a visita com a assinatura do acompanhante. Textos, plano e conclusão ficam para o escritório.</span></div>
+    ${btn('Encerrar a visita', `ir:campo-encerrar:${_id}`, { cls: 'btn-outline btn-sm' })}</div>`;
 }
 
 /* v222: 4 quadros do topo — o que falta, com um toque cada. */
@@ -211,7 +231,7 @@ function quadros(d) {
   const conf = D.temConferencia(d) ? D.resumoConferencia(d) : null;
   const abertas = D.temPendEmpresa() ? D.pendEmpresaAbertas(d).length : 0;
   const nAss = (d.av.acompanhante_nome ? 1 : 0) + 1;
-  const feitas = (d.av.acompanhante_nome && D.assinaturaDe(d, 'acomp').path ? 1 : 0) + (D.assinaturaDe(d, 'tec').path ? 1 : 0);
+  const feitas = (d.av.acompanhante_nome && (D.assinaturaDe(d, 'acomp').path || D.motivoSemAssinatura(d)) ? 1 : 0) + (D.assinaturaDe(d, 'tec').path ? 1 : 0);
   const q = (cls, ic, num, rot, acao) => `<button type="button" class="cp-q ${cls}" ${acao ? `data-acao="${acao}"` : 'disabled'}><span class="cp-q-ic">${I[ic]}</span><span class="cp-q-tx"><b>${num}</b><span>${rot}</span></span></button>`;
   const gheTx = d.ghes.length ? `${gOk} de ${d.ghes.length}` : '0';
   const gheRot = d.ghes.length ? `${d.ghes.length === 1 ? 'GHE completo' : 'GHEs completos'}${rsv.length ? ` · ${rsv.filter(r => D.riscoCompleto(r) === 'ok').length}/${rsv.length} riscos` : ''}` : 'GHE criado';
@@ -303,6 +323,11 @@ export async function acao(nome, valor, redesenhar) {
   const d = D.doc(_id);
   if (!d) return false;
   if (nome === 'campo:novo-ghe') { modalNovoGhe(d, redesenhar); return true; }
+  if (nome === 'campo:reabrir-visita') {   // v233
+    if (!await confirmar('Reabrir a visita? A avaliação volta para "Em andamento" e pode ser encerrada de novo depois.')) return true;
+    try { await D.reabrirVisita(_id); avisar('Visita reaberta.'); } catch (e) { avisar(D.traduzirErro(e), 'erro'); }
+    redesenhar(); return true;
+  }
   if (nome === 'campo:psi-tirar-hub') {   // v230: tirar os psicossociais direto do cartão do GHE
     const g = d.ghes.find(x => x.id === valor); if (!g) return true;
     const n = (g.riscos || []).filter(r => D.ehPsicossocial(r)).length;

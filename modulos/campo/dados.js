@@ -50,7 +50,7 @@ export const MOTIVOS_PENDENCIA = [['documento_empresa', 'Aguardando documento da
   ['medicao', 'Medição a fazer'], ['outro', 'Outro']];
 export const SITUACAO = {
   agendada: ['Agendada', 'badge-blue'], em_andamento: ['Em andamento', 'badge-warn'],
-  aguardando: ['Aguardando informações', 'badge-warn'], concluida: ['Concluída', 'badge-green'],
+  aguardando: ['Aguardando informações', 'badge-warn'], escritorio: ['Falta o escritório', 'badge-escr'], concluida: ['Concluída', 'badge-green'],
   cancelada: ['Cancelada', 'badge-gray']
 };
 /* v222: matriz de risco padrão — a mesma do SOC (matriz 8, 5x5, lida em 29/09,
@@ -235,7 +235,7 @@ const SEL_AV_BASE = 'id,org_id,numero,cliente_id,compromisso_id,tecnico_id,data_
 /* Colunas que dependem de um PASSO: se o banco ainda não tem a coluna, o app
    segue como antes — lê sem ela e esconde a parte da tela que a usa.
    v203: funcionarios (PASSO-68) · v222: pendencias_empresa (PASSO-73). */
-const _COLS_OPC = { funcionarios: null, pendencias_empresa: null, plano: null, motivo_revisao: null };   // null = ainda não sabe · v223: plano (PASSO-74)
+const _COLS_OPC = { funcionarios: null, pendencias_empresa: null, plano: null, motivo_revisao: null, visita: null };   // v233: visita (PASSO-78)   // null = ainda não sabe · v223: plano (PASSO-74)
 const selAv = () => SEL_AV_BASE + Object.entries(_COLS_OPC).filter(([, v]) => v !== false).map(([k]) => ',' + k).join('');
 let SEL_AV = selAv();
 let _temConf = null;   // espelho de _COLS_OPC.funcionarios (nome antigo, usado abaixo)
@@ -255,6 +255,8 @@ async function lerAv(fn) {
   _temConf = _COLS_OPC.funcionarios;
   return r;
 }
+/* v233: o banco já tem a visita em dois tempos (PASSO-78)? */
+export const temVisita = () => _COLS_OPC.visita !== false;
 /* v222: o banco já tem a coluna do "O que falta a empresa enviar"? */
 export const temPendEmpresa = () => _COLS_OPC.pendencias_empresa !== false;
 /* v223: o banco já tem o plano de ação (PASSO-74)? */
@@ -531,7 +533,7 @@ export const assinaturaDe = (d, quem) => ({
 /* ══ Envio para o banco ═════════════════════════════════════════════════════ */
 const _enviando = new Map();
 const ehConflito = (e) => /CAMPO_CONFLITO/.test(e?.message || '');
-const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios', 'pendencias_empresa', 'plano', 'motivo_revisao'];
+const CAMPOS_AV = ['acompanhante_nome', 'acompanhante_cargo', 'observacoes', 'documentos', 'soc', 'funcionarios', 'pendencias_empresa', 'plano', 'motivo_revisao', 'visita'];
 const CAMPOS_GHE = ['ordem', 'nome', 'codigo_soc', 'setores', 'funcoes', 'menor18', 'descricao', 'ambientes', 'riscos', 'treinamentos'];
 
 export function sincronizar(id) {
@@ -605,7 +607,7 @@ async function _sincronizar(id) {
     /* 4. Avaliação */
     if (d.sujo.av || Object.keys(patchArq).length) {
       const patch = { ...patchArq };
-      for (const c of CAMPOS_AV) if (c in d.av && _COLS_OPC[c] !== false) patch[c] = d.av[c] ?? (c === 'pendencias_empresa' ? [] : c === 'plano' ? {} : null);
+      for (const c of CAMPOS_AV) if (c in d.av && _COLS_OPC[c] !== false) patch[c] = d.av[c] ?? (c === 'pendencias_empresa' ? [] : c === 'plano' || c === 'visita' ? {} : null);
       await gravarAv(d, patch);
       for (const a of d.sujo.arquivos) { delete d.av['_assinatura_' + a.campo + '_local']; delete d.av['_assinatura_' + a.campo + '_local_em']; }
       d.sujo.arquivos = [];
@@ -721,7 +723,7 @@ export function faltas(d, { semAssinaturaTec = false } = {}) {
     const pc = C.pendentes(r);
     if (!sem.length && pc.length) f.push({ texto: `${rot}: confira a classificação (${pc.map(x => x.id).join(', ')}): corrija ou justifique`, ghe: g.id, risco: r.uid, coerencia: true });
   }
-  if (d.av.acompanhante_nome && !assinaturaDe(d, 'acomp').path) f.push({ texto: `Assinatura do acompanhante (${d.av.acompanhante_nome})`, assinatura: 'acomp' });
+  if (d.av.acompanhante_nome && !assinaturaDe(d, 'acomp').path && !motivoSemAssinatura(d)) f.push({ texto: `Assinatura do acompanhante (${d.av.acompanhante_nome})`, assinatura: 'acomp' });
   if (!semAssinaturaTec && !assinaturaDe(d, 'tec').path) f.push({ texto: 'Assinatura do técnico', assinatura: 'tec' });
   return f;
 }
@@ -748,6 +750,7 @@ export const pendEmpresa = (d) => Array.isArray(d?.av?.pendencias_empresa) ? d.a
 export const pendEmpresaAbertas = (d) => pendEmpresa(d).filter(p => p && !p.resolvido_em);
 function espelharSituacao(d) {
   if (['concluida', 'cancelada'].includes(d.av.situacao)) return;
+  if (visitaEncerrada(d) && d.ghes.length) { d.av.situacao = 'escritorio'; return; }   // v233 (PASSO-78)
   const aguardando = pendEmpresaAbertas(d).length > 0 || pendencias(d).length > 0;
   d.av.situacao = aguardando ? 'aguardando' : (d.ghes.length ? 'em_andamento' : 'agendada');
 }
@@ -999,3 +1002,46 @@ if (typeof window !== 'undefined' && !window.__campoOnline) {
     for (const d of await idbTodos('docs')) if (temPendencia(d)) sincronizar(d.id).catch(() => {});
   });
 }
+
+
+/* ── v233: visita em dois tempos (PASSO-78) ────────────────────────────────
+   av.visita = { encerrada, encerrada_em, encerrada_por, motivo_sem_assinatura,
+                 reaberta_em, reaberta_por }
+   O app só escreve `encerrada` e `motivo_sem_assinatura`; hora e autor vêm do
+   banco. Encerrada = "Falta o escritório" (o banco decide; aqui o espelho). */
+export const visita = (d) => (d?.av?.visita && typeof d.av.visita === 'object') ? d.av.visita : {};
+export const visitaEncerrada = (d) => visita(d).encerrada === true;
+export const motivoSemAssinatura = (d) => String(visita(d).motivo_sem_assinatura || '').trim();
+export const MOTIVOS_SEM_ASSINATURA = ['Ninguém da empresa acompanhou', 'O acompanhante saiu antes do fim', 'O acompanhante não quis assinar'];
+/* Pode encerrar? Devolve o que falta (vazio = pode). */
+export function faltaParaEncerrar(d, motivo = null) {
+  const f = [];
+  if (!d.ghes.length) f.push('Cadastre pelo menos um GHE.');
+  const temAss = !!assinaturaDe(d, 'acomp').path;
+  const mot = String(motivo ?? motivoSemAssinatura(d)).trim();
+  if (!temAss && !mot) f.push('Colha a assinatura do acompanhante ou diga por que ele não assinou.');
+  return f;
+}
+export async function encerrarVisita(id, motivo = '') {
+  const d = _docs.get(id); if (!d || !podeEditar(d)) throw new Error('Esta avaliação não pode ser alterada.');
+  const falta = faltaParaEncerrar(d, motivo);
+  if (falta.length) throw new Error(falta.join(' '));
+  const v = { ...visita(d), encerrada: true };
+  const mot = String(motivo || '').trim();
+  if (mot && !assinaturaDe(d, 'acomp').path) v.motivo_sem_assinatura = mot.slice(0, 300); else delete v.motivo_sem_assinatura;
+  alterarAv(id, { visita: v, ...(v.encerrada_em ? {} : { _encerradaLocal: new Date().toISOString() }) });
+  espelharSituacao(d);
+  if (online()) { try { await sincronizar(id); } catch { /* fica guardado; o aviso de envio aparece na tela */ } }
+  return d;
+}
+export async function reabrirVisita(id) {
+  const d = _docs.get(id); if (!d || !podeEditar(d)) throw new Error('Esta avaliação não pode ser alterada.');
+  const v = { ...visita(d) };
+  v.encerrada = false; delete v.encerrada_em; delete v.encerrada_por;
+  alterarAv(id, { visita: v, _encerradaLocal: null });
+  espelharSituacao(d);
+  if (online()) { try { await sincronizar(id); } catch { /* idem */ } }
+  return d;
+}
+/* Quando foi encerrada (hora do banco; sem internet, a do aparelho). */
+export const encerradaEm = (d) => visita(d).encerrada_em || d?.av?._encerradaLocal || null;

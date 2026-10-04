@@ -29,6 +29,7 @@ const COLUNAS = [
   ['agendada', 'Agendadas', 'Nenhuma visita agendada.'],
   ['em_andamento', 'Em andamento', 'Nenhuma avaliação em andamento.'],
   ['aguardando', 'Aguardando informações', 'Nada esperando o cliente.'],
+  ['escritorio', 'Falta o escritório', 'Nenhuma visita esperando o escritório.'],   // v233 (PASSO-78)
   ['concluida', 'Concluídas', 'Nenhuma avaliação concluída.']
 ];
 const MAX_CONCLUIDAS_QUADRO = 5;
@@ -105,7 +106,15 @@ function levantamento(a) {
     } else {
       out.resumo = `${plural(nG, 'GHE', 'GHEs')} · ${plural(nR, 'risco', 'riscos')}`;
     }
-    if (a.situacao === 'aguardando' || pendencias.length) {
+    if (a.situacao === 'escritorio') {   // v233
+      const falta = [];
+      if (feitos != null && nR - feitos > 0) falta.push(plural(nR - feitos, 'risco a completar', 'riscos a completar'));
+      if (pendencias.length) falta.push(plural(pendencias.length, 'pendência', 'pendências'));
+      if (!a.assinatura_tec_path) falta.push('assinatura do técnico');
+      const v = a.visita || {};
+      out.status = `Visita encerrada${v.encerrada_em ? ' em ' + new Date(v.encerrada_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}${falta.length ? ' · falta ' + falta.join(', ') : ''}`;
+      out.tom = 'escr';
+    } else if (a.situacao === 'aguardando' || pendencias.length) {
       if (pendencias.length) {
         out.status = `${plural(pendencias.length, 'pendência', 'pendências')}: ${pendencias.map(p => p.texto || p.nome).filter(Boolean).slice(0, 2).join(', ')}`;
         out.tom = 'laranja';
@@ -139,6 +148,7 @@ function botoes(a, compacto) {
   const lst = a.situacao === 'agendada' ? [['Iniciar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
     : a.situacao === 'em_andamento' ? [...(compacto && D.temPendEmpresa() && podeMarcar() ? [['Falta algo?', 'btn-outline', `campo:falta-lista:${a.id}`]] : []), ['Continuar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
     : a.situacao === 'aguardando' ? [...(nEsp === 1 && podeMarcar() ? [['Chegou', 'btn-outline', `campo:chegou-lista:${a.id}`]] : []), ['Continuar', 'btn-amber', `ir:campo-avaliacao:${a.id}`]]
+    : a.situacao === 'escritorio' ? [['Escritório', 'btn-amber', `ir:campo-escritorio:${a.id}`]]
     : a.situacao === 'concluida'
       ? [...(a.pdf_path ? [['PDF', 'btn-outline', `campo:pdf-lista:${a.id}`]] : []), ...(compacto ? [] : [['Abrir', 'btn-outline', `ir:campo-avaliacao:${a.id}`]])]
       : compacto ? [] : [['Abrir', 'btn-outline', `ir:campo-avaliacao:${a.id}`]];
@@ -245,12 +255,12 @@ export async function render() {
 
   const topo = `
     ${offline ? nota('Sem internet. Aparecem só as avaliações já abertas neste aparelho; o que você fizer fica guardado e é enviado quando a conexão voltar.', 'warn') : ''}
-    <div class="cp-kcs">${kc('agendada', 'cal', n('agendada'), 'Agendadas')}${kc('em_andamento', 'pen', n('em_andamento'), 'Em andamento')}${kc('aguardando', 'relogio', n('aguardando'), 'Aguardando informações')}${kc('concluida', 'check', n('concluida'), 'Concluídas')}</div>
+    <div class="cp-kcs${D.temVisita() ? ' cinco' : ''}">${kc('agendada', 'cal', n('agendada'), 'Agendadas')}${kc('em_andamento', 'pen', n('em_andamento'), 'Em andamento')}${kc('aguardando', 'relogio', n('aguardando'), 'Aguardando informações')}${D.temVisita() ? kc('escritorio', 'doc', n('escritorio'), 'Falta o escritório') : ''}${kc('concluida', 'check', n('concluida'), 'Concluídas')}</div>
     <div class="turmas-filtros cp-filtros">
       <div class="turmas-busca"><span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-3)">${I.busca}</span>
         <input type="search" id="cpBuscaLista" data-acao="campo:busca" value="${esc(_busca)}" placeholder="Buscar empresa, CNPJ ou número..."></div>
       ${_modo === 'lista' ? `<select class="turmas-filtro-select" data-acao="campo:sit">
-        ${[['', 'Todas as situações'], ['abertas', 'Em aberto'], ['agendada', 'Agendadas'], ['em_andamento', 'Em andamento'], ['aguardando', 'Aguardando informações'], ['concluida', 'Concluídas'], ['cancelada', 'Canceladas']]
+        ${[['', 'Todas as situações'], ['abertas', 'Em aberto'], ['agendada', 'Agendadas'], ['em_andamento', 'Em andamento'], ['aguardando', 'Aguardando informações'], ['escritorio', 'Falta o escritório'], ['concluida', 'Concluídas'], ['cancelada', 'Canceladas']]
           .map(([v, l]) => `<option value="${v}" ${v === _sit ? 'selected' : ''}>${l}</option>`).join('')}
       </select>` : ''}
       ${gestor && tecnicos.length > 1 ? `<select class="turmas-filtro-select" data-acao="campo:tec"><option value="">Todos os técnicos</option>${tecnicos.map(([id, nome]) => `<option value="${id}" ${id === _tec ? 'selected' : ''}>${esc(nome)}</option>`).join('')}</select>` : ''}
@@ -264,7 +274,7 @@ export async function render() {
 
   /* ── Quadro ───────────────────────────────────────────────────────────── */
   function corpoQuadro() {
-    const cols = COLUNAS.map(([sit, rot, vazio]) => {
+    const cols = COLUNAS.filter(([sit]) => sit !== 'escritorio' || D.temVisita()).map(([sit, rot, vazio]) => {
       let itens = doSit(sit).sort(sit === 'concluida' ? ordemFechadas : ordemAbertas);
       const total = itens.length;
       let mais = '';
@@ -279,11 +289,11 @@ export async function render() {
     const visiveis = _sit ? cols.filter(c => c.sit === _sit) : cols;
     /* No celular: uma coluna por vez. Abre na primeira que tiver algo. */
     const celular = _sit || (cols.find(c => c.sit === _colCel) ? _colCel : (cols.find(c => c.total)?.sit || 'agendada'));
-    const abas = `<div class="cp-abas">${cols.map(c => `<button type="button" class="${c.sit === celular ? 'on' : ''}" data-acao="campo:col:${c.sit}">${esc(c.rot === 'Aguardando informações' ? 'Aguardando' : c.rot)} ${c.total}</button>`).join('')}</div>`;
+    const abas = `<div class="cp-abas">${cols.map(c => `<button type="button" class="${c.sit === celular ? 'on' : ''}" data-acao="campo:col:${c.sit}">${esc(c.rot === 'Aguardando informações' ? 'Aguardando' : c.rot === 'Falta o escritório' ? 'Escritório' : c.rot)} ${c.total}</button>`).join('')}</div>`;
     const filtroAviso = _sit ? `<div class="cp-filtro-ativo">Mostrando só: <b>${esc(cols.find(c => c.sit === _sit)?.rot || '')}</b><button type="button" class="btn btn-ghost btn-sm" data-acao="campo:sit:">Mostrar todas</button></div>` : '';
     const canceladas = doSit('cancelada').length;
     return `${filtroAviso}${_sit ? '' : abas}
-      <div class="cp-kb${_sit ? ' um' : ''}">${visiveis.map(c => `<section class="cp-col k-${c.sit}${c.sit === celular ? ' cel-on' : ''}">
+      <div class="cp-kb${_sit ? ' um' : ''}${cols.length === 5 ? ' cinco' : ''}">${visiveis.map(c => `<section class="cp-col k-${c.sit}${c.sit === celular ? ' cel-on' : ''}">
         <div class="cp-col-h"><i></i><span>${esc(c.rot)}</span><em>${c.total}</em></div>${c.html}</section>`).join('')}</div>
       ${canceladas ? `<div class="cp-rodape-nota">${plural(canceladas, 'visita cancelada', 'visitas canceladas')} fora do quadro. <button type="button" class="btn btn-ghost btn-sm" data-acao="campo:ver-canceladas">Ver na lista</button></div>` : ''}`;
   }
@@ -319,14 +329,14 @@ export function depois() {
       await D.catalogo({ fresco: true });
       const { lista } = await D.listarAvaliacoes();
       const eu = sessao.usuario()?.id;
-      const minhas = lista.filter(a => a.tecnico_id === eu && ['agendada', 'em_andamento', 'aguardando'].includes(a.situacao)).slice(0, 30);
+      const minhas = lista.filter(a => a.tecnico_id === eu && ['agendada', 'em_andamento', 'aguardando', 'escritorio'].includes(a.situacao)).slice(0, 30);
       for (const a of minhas) { try { await D.abrir(a.id); } catch { /* segue */ } }
     } catch (e) { console.warn('[campo] preparação para uso sem internet:', e?.message); }
     finally { setTimeout(() => { _preparando = false; }, 60000); }
   })();
 }
 
-const SITS = ['', 'abertas', 'agendada', 'em_andamento', 'aguardando', 'concluida', 'cancelada'];
+const SITS = ['', 'abertas', 'agendada', 'em_andamento', 'aguardando', 'escritorio', 'concluida', 'cancelada'];
 
 export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:busca') { _busca = valor || ''; redesenhar(); return true; }

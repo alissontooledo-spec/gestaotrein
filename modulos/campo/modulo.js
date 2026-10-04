@@ -41,6 +41,11 @@ export default {
       rota: () => import('./soc.js') },
     { id: 'campo-acoes', rotulo: 'Planos de ação', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
       rota: () => import('./acoes.js') },
+    /* v233: visita em dois tempos (PASSO-78): encerrar no celular, terminar no escritório. */
+    { id: 'campo-encerrar', rotulo: 'Encerrar a visita', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./encerrar.js') },
+    { id: 'campo-escritorio', rotulo: 'Escritório', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./escritorio.js') },
     /* v232: consulta de agentes do Laudomiro (insalubridade, aposentadoria especial, eSocial). */
     { id: 'campo-agentes', rotulo: 'Consultar agente', icone: 'book', perfis: TODOS, mobile: true,
       rota: () => import('./agentes.js') },

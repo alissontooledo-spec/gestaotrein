@@ -83,7 +83,9 @@ export async function render(params) {
     <div class="cp-sec"><div class="cp-sec-tit">Assinaturas</div><div class="cp-assins">
       <div class="cp-assin"><div class="cp-assin-quem">Acompanhante ${aAcomp.path ? '<span class="badge badge-green">Assinada</span>' : ''}</div>
         <div class="cp-assin-nome" data-cp-acomp-nome>${esc(d.av.acompanhante_nome || 'Nome a informar')}</div><div class="cp-assin-sub">${esc(d.av.acompanhante_cargo || 'Assina na visita, mesmo com pendência')}</div>
-        ${areaAssin('acomp', aAcomp, !trav && !!d.av.acompanhante_nome, 'Tocar para assinar', 'Informe o nome do acompanhante acima')}</div>
+        ${!aAcomp.path && D.motivoSemAssinatura(d) ? `<div class="cp-assin-area" style="cursor:default"><span>Não assinou: ${esc(D.motivoSemAssinatura(d))}</span></div>
+          ${trav ? '' : `<div class="cp-ajuda" style="margin-top:6px">Se ele puder assinar depois, ${btn('Colher a assinatura', 'campo:assinar:acomp', { cls: 'btn-ghost btn-sm' })}</div>`}`
+          : areaAssin('acomp', aAcomp, !trav && !!d.av.acompanhante_nome, 'Tocar para assinar', 'Informe o nome do acompanhante acima')}</div>
       <div class="cp-assin"><div class="cp-assin-quem">Técnico responsável ${aTec.path ? '<span class="badge badge-green">Assinada</span>' : '<span class="badge badge-gray">Ao concluir</span>'}</div>
         <div class="cp-assin-nome">${esc(tec?.nome || '')}</div><div class="cp-assin-sub">${esc(registroTec(tec))}</div>
         ${areaAssin('tec', aTec, !trav && !semTec.length, 'Tocar para assinar', 'Libera quando não faltar mais nada')}</div></div></div>
