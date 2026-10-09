@@ -31878,7 +31878,7 @@ async function enviarDocumentosPorEmail(turmaId, opts = {}) {
     // v236: o Resend recusa e-mails acima de 40MB (contando o Base64 dos anexos).
     // Turma grande (ex.: 59 PDFs = 36MB) NAO e mais recusada: os anexos sao
     // divididos em varios e-mails ("parte 1 de 2"), cada um bem abaixo do limite.
-    const LIMITE_PARTE_BYTES = 25 * 1024 * 1024;
+    const LIMITE_PARTE_BYTES = 10 * 1024 * 1024; // v237: 25MB deu 408 (timeout) no Resend
     const _partes = [];
     {
       let atual = [], atualTam = 0;
@@ -31918,6 +31918,7 @@ async function enviarDocumentosPorEmail(turmaId, opts = {}) {
       arquivos: _partes[_p],
       treinamento: `${payload.treinamento} (parte ${_p+1} de ${_partes.length})`,
     };
+    if (_p > 0) await new Promise(r => setTimeout(r, 1500));
     const resp = await sb.functions.invoke('enviar-documentos', {body: _payloadParte});
     if (resp.error) {
       // O supabase-js só traz uma mensagem genérica em resp.error.message quando a
@@ -32191,7 +32192,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '236';
+  var APP_BUILD = '237';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
