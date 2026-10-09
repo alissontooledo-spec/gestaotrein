@@ -31875,13 +31875,24 @@ async function enviarDocumentosPorEmail(turmaId, opts = {}) {
 
     if (arquivos.length === 0) throw new Error('Não foi possível baixar nenhum documento do Storage.');
 
-    // Resend recusa e-mails acima de 40MB (contando o Base64 dos anexos).
-    // Deixa uma margem de segurança pro corpo do e-mail e overhead do payload.
-    const LIMITE_ANEXOS_BYTES = 35 * 1024 * 1024;
-    const tamanhoTotalBytes = arquivos.reduce((soma, a) => soma + (a.conteudo_b64?.length || 0), 0);
-    if (tamanhoTotalBytes > LIMITE_ANEXOS_BYTES) {
-      const totalMB = (tamanhoTotalBytes / (1024*1024)).toFixed(1);
-      throw new Error(`Os documentos desta turma somam ${totalMB}MB em anexos — acima do limite de 40MB do provedor de e-mail, o envio seria recusado. Baixe os PDFs manualmente na tela de Documentos da turma (botão de cada um) e envie ao cliente por fora do sistema, em mais de um e-mail se necessário.`);
+    // v236: o Resend recusa e-mails acima de 40MB (contando o Base64 dos anexos).
+    // Turma grande (ex.: 59 PDFs = 36MB) NAO e mais recusada: os anexos sao
+    // divididos em varios e-mails ("parte 1 de 2"), cada um bem abaixo do limite.
+    const LIMITE_PARTE_BYTES = 25 * 1024 * 1024;
+    const _partes = [];
+    {
+      let atual = [], atualTam = 0;
+      for (const a of arquivos) {
+        const tam = a.conteudo_b64?.length || 0;
+        if (tam > 35 * 1024 * 1024) {
+          throw new Error(`O arquivo ${a.nome} tem ${(tam/(1024*1024)).toFixed(1)}MB, acima do limite do provedor de e-mail. Reduza o arquivo ou envie-o ao cliente por fora do sistema.`);
+        }
+        if (atual.length && atualTam + tam > LIMITE_PARTE_BYTES) {
+          _partes.push(atual); atual = []; atualTam = 0;
+        }
+        atual.push(a); atualTam += tam;
+      }
+      if (atual.length) _partes.push(atual);
     }
 
     const ag = (t.sessoes||[]).sort((a,b) => a.data > b.data ? 1 : -1);
@@ -31900,7 +31911,14 @@ async function enviarDocumentosPorEmail(turmaId, opts = {}) {
       org_id:        usuarioAtual.org_id,
     };
 
-    const resp = await sb.functions.invoke('enviar-documentos', {body: payload});
+    for (let _p = 0; _p < _partes.length; _p++) {
+    if (_partes.length > 1) showLoading(`Enviando e-mail ${_p+1} de ${_partes.length}...`);
+    const _payloadParte = _partes.length === 1 ? {...payload, arquivos: _partes[0]} : {
+      ...payload,
+      arquivos: _partes[_p],
+      treinamento: `${payload.treinamento} (parte ${_p+1} de ${_partes.length})`,
+    };
+    const resp = await sb.functions.invoke('enviar-documentos', {body: _payloadParte});
     if (resp.error) {
       // O supabase-js só traz uma mensagem genérica em resp.error.message quando a
       // Edge Function responde com status != 2xx ("Edge Function returned a non-2xx
@@ -31920,7 +31938,9 @@ async function enviarDocumentosPorEmail(turmaId, opts = {}) {
         }
       } catch(_) {}
       console.error('Falha na Edge Function enviar-documentos:', detalhe, resp.error);
+      if (_p > 0) throw new Error(`${_p} de ${_partes.length} e-mails já foram enviados ao cliente; o e-mail ${_p+1} falhou: ${detalhe}. Não reenvie o pacote inteiro: baixe os documentos que faltam na tela de Documentos da turma e envie ao cliente por fora.`);
       throw new Error(detalhe);
+    }
     }
 
     let envioRegistroErr = await _registrarEnvioEmail(turmaId, t.clientes?.email||'');
@@ -32171,7 +32191,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '235';
+  var APP_BUILD = '236';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
