@@ -2559,6 +2559,14 @@ body,.main-content{background:#F7F8FB}
 .gi5-hoje .gi5-alerta{color:#B42318}
 .gi5-prog i.gi5-p-dada{background:var(--navy);box-shadow:none}
 @media(max-width:767px){.gi-focus .gi-lb{margin:0 -17px 12px;padding:9px 17px}}
+/* v243: ao passar o mouse, o Hoje não fica mais azul-escuro; os cartões clicáveis só ganham um pouco mais de sombra */
+.gi-focus:hover{background:#FFFFFF}
+.gi-focus:hover,.gi-kpi[onclick]:hover,.gi-kpi[data-nav]:hover{border-color:transparent;box-shadow:0 2px 4px rgba(23,37,65,.08),0 14px 32px rgba(23,37,65,.13)}
+.gi-focus,.gi-kpi{transition:box-shadow .15s}
+/* v244: o mesmo padrão de cartão nas outras telas (Turmas, Clientes, Avaliação de Campo e onde houver .card) */
+.card,.turmas-kpi,.turma-tabela-wrap,body .cp-kc,body .cp-cd{border-color:transparent;box-shadow:0 1px 2px rgba(23,37,65,.06),0 8px 24px rgba(23,37,65,.08)}
+body .cp-kc:hover,body .cp-cd:hover{box-shadow:0 2px 4px rgba(23,37,65,.08),0 14px 32px rgba(23,37,65,.13)}
+body .cp-col{background:#EEF1F6}
 </style>
 </head>
 <body>
@@ -32255,7 +32263,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '242';
+  var APP_BUILD = '244';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
