@@ -97,12 +97,13 @@ export const t24 = (a) => a.prev.t24 ? ({ cod: a.prev.t24, desc: T24[a.prev.t24]
    impacto: 130 dB linear ou 120 dB(C) (NR-15 Anexo 2). VMB: 5 e 2,5 m/s². VCI: aren 1,1 e 0,5 / VDVR 21 e 9,1 (NR-15 Anexo 8, NR-09 Anexo I).
    calor: limite do Quadro 1 do Anexo 3 da NR-15 e nível de ação do Quadro 1 do Anexo III da NR-09, pela taxa metabólica (Quadro 2);
    M entre linhas → linha de M imediatamente maior (conservador). */
-const UN_MED = { ruido: ['dB(A)'], impacto: ['dB linear', 'dB(C)'], vmb: ['m/s² (aren)'], vci: ['m/s² (aren)', 'VDVR (m/s^1,75)'] };
+const UN_MED = { ruido: ['dB(A)'], impacto: ['dB(A)', 'dB linear', 'dB(C)'], vmb: ['m/s² (aren)'], vci: ['m/s² (aren)', 'VDVR (m/s^1,75)'] };
 export const ehCalor = (a) => a.medida?.tipo === 'calor';
 const linhaCalor = (tab, m) => (tab.find(r => r.m >= m) || tab[tab.length - 1]).ibutg;
 function limitesMedida(a, unidade) {
   const m = a.medida, t = m.tipo;
   if (t === 'ruido') return { lt: 85, na: 80, un: 'dB(A)', min: 76, max: 90 };
+  if (t === 'impacto' && (!unidade || unidade === 'dB(A)')) return null;   // v240: em dB(A) o impacto entra na dose (Anexo 1 / NHO-01)
   if (t === 'impacto') return unidade === 'dB(C)' ? { lt: 120, na: null, un: 'dB(C)', min: 100, max: 135 } : { lt: 130, na: null, un: 'dB linear', min: 110, max: 145 };
   if (t === 'vmb') return { lt: 5, na: 2.5, un: 'm/s²' };
   if (t === 'vci') return /VDVR/.test(unidade || '') ? { lt: 21, na: 9.1, un: 'm/s^1,75' } : { lt: 1.1, na: 0.5, un: 'm/s²' };
@@ -226,6 +227,7 @@ export function avaliar(a, ctx = {}) {
 function escala(a, ctx) {
   const t = a.medida?.tipo;
   if (t === 'ruido') return { min: 70, max: 120, na: 80, lt: 85, grave: 115, marcas: [70, 80, 85, 115] };
+  if (t === 'impacto' && (!ctx.unidade || ctx.unidade === 'dB(A)')) return null;
   if (t === 'impacto') { const C = ctx.unidade === 'dB(C)'; return C ? { min: 100, max: 140, na: null, lt: 120, grave: 130, marcas: [100, 120, 130, 140] } : { min: 110, max: 150, na: null, lt: 130, grave: 140, marcas: [110, 130, 140, 150] }; }
   const c = ctx.c; if (!c) return null;
   if (t === 'calor') return { min: Math.floor(c.na - 3), max: Math.ceil(c.lt + 2), na: c.na, lt: c.lt, marcas: [c.na, c.lt] };
@@ -252,6 +254,9 @@ export function conclusaoHtml(a, av) {
 }
 /* Conteúdo que muda ao digitar (régua + conclusão). */
 export function resultadoHtml(a, ctx = {}) {
+  if (a.medida?.tipo === 'impacto' && (!ctx.unidade || ctx.unidade === 'dB(A)'))
+    return `<div class="lmx-sem" style="margin:12px 0 14px"><b>Medido em dB(A): use a dose do ruído contínuo</b>O limite do ruído de impacto (Anexo 2) só existe em dB linear (130) ou dB(C) (120). Medido em dB(A) pelo dosímetro, o impacto já entra no Lavg e no NEN da jornada: avalie pela ficha do ruído contínuo (Anexo 1 e NHO-01).
+      <div style="margin-top:8px"><button type="button" class="lmx-lnk" data-acao="campo:lm-ver:ruido-continuo">Abrir Ruído contínuo ou intermitente</button></div></div>`;
   const av = avaliar(a, ctx);
   if (!av) return `${reguaHtml(a, null, ctx)}<div class="lmx-dica-med">${esc(dicaMedicao(a, ctx.unidade))}</div>`;
   return reguaHtml(a, av, ctx) + conclusaoHtml(a, av);
