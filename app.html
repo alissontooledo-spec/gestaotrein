@@ -2567,6 +2567,8 @@ body,.main-content{background:#F7F8FB}
 .card,.turmas-kpi,.turma-tabela-wrap,body .cp-kc,body .cp-cd{border-color:transparent;box-shadow:0 1px 2px rgba(23,37,65,.06),0 8px 24px rgba(23,37,65,.08)}
 body .cp-kc:hover,body .cp-cd:hover{box-shadow:0 2px 4px rgba(23,37,65,.08),0 14px 32px rgba(23,37,65,.13)}
 body .cp-col{background:#EEF1F6}
+/* v246: Agenda da Equipe com o mesmo cartão de sombra suave */
+.ag-quadro{border-color:transparent!important;box-shadow:0 1px 2px rgba(23,37,65,.06),0 8px 24px rgba(23,37,65,.08)}
 </style>
 </head>
 <body>
@@ -7897,7 +7899,8 @@ function _giAvisosHtml(av, docs) {
     return `<div class="gi5-emdia">Tudo em dia. Nenhuma aula esperando registro, nenhuma turma parada${docs.erro ? '' : ' e nenhum documento pendente'}.</div>`
       + (docs.erro ? '<div class="gi5-carregando">Não foi possível conferir os documentos pendentes agora. Veja em Relatórios.</div>' : '');
   }
-  return _rxAvisos(itens) + (docs && docs.erro ? '<div class="gi5-carregando">Não foi possível conferir os documentos pendentes agora. Veja em Relatórios.</div>' : '');
+  return _rxAvisos(itens) + (docs && docs.erro ? '<div class="gi5-carregando">Não foi possível conferir os documentos pendentes agora. Veja em Relatórios.</div>' : '')
+    + (docs === null ? '<div class="gi5-carregando">Conferindo documentos pendentes…</div>' : '');   // v245: avisa enquanto confere
 }
 
 function _giView218(d, extras) {
@@ -7993,7 +7996,18 @@ async function renderHomeAdmin(opcoes = {}) {
 async function _giCarregarDocsPendentes(token, oi, dd, d) {
   let docs;
   try {
-    const tudo = (tab, cols) => _lerTudo(() => sb.from(tab).select(cols).eq('org_id', oi).order('id'));
+    /* v245: só as turmas CONCLUÍDAS entram na conta (_rxPendenciasDocumentos só olha
+       para elas). Antes lia presenças, documentos etc. de TODAS as turmas da organização,
+       página por página, e o aviso demorava segundos para aparecer. Agora busca só o
+       que é das concluídas, em blocos de turmas lidos em paralelo. Mesma regra, mesmo número. */
+    const conc = dd.turmas.filter(t => t.status === 'concluida').map(t => t.id);
+    const blocos = []; for (let i = 0; i < conc.length; i += 80) blocos.push(conc.slice(i, i + 80));
+    const tudo = async (tab, cols) => {
+      if (!blocos.length) return { data: [], error: null };
+      const rs = await Promise.all(blocos.map(ids => _lerTudo(() => sb.from(tab).select(cols).eq('org_id', oi).in('turma_id', ids).order('id'))));
+      const err = rs.find(r => !r || r.error);
+      return err ? { data: null, error: err?.error || { message: 'falha' } } : { data: rs.flatMap(r => r.data || []), error: null };
+    };
     const [docR, envR, presR, partR, avR] = await Promise.all([
       tudo('documentos', 'id,turma_id,tipo,colaborador_id,emitido_em,revogado_em'),
       tudo('envios_email', 'id,turma_id,status'),
@@ -11752,8 +11766,8 @@ async function renderConformidade(manterEstado = false) {
 
   if (!planoAtinge('pro')) {
     setConteudo(`
-      <div class="card" style="border:2px solid var(--amber);background:rgba(245,158,11,.04);text-align:center;padding:32px 24px">
-        <div style="width:52px;height:52px;border-radius:50%;background:rgba(245,158,11,.15);color:var(--amber-h);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">${ICONS.shield}</div>
+      <div class="card" style="text-align:center;padding:32px 24px">
+        <div style="width:52px;height:52px;border-radius:50%;background:#EEF1F6;color:var(--navy);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">${ICONS.shield}</div>
         <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:8px">Controle de Conformidade</div>
         <p style="font-size:13px;color:var(--text-2);line-height:1.6;max-width:420px;margin:0 auto 18px">
           Acompanhe vencimentos de certificados por colaborador, o índice de conformidade da organização e receba alertas de renovação antes que expirem.
@@ -18728,7 +18742,7 @@ async function renderAgendaEquipe() {
       </div>
     </div>
 
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden">
+    <div class="ag-quadro" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden">
       <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
         <button onclick="_agEquipeNav(-1)" aria-label="Período anterior" style="border:1px solid var(--border);background:var(--surface);color:var(--text-1);cursor:pointer;width:30px;height:30px;border-radius:7px;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0">‹</button>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center">
@@ -19197,9 +19211,9 @@ function _agEquipeRenderSemana() {
   const cabecalho = dias.map(data => {
     const dd = Number(data.slice(8,10));
     const ehHoje = data === hoje;
-    return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7);border:1px solid var(--border)'}">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:${ehHoje?'var(--amber-text)':'var(--text-2)'}">${diasSemanaAbrev[new Date(data+'T12:00:00').getDay()]}</div>
-      <div style="font-size:15px;font-weight:800;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dd}</div>
+    return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}')" style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;text-align:center;padding:6px 4px;cursor:pointer;border-radius:6px;${ehHoje?'background:var(--navy);border:1px solid var(--navy)':'background:#F3F5F9;border:1px solid transparent'}">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:600;color:${ehHoje?'rgba(255,255,255,.75)':'var(--text-2)'}">${diasSemanaAbrev[new Date(data+'T12:00:00').getDay()]}</div>
+      <div style="font-size:15px;font-weight:800;color:${ehHoje?'#fff':'var(--text-1)'}">${dd}</div>
     </div>`;
   }).join('');
 
@@ -19242,7 +19256,7 @@ function _agEquipeRenderSemana() {
       const sessoes = (sessoesPorDia[data]||[]).filter(s=>s.instrutor_id===inst.id).sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
       if (!sessoes.length) {
         return `<div onclick="_agEquipeCelulaSemanaClique(event,'${data}','${inst.id}')" title="Clique para agendar com ${escapeHtml(inst.nome)} neste dia"
-          style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:var(--gray-50,#F0F2F7);display:flex;align-items:center;justify-content:center;${bordaInst}">
+          style="flex:1 1 ${colLargura}px;min-width:${colLargura}px;height:${alturaCelula}px;padding:6px;cursor:pointer;border-radius:6px;background:#F7F8FB;display:flex;align-items:center;justify-content:center;${bordaInst}">
           <span style="font-size:11px;color:var(--text-3)">Livre</span>
         </div>`;
       }
@@ -19321,7 +19335,7 @@ function _agEquipeRenderSemana() {
       const cabecalhoDia = `<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
         <span style="font-size:11px;font-weight:700;color:${ehHoje?'var(--amber-text)':'var(--text-2)'};text-transform:uppercase;letter-spacing:.03em">${diasSemanaMobile[new Date(data+'T12:00:00').getDay()]}</span>
         <span style="font-size:14px;font-weight:700;color:${ehHoje?'var(--amber-text)':'var(--text-1)'}">${dd}</span>
-        ${ehHoje?'<span style="font-size:10.5px;font-weight:700;color:var(--amber-text);background:var(--amber-l);padding:1px 6px;border-radius:999px">HOJE</span>':''}
+        ${ehHoje?'<span style="font-size:10.5px;font-weight:700;color:#fff;background:var(--navy);padding:1px 7px;border-radius:999px;letter-spacing:.04em">HOJE</span>':''}
       </div>`;
       let corpoDia;
       if (!sessoesDia.length) {
@@ -19571,7 +19585,7 @@ function _agEquipeRenderMes() {
     // cortando o sábado. O popover (position:fixed) não é afetado pelo
     // overflow:hidden aqui — position:fixed ignora overflow de ancestral.
     celulas.push(`<div onclick="_agEquipeCelulaMesClique(event,'${dataISO}')"
-      style="position:relative;height:92px;min-width:0;border-radius:6px;padding:6px;cursor:pointer;overflow:hidden;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':sessoesDia.some(s=>s._conflito)?'background:var(--red-l);outline:2px solid var(--red);outline-offset:-2px':ehHoje?'background:var(--amber-l);border:1px solid var(--amber)':'background:var(--gray-50,#F0F2F7)'}">
+      style="position:relative;height:92px;min-width:0;border-radius:6px;padding:6px;cursor:pointer;overflow:hidden;${popoverAberto?'background:var(--surface);border:1.5px solid var(--navy)':sessoesDia.some(s=>s._conflito)?'background:var(--red-l);outline:2px solid var(--red);outline-offset:-2px':ehHoje?'background:#EEF2F8;border:1.5px solid var(--navy)':'background:var(--gray-50,#F0F2F7)'}">
       <div style="font-size:13px;font-weight:800;line-height:1.2;color:${(ehHoje && !popoverAberto && !sessoesDia.some(s=>s._conflito))?'var(--amber-text)':'var(--text-1)'}">${dia}</div>
       ${corpo}
       ${popoverHtml}
@@ -32263,7 +32277,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '244';
+  var APP_BUILD = '246';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
