@@ -404,9 +404,9 @@ function riscoAberto(d, g, r, trav) {
         <div><label class="cp-lbl">IRC</label>${inp('r.ilu.irc', ilu.irc, { travado: trav, modo: 'decimal' })}</div></div></div>` : '';
 
   /* v232: o Laudomiro mostra o que a base diz do agente, sem marcar nada. */
-  const agLm = r.categoria === 'quimico' ? LM.doRisco(r.nome) : null;
+  const agLm = ['quimico', 'fisico', 'biologico', 'operacao_perigosa'].includes(r.categoria) ? LM.doRisco(r.nome, r.categoria) : null;
   const conc = cols.length ? `<div class="cp-sec"><div class="cp-sec-tit">Conclusão <span class="dir" style="color:var(--text-3)">pode ficar para o escritório</span></div>
-      ${agLm ? LM.dicaRiscoHtml(agLm, r.medicao) : ''}
+      ${agLm ? LM.dicaRiscoHtml(agLm, r.medicao, { aplicar: !trav && cols.length > 0 }) : ''}
       <div class="cp-conc">${cols.map(k => `<div class="cp-conc-it"><div class="t">${nomeConc[k]}${pad[k] ? `<span class="cp-padrao">padrão da ficha: ${esc(pad[k])}</span>` : ''}${socDica(k)}</div>
         ${seg('r:' + k, [['S', 'Sim'], ['N', 'Não']], r[k], { travado: trav })}
         ${k === 'ins' && r.ins === 'S' ? `<div class="cp-seg-leg">Grau</div>${seg('r:grau', graus.map(x => [x, x]), r.grau, { travado: trav })}` : ''}</div>`).join('')}</div>
@@ -617,15 +617,35 @@ function modalNaoListado() {
   });
 }
 
+/* v239: "Aplicar ao risco" — preenche a Conclusão com o que o Laudomiro concluiu.
+   Só as colunas que o risco tem (ins/per/ae); o técnico confere e pode mudar. */
+function aplicarLaudomiro(id, redesenhar) {
+  const a = LM.porId(id); const d = doc(); const g = ghe();
+  const r = g?.riscos.find(x => x.uid === _risco);
+  if (!a || !d || !r || !D.podeEditar(d)) return;
+  const cols = colunasConclusao(r);
+  const sg = LM.sugestao(a, r.medicao || {});
+  const mudou = [];
+  altR(rr => { for (const k of cols) if (sg.valores[k]) { rr[k] = sg.valores[k]; mudou.push(k); }
+    if (cols.includes('ins')) { if (rr.ins === 'S' && sg.valores.grau) rr.grau = sg.valores.grau; if (rr.ins !== 'S') rr.grau = null; } });
+  redesenhar();
+  const nomes = { ins: 'insalubridade', per: 'periculosidade', ae: 'aposentadoria' };
+  avisar(mudou.length ? `Conclusão preenchida pelo Laudomiro (${mudou.map(k => nomes[k]).join(', ')}). Confira antes de concluir.${sg.falta ? ' ' + sg.falta : ''}` : (sg.falta || 'Nada a preencher para este risco.'));
+}
+
 export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lm-ficha') {
     const a = LM.porId(valor); if (!a) return true;
     const p = ponte();
+    const podeAplicar = (() => { const dd = doc(), gg = ghe(), rr = gg?.riscos.find(x => x.uid === _risco); return !!(dd && rr && D.podeEditar(dd) && colunasConclusao(rr).length); })();
+    window.__lmAplicar = (id) => aplicarLaudomiro(id, redesenhar);   // v239: o botão do modal chama de fora do módulo
     p.abrirModal('Laudomiro', LM.fichaHtml(a, { compacta: true }),
       `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
+       ${podeAplicar ? `<button class="btn lmx-btn-am" onclick="fecharModal();window.__lmAplicar&&window.__lmAplicar('${esc(a.id)}')">Aplicar ao risco</button>` : ''}
        <button class="btn btn-navy" onclick="fecharModal();window.GRID&&window.GRID.tratarAcao('ir:campo-agentes:${esc(a.id)}')">Abrir a ficha completa</button>`);
     return true;
   }
+  if (nome === 'campo:lm-aplicar') { aplicarLaudomiro(valor, redesenhar); return true; }
   const d = doc(); const g = ghe();
   if (!d || !g) return false;
   const [a1, ...resto] = String(valor ?? '').split(':');

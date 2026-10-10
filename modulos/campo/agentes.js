@@ -1,83 +1,113 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   GRID · modulos/campo/agentes.js — tela "Consultar agente" (v232, 04/10/2026)
-   Busca na base do Laudomiro (laudomiro.js) e mostra a ficha: insalubridade,
-   aposentadoria especial, código do eSocial e comparação com uma medição.
-   Computador: busca à esquerda, ficha à direita. Celular: busca; tocar num
-   agente abre a ficha com "Voltar à busca".
+   GRID · modulos/campo/agentes.js — tela "Consultar agente" (v232; v239: nova cara)
+   v239 (Opção A v2, aprovada pelo Alisson em 09/10/2026, depois da revisão de
+   três especialistas): busca + filtro por grupo; lista separada por grupo com
+   etiqueta escrita; ficha com a medição e a conclusão primeiro, enquadramento,
+   seções que abrem ao tocar e "Copiar texto para…" (laudo, LTCAT/PPP, PGR).
+   Computador: lista à esquerda, ficha à direita. Celular: lista; tocar abre a
+   ficha com "Voltar à busca" e o botão de copiar fixo embaixo.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as L from './laudomiro.js';
-import { I, esc, btn, ligarTela, avisar, ponte } from './comum.js';
+import { I, esc, ligarTela, avisar, ponte } from './comum.js';
 
-let _q = '', _sel = null, _med = '', _un = '', _verFicha = false;
-const COMUNS = ['tolueno-toluol', 'xileno-xilol', 'oleos-minerais-graxas-e-oleo-queimado', 'solventes-aromaticos-thinner-em-limpeza-e-pintura',
-  'silica-livre-cristalizada-quartzo', 'fumos-de-solda', 'formaldeido-formol', 'amonia', 'cimento-e-cal', 'chumbo', 'acido-cloridrico', 'monoxido-de-carbono'];
-const ATALHOS = [['tolueno', 'Tolueno'], ['graxa', 'Graxa'], ['thinner', 'Thinner'], ['sílica', 'Sílica'], ['solda', 'Solda'], ['formol', 'Formol'], ['cimento', 'Cimento'], ['amônia', 'Amônia']];
+let _q = '', _grp = 'todos', _sel = null, _verFicha = false, _ctx = {};
+const GRUPOS = [['todos', 'Todos'], ['quimico', 'Químicos'], ['fisico', 'Físicos'], ['biologico', 'Biológicos'], ['periculosidade', 'Periculosidade']];
+const NOME_GRUPO = { quimico: 'Químicos', fisico: 'Físicos', biologico: 'Biológicos', periculosidade: 'Periculosidade' };
+/* Quando não há busca nem filtro: os mais vistos na visita, por grupo. */
+const COMUNS = {
+  fisico: ['ruido-continuo', 'calor', 'vibracao-maos-bracos', 'vibracao-corpo-inteiro'],
+  quimico: ['tolueno-toluol', 'oleos-minerais-graxas-e-oleo-queimado', 'solventes-aromaticos-thinner-em-limpeza-e-pintura', 'silica-livre-cristalizada-quartzo', 'fumos-de-solda'],
+  biologico: ['bio-esgoto', 'bio-lixo-urbano', 'bio-saude-humana'],
+  periculosidade: ['peri-inflamaveis', 'peri-energia-eletrica', 'peri-motocicleta']
+};
+const contar = (g) => L.AGENTES.filter(a => L.grupoDe(a) === g).length;
+const IC_COP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
 
-const mini = (a) => { const i = L.insal(a), p = L.apos(a);
-  return `<span class="lm-mini ins-${i.cls}">${esc(a.nr15.grau ? `${a.nr15.grau} ${a.nr15.pct}%` : i.v)}</span><span class="lm-mini ae-${p.cls}">${esc(p.cls === 'sim' ? `aposent. ${a.prev.anos} anos` : p.cls === 'talvez' ? 'aposent. pode ter' : 'sem aposent.')}</span>`; };
-
+function itemHtml(a) {
+  const e = L.etiqueta(a), ref = L.referencia(a);
+  return `<button type="button" class="lmx-li${a.id === _sel ? ' on' : ''}" data-acao="campo:lm-ver:${esc(a.id)}"${a.id === _sel ? ' aria-current="true"' : ''}>
+    <span class="n">${esc(a.nome)}</span><span class="r"><span class="lmx-bdg b-${e.cls}">${esc(e.t)}</span>${esc(ref)}</span></button>`;
+}
 function listaHtml() {
   const t = _q.trim();
-  const itens = t ? L.buscar(t) : COMUNS.map(L.porId).filter(Boolean);
-  const tn = L.norm(t);
-  const linha = (a) => { const hit = t && !L.norm(a.nome).includes(tn) ? a.sinonimos.find(s => L.norm(s).includes(tn)) : '';
-    return `<button type="button" class="lm-li${a.id === _sel ? ' on' : ''}" data-acao="campo:lm-ver:${esc(a.id)}">
-      <span class="n">${esc(a.nome)}</span>${hit ? `<span class="h">também: ${esc(hit)}</span>` : ''}<span class="b">${mini(a)}</span></button>`; };
-  const cab = t ? `<div class="lm-cont">${itens.length ? `${itens.length} encontrado${itens.length === 1 ? '' : 's'}` : ''}</div>`
-    : `<div class="lm-cont">Comuns na visita · ou digite para buscar entre os ${L.AGENTES.length} da base</div>`;
-  return cab + (itens.length ? `<div class="lm-lista">${itens.slice(0, 80).map(linha).join('')}</div>`
-    : `<div class="lm-vazio">Nada encontrado para "${esc(t)}". Tente outro nome, o nome do produto na FISPQ ou o número CAS.</div>`);
+  if (t) {
+    const itens = L.buscar(t).filter(a => _grp === 'todos' || L.grupoDe(a) === _grp);
+    return itens.length ? `<div class="lmx-lista"><div class="lmx-lh"><span>${itens.length} encontrado${itens.length === 1 ? '' : 's'}</span></div>${itens.slice(0, 80).map(itemHtml).join('')}</div>`
+      : `<div class="lmx-vazio">Nada encontrado para "${esc(t)}". Tente outro nome, o nome do produto na FISPQ, a atividade ou o número CAS.</div>`;
+  }
+  if (_grp !== 'todos') {
+    const itens = L.AGENTES.filter(a => L.grupoDe(a) === _grp).sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
+    return `<div class="lmx-lista"><div class="lmx-lh"><span>${NOME_GRUPO[_grp]}</span><span>${itens.length}</span></div>${itens.map(itemHtml).join('')}</div>`;
+  }
+  return `<div class="lmx-lista">${['fisico', 'quimico', 'biologico', 'periculosidade'].map(g => {
+    const itens = COMUNS[g].map(L.porId).filter(Boolean), n = contar(g);
+    return `<div class="lmx-lh"><span>${NOME_GRUPO[g]}</span><span>${n}</span></div>${itens.map(itemHtml).join('')}
+      ${n > itens.length ? `<button type="button" class="lmx-mais" data-acao="campo:lm-grp:${g}">Ver ${g === 'periculosidade' ? 'as' : 'os'} ${n} ${g === 'periculosidade' ? 'situações' : NOME_GRUPO[g].toLowerCase()}</button>` : ''}`;
+  }).join('')}</div>`;
 }
-
 function boasVindas() {
-  return `<div class="lm-ficha lm-bv"><div class="lm-nome">Como ler a ficha</div>
-    <div class="lm-sin">Escolha um agente na lista. A ficha responde três perguntas:</div>
-    <div class="lm-resp">
-      <div class="lm-t ins-med"><div class="lm-t-k">Insalubridade</div><div class="lm-t-v">Grau e %</div><div class="lm-t-s">pela NR-15: acima do limite ou pela atividade</div></div>
-      <div class="lm-t ae-sim"><div class="lm-t-k">Aposentadoria especial</div><div class="lm-t-v">Sim, pode ter ou não</div><div class="lm-t-s">pelo Anexo IV do Decreto 3.048</div></div>
-      <div class="lm-t es"><div class="lm-t-k">eSocial · S-2240</div><div class="lm-t-v mono">00.00.000</div><div class="lm-t-s">código da Tabela 24</div></div></div>
-    <div class="lm-rod">Base montada pelo Laudomiro a partir dos textos oficiais (NR-15, Decreto 3.048, eSocial, LINACH e IN INSS 128). É indicação para o técnico; não substitui laudo nem LTCAT.</div></div>`;
+  return `<article class="lmx-ficha lmx-bv"><header class="lmx-cab"><div class="lmx-cab-t"><h2 class="lmx-nome">Escolha um agente</h2>
+    <div class="lmx-sin">Químico, físico, biológico ou uma atividade perigosa. A ficha responde se gera insalubridade ou periculosidade, se conta para a aposentadoria especial e qual o código do eSocial. Com a medição em mãos, ela compara com o nível de ação e o limite.</div></div></header>
+    <footer class="lmx-rod">Base montada pelo Laudomiro a partir dos textos oficiais (NR-15, NR-09, NR-16, Decreto 3.048, eSocial, LINACH e IN INSS 128). É indicação para o técnico; não substitui laudo nem LTCAT.</footer></article>`;
+}
+const btnCopiar = (cls = '') => `<button type="button" class="btn lmx-btn-am ${cls}" data-acao="campo:lm-copiar">${IC_COP}<span>Copiar texto para…</span></button>`;
+
+function pintarResultado() {
+  const a = L.porId(_sel); if (!a) return;
+  document.querySelectorAll('[data-lm-res]').forEach(el => { el.innerHTML = L.resultadoHtml(a, _ctx); });
+  if (L.ehRuido(a)) {
+    const v1 = parseFloat(String(_ctx.valor || '').replace(',', '.')), v2 = parseFloat(String(_ctx.valor2 || '').replace(',', '.'));
+    document.querySelectorAll('[data-lm-dose="1"]').forEach(el => { el.textContent = Number.isFinite(v1) ? `dose ${L.doseQ(v1, 5)}%` : ''; });
+    document.querySelectorAll('[data-lm-dose="2"]').forEach(el => { el.textContent = Number.isFinite(v2) ? `dose ${L.doseQ(v2, 3)}%` : ''; });
+  }
 }
 
 export async function render(params = {}) {
-  if (params.id && L.porId(params.id) && params.id !== _sel) { _sel = params.id; _verFicha = true; _med = ''; _un = ''; }
+  if (params.id && L.porId(params.id) && params.id !== _sel) { _sel = params.id; _verFicha = true; _ctx = {}; }
   ligarTela({ digitar: (chave, valor) => {
-    if (chave !== 'lm.med') return;
-    _med = valor;
-    const a = L.porId(_sel); if (!a) return;
-    const c = L.comparar(a, valor, _un || L.unidades(a)[0]);
-    document.querySelectorAll('[data-lm-res]').forEach(el => { el.innerHTML = c ? L.barraHtml(c) : '<div class="lm-med-r">Digite o resultado para comparar com o limite.</div>'; });
+    if (chave === 'lm.med') { _ctx.valor = valor; pintarResultado(); }
+    else if (chave === 'lm.med2') { _ctx.valor2 = valor; pintarResultado(); }
   } });
   const a = L.porId(_sel);
   ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">${a && _verFicha ? esc(L.curtoNome(a.nome)) : 'Consultar agente'}</div>`);
-  return `<div class="cp-topo lm-topo${a && _verFicha ? ' na-ficha' : ''}"><div class="cp-topo-txt"><div class="cp-topo-emp">Avaliação de Campo</div><div class="cp-topo-tit">Consultar agente</div>
-      <div class="cp-topo-sub">Insalubridade, aposentadoria especial e código do eSocial de cada agente, pelo Laudomiro.</div></div>${btn('Voltar para as avaliações', 'ir:campo', { cls: 'btn-ghost' })}</div>
-    <div class="lm-wrap${a ? ' tem-sel' : ''}${_verFicha ? ' ver-ficha' : ''}">
-      <div class="lm-col-busca">
-        <div class="turmas-busca lm-busca"><span class="lm-busca-ic">${I.busca}</span>
-          <input type="search" id="lmBusca" data-acao="campo:lm-busca" value="${esc(_q)}" placeholder="Nome, produto ou CAS" autocomplete="off"></div>
-        ${_q.trim() ? '' : `<div class="lm-atalhos">${ATALHOS.map(([q, r]) => `<button type="button" data-acao="campo:lm-atalho:${esc(q)}">${esc(r)}</button>`).join('')}</div>`}
-        ${listaHtml()}
-      </div>
-      <div class="lm-col-ficha">
-        ${a ? `<button type="button" class="lm-volta" data-acao="campo:lm-voltar">${I.chevL}<span>Voltar à busca</span></button>
-          ${L.fichaHtml(a, { medicao: _med, unidade: _un, acoes: btn(`<span style="width:15px;height:15px;display:inline-flex">${I.copiar}</span> Copiar resumo`, 'campo:lm-copiar', { cls: 'btn-outline btn-sm lm-copiar' }) })}` : boasVindas()}
+  return `<div class="lmx-topo${a && _verFicha ? ' na-ficha' : ''}">
+      <div class="lmx-crumb">Avaliação de campo <span aria-hidden="true">/</span> <button type="button" class="lmx-lnk" data-acao="ir:campo">voltar para as avaliações</button></div>
+      <h1 class="lmx-tit">Consultar agente</h1>
+      <div class="lmx-filtros">
+        <div class="lmx-busca"><span class="lmx-busca-ic">${I.busca}</span><input type="search" id="lmBusca" data-acao="campo:lm-busca" value="${esc(_q)}" placeholder="Agente, produto, atividade ou CAS" autocomplete="off" aria-label="Buscar agente"></div>
+        <div class="lmx-seg" role="tablist">${GRUPOS.map(([k, t]) => `<button type="button" role="tab" aria-selected="${_grp === k}" class="${_grp === k ? 'on' : ''}" data-acao="campo:lm-grp:${k}">${t}<i>${k === 'todos' ? L.AGENTES.length : contar(k)}</i></button>`).join('')}</div>
+      </div></div>
+    <div class="lmx-wrap${a ? ' tem-sel' : ''}${_verFicha ? ' ver-ficha' : ''}">
+      <div class="lmx-col-lista">${listaHtml()}</div>
+      <div class="lmx-col-ficha">
+        ${a ? `<button type="button" class="lmx-volta" data-acao="campo:lm-voltar">${I.chevL}<span>Voltar à busca</span></button>
+          ${L.fichaHtml(a, { ctx: _ctx, acoes: btnCopiar() })}
+          <div class="lmx-barra">${btnCopiar('lmx-btn-big')}</div>` : boasVindas()}
       </div>
     </div>`;
 }
 
+function abrirCopiar() {
+  const a = L.porId(_sel); if (!a) return;
+  const t = L.textos(a, _ctx);
+  window.__lmCopiar = async (tipo) => {
+    try { await navigator.clipboard.writeText(t[tipo] + '\nIndicação do GRID (Laudomiro); não substitui laudo nem LTCAT.'); avisar('Texto copiado. Cole no documento.'); }
+    catch { avisar('Não foi possível copiar neste aparelho.', 'erro'); }
+  };
+  const op = [['laudo', 'Laudo de insalubridade ou periculosidade', 'Agente, critério, resultado e conclusão pela NR-15 ou NR-16.'],
+    ['ltcat', 'LTCAT e PPP', 'Enquadramento no Anexo IV, conclusão para aposentadoria e código do eSocial.'],
+    ['pgr', 'PGR', 'Perigo, avaliação e medidas de controle.']];
+  ponte().abrirModal?.('Copiar texto para…', `<div class="lmx-cp">${op.map(([k, tt, d]) => `<button type="button" class="lmx-cp-op" onclick="window.__lmCopiar&&window.__lmCopiar('${k}');fecharModal()"><b>${tt}</b><span>${d}</span></button>`).join('')}</div>`,
+    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>');
+}
+
 export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lm-busca') { _q = valor || ''; redesenhar(); return true; }
-  if (nome === 'campo:lm-atalho') { _q = valor; redesenhar(); return true; }
-  if (nome === 'campo:lm-ver') { if (valor !== _sel) { _med = ''; _un = ''; } _sel = valor; _verFicha = true; redesenhar(); window.scrollTo?.(0, 0); return true; }
+  if (nome === 'campo:lm-grp') { _grp = valor || 'todos'; _verFicha = false; redesenhar(); return true; }
+  if (nome === 'campo:lm-ver') { if (valor !== _sel) _ctx = {}; _sel = valor; _verFicha = true; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (nome === 'campo:lm-voltar') { _verFicha = false; redesenhar(); return true; }
-  if (nome === 'campo:lm-un') { _un = valor; redesenhar(); return true; }
-  if (nome === 'campo:lm-copiar') {
-    const a = L.porId(_sel); if (!a) return true;
-    try { await navigator.clipboard.writeText(L.resumoTexto(a)); avisar('Resumo copiado. Cole no laudo, no SOC ou na conversa.'); }
-    catch { avisar('Não foi possível copiar neste aparelho.', 'erro'); }
-    return true;
-  }
+  if (nome === 'campo:lm-un') { _ctx.unidade = valor; redesenhar(); return true; }
+  if (nome === 'campo:lm-copiar') { abrirCopiar(); return true; }
   return false;
 }
