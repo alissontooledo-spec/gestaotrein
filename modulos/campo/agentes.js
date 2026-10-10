@@ -12,6 +12,8 @@ import * as L from './laudomiro.js';
 import { I, esc, ligarTela, avisar, ponte } from './comum.js';
 
 let _q = '', _grp = 'todos', _sel = null, _verFicha = false, _ctx = {};
+/* v241: campos da medição → chave do contexto do Laudomiro. */
+const CAMPOS = { 'lm.med': 'valor', 'lm.med2': 'valor2', 'lm.fx1': 'fx1', 'lm.fx2': 'fx2', 'lm.d5': 'd5', 'lm.d3': 'd3', 'lm.tm': 'tm', 'lm.tj': 'tj' };
 const GRUPOS = [['todos', 'Todos'], ['quimico', 'Químicos'], ['fisico', 'Físicos'], ['biologico', 'Biológicos'], ['periculosidade', 'Periculosidade']];
 const NOME_GRUPO = { quimico: 'Químicos', fisico: 'Físicos', biologico: 'Biológicos', periculosidade: 'Periculosidade' };
 /* Quando não há busca nem filtro: os mais vistos na visita, por grupo. */
@@ -56,18 +58,19 @@ const btnCopiar = (cls = '') => `<button type="button" class="btn lmx-btn-am ${c
 function pintarResultado() {
   const a = L.porId(_sel); if (!a) return;
   document.querySelectorAll('[data-lm-res]').forEach(el => { el.innerHTML = L.resultadoHtml(a, _ctx); });
-  if (L.ehRuido(a)) {
-    const v1 = parseFloat(String(_ctx.valor || '').replace(',', '.')), v2 = parseFloat(String(_ctx.valor2 || '').replace(',', '.'));
-    document.querySelectorAll('[data-lm-dose="1"]').forEach(el => { el.textContent = Number.isFinite(v1) ? `dose ${L.doseQ(v1, 5)}%` : ''; });
-    document.querySelectorAll('[data-lm-dose="2"]').forEach(el => { el.textContent = Number.isFinite(v2) ? `dose ${L.doseQ(v2, 3)}%` : ''; });
-  }
+  L.atualizarEntrada(a, _ctx);   // v241: dose ao lado do campo (Lavg/NEN ou Faixa e dose)
 }
 
 export async function render(params = {}) {
   if (params.id && L.porId(params.id) && params.id !== _sel) { _sel = params.id; _verFicha = true; _ctx = {}; }
   ligarTela({ digitar: (chave, valor) => {
-    if (chave === 'lm.med') { _ctx.valor = valor; pintarResultado(); }
-    else if (chave === 'lm.med2') { _ctx.valor2 = valor; pintarResultado(); }
+    const k = CAMPOS[chave], m = /^lm\.(pn|pt)\.(\d+)$/.exec(chave || '');
+    if (k) { _ctx[k] = valor; pintarResultado(); }
+    else if (m) {   // decibelímetro: linhas nível + horas
+      _ctx.pts = _ctx.pts?.length ? _ctx.pts : [{}];
+      const i = +m[2]; while (_ctx.pts.length <= i) _ctx.pts.push({});
+      _ctx.pts[i][m[1] === 'pn' ? 'n' : 'h'] = valor; pintarResultado();
+    }
   } });
   const a = L.porId(_sel);
   ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">${a && _verFicha ? esc(L.curtoNome(a.nome)) : 'Consultar agente'}</div>`);
@@ -108,6 +111,11 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lm-ver') { if (valor !== _sel) _ctx = {}; _sel = valor; _verFicha = true; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (nome === 'campo:lm-voltar') { _verFicha = false; redesenhar(); return true; }
   if (nome === 'campo:lm-un') { _ctx.unidade = valor; redesenhar(); return true; }
+  if (nome === 'campo:lm-ap') { _ctx.ap = valor === 'dec' ? 'dec' : 'dos'; redesenhar(); return true; }
+  if (nome === 'campo:lm-rel') { _ctx.rel = valor === 'db' ? 'db' : 'dose'; redesenhar(); return true; }
+  if (nome === 'campo:lm-pt-add') { _ctx.pts = _ctx.pts?.length ? _ctx.pts : [{}]; _ctx.pts.push({}); redesenhar(); return true; }
+  if (nome === 'campo:lm-pt-del') { const i = +valor; if (_ctx.pts?.length > 1) _ctx.pts.splice(i, 1); redesenhar(); return true; }
+  if (nome === 'campo:lm-parcial') { _ctx.parcial = !_ctx.parcial; redesenhar(); return true; }
   if (nome === 'campo:lm-copiar') { abrirCopiar(); return true; }
   return false;
 }

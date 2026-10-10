@@ -54,7 +54,11 @@ export function doRisco(nomeRisco, categoria) {
 
 /* ── Respostas curtas ──────────────────────────────────────────────────── */
 const COR_GRAU = { 'máximo': 'max', 'médio': 'med', 'mínimo': 'min' };
-const numBr = (v) => { const n = parseFloat(String(v ?? '').replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : null; };
+const numBr = (v) => {
+  let t = String(v ?? '').trim().replace(/[\s%]/g, '');
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');   // v241: 1.000 é milhar; 82.5 é decimal
+  const n = parseFloat(t); return Number.isFinite(n) ? n : null; };
 const limites = (a) => { const n = a.nr15; if (!n || a.medida) return []; return [n.lt_ppm && numBr(n.lt_ppm) != null ? ['ppm', n.lt_ppm] : null, n.lt_mg && numBr(n.lt_mg) != null ? ['mg/m³', n.lt_mg] : null].filter(Boolean); };
 
 const S_MEDIDA = { ruido: 'se a dose passar de 100% (85 dB(A) em 8 h)', impacto: 'se o pico passar de 130 dB linear', calor: 'se o IBUTG passar do limite da atividade',
@@ -179,6 +183,119 @@ const VER_TAMBEM = { 'ruido-continuo': ['ruido-impacto'], 'ruido-impacto': ['rui
    Ruído: insalubridade pelo Lavg da NR-15 (q = 5; dose = 2^((L-85)/5));
    aposentadoria pelo NEN da NHO-01 (q = 3; dose = 2^((N-85)/3)), IN 128 art. 292. */
 export const doseQ = (db, q) => Math.round(100 * Math.pow(2, (db - 85) / q));
+/* v241 (parecer do Laudomiro, aprovado pelo Alisson em 09/10/2026): a tela pergunta o APARELHO usado.
+   ▸ Dosímetro (padrão): o relatório traz a dose (0,67 ou 67%) ou o nível em dB (nível de 8 h q = 5 e NEN q = 3).
+     Nível de 8 h (TWA) = 85 + 16,61·log(D5); NEN = 85 + 10·log(D3) (NHO-01). A faixa (84 a 87) é opcional e só confere.
+     Medição parcial: D = Dmedida × jornada / tempo medido (supõe o período não medido igual ao medido).
+   ▸ Decibelímetro (medição pontual, NR-15 Anexo 1 item 2): linhas nível + horas; soma C/T (item 6) com o tempo
+     do Quadro (nível intermediário usa o tempo do nível imediatamente mais elevado, item 4). Abaixo de 85 não
+     entra na soma da NR-15; de 80 a 85 entra só no nível de ação (q = 5). Acima de 115: grave e iminente (itens 5 e 7).
+     Não serve para aposentadoria (TNU Tema 174: vedada a medição pontual).
+   Limite: EXCEDER (dose > 100%, NEN > 85,0). */
+const doseFr = (txt) => { const t = String(txt ?? ''), n = numBr(t); if (n == null || n <= 0) return null; return /%/.test(t) || n >= 5 ? n / 100 : n; };
+const pct = (d) => Math.round(d * 100);
+const r1 = (x) => Math.round(x * 10) / 10;
+const dicaDose = (txt) => { const d = doseFr(txt); if (!d) return ''; const t = String(txt), n = numBr(t);
+  return !/%/.test(t) && n >= 1.5 && n < 5 ? `= ${pct(d)}% (se for ${fmt(n)}%, digite ${fmt(n)}%)` : `= ${pct(d)}%`; };
+const QUADRO_RUIDO = () => { try { return porId('ruido-continuo')?.medida?.tabela || []; } catch { return []; } };
+export function tempoMaxRuido(db) {
+  if (db == null) return null;
+  if (db <= 85) return 480;
+  const t = QUADRO_RUIDO().find(r => r.db >= db);
+  return t ? t.min : 0;   // acima de 115 dB(A): sem tempo permitido
+}
+export const fmtMin = (m) => m >= 60 ? `${Math.floor(m / 60)} h${Math.round(m % 60) ? ` ${Math.round(m % 60)} min` : ''}` : `${Math.round(m)} min`;
+const fmtH = (h) => fmtMin(Math.round(h * 60));
+export const modoRuido = (ctx = {}) => ctx.ap === 'dec' || ctx.modo === 'ponto' ? 'dec' : ctx.rel === 'db' || ctx.modo === 'nivel' ? 'db' : 'dose';
+export function ruidoNiveis(ctx = {}) {
+  const modo = modoRuido(ctx);
+  if (modo === 'db') return { modo, L: numBr(ctx.valor), N: numBr(ctx.valor2) };
+  if (modo === 'dec') {
+    const pts = (ctx.pts?.length ? ctx.pts : [{ n: ctx.pn, h: ctx.pt }]).map(p => {
+      const n = numBr(p?.n), hh = numBr(p?.h), h = hh > 0 && hh <= 24 ? hh : (hh == null && n != null ? 8 : null);
+      return n != null && n > 0 && n < 200 && h ? { n, h, tmax: tempoMaxRuido(n) } : null;
+    }).filter(Boolean);
+    if (!pts.length) return { modo, L: null, N: null, pts };
+    let dIns = 0, dAcao = 0, grave = false;
+    for (const p of pts) {
+      if (p.n > 115) { grave = true; continue; }
+      if (p.n > 85 || (p.n === 85)) { p.c = p.h * 60 / p.tmax; dIns += p.c; dAcao += p.c; }
+      else if (p.n >= 80) { p.a = (p.h / 8) * Math.pow(2, (p.n - 85) / 5); dAcao += p.a; }
+    }
+    const totalH = pts.reduce((s, p) => s + p.h, 0);
+    const L = grave ? Math.max(...pts.map(p => p.n)) : pts.length === 1 && pts[0].h === 8 ? pts[0].n : dAcao > 0 ? 85 + 16.61 * Math.log10(dAcao) : Math.max(...pts.map(p => p.n));
+    return { modo, pts, dIns, dAcao, grave, totalH, L, N: null };
+  }
+  const tm = numBr(ctx.tm), tj = numBr(ctx.tj) || 8;
+  const k = ctx.parcial && tm > 0 && tm <= 24 && tj > 0 && tj <= 24 ? tj / tm : 1;
+  const m5 = doseFr(ctx.d5), m3 = doseFr(ctx.d3);
+  const d5 = m5 ? m5 * k : null, d3 = m3 ? m3 * k : null;
+  const f1 = numBr(ctx.fx1), f2 = numBr(ctx.fx2), fs = [f1, f2].filter(x => x != null && x > 0 && x < 200);
+  return { modo, d5, d3, k, tj: k !== 1 ? tj : 8,
+    L: d5 ? 85 + 16.61 * Math.log10(d5) : null, N: d3 ? 85 + 10 * Math.log10(d3) : null,
+    lo: fs.length ? Math.min(...fs) : null, hi: fs.length ? Math.max(...fs) : null };
+}
+/* Dose que a faixa daria se o trabalhador ficasse a jornada inteira nela (q = 5; abaixo do limiar de 80 dB(A) não soma). */
+const dz = (R, db) => db < 80 ? 0 : (R.tj / 8) * Math.pow(2, (db - 85) / 5);
+const doseFaixa = (R) => R.lo == null ? null : { min: dz(R, R.lo), max: dz(R, R.hi) };
+const fraseNivel = (nIns, p) => nIns === 'acima' ? 'passou do limite (100%).'
+  : nIns === 'acao' ? (p >= 100 ? 'chegou ao limite (100%) sem passar; acima do nível de ação (50%).' : 'abaixo do limite (100%), mas acima do nível de ação (50%).') : 'abaixo do nível de ação (50%).';
+function explicaDose(R, nIns) {
+  const out = [];
+  if (R.d5) {
+    const p = pct(R.d5);
+    out.push(['Em resumo', nIns === 'acima'
+      ? `Dose de ${p}%: passou do limite (100%). O trabalhador recebe mais ruído do que a NR-15 permite na jornada.`
+      : nIns === 'acao'
+        ? `Dose de ${p}%: ${p >= 100 ? 'chegou ao limite (100%) sem passar' : 'abaixo do limite (100%)'}, mas acima do nível de ação (50%). Não dá insalubridade, mas o ruído precisa de controle.`
+        : `Dose de ${p}%: abaixo do nível de ação (50%). Ruído sob controle; mantenha a avaliação periódica.`]);
+    const F = doseFaixa(R);
+    if (F) {
+      const fx = R.lo === R.hi ? `${fmt(R.lo)} dB(A)` : `${fmt(R.lo)} a ${fmt(R.hi)} dB(A)`;
+      if (R.d5 < F.min * 0.9)
+        out.push(['Faixa medida', `${fx}. Se ficasse a jornada toda nessa faixa, a dose seria de ${pct(F.min)}% a ${pct(F.max)}%. A dose real (${p}%) é menor: parte do dia é em lugares mais silenciosos ou em pausas, ou há erro no registro. Vale a dose, não o maior número da faixa.`]);
+      else if (R.d5 > F.max * 1.1)
+        out.push(['Faixa medida', `${fx}. Essa faixa daria no máximo ${pct(F.max)}% na jornada, e a dose deu ${p}%: houve momentos mais barulhentos do que a faixa anotada. Vale a dose do dosímetro; se a diferença for grande, confira a medição.`]);
+      else
+        out.push(['Faixa medida', `${fx}. Combina com a dose (${pct(F.min)}% a ${pct(F.max)}% se ficasse a jornada toda nela). Vale a dose.`]);
+    }
+    if (R.k !== 1) out.push(['Projeção', `Medição parcial: a dose foi projetada para a jornada de ${fmt(R.tj)} h (× ${fmt(r1(R.k))}), supondo o período não medido igual ao medido.`]);
+  }
+  return out;
+}
+function explicaDec(R, nIns) {
+  const out = [], acima85 = R.pts.filter(p => p.c != null), f8085 = R.pts.filter(p => p.a != null), grv = R.pts.filter(p => p.n > 115);
+  const p = pct(R.dIns);
+  let res;
+  if (R.grave) res = `${grv.map(x => fmt(x.n)).join(' e ')} dB(A) passa de 115: exposição proibida sem proteção adequada, risco grave e iminente (NR-15 Anexo 1 itens 5 e 7).`;
+  else if (acima85.length === 1 && R.pts.length === 1) {
+    const x = acima85[0], fora = QUADRO_RUIDO().every(r => r.db !== x.n);
+    res = `Em ${fmt(x.n)} dB(A) a NR-15 permite no máximo ${fmtMin(x.tmax)} por dia${fora ? ' (nível fora do Quadro: vale o tempo do nível acima, item 4)' : ''}. Exposto ${fmtH(x.h)}, a dose é ${p}% (${fmtH(x.h)} ÷ ${fmtMin(x.tmax)}): ${fraseNivel(nIns, p)}`;
+  } else if (acima85.length) {
+    res = `Soma da NR-15 (Anexo 1 item 6): ${acima85.map(x => `${fmtH(x.h)} ÷ ${fmtMin(x.tmax)} (${fmt(x.n)} dB(A))`).join(' + ')} = ${fmt(Math.round(R.dIns * 100) / 100)}. Dose ${p}%: ${fraseNivel(nIns, p)}`;
+  } else if (f8085.length) res = `Nenhum nível chegou a 85 dB(A): não há insalubridade. Pelo nível de ação a dose é ${pct(R.dAcao)}%: ${nIns === 'acao' ? 'acima do nível de ação (50%), precisa de controle.' : 'abaixo do nível de ação (50%).'}`;
+  else res = 'Todos os níveis abaixo de 80 dB(A), o nível de ação. Ruído sob controle; mantenha a avaliação periódica.';
+  out.push(['Em resumo', res]);
+  if (f8085.length && acima85.length) out.push(['Níveis de 80 a 85', `${f8085.map(x => fmt(x.n)).join(', ')} dB(A) não entram na soma da NR-15; contam só para o nível de ação.`]);
+  if (R.totalH > 12) out.push(['Confira as horas', `O total informado é ${fmtH(R.totalH)} por dia.`]);
+  else if (R.totalH < 8 && !R.grave) out.push(['Resto da jornada', `Total informado: ${fmtH(R.totalH)}. O restante da jornada foi considerado abaixo de 85 dB(A).`]);
+  out.push(['Atenção', 'É medição pontual. Se o ruído varia no dia, a dosimetria é mais segura.']);
+  return out;
+}
+export function atualizarEntrada(a, ctx = {}, raiz = document) {
+  if (!ehRuido(a)) return;
+  const modo = modoRuido(ctx), put = (sel, t) => raiz.querySelectorAll(sel).forEach(el => { el.textContent = t; });
+  if (modo === 'dec') {
+    (ctx.pts || []).forEach((p, i) => { const n = numBr(p?.n), tm = tempoMaxRuido(n); put(`[data-lm-hint="pn${i}"]`, n == null ? '' : n > 115 ? 'proibido' : n >= 85 ? `máx. ${fmtMin(tm)}/dia` : ''); });
+  } else if (modo === 'db') {
+    const L = numBr(ctx.valor), N = numBr(ctx.valor2);
+    put('[data-lm-dose="1"]', L != null ? `dose ${doseQ(L, 5)}%` : '');
+    put('[data-lm-dose="2"]', N != null ? `dose ${doseQ(N, 3)}%` : '');
+  } else {
+    put('[data-lm-hint="d5"]', dicaDose(ctx.d5));
+    put('[data-lm-hint="d3"]', dicaDose(ctx.d3));
+  }
+}
 export const ehRuido = (a) => a.medida?.tipo === 'ruido';
 const linhaApos = (a, acima) => {
   const p = a.prev;
@@ -200,18 +317,33 @@ const linhaPgr = (a, nivel) => {
 };
 export function avaliar(a, ctx = {}) {
   if (ehRuido(a)) {
-    const L = numBr(ctx.valor), N = numBr(ctx.valor2);
+    const R = ruidoNiveis(ctx), L = R.L, N = R.N, modo = R.modo;
     if (L == null && N == null) return null;
-    const nIns = L == null ? null : L > 85 ? 'acima' : L > 80 ? 'acao' : 'abaixo';
+    const dec = modo === 'dec';
+    const nIns = L == null ? null : dec ? (R.grave || R.dIns > 1 ? 'acima' : R.dAcao > 0.5 ? 'acao' : 'abaixo') : L > 85 ? 'acima' : L > 80 ? 'acao' : 'abaixo';
     const nApo = N == null ? null : N > 85;
     const nivel = nIns === 'acima' || nApo ? 'acima' : nIns === 'acao' ? 'acao' : 'abaixo';
-    const linhas = [
-      ['Insalubridade', L == null ? 'Digite o Lavg (NR-15) para concluir.' : linhaIns(a, nIns)],
-      ['Aposentadoria', N == null ? 'Digite o NEN (NHO-01) para concluir.' : linhaApos(a, nApo)],
-      ['PGR e PCMSO', linhaPgr(a, nivel)]];
-    const v = L ?? N;
-    return { nivel, valor: v, titulo: nivel === 'acima' ? 'Acima do limite de tolerância' : nivel === 'acao' ? 'Acima do nível de ação' : 'Abaixo do nível de ação',
-      sub: L != null ? `Lavg ${fmt(L)} dB(A), dose ${doseQ(L, 5)}%` : `NEN ${fmt(N)} dB(A)`, linhas };
+    const insTxt = L == null ? (modo === 'dose' ? 'Digite a dose NR-15 (q = 5) para concluir.' : 'Digite o nível de 8 h (NR-15) para concluir.')
+      : R.grave ? `${linhaIns(a, 'acima')} Acima de 115 dB(A) sem proteção adequada a exposição é proibida (NR-15 Anexo 1 item 5).` : linhaIns(a, nIns);
+    const apoTxt = dec ? 'Medição pontual não serve para aposentadoria: o PPP precisa do NEN da jornada inteira, medido com dosímetro (NHO-01). A TNU (Tema 174) veda a medição pontual.'
+      : N == null ? 'Inconclusivo: falta o NEN (dose NHO-01, q = 3). A IN 128 (art. 292, IV) exige NEN acima de 85 dB(A); só a dose NR-15 não comprova no PPP.'
+      : linhaApos(a, nApo);
+    const pppTxt = dec ? 'Registre a medição só no laudo de insalubridade (NR-15 Anexo 1). Para o PPP e o LTCAT, faça dosimetria.'
+      : N != null ? `Registrar: NEN ${fmt(r1(N))} dB(A); técnica: dosimetria; norma: NHO-01 (Fundacentro).${L != null ? ` Para insalubridade: ${modo === 'dose' ? `dose ${pct(R.d5)}%` : `nível de 8 h ${fmt(r1(L))} dB(A)`}, NR-15 Anexo 1.` : ''}`
+      : 'Sem o NEN o PPP não comprova a aposentadoria. Peça ao relatório do dosímetro o resultado em q = 3 (NHO-01).';
+    const linhas = [['Insalubridade', insTxt], ['Aposentadoria', apoTxt], ['PGR e PCMSO', linhaPgr(a, nivel)], ['PPP e LTCAT', pppTxt]];
+    const titulo = nivel === 'acima' ? 'Acima do limite de tolerância' : nivel === 'acao' ? 'Acima do nível de ação' : 'Abaixo do nível de ação';
+    if (dec) {
+      const sub = R.grave ? 'Acima de 115 dB(A)' : `${R.pts.map(p => `${fmt(p.n)} dB(A) por ${fmtH(p.h)}`).join(' + ')}; dose ${pct(R.dIns > 0 ? R.dIns : R.dAcao)}%`;
+      return { nivel, valor: r1(L), titulo, sub, linhas, explica: explicaDec(R, nIns) };
+    }
+    if (modo === 'dose') {
+      const fx = R.lo == null ? '' : R.lo === R.hi ? `; nível medido ${fmt(R.lo)} dB(A)` : `; faixa medida ${fmt(R.lo)} a ${fmt(R.hi)} dB(A)`;
+      const sub = [R.d5 ? `Dose NR-15 ${pct(R.d5)}% = ${fmt(r1(L))} dB(A) em 8 h` : '', R.d3 ? `Dose NHO-01 ${pct(R.d3)}% = NEN ${fmt(r1(N))} dB(A)` : ''].filter(Boolean).join('; ') + fx;
+      return { nivel, valor: r1(L ?? N), titulo, sub, linhas, explica: explicaDose(R, nIns), faixa: R.lo != null ? [R.lo, R.hi] : null };
+    }
+    const sub = [L != null ? `Nível de 8 h ${fmt(r1(L))} dB(A), dose ${doseQ(L, 5)}%` : '', N != null ? `NEN ${fmt(r1(N))} dB(A)` : ''].filter(Boolean).join('; ');
+    return { nivel, valor: r1(L ?? N), titulo, sub, linhas };
   }
   const c = comparar(a, ctx.valor, ctx.unidade);
   if (!c) return null;
@@ -241,16 +373,18 @@ export function reguaHtml(a, av, ctx = {}) {
   if (e.na != null) zonas.push([e.min, e.na, 'za', 'Abaixo'], [e.na, e.lt, 'zb', 'Ação']); else zonas.push([e.min, e.lt, 'za', 'Abaixo']);
   zonas.push([e.lt, e.grave ?? e.max, 'zc', 'Acima do limite']);
   if (e.grave) zonas.push([e.grave, e.max, 'zd', '']);
-  const v = av?.valor;
+  const v = av?.valor, fxa = av?.faixa || ctx.faixa;
+  const fxH = fxa ? `<span class="lmx-r-fx" style="left:${P(fxa[0])}%;width:${Math.max(1.2, P(fxa[1]) - P(fxa[0]))}%" title="Faixa medida"></span>` : '';
   const pin = v != null ? `<div class="lmx-r-top"><span class="lmx-r-pin" style="left:${P(v)}%">${esc(fmt(v))}</span></div>` : '<div class="lmx-r-top"></div>';
   return `<div class="lmx-regua" role="img" aria-label="${v != null ? esc(`${fmt(v)}: ${av.titulo.toLowerCase()}`) : 'Faixas de referência'}">${pin}
-    <div class="lmx-r-bar">${zonas.map(([x0, x1, c, t]) => `<i class="${c}" style="width:${P(x1) - P(x0)}%">${(P(x1) - P(x0)) > 9 ? t : ''}</i>`).join('')}${v != null ? `<span class="lmx-r-mk" style="left:${P(v)}%"></span>` : ''}</div>
-    <div class="lmx-r-esc">${e.marcas.map(m => `<span style="left:${P(m)}%">${esc(fmt(m))}</span>`).join('')}</div></div>`;
+    <div class="lmx-r-bar">${zonas.map(([x0, x1, c, t]) => `<i class="${c}" style="width:${P(x1) - P(x0)}%">${(P(x1) - P(x0)) > 9 ? t : ''}</i>`).join('')}${fxH}${v != null ? `<span class="lmx-r-mk" style="left:${P(v)}%"></span>` : ''}</div>
+    <div class="lmx-r-esc">${e.marcas.map(m => `<span style="left:${P(m)}%">${esc(fmt(m))}</span>`).join('')}</div>
+    ${fxa ? `<div class="lmx-r-leg"><i></i>Faixa medida${v != null ? '<b></b>Nível da jornada (pela dose)' : ''}</div>` : ''}</div>`;
 }
 export function conclusaoHtml(a, av) {
   if (!av) return '';
   return `<div class="lmx-conc ${av.nivel}" aria-live="polite"><div class="lmx-conc-h">${av.nivel === 'abaixo' ? IC.ok : IC.alerta}<b>${esc(av.titulo)}</b><span>${esc(av.sub)}</span></div>
-    ${av.linhas.map(([k, t]) => `<div class="lmx-conc-l"><span class="q">${esc(k)}</span><span>${esc(t)}</span></div>`).join('')}</div>`;
+    ${[...(av.explica || []), ...av.linhas].map(([k, t]) => `<div class="lmx-conc-l${k === 'Em resumo' ? ' res' : ''}"><span class="q">${esc(k)}</span><span>${esc(t)}</span></div>`).join('')}</div>`;
 }
 /* Conteúdo que muda ao digitar (régua + conclusão). */
 export function resultadoHtml(a, ctx = {}) {
@@ -258,12 +392,20 @@ export function resultadoHtml(a, ctx = {}) {
     return `<div class="lmx-sem" style="margin:12px 0 14px"><b>Medido em dB(A): use a dose do ruído contínuo</b>O limite do ruído de impacto (Anexo 2) só existe em dB linear (130) ou dB(C) (120). Medido em dB(A) pelo dosímetro, o impacto já entra no Lavg e no NEN da jornada: avalie pela ficha do ruído contínuo (Anexo 1 e NHO-01).
       <div style="margin-top:8px"><button type="button" class="lmx-lnk" data-acao="campo:lm-ver:ruido-continuo">Abrir Ruído contínuo ou intermitente</button></div></div>`;
   const av = avaliar(a, ctx);
-  if (!av) return `${reguaHtml(a, null, ctx)}<div class="lmx-dica-med">${esc(dicaMedicao(a, ctx.unidade))}</div>`;
+  if (!av && ehRuido(a) && modoRuido(ctx) === 'dose') {
+    const R = ruidoNiveis(ctx), F = doseFaixa(R);
+    const txt = F ? `Se o trabalhador ficasse a jornada toda nessa faixa, a dose seria de ${pct(F.min)}% a ${pct(F.max)}%. A faixa sozinha não comprova a exposição (STJ Tema 1083): digite a dose do relatório.`
+      : dicaMedicao(a, ctx.unidade, ctx);
+    return `${reguaHtml(a, null, { ...ctx, faixa: R.lo != null ? [R.lo, R.hi] : null })}<div class="lmx-dica-med">${esc(txt)}</div>`;
+  }
+  if (!av) return `${reguaHtml(a, null, ctx)}<div class="lmx-dica-med">${esc(dicaMedicao(a, ctx.unidade, ctx))}</div>`;
   return reguaHtml(a, av, ctx) + conclusaoHtml(a, av);
 }
-export function dicaMedicao(a, unidade) {
+export function dicaMedicao(a, unidade, ctx = {}) {
   if (ehCalor(a)) return unidade ? 'Digite o IBUTG médio dos 60 minutos mais críticos.' : 'Escolha a atividade (taxa metabólica) e digite o IBUTG médio.';
-  if (ehRuido(a)) return 'Digite o Lavg (insalubridade) e o NEN (aposentadoria) da jornada de 8 horas.';
+  if (ehRuido(a)) { const m = modoRuido(ctx); return m === 'db' ? 'Digite o nível de 8 h (insalubridade) e o NEN (aposentadoria) do relatório do dosímetro.'
+    : m === 'dec' ? 'Digite o nível medido e as horas por dia nele. Exemplo: 88 dB(A) por 8 h.'
+    : 'Digite a dose do relatório (NR-15 e, se tiver, NHO-01). Exemplo: 0,67.'; }
   if (a.medida) { const L = limitesMedida(a, unidade || unidades(a)[0]); return `Digite o resultado para comparar com ${L.na != null ? `o nível de ação (${fmt(L.na)} ${L.un}) e ` : ''}o limite (${fmt(L.lt)} ${L.un}).`; }
   const l = limites(a); return l.length ? `Digite a média das amostras para comparar com o nível de ação (${fmt(numBr(l[0][1]) / 2)} ${l[0][0]}) e o limite (${l[0][1]} ${l[0][0]}).` : '';
 }
@@ -280,13 +422,47 @@ function entradaHtml(a, ctx) {
   const un = unidades(a);
   if (!un.length) return '';
   if (ehRuido(a)) {
+    const modo = modoRuido(ctx), dos = modo !== 'dec';
+    const inp = (cp, v, aria, ph = '0') => `<input type="text" inputmode="decimal" data-cp="${cp}" value="${esc(v || '')}" placeholder="${ph}" aria-label="${aria}">`;
+    const seg = `<div class="lmx-ap"><span class="lmx-ap-t">Aparelho usado</span><div class="lmx-modo" role="tablist" aria-label="Aparelho usado">${[['dos', 'Dosímetro'], ['dec', 'Decibelímetro']].map(([k, t]) =>
+      `<button type="button" role="tab" aria-selected="${(k === 'dos') === dos}" class="${(k === 'dos') === dos ? 'on' : ''}" data-acao="campo:lm-ap:${k}">${t}</button>`).join('')}</div></div>`;
+    if (!dos) {
+      const pts = ctx.pts?.length ? ctx.pts : [{}];
+      const linha = (p, i) => { const n = numBr(p.n), tm = tempoMaxRuido(n);
+        return `<div class="lmx-dec-l">
+        <label class="lmx-campo"><span class="lmx-lbl">${pts.length > 1 ? `Nível ${i + 1}` : 'Nível medido'} <small>dB(A), resposta lenta</small></span>
+          <span class="lmx-inp">${inp(`lm.pn.${i}`, p.n, `Nível ${i + 1} em dB(A)`)}<span class="u">dB(A)</span><span class="h" data-lm-hint="pn${i}">${n == null ? '' : n > 115 ? 'proibido' : n >= 85 ? `máx. ${fmtMin(tm)}/dia` : ''}</span></span></label>
+        <label class="lmx-campo"><span class="lmx-lbl">Horas por dia</span>
+          <span class="lmx-inp">${inp(`lm.pt.${i}`, p.h, 'Horas por dia nesse nível', '8')}<span class="u">h</span></span></label>
+        ${pts.length > 1 ? `<button type="button" class="lmx-dec-x" data-acao="campo:lm-pt-del:${i}" aria-label="Tirar o nível ${i + 1}">×</button>` : '<span></span>'}</div>`; };
+      return `${seg}<div class="lmx-dec">${pts.map(linha).join('')}</div>
+      <div class="lmx-nota"><button type="button" class="lmx-lnk" data-acao="campo:lm-pt-add">+ nível</button> se o trabalhador fica em locais com ruídos diferentes. Medir perto do ouvido (NR-15 Anexo 1 item 2). Serve só para insalubridade.</div>`;
+    }
+    const rel = modo === 'db' ? 'db' : 'dose';
+    const sub = `<div class="lmx-rel">O relatório do dosímetro traz: ${[['dose', 'a dose'], ['db', 'o nível em dB']].map(([k, t]) =>
+      `<button type="button" class="lmx-chip${rel === k ? ' on' : ''}" aria-pressed="${rel === k}" data-acao="campo:lm-rel:${k}">${t}</button>`).join('')}</div>`;
+    if (rel === 'dose') {
+      return `${seg}${sub}<div class="lmx-ent">
+      <label class="lmx-campo"><span class="lmx-lbl">Dose NR-15 <small>q = 5, insalubridade</small></span>
+        <span class="lmx-inp">${inp('lm.d5', ctx.d5, 'Dose NR-15', '0,00')}<span class="h" data-lm-hint="d5">${dicaDose(ctx.d5)}</span></span></label>
+      <label class="lmx-campo"><span class="lmx-lbl">Dose NHO-01 <small>q = 3, aposentadoria</small></span>
+        <span class="lmx-inp">${inp('lm.d3', ctx.d3, 'Dose NHO-01', '0,00')}<span class="h" data-lm-hint="d3">${dicaDose(ctx.d3)}</span></span></label>
+      <div class="lmx-campo"><span class="lmx-lbl">Faixa medida <small>opcional, só para conferir</small></span>
+        <span class="lmx-inp lmx-fx">${inp('lm.fx1', ctx.fx1, 'Menor nível em dB(A)')}<span class="a">a</span>${inp('lm.fx2', ctx.fx2, 'Maior nível em dB(A)')}<span class="u">dB(A)</span></span></div></div>
+      ${ctx.parcial ? `<div class="lmx-ent lmx-ent-p">
+      <label class="lmx-campo"><span class="lmx-lbl">Tempo medido</span><span class="lmx-inp">${inp('lm.tm', ctx.tm, 'Tempo medido em horas')}<span class="u">h</span></span></label>
+      <label class="lmx-campo"><span class="lmx-lbl">Jornada</span><span class="lmx-inp">${inp('lm.tj', ctx.tj, 'Jornada em horas', '8')}<span class="u">h</span></span></label></div>` : ''}
+      <div class="lmx-nota">Digite a dose como o relatório mostra: 0,67 ou 67%. ${ctx.parcial
+        ? '<button type="button" class="lmx-lnk" data-acao="campo:lm-parcial">A medição cobriu a jornada toda</button>'
+        : '<button type="button" class="lmx-lnk" data-acao="campo:lm-parcial">A medição não cobriu a jornada toda?</button>'}</div>`;
+    }
     const L = numBr(ctx.valor), N = numBr(ctx.valor2);
-    return `<div class="lmx-ent">
-      <label class="lmx-campo"><span class="lmx-lbl">Lavg da jornada <small>NR-15, q = 5, insalubridade</small></span>
-        <span class="lmx-inp"><input type="text" inputmode="decimal" data-cp="lm.med" value="${esc(ctx.valor || '')}" placeholder="0" aria-label="Lavg em dB(A)"><span class="u">dB(A)</span><span class="d" data-lm-dose="1">${L != null ? `dose ${doseQ(L, 5)}%` : ''}</span></span></label>
-      <label class="lmx-campo"><span class="lmx-lbl">NEN <small>NHO-01, q = 3, aposentadoria</small></span>
-        <span class="lmx-inp"><input type="text" inputmode="decimal" data-cp="lm.med2" value="${esc(ctx.valor2 || '')}" placeholder="0" aria-label="NEN em dB(A)"><span class="u">dB(A)</span><span class="d" data-lm-dose="2">${N != null ? `dose ${doseQ(N, 3)}%` : ''}</span></span></label></div>
-      <div class="lmx-nota">Jornada de 8 horas. Em outra jornada, use o NEN ou o Lavg já normalizado pelo dosímetro.</div>`;
+    return `${seg}${sub}<div class="lmx-ent">
+      <label class="lmx-campo"><span class="lmx-lbl">Nível de 8 h, NR-15 <small>q = 5 (TWA ou Lavg normalizado)</small></span>
+        <span class="lmx-inp">${inp('lm.med', ctx.valor, 'Nível de 8 horas em dB(A)')}<span class="u">dB(A)</span><span class="d" data-lm-dose="1">${L != null ? `dose ${doseQ(L, 5)}%` : ''}</span></span></label>
+      <label class="lmx-campo"><span class="lmx-lbl">NEN, NHO-01 <small>q = 3, aposentadoria</small></span>
+        <span class="lmx-inp">${inp('lm.med2', ctx.valor2, 'NEN em dB(A)')}<span class="u">dB(A)</span><span class="d" data-lm-dose="2">${N != null ? `dose ${doseQ(N, 3)}%` : ''}</span></span></label></div>
+      <div class="lmx-nota">Se o relatório traz o Lavg só do tempo medido (não normalizado para 8 h), escolha "a dose".</div>`;
   }
   const sel = ehCalor(a)
     ? `<label class="lmx-campo lmx-ativ"><span class="lmx-lbl">Atividade <small>taxa metabólica, NR-15 Anexo 3 Quadro 2</small></span><select class="cp-inp" data-acao="campo:lm-un"><option value="">Escolha a atividade…</option>${
@@ -380,7 +556,7 @@ export function textos(a, ctx = {}) {
   return {
     laudo: [`Agente: ${a.nome}${a.cas ? ` (CAS ${a.cas})` : ''}.`, res, ins, a.nr15 && a.nr16 ? `Periculosidade: ${a.nr16.texto}` : ''].filter(Boolean).join('\n'),
     ltcat: [`Agente nocivo: ${a.nome}${a.cas ? ` (CAS ${a.cas})` : ''}.`, p.iv ? `Enquadramento: Decreto 3.048, Anexo IV, ${p.iv} (${p.iv_nome || ''}), ${p.anos} anos.` : 'Enquadramento: não consta no Anexo IV do Decreto 3.048.',
-      res, `Conclusão: ${apo}`, `eSocial S-2240, Tabela 24: ${e.cod}, ${e.desc}.`].filter(Boolean).join('\n'),
+      res, `Conclusão: ${apo}`, av?.linhas?.[3] ? `PPP: ${av.linhas[3][1]}` : '', `eSocial S-2240, Tabela 24: ${e.cod}, ${e.desc}.`].filter(Boolean).join('\n'),
     pgr: [`Perigo: ${a.nome}.`, res || `Avaliação: ${n?.lt_texto ? 'comparar com ' + n.lt_texto : 'qualitativa'}.`, `Medidas: ${av ? av.linhas[2][1] : linhaPgr(a, 'acao')}`].filter(Boolean).join('\n')
   };
 }
