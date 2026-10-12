@@ -148,7 +148,11 @@ function textoComRefs(texto, turno, tIdx) {
     vistos.add(+n);
     const on = _painel && _painel.t === tIdx && _painel.n === +n;
     return ` <button type="button" class="lq-it${on ? ' on' : ''}" data-acao="campo:lq-fonte:${tIdx}.${+n}" title="Ver o texto: ${esc(t.fonte)}">${esc(t.rotulo)}</button>`;
-  });
+  })
+    // v252: citação repetida tirada não deixa "()" ou "( , )" sobrando
+    .replace(/\(\s*(?:,\s*)*\)/g, '')
+    .replace(/\(\s*,\s*/g, '(').replace(/\s*,\s*\)/g, ')')
+    .replace(/\s+([.,;:])/g, '$1');
 }
 
 function tipoFonte(t) { return t.tipo === 'oficial' ? 'Texto oficial' : 'Ficha do Laudomiro'; }
@@ -210,6 +214,12 @@ function fichaAgente(json) {
 
 export async function render(params = {}) {
   if (params.id && L.porId?.(params.id)) _aba = 'fichas';
+  // v252: pergunta feita no Início ("Pergunte ao Laudomiro") já chega enviada
+  if (params.pergunta && !params.__lqEnviada) {
+    params.__lqEnviada = 1; _aba = 'perguntar'; _painel = null;
+    const p = String(params.pergunta);
+    setTimeout(() => enviar(p), 30);
+  }
   ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">Laudomiro</div>`);
   if (_aba === 'fichas') {
     const html = await Fichas.render({ ...params, embutido: true });
