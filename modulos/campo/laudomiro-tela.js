@@ -85,7 +85,10 @@ function saudacao() {
 /* v250: o Laudomiro é uma permissão do perfil de acesso. Sem ela, a aba Perguntar fica travada
    (as Fichas continuam). O servidor também recusa — isto aqui só evita a pessoa tentar à toa. */
 function semPermissao() {
-  return (typeof window._podeAcao === 'function' && !window._podeAcao('usar_laudomiro')) || _status?.permitido === false;
+  // v251: o servidor sabe se a empresa liberou o perfil padrão; enquanto a resposta não chega, vale o perfil personalizado
+  if (_status && typeof _status.permitido === 'boolean') return !_status.permitido;
+  const p = typeof window._permAtual === 'function' ? window._permAtual() : null;
+  return !!p && !(p.acoes || {}).usar_laudomiro;
 }
 
 function abas() {
