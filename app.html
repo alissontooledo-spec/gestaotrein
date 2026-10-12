@@ -1665,6 +1665,31 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .gi-kpirow.gi-2 { grid-template-columns:repeat(2,1fr) }
 .gi-kpi.gi-sm { padding:15px 16px }
 .gi-kpi.gi-sm .gi-n { font-size:23px; margin:8px 0 3px }
+/* v253 — telas do Provedor no padrão do Início */
+.gi-kpi .home-kpi-delta { display:block; margin-top:0; font-size:10px; font-weight:600; color:var(--text-3) }
+.gi-kpi .home-kpi-delta.green { color:var(--green-text) }
+.gi-kpi .home-kpi-delta.red { color:var(--red-text) }
+.gi-kpi .home-kpi-delta.amber { color:var(--amber-text) }
+.prov-chips { margin-top:5px; display:flex; flex-wrap:wrap; gap:4px }
+.prov-chip { display:inline-block; font-size:10px; font-weight:700; border-radius:6px; padding:1px 7px; background:var(--gray-100); color:var(--text-3) }
+.prov-chip.on { background:#E8EEFB; color:#36588D }
+.prov-lin { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border) }
+.prov-ficha { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; align-items:start }
+.prov-ficha > div { display:grid; gap:16px; min-width:0 }
+.prov-sw { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); font-size:12px }
+.prov-sw:last-child { border-bottom:0 }
+.prov-tg { width:34px; height:19px; border-radius:10px; background:#B7C0D1; border:0; position:relative; cursor:pointer; padding:0; flex:none }
+.prov-tg:after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:#fff; transition:left .15s }
+.prov-tg.on { background:var(--green) }
+.prov-tg.on:after { left:17px }
+.prov-barra { height:8px; border-radius:6px; background:var(--gray-100); overflow:hidden; margin:8px 0 4px }
+.prov-barra i { display:block; height:100%; background:#1D4ED8; border-radius:6px }
+.prov-tarja { position:fixed; top:0; left:0; right:0; z-index:8000; background:#FFF4DD; color:var(--amber-text); border-bottom:3px solid var(--amber-h); font-size:12px; font-weight:600; padding:7px 14px; padding-top:calc(7px + env(safe-area-inset-top)); display:flex; align-items:center; justify-content:space-between; gap:8px 16px; flex-wrap:wrap }
+.prov-tarja b { color:var(--navy) }
+.prov-tarja .pt-g { display:flex; align-items:center; gap:6px 14px; flex-wrap:wrap; min-width:0 }
+.prov-tarja .pt-reg { font-size:11px; font-weight:500; color:var(--text-3) }
+.prov-tarja button { background:var(--amber-h); color:#fff; border:0; border-radius:7px; padding:5px 12px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; flex-shrink:0 }
+@media (max-width:860px) { .prov-ficha { grid-template-columns:1fr } .prov-tarja .pt-reg { display:none } }
 
 /* --- painéis --- */
 /* align-items:start — sem isto o painel mais curto se estica ate a altura do
@@ -3683,6 +3708,7 @@ async function iniciarModoSuporte(orgId) {
 
     // Ativar flags de suporte
     _suporteAtivo   = true;
+    window._suporteInicioMs = Date.now();   // v253: tarja mostra há quanto tempo
     _suporteOrgId   = orgId;
     _suporteOrgNome = org?.nome || orgPrev?.nome || 'Organização';
     _suporteLogId   = log.id;
@@ -3780,11 +3806,16 @@ function _suporteMostrarBanner() {
 
   const banner = document.createElement('div');
   banner.id = '_suporteBanner';
-  // padding-top soma a safe-area (notch/status bar) em vez de ficar embaixo
-  // dela; padding geral menor que antes para ficar mais discreta.
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:8000;background:#D97706;color:#fff;font-size:11px;font-weight:600;padding:5px 14px;padding-top:calc(5px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;box-shadow:var(--shadow-md)';
-  banner.innerHTML = '<div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:13px;flex-shrink:0"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M15.5 8.5a4.5 4.5 0 0 1-5.9 5.9L4 20l-.7-.7 5.6-5.6a4.5 4.5 0 0 1 5.9-5.9l-2.6 2.6 2.1 2.1z"/></svg></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">MODO SUPORTE — ' + _suporteOrgNome + '</span></div><button onclick="encerrarModoSuporte(false)" style="background:rgba(0,0,0,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:5px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">✕ Encerrar suporte</button>';
+  banner.className = 'prov-tarja';   // v253: tarja clara com mais informação (proposta aprovada 12/10)
+  banner.innerHTML = `<div class="pt-g"><span><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M15.5 8.5a4.5 4.5 0 0 1-5.9 5.9L4 20l-.7-.7 5.6-5.6a4.5 4.5 0 0 1 5.9-5.9l-2.6 2.6 2.1 2.1z"/></svg> <b>Modo Suporte</b> · ${escapeHtml(_suporteOrgNome || '')}</span><span>Você está como <b>Administrador</b></span><span id="_suporteTempo">há menos de 1 min</span></div><div class="pt-g"><span class="pt-reg">Tudo o que você fizer fica registrado</span><button type="button" onclick="encerrarModoSuporte(false)">Sair do suporte</button></div>`;
   document.body.appendChild(banner);
+  if (window._suporteTempoTimer) clearInterval(window._suporteTempoTimer);
+  window._suporteTempoTimer = setInterval(() => {
+    const el = document.getElementById('_suporteTempo');
+    if (!el) { clearInterval(window._suporteTempoTimer); return; }
+    const m = Math.floor((Date.now() - (window._suporteInicioMs || Date.now())) / 60000);
+    el.textContent = m < 1 ? 'há menos de 1 min' : (m < 60 ? `há ${m} min` : `há ${Math.floor(m / 60)} h ${m % 60} min`);
+  }, 30000);
 
   // .screen e .sidebar são os únicos elementos position:fixed que tocam o
   // topo da tela — são eles que precisam recuar, não .main-header/
@@ -5085,7 +5116,7 @@ async function fazerLogout() {
 // NAVEGAÇÃO
 // ============================================================
 const NAV = {
-  provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'logs',l:'Logs / Auditoria',icon:'filesheet'},{id:'conta',l:'Minha conta',icon:'user'}],
+  provedor:      [{id:'home',l:'Início',icon:'home'},{id:'orgs',l:'Organizações',icon:'building'},{id:'financeiro',l:'Financeiro',icon:'chart'},{id:'adocao',l:'Adoção',icon:'target'},{id:'laudomiro-uso',l:'Laudomiro',icon:'shield'},{id:'logs',l:'Logs / Auditoria',icon:'filesheet'},{id:'conta',l:'Minha conta',icon:'user'}],
   administrador: [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'cap'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'company'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Gestão'},{id:'catalogo',l:'Catálogo',icon:'book'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{id:'equipe',l:'Equipe',icon:'team'},{id:'perfis',l:'Perfis de acesso',icon:'shield'},{id:'configuracoes',l:'Configurações',icon:'settings'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
   // 2026-08: adicionado 'relatorios' — já estava referenciado em
   // NAV_BOTTOM.comercial (atalho do rodapé mobile) mas não existia aqui,
@@ -5895,6 +5926,8 @@ const SECAO_DO_ITEM = {
   agenda: 'Meu trabalho', historico: 'Meu trabalho',
   orgs: 'Provedor', financeiro: 'Provedor', adocao: 'Provedor', logs: 'Provedor',
 };
+// v253: o Provedor tem as próprias seções (Principal · Negócio · Plataforma)
+const SECAO_PROVEDOR = { home: 'Principal', orgs: 'Principal', financeiro: 'Negócio', adocao: 'Negócio', 'laudomiro-uso': 'Plataforma', logs: 'Plataforma' };
 
 // Contagens já publicadas nos itens do menu. Redesenhar a barra apaga os
 // badges do DOM; guardar aqui permite repor sem consultar o banco de novo.
@@ -6013,7 +6046,7 @@ function _htmlGruposMenu(itens, rotuloPadrao) {
   const ordem = [];
   const porSecao = {};
   for (const i of itens) {
-    const sec = SECAO_DO_ITEM[i.id] || rotuloPadrao || '';
+    const sec = (usuarioAtual?.perfil === 'provedor' && SECAO_PROVEDOR[i.id]) || SECAO_DO_ITEM[i.id] || rotuloPadrao || '';
     if (!porSecao[sec]) { porSecao[sec] = []; ordem.push(sec); }
     porSecao[sec].push(i);
   }
@@ -6122,6 +6155,7 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.mod-sel2')) 
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') _fecharSeletorModulo(); });
 
 function _htmlConfigMenu(config) {
+  if (usuarioAtual?.perfil === 'provedor') return '';   // v253: Minha conta fica no avatar, embaixo do menu
   // v250: Equipe, Perfis e Minha conta moram dentro de Configurações (continuam no NAV para o acesso e o rodapé do celular)
   if (config.some(i => i.id === 'configuracoes')) config = config.filter(i => i.id === 'configuracoes');
   if (!config.length) return '';
@@ -6190,7 +6224,7 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {configuracoes:'Configurações','cfg-avisos':'Avisos automáticos','cfg-empresa':'Empresa e plano','cfg-laudomiro':'Laudomiro',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos',
+const TITULOS = {configuracoes:'Configurações','cfg-avisos':'Avisos automáticos','cfg-empresa':'Empresa e plano','cfg-laudomiro':'Laudomiro',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria','laudomiro-uso':'Laudomiro',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos',
   // 26/09 (v198): rotas da Avaliação de Campo (as ocultas não passam pelo menu)
   perfis:'Perfis de acesso',laudomiro:'Laudomiro',campo:'Avaliações de campo','campo-avaliacao':'Avaliação de campo','campo-ghe':'GHE','campo-finalizar':'Finalizar avaliação','campo-catalogo':'Catálogo da ficha','campo-funcionarios':'Conferir funcionários','campo-tipos':'Tipos de documento','campo-matriz':'Matriz de risco','campo-plano':'Plano de ação','campo-soc':'Lançar no SOC','campo-acoes':'Planos de ação','campo-agentes':'Laudomiro','campo-encerrar':'Encerrar a visita','campo-escritorio':'Escritório'};
 
@@ -6258,6 +6292,7 @@ async function irPara(pagina, params={}) {
       case 'financeiro':    await renderFinanceiroProvedor(); break;
       case 'adocao':        await renderAdocaoProvedor(); break;
       case 'logs':          await renderLogsAuditoria(); break;
+      case 'laudomiro-uso': await renderLaudomiroProvedor(); break;   // v253
       case 'clientes':      await renderClientes(); break;
       case 'colaboradores': await renderColaboradores(); break;
       case 'catalogo':      await renderCatalogo(); break;
@@ -7047,68 +7082,48 @@ async function verOrgProvedor(orgId) {
   _paginaUsuariosOrg = 1;
 
   setConteudo(`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <button class="btn btn-ghost btn-sm" onclick="renderHomeProvedor()">${ICONS.back} Voltar</button>
-    </div>
+    <div style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="renderOrgs()">${ICONS.back} Organizações</button></div>
 
-    <!-- Cabeçalho navy com info da org, KPIs e plano -->
-    <div style="background:var(--navy);border-radius:var(--r-xl);padding:20px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <div style="width:48px;height:48px;border-radius:50%;background:rgba(245,158,11,.2);color:var(--amber);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${iniciais(orgData.nome||'')}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="font-size:17px;font-weight:700;color:#fff">${escapeHtml(orgData.nome||'—')}</div>
-            ${_htmlBadgeSaude(scoreSaude, true)}
-          </div>
-          ${orgData.cnpj ? `<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">CNPJ: ${orgData.cnpj}</div>` : ''}
-          ${orgData.email ? `<div style="font-size:12px;color:rgba(255,255,255,.35);margin-top:1px">${escapeHtml(orgData.email)}</div>` : ''}
-          ${scoreSaude.grade !== '—' && scoreSaude.motivos.length ? `<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:3px">Score de Saúde: ${escapeHtml(scoreSaude.label)} — ${escapeHtml(scoreSaude.motivos.join(', '))}</div>` : ''}
-        </div>
-        ${_badgeStatusAssinatura(orgData)}
+    <div class="gi-page">
+      <div style="min-width:0">
+        <div class="gi-eyebrow">Organização · ${planoNome}</div>
+        <h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${escapeHtml(orgData.nome||'—')} ${_htmlBadgeSaude(scoreSaude, true)} ${_badgeStatusAssinatura(orgData)}</h2>
+        <p>${orgData.cnpj ? 'CNPJ ' + orgData.cnpj : ''}${orgData.cnpj && orgData.email ? ' · ' : ''}${orgData.email ? escapeHtml(orgData.email) : ''}${scoreSaude.grade !== '—' && scoreSaude.motivos.length ? ' · Score de Saúde: ' + escapeHtml(scoreSaude.label) + ' — ' + escapeHtml(scoreSaude.motivos.join(', ')) : ''}</p>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
-          <div style="font-size:11px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Usuários</div>
-          <div style="font-size:18px;font-weight:700;color:#fff">${usrsData.length}</div>
-        </div>
-        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
-          <div style="font-size:11px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Turmas</div>
-          <div style="font-size:18px;font-weight:700;color:#fff">${totalT}</div>
-        </div>
-        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
-          <div style="font-size:11px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Ativas</div>
-          <div style="font-size:18px;font-weight:700;color:${ativasT>0?'var(--amber)':'rgba(255,255,255,.4)'}">${ativasT}</div>
-        </div>
-        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">
-          <div style="font-size:11px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-bottom:3px">Concluídas</div>
-          <div style="font-size:18px;font-weight:700;color:rgba(255,255,255,.8)">${concT}</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-top:8px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:11px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.05em">Plano</span>
-          <span style="font-size:14px;font-weight:700;color:${planoClrDark}">${planoNome}</span>
-          <span style="font-size:12px;color:rgba(255,255,255,.6)">${planoValor}</span>
-          ${venc ? `<span style="font-size:11px;color:rgba(255,255,255,.4)">· Vence ${venc}</span>` : ''}
-        </div>
-        <button onclick="abrirModalAlterarPlano('${orgId}','${plano}')" style="padding:6px 12px;border-radius:var(--r-md);border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Alterar plano</button>
+      <div class="gi-acoes">
+        <button class="gi-btn" onclick="abrirModalOrg('${orgId}')">Editar</button>
+        <button class="gi-btn" onclick="abrirModalUsuarioOrg('${orgId}')">Criar usuário</button>
+        <button class="gi-btn" onclick="carregarCatalogoModeloOrgUI('${orgId}')">Catálogo modelo</button>
+        ${orgData.ativo ? `<button class="gi-btn gi-laranja" onclick="iniciarModoSuporte('${orgId}')">Entrar como suporte</button>` : ''}
       </div>
     </div>
 
-    <!-- Ações — todas concentradas aqui na tela de detalhes (item 3) -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
-      <button class="btn btn-outline" onclick="abrirModalOrg('${orgId}')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Editar organização</button>
-      <button class="btn btn-outline" onclick="abrirModalUsuarioOrg('${orgId}')">${ICONS.userplus} Criar usuário</button>
-      <button class="btn btn-outline" onclick="carregarCatalogoModeloOrgUI('${orgId}')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h7"/></svg> Carregar catálogo modelo</button>
-      ${orgData.ativo ? `<button class="btn btn-amber" onclick="iniciarModoSuporte('${orgId}')"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M15.5 8.5a4.5 4.5 0 0 1-5.9 5.9L4 20l-.7-.7 5.6-5.6a4.5 4.5 0 0 1 5.9-5.9l-2.6 2.6 2.1 2.1z"/></svg> Acessar como administrador</button>` : ''}
-      <button class="btn btn-outline" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">
-        ${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}
-      </button>
+    <div class="gi-kpirow">
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Usuários</div><span class="gi-n">${usrsData.length}</span><small class="gi-s">${usrsData.filter(u=>u.ativo).length} ativos</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Turmas</div><span class="gi-n">${totalT}</span></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Em andamento</div><span class="gi-n">${ativasT}</span></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Concluídas</div><span class="gi-n">${concT}</span></div>
     </div>
 
-    <!-- Usuários — largura total (sem coluna lateral, o plano já está no cabeçalho) -->
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Usuários (${usrsData.filter(u=>u.ativo).length} ativos de ${usrsData.length})</div>
-    ${(usrsData.length > 5 || usrsData.some(u=>!u.ativo)) ? `
+    <section class="gi-painel" style="margin-bottom:16px">
+      <div class="gi-painel-h"><h3>Plano</h3><button class="gi-link" onclick="abrirModalAlterarPlano('${orgId}','${plano}')">Alterar plano</button></div>
+      <div style="padding:14px 18px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+        <b style="font-size:16px;color:var(--text-1)">${planoNome}</b><span style="font-size:12px;color:var(--text-2)">${planoValor}</span>${venc ? `<span style="font-size:11px;color:var(--text-3)">· Vence ${venc}</span>` : ''}
+      </div>
+    </section>
+
+    <div class="prov-ficha">
+      <div>
+        ${window._orgModulosAtual !== undefined ? `
+        <section class="gi-painel"><div class="gi-painel-h"><h3>Módulos contratados</h3></div>
+          <div style="padding:14px 18px" id="modulosOrg">${_htmlModulosOrg()}</div></section>` : ''}
+
+        <section class="gi-painel"><div class="gi-painel-h"><h3>Laudomiro (IA)</h3><span class="gi-badge gi-blue">novo aqui</span></div>
+          <div style="padding:6px 18px 14px" id="laudomiroOrg"><div class="gi-vazio" style="padding:10px 0">Carregando…</div></div></section>
+
+        <section class="gi-painel"><div class="gi-painel-h"><h3>Usuários (${usrsData.filter(u=>u.ativo).length} ativos de ${usrsData.length})</h3></div>
+          <div style="padding:${(usrsData.length > 5 || usrsData.some(u=>!u.ativo)) ? '12px 18px 0' : '0'}">
+          ${(usrsData.length > 5 || usrsData.some(u=>!u.ativo)) ? `
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       ${usrsData.length > 5 ? `<input type="search" id="buscaUsuariosOrg" placeholder="Buscar por nome ou perfil..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1)" oninput="_filtrarUsuariosOrg()">` : ''}
       ${usrsData.some(u=>!u.ativo) ? `<select id="filtroStatusUsuarioOrg" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="_filtrarUsuariosOrg()">
@@ -7123,32 +7138,25 @@ async function verOrgProvedor(orgId) {
         <option value="instrutor">Instrutor</option>
       </select>` : ''}
     </div>` : ''}
-    <div class="card" style="padding:0" id="listaUsuariosOrg">${_renderUsuariosOrgLista()}</div>
+          </div>
+          <div id="listaUsuariosOrg">${_renderUsuariosOrgLista()}</div></section>
+      </div>
+      <div>
+        <section class="gi-painel"><div class="gi-painel-h"><h3>Integração SOC</h3></div>
+          <div style="padding:14px 18px" id="integracaoSocOrg">${_htmlIntegracaoSocOrg()}</div></section>
 
-    <!-- Notas internas — só o provedor vê, fica invisível pro cliente -->
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Notas internas</div>
-    <div class="card" style="padding:14px" id="notasInternasOrg">${_htmlNotasInternasOrg()}</div>
+        <section class="gi-painel"><div class="gi-painel-h"><h3>Notas internas</h3><span class="gi-link" style="cursor:default;color:var(--text-3);font-weight:600">só o Provedor vê</span></div>
+          <div style="padding:14px 18px" id="notasInternasOrg">${_htmlNotasInternasOrg()}</div></section>
 
-    <!-- Módulos contratados — 08/09/2026. Liberação pela aplicação, não pelo
-         SQL: é o que o desenho da plataforma modular sempre previu. Só
-         aparece se o PASSO-30 já rodou neste banco. -->
-    ${window._orgModulosAtual !== undefined ? `
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Módulos contratados</div>
-    <div class="card" style="padding:14px" id="modulosOrg">${_htmlModulosOrg()}</div>
-    ` : ''}
+        <section class="gi-painel"><div class="gi-painel-h"><h3>Histórico de mudanças</h3></div>
+          <div>${_htmlHistoricoOrg()}</div></section>
 
-    <!-- Integração SOC (SOCGED) — feature nova e isolada, 2026-08-10. Só
-         aparece se a migration migration-soc-ged-certificados.sql já rodou
-         (senão window._orgSocGedConfigAtual fica undefined, não null). -->
-    <!-- 27/09 (v198): um card só para tudo o que vem do SOC — Busca (antes só
-         por SQL), SOCGED e rotinas da Avaliação de Campo. -->
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Integração SOC</div>
-    <div class="card" style="padding:14px" id="integracaoSocOrg">${_htmlIntegracaoSocOrg()}</div>
-
-    <!-- Histórico de mudanças — só leitura, últimos 15 eventos desta organização -->
-    <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">Histórico de mudanças</div>
-    <div class="card" style="padding:0">${_htmlHistoricoOrg()}</div>
+        <section class="gi-painel"><div class="gi-painel-h"><h3>Zona de cuidado</h3></div>
+          <div style="padding:14px 18px"><button class="btn btn-outline" style="color:var(--red-text);border-color:var(--red-l)" onclick="${orgData.ativo ? `desativarOrg('${orgId}')` : `ativarOrg('${orgId}')`}">${orgData.ativo ? 'Desativar organização' : 'Ativar organização'}</button></div></section>
+      </div>
+    </div>
   `);
+  _provLaudomiroCarregar(orgId);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -8561,6 +8569,122 @@ function _atualizarProjecaoMrr() {
   _setElBoth('mrrProjetadoValor', `R$${Math.round(projetado).toLocaleString('pt-BR')}`);
 }
 
+
+// ============================================================
+// v253 — Laudomiro no painel do Provedor (uso por organização) e cartão na ficha da organização
+// Só leitura nas contas; a liberação de perfis usa a ação "config" da função laudomiro-perguntar (já existia desde a v251).
+// ============================================================
+async function renderLaudomiroProvedor() {
+  setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Laudomiro</div>`);
+  const ini = new Date(); ini.setDate(1); ini.setHours(0, 0, 0, 0);
+  const mes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
+  const [orgsR, modsR, cotaR, cfgR, pergR] = await Promise.all([
+    sb.from('organizacoes').select('id,nome,ativo').order('nome'),
+    sb.from('organizacoes_modulos').select('org_id,modulo,ativo'),
+    sb.from('laudomiro_cota').select('org_id,limite_mes'),
+    sb.from('laudomiro_config').select('org_id,perfis_padrao'),
+    _lerTudo(() => sb.from('laudomiro_perguntas').select('org_id,erro,avaliacao').gte('criado_em', ini.toISOString()).order('criado_em')),
+  ]);
+  if (orgsR.error) throw orgsR.error;
+  const faltou = !!(modsR.error || cotaR.error || cfgR.error || pergR.error);
+  const comCampo = new Set((modsR.data || []).filter(m => m.modulo === 'campo' && m.ativo).map(m => m.org_id));
+  const limites = new Map((cotaR.data || []).map(c => [c.org_id, c.limite_mes]));
+  const perfis = new Map((cfgR.data || []).map(c => [c.org_id, c.perfis_padrao || ['administrador']]));
+  const usadas = new Map(), erros = new Map();
+  for (const p of (pergR.data || [])) {
+    if (!p.org_id || p.erro) continue;
+    usadas.set(p.org_id, (usadas.get(p.org_id) || 0) + 1);
+    if (p.avaliacao === 'erro') erros.set(p.org_id, (erros.get(p.org_id) || 0) + 1);
+  }
+  const rotPerfil = { administrador: 'Administrador', comercial: 'Comercial', instrutor: 'Instrutor' };
+  const linhas = (orgsR.data || []).filter(o => o.ativo && comCampo.has(o.id)).map(o => {
+    const lim = Number.isFinite(limites.get(o.id)) ? limites.get(o.id) : 300;
+    const us = usadas.get(o.id) || 0;
+    return { o, lim, us, pct: lim > 0 ? Math.round(us / lim * 100) : 100, erros: erros.get(o.id) || 0, perfis: (perfis.get(o.id) || ['administrador']).map(p => rotPerfil[p] || p) };
+  }).sort((a, b) => b.us - a.us || a.o.nome.localeCompare(b.o.nome));
+  const totalUsadas = linhas.reduce((t, l) => t + l.us, 0);
+  const perto = linhas.filter(l => l.pct >= 80).length;
+  const totalErros = linhas.reduce((t, l) => t + l.erros, 0);
+
+  const htmlLinhas = linhas.length ? linhas.map(l => `
+    <div class="gi-row" style="padding:12px 0;cursor:pointer;gap:14px;flex-wrap:wrap" onclick="_provAbrirOrg('${l.o.id}')">
+      <div class="gi-main" style="min-width:160px"><b style="font-size:12.5px">${escapeHtml(l.o.nome)}</b><small>Liberado para: ${escapeHtml(l.perfis.join(', '))}</small></div>
+      <div style="flex:none;width:min(210px,42%)">
+        <div style="font-size:11px;color:var(--text-2)"><b>${l.us}</b> de ${l.lim} perguntas</div>
+        <div class="prov-barra"><i style="width:${Math.min(100, l.pct)}%;${l.pct >= 100 ? 'background:var(--red)' : (l.pct >= 80 ? 'background:var(--amber-h)' : '')}"></i></div>
+      </div>
+      <span class="gi-badge ${l.pct >= 100 ? 'gi-red' : (l.pct >= 80 ? 'gi-warn' : '')}" style="width:92px;justify-content:center">${l.pct >= 100 ? 'Cota esgotada' : l.pct + '% usado'}</span>
+      <span style="width:84px;display:inline-flex;justify-content:flex-end;flex:none">${l.erros ? `<span class="gi-badge gi-red" title="Respostas que os usuários marcaram como Tem erro">${l.erros} com erro</span>` : ''}</span>
+    </div>`).join('') : `<div class="gi-vazio">Nenhuma organização ativa com o módulo Avaliação de Campo (o Laudomiro faz parte dele).</div>`;
+
+  setConteudo(`
+    <div class="gi-page">
+      <div>
+        <div class="gi-eyebrow">Painel GRID · Provedor</div>
+        <h2>Laudomiro</h2>
+        <p>Uso do assistente de IA por organização em ${escapeHtml(mes)}. As perguntas feitas por você (Provedor) não gastam a cota do cliente.</p>
+      </div>
+    </div>
+    <div class="gi-kpirow">
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Perguntas no mês</div><span class="gi-n">${totalUsadas}</span><small class="gi-s">em todas as organizações</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Organizações com Laudomiro</div><span class="gi-n">${linhas.length}</span><small class="gi-s">com o módulo Campo ativo</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Perto da cota</div><span class="gi-n">${perto}</span><small class="gi-s">80% ou mais usado</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Respostas com erro</div><span class="gi-n">${totalErros}</span><small class="gi-s">marcadas pelos usuários</small></div>
+    </div>
+    ${faltou ? `<div class="gi-passos-card" style="margin-bottom:16px"><div><b>Alguns dados não carregaram</b><small>Os números abaixo podem estar incompletos. Atualize a tela; se continuar, confira se o PASSO-79 e o PASSO-81 foram aplicados.</small></div></div>` : ''}
+    <section class="gi-painel">
+      <div class="gi-painel-h"><h3>Uso por organização</h3><span class="gi-link" style="cursor:default;color:var(--text-3);font-weight:600">toque na organização para liberar perfis</span></div>
+      <div class="gi-corpo">${htmlLinhas}</div>
+    </section>`);
+}
+
+// abre a ficha da organização com o menu e o título de Organizações (a tela de origem pode ser outra)
+function _provAbrirOrg(id) {
+  paginaAtual = 'orgs';
+  try { marcarNavAtivo('orgs'); document.getElementById('headerTitle').textContent = TITULOS.orgs; } catch (e) {}
+  return verOrgProvedor(id);
+}
+window._provLqStatus = {};
+async function _provLaudomiroCarregar(orgId) {
+  const temCampo = !!(window._orgModulosAtual?.modulos || []).find(m => m.modulo === 'campo' && m.ativo);
+  if (!temCampo) { _setElBoth('laudomiroOrg', `<div class="gi-vazio" style="padding:6px 0">O Laudomiro faz parte do módulo Avaliação de Campo, que não está ativo nesta organização.</div>`); return; }
+  let st = null;
+  try {
+    const { data, error } = await sb.functions.invoke('laudomiro-perguntar', { body: { acao: 'status', orgId } });
+    if (!error && data && !data.error) st = data;
+  } catch (e) { st = null; }
+  if (window._orgIdAtualProvedor !== orgId) return;
+  window._provLqStatus[orgId] = st;
+  _setElBoth('laudomiroOrg', _provLaudomiroHtml(orgId, st));
+}
+function _provLaudomiroHtml(orgId, st) {
+  if (!st) return `<div class="gi-vazio" style="padding:6px 0">Não consegui ler o uso do Laudomiro agora. Atualize a tela.</div>`;
+  const pp = st.perfisPadrao || ['administrador'];
+  const linha = (perfil, rot) => `<div class="prov-sw"><span>${rot}</span><button type="button" class="prov-tg${pp.includes(perfil) ? ' on' : ''}" role="switch" aria-checked="${pp.includes(perfil)}" aria-label="Liberar o Laudomiro para ${rot}" onclick="_provLaudomiroPerfil('${orgId}','${perfil}',${!pp.includes(perfil)})"></button></div>`;
+  const pct = st.limite > 0 ? Math.round(st.usadas / st.limite * 100) : 100;
+  return `
+    <div class="prov-sw"><span>Administrador</span><span class="gi-badge">Sempre liberado</span></div>
+    ${linha('comercial', 'Comercial')}
+    ${linha('instrutor', 'Instrutor')}
+    <div style="margin-top:10px;font-size:12px;color:var(--text-2)">Perguntas em ${escapeHtml(st.mes || 'este mês')}: <b>${st.usadas}</b> de ${st.limite}</div>
+    <div class="prov-barra"><i style="width:${Math.min(100, pct)}%"></i></div>
+    <small style="font-size:10px;color:var(--text-3)">A cota volta no dia 1º. ${st.configurado === false ? 'Atenção: a chave da IA ainda não está salva no servidor.' : ''}</small>`;
+}
+async function _provLaudomiroPerfil(orgId, perfil, ligado) {
+  try {
+    showLoading('Salvando...');
+    const { data, error } = await sb.functions.invoke('laudomiro-perguntar', { body: { acao: 'config', orgId, perfil, ligado } });
+    if (error || !data || data.error) throw new Error(data?.error || 'Não foi possível salvar.');
+    const st = window._provLqStatus[orgId] || {};
+    st.perfisPadrao = data.perfisPadrao || st.perfisPadrao;
+    window._provLqStatus[orgId] = st;
+    _setElBoth('laudomiroOrg', _provLaudomiroHtml(orgId, st));
+    showToast('Salvo', 'success');
+  } catch (e) {
+    showToast(e?.message || 'Não foi possível salvar.', 'error');
+  } finally { hideLoading(); }
+}
+
 async function renderFinanceiroProvedor() {
   const [{ data: orgs }, { data: eventosOrgTodos }] = await Promise.all([
     sb.from('organizacoes').select('id,nome,ativo,plano,created_at,trial_fim,assinatura_vencimento,assinatura_id,assinatura_status,assinatura_atraso_desde'),
@@ -8895,33 +9019,9 @@ async function renderFinanceiroProvedor() {
     </div>`).join('') : '<div style="padding:16px 4px;font-size:12px;color:var(--text-3)">Sem organizações pagantes ainda.</div>';
 
   setConteudo(`
-    <div class="home-navy-header" style="margin-bottom:14px">
-      <div class="home-navy-greeting">Financeiro</div>
-      <div class="home-navy-sub">Visão consolidada de receita · GRID</div>
-      <div class="home-kpi-grid" style="margin-top:16px">
-        <div class="home-kpi">
-          <div class="home-kpi-val">R$${mrr.toLocaleString('pt-BR')}</div>
-          <div class="home-kpi-lbl">MRR atual</div>
-          <div class="home-kpi-delta green">${pros}P · ${starters}S · ${enterprises}E</div>
-          ${_htmlDeltaKpi(mrr, mrrMesAnterior, {pct:true})}
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val">R$${arr.toLocaleString('pt-BR')}</div>
-          <div class="home-kpi-lbl">ARR projetado</div>
-          <div class="home-kpi-delta green">Anualizado</div>
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val">R$${ticketMedio.toLocaleString('pt-BR')}</div>
-          <div class="home-kpi-lbl">Ticket médio</div>
-          <div class="home-kpi-delta green">Por org. paga</div>
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val">${vencimentos.filter(v=>v.dias<=7 && v.dias>=0).length}</div>
-          <div class="home-kpi-lbl">Vencem em 7d</div>
-          <div class="home-kpi-delta">Atenção</div>
-        </div>
-      </div>
-    </div>
+    <div class="gi-page"><div><div class="gi-eyebrow">Painel GRID · Provedor</div><h2>Financeiro</h2><p>Visão consolidada de receita · GRID</p></div></div>
+    <div class="gi-kpirow"><div class="gi-kpi gi-sm"><div class="gi-kh">MRR atual</div><span class="gi-n">R$${mrr.toLocaleString('pt-BR')}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta green">${pros}P · ${starters}S · ${enterprises}E</div>
+          ${_htmlDeltaKpi(mrr, mrrMesAnterior, {pct:true})}</div></div><div class="gi-kpi gi-sm"><div class="gi-kh">ARR projetado</div><span class="gi-n">R$${arr.toLocaleString('pt-BR')}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta green">Anualizado</div></div></div><div class="gi-kpi gi-sm"><div class="gi-kh">Ticket médio</div><span class="gi-n">R$${ticketMedio.toLocaleString('pt-BR')}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta green">Por org. paga</div></div></div><div class="gi-kpi gi-sm"><div class="gi-kh">Vencem em 7d</div><span class="gi-n">${vencimentos.filter(v=>v.dias<=7 && v.dias>=0).length}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta">Atenção</div></div></div></div>
 
     <div class="card" style="padding:16px;margin-bottom:14px">
       <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:4px">Projeção de MRR (trials ativos)</div>
@@ -9149,36 +9249,12 @@ function _renderAdocaoConteudo(filtro) {
     </div>`).join('') : '<div style="padding:24px 4px;text-align:center;font-size:12.5px;color:var(--text-3)">Nenhuma organização encontrada.</div>';
 
   setConteudo(`
-    <div class="home-navy-header" style="margin-bottom:14px">
-      <div class="home-navy-greeting">Adoção de Recursos</div>
-      <div class="home-navy-sub">O quanto cada organização realmente usa da plataforma</div>
-      <div class="home-kpi-grid" style="margin-top:16px">
-        <div class="home-kpi">
-          <div class="home-kpi-val">${mediaAdocao}%</div>
-          <div class="home-kpi-lbl">Adoção média</div>
-          <div class="home-kpi-delta">${totalOrgs} organizaç${totalOrgs!==1?'ões':'ão'}</div>
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val">${baixaAdocao}</div>
-          <div class="home-kpi-lbl">Abaixo de 50%</div>
-          <div class="home-kpi-delta ${baixaAdocao?'red':''}">${baixaAdocao?'Risco de churn':'Nenhuma'}</div>
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val" style="font-size:15px">${maisUsado?maisUsado.label:'—'}</div>
-          <div class="home-kpi-lbl">Recurso mais usado</div>
-          <div class="home-kpi-delta green">${maisUsado?maisUsado.pct+'%':''}</div>
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val" style="font-size:15px">${menosUsado?menosUsado.label:'—'}</div>
-          <div class="home-kpi-lbl">Recurso menos usado</div>
-          <div class="home-kpi-delta amber">${menosUsado?menosUsado.pct+'%':''}</div>
-        </div>
-      </div>
-    </div>
+    <div class="gi-page"><div><div class="gi-eyebrow">Painel GRID · Provedor</div><h2>Adoção de Recursos</h2><p>O quanto cada organização realmente usa da plataforma</p></div></div>
+    <div class="gi-kpirow"><div class="gi-kpi gi-sm"><div class="gi-kh">Adoção média</div><span class="gi-n">${mediaAdocao}%</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta">${totalOrgs} organizaç${totalOrgs!==1?'ões':'ão'}</div></div></div><div class="gi-kpi gi-sm"><div class="gi-kh">Abaixo de 50%</div><span class="gi-n">${baixaAdocao}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta ${baixaAdocao?'red':''}">${baixaAdocao?'Risco de churn':'Nenhuma'}</div></div></div><div class="gi-kpi gi-sm"><div class="gi-kh">Recurso mais usado</div><span class="gi-n" style="font-size:15px;line-height:1.25">${maisUsado?maisUsado.label:'—'}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta green">${maisUsado?maisUsado.pct+'%':''}</div></div></div><div class="gi-kpi gi-sm"><div class="gi-kh">Recurso menos usado</div><span class="gi-n" style="font-size:15px;line-height:1.25">${menosUsado?menosUsado.label:'—'}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta amber">${menosUsado?menosUsado.pct+'%':''}</div></div></div></div>
 
-    <div style="background:var(--navy);border-radius:var(--r-lg);padding:14px 18px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center">
-      <div style="font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg> Resumo</div>
-      <div style="flex:1;min-width:220px;font-size:12.5px;color:rgba(255,255,255,.8);line-height:1.5">${resumo}</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:7px;padding:14px 18px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center">
+      <div style="font-size:11px;font-weight:700;color:var(--text-1);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg> Resumo</div>
+      <div style="flex:1;min-width:220px;font-size:12.5px;color:var(--text-2);line-height:1.5">${resumo}</div>
     </div>
 
     <div class="card" style="padding:16px;margin-bottom:14px">
@@ -9267,18 +9343,8 @@ async function renderLogsAuditoria() {
   _logsListaFiltrada = _filtrarLogs(_logsCache, '', '', '', '30');
 
   setConteudo(`
-    <div class="home-navy-header" style="margin-bottom:14px">
-      <div>
-        <div class="home-navy-greeting">Logs / Auditoria</div>
-        <div class="home-navy-sub">Registro de acessos ao sistema · GRID</div>
-      </div>
-      <div class="home-kpi-grid" style="margin-top:16px">
-        <div class="home-kpi"><div class="home-kpi-val">${totalRegistros}</div><div class="home-kpi-lbl">Total de registros</div></div>
-        <div class="home-kpi"><div class="home-kpi-val">${totalLogins}</div><div class="home-kpi-lbl">Logins</div></div>
-        <div class="home-kpi"><div class="home-kpi-val">${totalSuporte}</div><div class="home-kpi-lbl">Modo Suporte</div></div>
-        <div class="home-kpi"><div class="home-kpi-val">${total24h}</div><div class="home-kpi-lbl">Últimas 24h</div></div>
-      </div>
-    </div>
+    <div class="gi-page"><div><div class="gi-eyebrow">Painel GRID · Provedor</div><h2>Logs / Auditoria</h2><p>Registro de acessos ao sistema · GRID</p></div></div>
+    <div class="gi-kpirow"><div class="gi-kpi gi-sm"><div class="gi-kh">Total de registros</div><span class="gi-n">${totalRegistros}</span></div><div class="gi-kpi gi-sm"><div class="gi-kh">Logins</div><span class="gi-n">${totalLogins}</span></div><div class="gi-kpi gi-sm"><div class="gi-kh">Modo Suporte</div><span class="gi-n">${totalSuporte}</span></div><div class="gi-kpi gi-sm"><div class="gi-kh">Últimas 24h</div><span class="gi-n">${total24h}</span></div></div>
 
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="search" id="buscaLogs" placeholder="Buscar por nome, e-mail ou organização..." style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="aplicarFiltrosLogs()">
@@ -9386,11 +9452,14 @@ function _htmlItemLog(l) {
 
 async function renderOrgs() {
   _orgsSelecionadas.clear();
-  const [{data,error}, {data:usuarios}, {data:colaboradoresOrgId}] = await Promise.all([
+  const [{data,error}, {data:usuarios}, {data:colaboradoresOrgId}, {data:modulosOrgs}] = await Promise.all([
     sb.from('organizacoes').select('*').order('nome'),
     sb.from('usuarios').select('org_id,perfil,ativo'),
     sb.from('colaboradores').select('org_id'),
+    sb.from('organizacoes_modulos').select('org_id,modulo,ativo'),   // v253: chips de módulos na lista
   ]);
+  _orgsModulosCache = {};
+  (modulosOrgs || []).filter(m => m.ativo).forEach(m => { (_orgsModulosCache[m.org_id] = _orgsModulosCache[m.org_id] || []).push(m.modulo); });
   if (error) throw error;
   _orgsCache = data||[];
   _orgsUsuariosCache = usuarios||[];
@@ -9401,6 +9470,12 @@ async function renderOrgs() {
 }
 
 let _orgsUsuariosCache = [];
+let _orgsModulosCache = {};
+function _chipsModulosOrg(id) {
+  const on = _orgsModulosCache[id] || [];
+  const c = (rot, ativo) => `<span class="prov-chip${ativo ? ' on' : ''}">${rot}</span>`;
+  return c('Treinamentos', true) + c('CRM', on.includes('crm')) + c('Campo', on.includes('campo'));
+}
 let _orgsColaboradorSet = new Set(); // orgs com pelo menos 1 colaborador cadastrado — usado no Score de Saúde da lista
 
 function _renderOrgsLista(orgs) {
@@ -9439,30 +9514,8 @@ function _renderOrgsLista(orgs) {
     </div>`;
 
   setConteudo(`
-    <div class="home-navy-header" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div class="home-navy-greeting">Organizações</div>
-          <div class="home-navy-sub">Portfólio de clientes · GRID</div>
-        </div>
-      </div>
-      <div class="home-kpi-grid" style="margin-top:16px">
-        <div class="home-kpi">
-          <div class="home-kpi-val">${orgs.length}</div>
-          <div class="home-kpi-lbl">Total</div>
-          <div class="home-kpi-delta green">${ativas} ativas</div>
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val">${ativas}</div>
-          <div class="home-kpi-lbl">Ativas</div>
-          ${_htmlDeltaKpi(ativas, ativas30dAtras)}
-        </div>
-        <div class="home-kpi">
-          <div class="home-kpi-val">${orgs.length-ativas}</div>
-          <div class="home-kpi-lbl">Inativas</div>
-        </div>
-      </div>
-    </div>
+    <div class="gi-page"><div><div class="gi-eyebrow">Painel GRID · Provedor</div><h2>Organizações</h2><p>Portfólio de clientes · GRID</p></div><div class="gi-acoes"><button class="gi-btn" onclick="exportarPortfolioCSV()">CSV</button><button class="gi-btn gi-laranja" onclick="abrirModalOrg()">+ Nova organização</button></div></div>
+    <div class="gi-kpirow"><div class="gi-kpi gi-sm"><div class="gi-kh">Total</div><span class="gi-n">${orgs.length}</span><div class="gi-tr gi-neutro" style="margin-top:6px"><div class="home-kpi-delta green">${ativas} ativas</div></div></div><div class="gi-kpi gi-sm"><div class="gi-kh">Ativas</div><span class="gi-n">${ativas}</span><div class="gi-tr gi-neutro" style="margin-top:6px">${_htmlDeltaKpi(ativas, ativas30dAtras)}</div></div><div class="gi-kpi gi-sm"><div class="gi-kh">Inativas</div><span class="gi-n">${orgs.length-ativas}</span></div></div>
 
     <!-- Detalhes financeiros (MRR, plano) ficam só na tela Financeiro, pra
          não repetir o mesmo número em 3 lugares diferentes. -->
@@ -9473,9 +9526,7 @@ function _renderOrgsLista(orgs) {
 
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="search" id="buscaOrg" placeholder="Buscar organização..." style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;outline:none" oninput="aplicarFiltrosOrgs()">
-      <button class="btn btn-outline" onclick="exportarPortfolioCSV()"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg> CSV</button>
-      <button class="btn btn-navy" onclick="abrirModalOrg()">${ICONS.building} Nova</button>
-    </div>
+</div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <select id="filtroOrgStatus" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosOrgs()">
         <option value="ativa" selected>Ativas</option>
@@ -9558,6 +9609,7 @@ function _htmlListaOrgs(orgs) {
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
           <div style="font-size:12px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${totalU} usuário${totalU!==1?'s':''} · ${o.cnpj?`CNPJ ${o.cnpj}`:(o.email||'Sem e-mail')}</div>
+          <div class="prov-chips">${_chipsModulosOrg(o.id)}</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -9565,7 +9617,7 @@ function _htmlListaOrgs(orgs) {
         ${_badgeTrial(o)}
         ${_badgeAtrasadaOuCancelada(o)}
         ${_badgePlanoLista(o.plano, o.ativo)}
-        ${o.ativo ? `<button class="btn btn-ghost btn-sm" title="Entrar como suporte" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support}</button>` : ''}
+        ${o.ativo ? `<button class="gi-btn gi-laranja" style="height:30px" title="Entrar como suporte nesta organização" onclick="event.stopPropagation();iniciarModoSuporte('${o.id}')">${ICONS.support} Entrar como suporte</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -32579,7 +32631,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '252';
+  var APP_BUILD = '253';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
