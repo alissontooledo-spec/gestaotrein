@@ -11,6 +11,7 @@
    v254 (12/10/2026): anexar FDS (PDF) ou foto para consulta — clipe no campo,
    resposta da FDS cruzada com a base de agentes e resposta da foto com as NRs.
    Proposta aprovada: 08-Propostas-visuais/laudomiro-v254-v2-*.png.
+   v255: campo limpa depois de enviar (celular); título do aviso de norma; CAS sem o número CE.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
@@ -264,6 +265,9 @@ const PASSOS = {
 const NOME_GHS = { GHS01: 'Explosivo', GHS02: 'Inflamável', GHS03: 'Oxidante', GHS04: 'Gás sob pressão', GHS05: 'Corrosivo', GHS06: 'Tóxico', GHS07: 'Irritante', GHS08: 'Perigo à saúde', GHS09: 'Meio ambiente' };
 const GRAU_F = { 'mínimo': ['mínima', 'min'], 'médio': ['média', 'med'], 'máximo': ['máxima', 'max'] };
 
+/* v255: no celular o campo focado mantinha o texto depois de enviar (o redesenho preserva o campo em foco). */
+function limparCampo() { document.querySelectorAll('#lqTxt').forEach((el) => { el.value = ''; }); }
+
 const anexosLigados = () => !!_status?.anexos && !semPermissao() && !!_status?.configurado;
 
 function menuAnexo() {
@@ -342,7 +346,7 @@ async function enviarAnexo(p) {
   const a = _anexo; _anexo = null;
   const turno = { pergunta: p, anexo: { tipo: a.tipo, nome: a.nome, thumb: a.thumb || '' }, carregando: true, passo: 0, _arquivo: a };
   _ctx = null;  // a FDS nova (ou a foto) muda o assunto da conversa
-  _conv.push(turno); _txt = ''; _painel = null; _copiarMenu = null;
+  _conv.push(turno); _txt = ''; _painel = null; _copiarMenu = null; limparCampo();
   repintar(); rolarFim();
   const relogio = setInterval(() => { if (turno.passo < 3) { turno.passo++; repintar(); } }, 6000);
   try {
@@ -407,7 +411,7 @@ function respostaFds(turno, tIdx) {
     <header class="lq-ver"><span class="lq-selo v-fds">FDS</span><div><h3>${esc(r.titulo)}</h3>${r.subtitulo ? `<p>${esc(r.subtitulo)}</p>` : ''}</div></header>
     ${r.curta ? `<p class="lq-curta">${negritoInicio(r.curta)} ${refChip(r.curta_ref)}</p>` : ''}
     <div class="lq-res3">${(r.quadros || []).map(q => `<div class="lq-r"><small>${esc(q.rotulo)}</small><b>${esc(q.titulo)}</b>${q.texto ? `<span>${esc(q.texto)}</span>` : ''}${q.ref ? `<em class="ref">${esc(q.ref)}</em>` : ''}</div>`).join('')}</div>
-    ${r.aviso_norma ? `<div class="lq-velha2">${IC.erro}<div><b>FDS no modelo antigo.</b> ${esc(r.aviso_norma)}</div></div>` : ''}
+    ${r.aviso_norma ? `<div class="lq-velha2">${IC.erro}<div><b>${(r.aviso_norma_tipo || (/^A revisão é de/.test(r.aviso_norma) ? 'antiga' : 'confirmar')) === 'antiga' ? 'FDS no modelo antigo.' : 'Confira a norma da FDS.'}</b> ${esc(r.aviso_norma)}</div></div>` : ''}
     ${(r.pictogramas || []).length || r.palavra ? `<div class="lq-sec"><h5>Pictogramas (seção 2)</h5><div class="ghs">${r.palavra ? `<span class="pal">${esc(r.palavra)}</span>` : ''}${(r.pictogramas || []).map(g => GHS[g] ? `<figure>${GHS[g]}<figcaption>${NOME_GHS[g]}</figcaption></figure>` : '').join('')}</div></div>` : ''}
     ${conf ? `<div class="lq-sec"><h5>Conferência da FDS</h5><div class="lq-conf2">${conf}</div></div>` : ''}
     ${comp ? `<div class="lq-sec"><h5>Composição${r.composicao_ref ? ' (' + esc(r.composicao_ref.toLowerCase()) + ')' : ''} e o que a base do GRID diz</h5><div class="lq-subs">${comp}</div></div>` : ''}
@@ -522,7 +526,7 @@ async function enviar(texto) {
   if (_status && !_status.configurado) { avisar('O Laudomiro ainda está sendo configurado.', 'erro'); return; }
   const historico = _conv.filter(t => t.resposta).slice(-2).map(t => ({ pergunta: t.pergunta, resposta: t.resumo || '' }));
   const turno = { pergunta: p, carregando: true };
-  _conv.push(turno); _txt = ''; _painel = null;
+  _conv.push(turno); _txt = ''; _painel = null; limparCampo();
   repintar();
   rolarFim();
   try {
