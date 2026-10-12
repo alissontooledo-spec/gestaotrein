@@ -45,7 +45,8 @@ const VEREDITO = {
 const sb = () => { const c = clienteBanco(); if (!c) throw new Error('Banco indisponível. Recarregue o sistema.'); return c; };
 
 async function chamar(body) {
-  const { data, error } = await sb().functions.invoke(FUNCAO, { body });
+  /* v249: manda a organização aberta (o Provedor em Modo Suporte não tem organização própria). */
+  const { data, error } = await sb().functions.invoke(FUNCAO, { body: { ...body, orgId: sessao.orgId?.() || undefined } });
   if (error) {
     let msg = error.message, codigo = '', status = error.context?.status || 0;
     try { const c = await error.context?.json?.(); if (c?.error) msg = c.error; if (c?.codigo) codigo = c.codigo; } catch { /* ok */ }
@@ -130,10 +131,12 @@ function quando(iso) {
 /* {{n}} → botão com o rótulo do trecho; **negrito** simples. */
 function textoComRefs(texto, turno, tIdx) {
   const mapa = new Map((turno.trechos || []).map(t => [t.n, t]));
-  return esc(texto).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\{\{(\d+)\}\}/g, (m, n) => {
-    const t = mapa.get(+n); if (!t) return '';
+  const vistos = new Set();   // v249: a mesma fonte aparece uma vez por parágrafo
+  return esc(texto).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\s*\{\{(\d+)\}\}/g, (m, n) => {
+    const t = mapa.get(+n); if (!t || vistos.has(+n)) return '';
+    vistos.add(+n);
     const on = _painel && _painel.t === tIdx && _painel.n === +n;
-    return `<button type="button" class="lq-it${on ? ' on' : ''}" data-acao="campo:lq-fonte:${tIdx}.${+n}" title="Ver o texto: ${esc(t.fonte)}">${esc(t.rotulo)}</button>`;
+    return ` <button type="button" class="lq-it${on ? ' on' : ''}" data-acao="campo:lq-fonte:${tIdx}.${+n}" title="Ver o texto: ${esc(t.fonte)}">${esc(t.rotulo)}</button>`;
   });
 }
 
@@ -224,7 +227,7 @@ async function enviar(texto) {
     const r = await chamar({ acao: 'perguntar', pergunta: p, historico });
     Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '' });
     if (_status && r.restantes != null) _status.restantes = r.restantes;
-    if (_status && r.id) _status.recentes = [{ id: r.id, pergunta: p, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
+    if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: p, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
   } catch (e) {
     Object.assign(turno, { carregando: false, erro: e.message || 'O Laudomiro não respondeu.', podeRepetir: !['NAO_CONFIGURADO', 'COTA'].includes(e.codigo) });
     if (e.codigo === 'NAO_CONFIGURADO' && _status) _status.configurado = false;
