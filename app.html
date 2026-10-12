@@ -16361,10 +16361,13 @@ function _lqCfgRender() {
   }
   const conta = (fn) => usos.filter(fn).length;
   const pessoas = (n) => `${n} pessoa${n === 1 ? '' : 's'}`;
+  // v251: Comercial e Instrutor padrão podem ser liberados de uma vez (Administrador sempre pode)
+  const padrao = Array.isArray(st?.perfisPadrao) ? st.perfisPadrao : ['administrador'];
   const BASES = _PERFIS_CATALOGO.bases.map(([b, nome]) => {
-    const on = b === 'administrador';
-    return `<div class="cx-row"><div class="l"><b>${nome} <span class="cx-pill cx-p-gray" style="display:inline-flex;margin-left:6px;font-size:10.5px">padrão</span></b><span>${pessoas(conta(u => u.perfil === b && !u.perfil_acesso_id))}${on ? '' : ' · os perfis padrão não mudam'}</span></div>
-      <div class="r">${on ? '<span class="cx-ok" style="font-size:12.5px">Pode usar</span>' : '<span class="cx-muted" style="font-size:12.5px">Não pode</span>'}<button type="button" class="cx-sw" aria-pressed="${on}" disabled aria-label="${nome}: ${on ? 'pode' : 'não pode'} usar"></button></div></div>`;
+    const adm = b === 'administrador', on = adm || padrao.includes(b);
+    const muda = !adm && pode && !!st && st.configurado !== false;
+    return `<div class="cx-row"><div class="l"><b>${nome} <span class="cx-pill cx-p-gray" style="display:inline-flex;margin-left:6px;font-size:10.5px">padrão</span></b><span>${pessoas(conta(u => u.perfil === b && !u.perfil_acesso_id))}${adm ? ' · sempre liberado' : ' com o perfil padrão'}</span></div>
+      <div class="r">${on ? '<span class="cx-ok" style="font-size:12.5px">Pode usar</span>' : '<span class="cx-muted" style="font-size:12.5px">Não pode</span>'}<button type="button" class="cx-sw" data-lq-padrao="${b}" aria-pressed="${on}" ${muda ? `onclick="_lqCfgPadrao('${b}')"` : 'disabled'} aria-label="${nome}: ${on ? 'tirar' : 'dar'} acesso ao Laudomiro"></button></div></div>`;
   }).join('');
   const PERS = perfis.map(p => {
     const semCampo = (p.permissoes?.modulos || {}).campo === false || !Number((p.permissoes?.telas || {}).campo || 0);
@@ -16376,7 +16379,7 @@ function _lqCfgRender() {
   }).join('');
   setConteudo(`<div class="cx-h"><div><h1>Laudomiro</h1><p>O assistente de IA do GRID para dúvidas de normas de SST. Responde com base nas NRs, no Decreto 3.048, na IN 128, no eSocial e nas instruções do CBMSC, sempre mostrando o item da norma.</p></div></div>
     <div class="cx-sec"><div class="cx-sec-h"><div><b>Uso deste mês</b><span>A cota é da empresa e renova todo dia 1º.</span></div>${st && st.configurado !== false ? '<span class="cx-pill cx-p-green" style="margin-left:auto"><i class="cx-dot"></i>Ativo</span>' : ''}</div>${uso}</div>
-    <div class="cx-sec"><div class="cx-sec-h"><div><b>Quem pode usar</b><span>O Laudomiro só aparece para quem tem a permissão no perfil de acesso. Por padrão, só Administradores. Para liberar a outras pessoas, crie um perfil personalizado e ligue a chave dele.</span></div>
+    <div class="cx-sec"><div class="cx-sec-h"><div><b>Quem pode usar</b><span>Administradores sempre podem usar. Ligue a chave de Comercial ou de Instrutor para liberar a todos com esse perfil, ou use um perfil personalizado para liberar só a algumas pessoas.</span></div>
       ${_podeRota('perfis') ? '<div class="cx-acts"><button type="button" class="cx-lnk" data-action="irPara" data-id="perfis">Gerenciar perfis →</button></div>' : ''}</div>
       ${BASES}${PERS}
       ${erroPerfis ? `<div class="cx-row"><div class="l"><span>${escapeHtml(traduzErroSupabase(erroPerfis, 'Não foi possível ler os perfis personalizados.'))}</span></div></div>` : ''}
@@ -16384,6 +16387,18 @@ function _lqCfgRender() {
     </div>
     <div class="cx-sec"><div class="cx-sec-h"><div><b>Privacidade e responsabilidade</b><span>Como o Laudomiro trata os dados (LGPD).</span></div></div>
       <ul class="cx-lst"><li>CPF, e-mail e telefone digitados são apagados antes de a pergunta sair do GRID.</li><li>Cada pessoa vê só as próprias perguntas. A empresa vê só o total do mês.</li><li>A resposta orienta e cita a norma. A conclusão do laudo continua sendo do profissional responsável.</li></ul></div>`);
+}
+async function _lqCfgPadrao(perfil) {
+  const st = window._lqCfg; if (!st?.st || !_perfisPodeEditar()) return;
+  const atual = (st.st.perfisPadrao || ['administrador']).includes(perfil);
+  document.querySelectorAll(`.cx-sw[data-lq-padrao="${perfil}"]`).forEach(b => { b.disabled = true; });
+  try {
+    const { data, error } = await sb.functions.invoke('laudomiro-perguntar', { body: { acao: 'config', perfil, ligado: !atual, orgId: usuarioAtual.org_id } });
+    let msg = null; if (error) { try { msg = (await error.context?.json?.())?.error; } catch (e) {} throw new Error(msg || error.message); }
+    st.st.perfisPadrao = data.perfisPadrao;
+    showToast(`${labelPerfil(perfil)}: Laudomiro ${!atual ? 'liberado' : 'bloqueado'} para quem usa o perfil padrão. Vale na próxima pergunta.`, 'success');
+  } catch (e) { showToast(e.message || 'Não foi possível salvar.', 'error'); }
+  _lqCfgRender();
 }
 async function _lqCfgAlternar(id) {
   const st = window._lqCfg; const p = st?.perfis.find(x => x.id === id);
@@ -26249,10 +26264,15 @@ async function renderEquipe() {
     sb.from('perfis_acesso').select('id,nome,perfil_base,permissoes').eq('org_id', orgId),
   ]);
   if (error) throw error;
+  // v251: quais perfis padrão a empresa liberou para o Laudomiro (Configurações → Laudomiro)
+  let lqPadrao = ['administrador'];
+  if ((_modulosAtivos || []).includes('campo')) {
+    try { const r = await sb.functions.invoke('laudomiro-perguntar', { body: { acao: 'status', orgId } }); if (Array.isArray(r?.data?.perfisPadrao)) lqPadrao = r.data.perfisPadrao; } catch (e) {}
+  }
   setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Equipe</div>`);
   fabOcultar();
   const ant = window._eqEstado;
-  window._eqEstado = { usuarios: data || [], perfis: pr?.data || [], filtro: ant?.filtro || 'todos' };
+  window._eqEstado = { usuarios: data || [], perfis: pr?.data || [], filtro: ant?.filtro || 'todos', lqPadrao };
   _eqRender();
 }
 function _eqPerfil(u) { return (window._eqEstado?.perfis || []).find(p => p.id === u.perfil_acesso_id) || null; }
@@ -26260,7 +26280,7 @@ function _eqLaudomiro(u) {
   if (u.perfil === 'provedor') return true;
   const p = _eqPerfil(u);
   if (u.perfil_acesso_id) return !!p && !!(p.permissoes?.acoes || {}).usar_laudomiro && (p.permissoes?.modulos || {}).campo !== false;
-  return u.perfil === 'administrador';
+  return u.perfil === 'administrador' || (window._eqEstado?.lqPadrao || []).includes(u.perfil);
 }
 function _eqFiltro(f) { window._eqEstado.filtro = f; _eqRender(); }
 function _eqBuscar(v) {
@@ -32507,7 +32527,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '250';
+  var APP_BUILD = '251';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
