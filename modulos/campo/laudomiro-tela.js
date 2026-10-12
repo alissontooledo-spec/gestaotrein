@@ -82,9 +82,15 @@ function saudacao() {
 }
 
 /* ── Pedaços da tela ───────────────────────────────────────────────────── */
+/* v250: o Laudomiro é uma permissão do perfil de acesso. Sem ela, a aba Perguntar fica travada
+   (as Fichas continuam). O servidor também recusa — isto aqui só evita a pessoa tentar à toa. */
+function semPermissao() {
+  return (typeof window._podeAcao === 'function' && !window._podeAcao('usar_laudomiro')) || _status?.permitido === false;
+}
+
 function abas() {
   const n = L.AGENTES.length;
-  const cota = _aba === 'perguntar' && _status?.configurado && _status.restantes != null
+  const cota = _aba === 'perguntar' && !semPermissao() && _status?.configurado && _status.restantes != null
     ? `<span class="lq-cota-t"><b>${_status.restantes}</b> ${_status.restantes === 1 ? 'pergunta restante' : 'perguntas restantes'} em ${esc(_status.mes || 'este mês')}</span>` : '';
   const nova = _aba === 'perguntar' && _conv.length ? '<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-nova">Nova conversa</button>' : '';
   return `<div class="lq-topo">
@@ -98,23 +104,25 @@ function abas() {
 }
 
 function compositor({ grande = false } = {}) {
-  const off = _status && !_status.configurado;
+  const bloq = semPermissao();
+  const off = (_status && !_status.configurado) || bloq;
   const ocupado = _conv.some(t => t.carregando);
   return `<div class="lq-comp${grande ? ' grande' : ''}${off ? ' off' : ''}">
       <input type="text" id="lqTxt" data-cp="lq.txt" data-cp-enter="lq.enviar" value="${esc(_txt)}" maxlength="1000" autocomplete="off"
-        placeholder="${off ? 'O Laudomiro está sendo configurado' : 'Pergunte ao Laudomiro'}" aria-label="Sua pergunta" ${off ? 'disabled' : ''}>
+        placeholder="${bloq ? 'Seu perfil de acesso não inclui o Laudomiro' : off ? 'O Laudomiro está sendo configurado' : 'Pergunte ao Laudomiro'}" aria-label="Sua pergunta" ${off ? 'disabled' : ''}>
       <button type="button" class="lq-env" data-acao="campo:lq-enviar" aria-label="Enviar pergunta" ${off || ocupado ? 'disabled' : ''}>${SEND}</button>
     </div>
     <div class="lq-priv">Não escreva nome, CPF nem dados de trabalhadores.</div>`;
 }
 
 function inicio() {
-  const off = _status && !_status.configurado;
+  const bloq = semPermissao();
+  const off = (_status && !_status.configurado) || bloq;
   const rec = (_status?.recentes || []).slice(0, 5);
   return `<section class="lq-ini">
     <h2 class="lq-h">${saudacao()} O que você precisa resolver?</h2>
     <p class="lq-sub">Pergunte como perguntaria a um engenheiro de segurança. Ele responde com o item da norma.</p>
-    ${off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> Logo você poderá perguntar aqui. Enquanto isso, as <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam funcionando.</div></div>` : ''}
+    ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil de acesso não inclui perguntas ao Laudomiro.</b> Peça ao administrador da sua empresa para liberar (Configurações → Laudomiro). As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> Logo você poderá perguntar aqui. Enquanto isso, as <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam funcionando.</div></div>` : ''}
     ${compositor({ grande: true })}
     <div class="lq-sug">${SUGESTOES.map(([r, p], i) => `<button type="button" class="lq-cd" data-acao="campo:lq-sug:${i}" ${off ? 'disabled' : ''}><small>${r}</small><b>${esc(p)}</b></button>`).join('')}</div>
     ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span>${esc(r.pergunta)}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
@@ -217,6 +225,7 @@ async function enviar(texto) {
   const p = String(texto ?? (valorVisivel('#lqTxt') || _txt)).trim();
   if (p.length < 4) { avisar('Escreva a pergunta.', 'erro'); return; }
   if (_conv.some(t => t.carregando)) return;
+  if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return; }
   if (_status && !_status.configurado) { avisar('O Laudomiro ainda está sendo configurado.', 'erro'); return; }
   const historico = _conv.filter(t => t.resposta).slice(-2).map(t => ({ pergunta: t.pergunta, resposta: t.resumo || '' }));
   const turno = { pergunta: p, carregando: true };
@@ -229,8 +238,9 @@ async function enviar(texto) {
     if (_status && r.restantes != null) _status.restantes = r.restantes;
     if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: p, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
   } catch (e) {
-    Object.assign(turno, { carregando: false, erro: e.message || 'O Laudomiro não respondeu.', podeRepetir: !['NAO_CONFIGURADO', 'COTA'].includes(e.codigo) });
+    Object.assign(turno, { carregando: false, erro: e.message || 'O Laudomiro não respondeu.', podeRepetir: !['NAO_CONFIGURADO', 'COTA', 'SEM_PERMISSAO'].includes(e.codigo) });
     if (e.codigo === 'NAO_CONFIGURADO' && _status) _status.configurado = false;
+    if (e.codigo === 'SEM_PERMISSAO' && _status) _status.permitido = false;
   }
   repintar();
   rolarFim();
