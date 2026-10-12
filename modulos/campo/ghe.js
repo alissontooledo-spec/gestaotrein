@@ -642,7 +642,7 @@ export async function acao(nome, valor, redesenhar) {
     p.abrirModal('Laudomiro', LM.fichaHtml(a, { compacta: true }),
       `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
        ${podeAplicar ? `<button class="btn lmx-btn-am" onclick="fecharModal();window.__lmAplicar&&window.__lmAplicar('${esc(a.id)}')">Aplicar ao risco</button>` : ''}
-       <button class="btn btn-navy" onclick="fecharModal();window.GRID&&window.GRID.tratarAcao('ir:campo-agentes:${esc(a.id)}')">Abrir a ficha completa</button>`);
+       <button class="btn btn-navy" onclick="fecharModal();window.GRID&&window.GRID.tratarAcao('ir:laudomiro:${esc(a.id)}')">Abrir a ficha completa</button>`);
     return true;
   }
   if (nome === 'campo:lm-aplicar') { aplicarLaudomiro(valor, redesenhar); return true; }

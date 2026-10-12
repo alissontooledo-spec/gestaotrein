@@ -73,10 +73,12 @@ export async function render(params = {}) {
     }
   } });
   const a = L.porId(_sel);
-  ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">${a && _verFicha ? esc(L.curtoNome(a.nome)) : 'Consultar agente'}</div>`);
-  return `<div class="lmx-topo${a && _verFicha ? ' na-ficha' : ''}">
-      <div class="lmx-crumb">Avaliação de campo <span aria-hidden="true">/</span> <button type="button" class="lmx-lnk" data-acao="ir:campo">voltar para as avaliações</button></div>
-      <h1 class="lmx-tit">Consultar agente</h1>
+  if (!params.embutido) ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">${a && _verFicha ? esc(L.curtoNome(a.nome)) : 'Consultar agente'}</div>`);
+  /* v248: dentro da tela Laudomiro (aba Fichas) o título e o "voltar" vêm da própria tela. */
+  const emb = !!params.embutido;
+  return `<div class="lmx-topo${a && _verFicha ? ' na-ficha' : ''}${emb ? ' emb' : ''}">
+      ${emb ? '' : `<div class="lmx-crumb">Avaliação de campo <span aria-hidden="true">/</span> <button type="button" class="lmx-lnk" data-acao="ir:campo">voltar para as avaliações</button></div>
+      <h1 class="lmx-tit">Consultar agente</h1>`}
       <div class="lmx-filtros">
         <div class="lmx-busca"><span class="lmx-busca-ic">${I.busca}</span><input type="search" id="lmBusca" data-acao="campo:lm-busca" value="${esc(_q)}" placeholder="Agente, produto, atividade ou CAS" autocomplete="off" aria-label="Buscar agente"></div>
         <div class="lmx-seg" role="tablist">${GRUPOS.map(([k, t]) => `<button type="button" role="tab" aria-selected="${_grp === k}" class="${_grp === k ? 'on' : ''}" data-acao="campo:lm-grp:${k}">${t}<i>${k === 'todos' ? L.AGENTES.length : contar(k)}</i></button>`).join('')}</div>

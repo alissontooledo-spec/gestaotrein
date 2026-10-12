@@ -46,9 +46,12 @@ export default {
       rota: () => import('./encerrar.js') },
     { id: 'campo-escritorio', rotulo: 'Escritório', icone: 'clipboard', oculto: true, perfis: TODOS, mobile: true,
       rota: () => import('./escritorio.js') },
-    /* v232: consulta de agentes do Laudomiro (insalubridade, aposentadoria especial, eSocial). */
-    { id: 'campo-agentes', rotulo: 'Consultar agente', icone: 'book', perfis: TODOS, mobile: true,
-      rota: () => import('./agentes.js') },
+    /* v248: Laudomiro — uma tela só com "Perguntar" (IA, PASSO-79) e "Fichas dos agentes"
+       (a antiga Consultar agente, v232). A rota antiga continua valendo e abre na aba Fichas. */
+    { id: 'laudomiro', rotulo: 'Laudomiro', icone: 'shield', perfis: TODOS, mobile: true,
+      rota: () => import('./laudomiro-tela.js') },
+    { id: 'campo-agentes', rotulo: 'Laudomiro', icone: 'shield', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./laudomiro-tela.js').then(m => m.comoFichas) },
     /* Catálogo da ficha: só abre de verdade em Modo Suporte (Provedor). */
     { id: 'campo-catalogo', rotulo: 'Catálogo da ficha', icone: 'book', oculto: true, perfis: ['administrador'], mobile: false,
       textoDesktop: 'Editar o catálogo da ficha é trabalho de mesa. No computador esta tela abre direto.',
