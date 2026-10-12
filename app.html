@@ -2588,6 +2588,17 @@ body .ds-kpi[data-acao]:hover{border-color:transparent;box-shadow:0 2px 4px rgba
 body .crm-kb-body{background:#EEF1F6;border-color:transparent}
 body .crm-lead-card{box-shadow:0 1px 2px rgba(23,37,65,.06),0 4px 12px rgba(23,37,65,.06)}
 body .crm-lead-card:hover{border-color:transparent;box-shadow:0 2px 4px rgba(23,37,65,.08),0 14px 32px rgba(23,37,65,.13)}
+/* v248: Avaliações de campo — letras dos cartões na mesma escala (o botão estava 10px e o nome 14px extra-forte) */
+body .cp-cd-t{font-size:11.5px;font-weight:600;letter-spacing:.02em}
+body .cp-cd-n{font-size:14px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+body .cp-cd-l,body .cp-cd-s,body .cp-cd-tec{font-size:12.5px}
+body .cp-cd-tec{flex:1 1 0;min-width:0}
+body .cp-cd-f .btn{font-size:12px;height:32px;min-height:32px;padding:0 11px;flex:none}
+body .cp-cd-f:has(.btn + .btn) .cp-cd-tec,body .cp-cd-f:has(.btn + .btn) .cp-avt{display:none}
+body .cp-cd-f:has(.btn + .btn) .btn{flex:1 1 0;min-width:0;padding:0 6px}
+body .cp-filtros .btn{font-size:12px}
+body .cp-modo button{font-size:12.5px}
+body .cp-col-h{font-size:13px;font-weight:700}
 </style>
 </head>
 <body>
@@ -5327,7 +5338,7 @@ const _PERFIS_CATALOGO = {
 const _TELA_MODULO = {};
 _PERFIS_CATALOGO.modulos.forEach(m => m.telas.forEach(([t]) => { _TELA_MODULO[t] = m.id; }));
 // Rotas que não são tela do catálogo, mas pertencem a uma.
-const _ROTA_TELA = { 'crm-lead':'crm-funil', 'crm-funis':'crm-funil', 'crm-respostas':'crm-conversas', 'crm-numeros-status':'crm-numeros', perfis:'equipe' };
+const _ROTA_TELA = { 'crm-lead':'crm-funil', 'crm-funis':'crm-funil', 'crm-respostas':'crm-conversas', 'crm-numeros-status':'crm-numeros', perfis:'equipe', laudomiro:'campo' };
 const _telaDaRota = (rota) => rota && rota.startsWith('campo') ? 'campo' : (_ROTA_TELA[rota] || rota);
 
 function _permAtual() { return usuarioAtual && usuarioAtual._perm ? usuarioAtual._perm : null; }
@@ -6053,7 +6064,7 @@ function marcarNavAtivo(id) {
 
 const TITULOS = {configuracoes:'Configurações',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos',
   // 26/09 (v198): rotas da Avaliação de Campo (as ocultas não passam pelo menu)
-  perfis:'Perfis de acesso',campo:'Avaliações de campo','campo-avaliacao':'Avaliação de campo','campo-ghe':'GHE','campo-finalizar':'Finalizar avaliação','campo-catalogo':'Catálogo da ficha','campo-funcionarios':'Conferir funcionários','campo-tipos':'Tipos de documento','campo-matriz':'Matriz de risco','campo-plano':'Plano de ação','campo-soc':'Lançar no SOC','campo-acoes':'Planos de ação','campo-agentes':'Consultar agente','campo-encerrar':'Encerrar a visita','campo-escritorio':'Escritório'};
+  perfis:'Perfis de acesso',laudomiro:'Laudomiro',campo:'Avaliações de campo','campo-avaliacao':'Avaliação de campo','campo-ghe':'GHE','campo-finalizar':'Finalizar avaliação','campo-catalogo':'Catálogo da ficha','campo-funcionarios':'Conferir funcionários','campo-tipos':'Tipos de documento','campo-matriz':'Matriz de risco','campo-plano':'Plano de ação','campo-soc':'Lançar no SOC','campo-acoes':'Planos de ação','campo-agentes':'Laudomiro','campo-encerrar':'Encerrar a visita','campo-escritorio':'Escritório'};
 
 async function irPara(pagina, params={}) {
   // Bloqueia navegação para telas fora do menu do perfil atual (ver
@@ -32296,7 +32307,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '247';
+  var APP_BUILD = '248';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
