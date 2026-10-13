@@ -12,6 +12,7 @@
    resposta da FDS cruzada com a base de agentes e resposta da foto com as NRs.
    Proposta aprovada: 08-Propostas-visuais/laudomiro-v254-v2-*.png.
    v255: campo limpa depois de enviar (celular); título do aviso de norma; CAS sem o número CE.
+   v256: motivo de o componente não estar na base; foto inteira na miniatura; quem aparece na foto.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
@@ -263,6 +264,13 @@ const PASSOS = {
   foto: ['Olhando a foto', 'Procurando os pontos de atenção', 'Conferindo nas NRs', 'Montando a resposta'],
 };
 const NOME_GHS = { GHS01: 'Explosivo', GHS02: 'Inflamável', GHS03: 'Oxidante', GHS04: 'Gás sob pressão', GHS05: 'Corrosivo', GHS06: 'Tóxico', GHS07: 'Irritante', GHS08: 'Perigo à saúde', GHS09: 'Meio ambiente' };
+/* v256: por que o componente não tem dados da base (a base tem o Anexo 11 da NR-15 completo). */
+const FORA = {
+  sem_cas: 'A FDS não identifica este componente (sem CAS). Peça ao fornecedor o nome químico ou o número CAS.',
+  fora_anexo11: 'Não consta na lista da NR-15 (Anexo 11). Veja se a atividade se enquadra no Anexo 13 e confira a ACGIH.',
+  cas_invalido: 'O CAS desta FDS tem erro e não deu para conferir. Peça ao fornecedor o número correto.',
+  x: 'Não está na base do GRID. Confira na NR-15 e na ACGIH.',
+};
 const GRAU_F = { 'mínimo': ['mínima', 'min'], 'médio': ['média', 'med'], 'máximo': ['máxima', 'max'] };
 
 /* v255: no celular o campo focado mantinha o texto depois de enviar (o redesenho preserva o campo em foco). */
@@ -401,7 +409,7 @@ function respostaFds(turno, tIdx) {
   const conf = (r.conferencia || []).map(c => `<span><em class="${c.ok ? 'ok' : 'nok'}">${c.ok ? '✓' : '!'}</em> ${esc(c.texto)}</span>`).join('');
   const comp = (r.composicao || []).map(c => `<div class="lq-sb${c.base ? '' : ' fora'}">
       <div class="nm"><b>${esc(c.nome)}</b><small>${c.cas ? 'CAS ' + esc(c.cas) : 'sem CAS'}${c.faixa ? ' · ' + esc(c.faixa) : ''}${c.casOk === false ? ' · <em class="nok">CAS com erro de digitação</em>' : ''}</small></div>
-      <div class="bs">${c.base ? tagsAgente(c.base) : '<span class="cinza">Não está na base do GRID. Confira na NR-15 e na ACGIH.</span>'}</div>
+      <div class="bs">${c.base ? tagsAgente(c.base) : `<span class="cinza">${FORA[c.fora] || FORA.x}</span>`}</div>
       ${c.base && c.n ? `<button type="button" class="lk" data-acao="campo:lq-fonte:${tIdx}.${c.n}">Ver ficha</button>` : '<span></span>'}</div>`).join('');
   const partes = (r.partes || []).map((p, i) => {
     const aberta = turno.abertas ? turno.abertas.has(p.chave) : i === 0;
@@ -433,6 +441,7 @@ function respostaFoto(turno, tIdx) {
     ${r.curta ? `<p class="lq-curta">${negritoInicio(r.curta)}</p>` : ''}
     <div class="lq-foto${pontos ? '' : ' so'}">${thumb ? `<button type="button" class="lq-thumb" data-acao="campo:lq-ampliar:${tIdx}" aria-label="Ampliar a foto"><img src="${thumb}" alt="Foto enviada"></button>` : '<div class="lq-thumb vazio">A foto não fica guardada no GRID</div>'}
       ${pontos ? `<div class="lq-pts">${pontos}</div>` : ''}</div>
+    ${(r.pessoas || []).length ? `<div class="lq-pess"><h5>Quem aparece na foto</h5>${r.pessoas.map((p, i) => `<div><b>${i + 1}.</b> ${esc(p.onde || '')}${p.atividade ? ' · ' + esc(p.atividade) : ''}${(p.epi_faltando || []).length ? `<span class="falta">Sem: ${esc(p.epi_faltando.join(', '))}</span>` : ''}${(p.epi_visto || []).length ? `<span class="tem">Com: ${esc(p.epi_visto.join(', '))}</span>` : ''}</div>`).join('')}</div>` : ''}
     ${(r.conferir || []).length ? `<div class="lq-conf3"><h5>A foto não responde: confira no local</h5>${r.conferir.map((c, i) => `<button type="button" class="lq-ck${marc.has(i) ? ' on' : ''}" data-acao="campo:lq-conf:${tIdx}.${i}" aria-pressed="${marc.has(i)}"><i>${marc.has(i) ? '✓' : ''}</i>${esc(c)}</button>`).join('')}</div>` : ''}
     <div class="lq-limite">${I.info}<div><b>Só vale para o que aparece na foto.</b> ${esc(String(r.limite || '').replace(/^Só vale para o que aparece na foto\.\s*/, ''))}</div></div>
     ${rodape(turno, tIdx, 'inspeção')}
@@ -467,7 +476,7 @@ function textoCopiar(turno, como) {
   const pictos = (r.pictogramas || []).map(g => NOME_GHS[g]).filter(Boolean).join(', ');
   const agentes = (r.composicao || []).map(c => {
     const b = c.base;
-    const dados = b ? [b.grau ? `insalubridade ${(GRAU_F[b.grau] || [b.grau])[0]} ${b.pct}% (NR-15 Anexo ${b.anexo})` : '', b.lt ? 'limite ' + b.lt : '', b.pele ? 'absorve pela pele' : '', b.t24 ? 'eSocial ' + b.t24 : ''].filter(Boolean).join(', ') : 'não está na base do GRID';
+    const dados = b ? [b.grau ? `insalubridade ${(GRAU_F[b.grau] || [b.grau])[0]} ${b.pct}% (NR-15 Anexo ${b.anexo})` : '', b.lt ? 'limite ' + b.lt : '', b.pele ? 'absorve pela pele' : '', b.t24 ? 'eSocial ' + b.t24 : ''].filter(Boolean).join(', ') : (FORA[c.fora] || FORA.x).replace(/\.$/, '').toLowerCase();
     return `• ${c.nome}${c.cas ? ' (CAS ' + c.cas + ')' : ''}${c.faixa ? ' ' + c.faixa : ''}: ${dados}`;
   });
   const prod = `${r.titulo}${r.subtitulo ? ' — ' + r.subtitulo : ''}`;
