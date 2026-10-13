@@ -1690,6 +1690,28 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .prov-tarja .pt-reg { font-size:11px; font-weight:500; color:var(--text-3) }
 .prov-tarja button { background:var(--amber-h); color:#fff; border:0; border-radius:7px; padding:5px 12px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; flex-shrink:0 }
 @media (max-width:860px) { .prov-ficha { grid-template-columns:1fr } .prov-tarja .pt-reg { display:none } }
+/* v257 — Laudomiro do Provedor: abas e "O que ele não sabe" */
+.lqp-abas { display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:3px; gap:2px; margin:0 0 16px }
+.lqp-abas button { border:0; background:none; font-family:inherit; font-size:12.5px; font-weight:700; color:var(--text-2); padding:7px 14px; border-radius:7px; cursor:pointer }
+.lqp-abas button.on { background:var(--navy); color:#fff }
+button.prov-chip { border:0; cursor:pointer; font-family:inherit; padding:4px 10px; font-size:11.5px }
+.prov-chip b { font-weight:800; margin-left:2px }
+.lqp-filtros { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap }
+.lqp-sel { font-family:inherit; font-size:12px; border:1px solid var(--border); border-radius:7px; padding:5px 8px; background:var(--surface); color:var(--text-1) }
+.lqp-it { display:grid; grid-template-columns:96px minmax(0,1fr) 74px auto; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border) }
+.lqp-it:last-child { border-bottom:0 }
+.lqp-it .gi-main b { font-size:13px; display:block; overflow-wrap:anywhere }
+.lqp-it .gi-main small { display:block; font-size:11.5px; color:var(--text-3); line-height:1.5; margin-top:2px }
+.lqp-tipo { font-size:10.5px; font-weight:800; border-radius:6px; padding:3px 8px; text-align:center; text-transform:uppercase; letter-spacing:.03em }
+.lqp-tipo.t-sub { background:#FEE2E2; color:#991B1B } .lqp-tipo.t-ns { background:#E8EEFB; color:#36588D }
+.lqp-tipo.t-err { background:#FEF3C7; color:#92400E } .lqp-tipo.t-fal { background:var(--gray-100); color:var(--text-2) }
+.lqp-dir { text-align:right } .lqp-dir small { display:block; font-size:10.5px; color:var(--text-3) }
+.lqp-n { font-size:16px; font-weight:800; color:var(--navy) }
+.lqp-acts { display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap }
+.lqp-acts .gi-btn { height:30px; font-size:11.5px }
+.lqp-com { color:var(--text-1); font-style:italic }
+.lqp-cod { font-family:ui-monospace,monospace; font-size:10.5px }
+@media (max-width:860px) { .lqp-it { grid-template-columns:auto 1fr; } .lqp-it .gi-main { grid-column:1 / -1; order:2 } .lqp-dir { text-align:right } .lqp-acts { grid-column:1 / -1; order:3; justify-content:flex-start } }
 
 /* --- painéis --- */
 /* align-items:start — sem isto o painel mais curto se estica ate a altura do
@@ -8574,7 +8596,186 @@ function _atualizarProjecaoMrr() {
 // v253 — Laudomiro no painel do Provedor (uso por organização) e cartão na ficha da organização
 // Só leitura nas contas; a liberação de perfis usa a ação "config" da função laudomiro-perguntar (já existia desde a v251).
 // ============================================================
+
+// ============================================================
+// v257 — "O que o Laudomiro não sabe" (Provedor → Laudomiro, 2ª aba)
+// Junta, dos últimos 90 dias de laudomiro_perguntas (o Provedor já lê tudo pelo RLS do PASSO-79):
+//   · substâncias de FDS que não estão na base (CAS fora do Anexo 11 ou CAS com erro);
+//   · perguntas que ele respondeu "não achei" (NAO_SEI);
+//   · respostas marcadas "Tem erro" pelos usuários (com o comentário);
+//   · falhas técnicas (modelo recusou, não respondeu, sem crédito...).
+// O status de cada lacuna (resolvida / ignorada) fica em laudomiro_lacunas (PASSO-82).
+// Nada aqui escreve na base do Laudomiro: a correção continua sendo conferida e publicada.
+// ============================================================
+window._lqProvAba = window._lqProvAba || 'uso';
+window._lqLacFiltro = 'todas';
+window._lqLacStatus = 'abertas';
+window._lqLacCache = null;
+
+function _lqProvAbas(ativa) {
+  return `<div class="lqp-abas" role="tablist" aria-label="Laudomiro">
+    <button type="button" role="tab" aria-selected="${ativa === 'uso'}" class="${ativa === 'uso' ? 'on' : ''}" onclick="_lqProvTrocarAba('uso')">Uso do mês</button>
+    <button type="button" role="tab" aria-selected="${ativa === 'lacunas'}" class="${ativa === 'lacunas' ? 'on' : ''}" onclick="_lqProvTrocarAba('lacunas')">O que ele não sabe</button>
+  </div>`;
+}
+function _lqProvTrocarAba(aba) { window._lqProvAba = aba; renderLaudomiroProvedor(); }
+
+function _lqNorm(t) {
+  return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+const _LQ_FORA = { fora_anexo11: 'Não consta no Anexo 11 da NR-15', cas_invalido: 'CAS com erro na FDS' };
+const _LQ_FALHA = {
+  ANEXO_RECUSADO: 'Arquivo recusado pelo modelo', SEM_RESPOSTA: 'O modelo não entregou a resposta', OCUPADO: 'Serviço da IA ocupado',
+  CHAVE_INVALIDA: 'Chave da Anthropic recusada', SEM_CREDITO: 'Créditos da Anthropic acabaram', ANEXO_NAO_FDS: 'PDF enviado não era FDS',
+  ANEXO_ILEGIVEL: 'PDF sem texto legível', ANEXO_FOTO_RUIM: 'Foto escura ou sem foco', falha: 'Falha sem código',
+};
+const _LQ_TIPO = { sub: ['Substância', 't-sub'], nao_sei: ['Sem resposta', 't-ns'], erro: ['Tem erro', 't-err'], falha: ['Falha', 't-fal'] };
+
+/** Agrupa as linhas de laudomiro_perguntas em lacunas. */
+function _lqLacunasDe(linhas, nomeOrg) {
+  const m = new Map();
+  const add = (chave, base, r, extra = {}) => {
+    let l = m.get(chave);
+    if (!l) { l = { chave, ...base, n: 0, orgs: new Set(), ids: [], ultima: r.criado_em, produtos: new Set(), msgs: [] }; m.set(chave, l); }
+    l.n++; l.ids.push(r.id); if (r.org_id) l.orgs.add(r.org_id); else l.orgs.add('provedor');
+    if (r.criado_em > l.ultima) l.ultima = r.criado_em;
+    if (extra.produto) l.produtos.add(extra.produto);
+    if (extra.msg && l.msgs.length < 3) l.msgs.push(extra.msg);
+  };
+  for (const r of linhas) {
+    const res = r.resposta || {};
+    if (r.erro) {
+      const cod = String(r.erro).split(':')[0].trim() || 'falha';
+      add('f:' + cod, { tipo: 'falha', titulo: _LQ_FALHA[cod] || cod, cod }, r, { msg: String(r.erro).slice(0, 200) });
+      continue;
+    }
+    if (res.tipo === 'fds') {
+      const vistos = new Set();
+      for (const c of res.composicao || []) {
+        if (c.base) continue;
+        const fora = c.fora || (!c.cas ? 'sem_cas' : (c.casOk === false ? 'cas_invalido' : 'fora_anexo11'));
+        if (fora === 'sem_cas') continue;  // a FDS não identifica: não dá para pôr na base
+        const chave = 'sub:' + (c.cas || _lqNorm(c.nome));
+        if (vistos.has(chave)) continue; vistos.add(chave);
+        add(chave, { tipo: 'sub', titulo: c.nome, cas: c.cas || '', fora }, r, { produto: res.titulo });
+      }
+    } else if (!res.tipo && res.veredito === 'NAO_SEI') {
+      const k = _lqNorm(r.pergunta).slice(0, 140);
+      add('q:' + k, { tipo: 'nao_sei', titulo: r.pergunta }, r, { msg: res.titulo || '' });
+    }
+    if (r.avaliacao === 'erro') add('e:' + r.id, { tipo: 'erro', titulo: r.pergunta, comentario: r.comentario || '' }, r, { msg: res.titulo || '' });
+  }
+  const peso = { erro: 0, sub: 1, nao_sei: 2, falha: 3 };
+  return [...m.values()].sort((a, b) => (peso[a.tipo] - peso[b.tipo]) || (b.n - a.n) || (b.ultima > a.ultima ? 1 : -1));
+}
+
+async function renderLaudomiroLacunas() {
+  setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">O que o Laudomiro não sabe</div>`);
+  const desde = new Date(Date.now() - 90 * 864e5).toISOString();
+  const [orgsR, pergR, stR] = await Promise.all([
+    sb.from('organizacoes').select('id,nome'),
+    _lerTudo(() => sb.from('laudomiro_perguntas').select('id,org_id,criado_em,pergunta,resposta,avaliacao,comentario,erro').gte('criado_em', desde).order('criado_em', { ascending: false })),
+    sb.from('laudomiro_lacunas').select('chave,status,nota,atualizado_em'),
+  ]);
+  const nomes = new Map((orgsR.data || []).map(o => [o.id, o.nome]));
+  const semTabela = !!stR.error;
+  const st = new Map((stR.data || []).map(s => [s.chave, s]));
+  const todas = _lqLacunasDe(pergR.data || [], nomes).map(l => ({ ...l, st: st.get(l.chave) || null }));
+  window._lqLacCache = { todas, nomes };
+  const abertas = todas.filter(l => !l.st);
+  const conta = (t) => abertas.filter(l => l.tipo === t).length;
+  const filtroSt = window._lqLacStatus, filtro = window._lqLacFiltro;
+  const vis = todas.filter(l => (filtroSt === 'abertas' ? !l.st : filtroSt === 'todas' ? true : l.st?.status === filtroSt) && (filtro === 'todas' || l.tipo === filtro));
+  const chip = (k, rot, n) => `<button type="button" class="prov-chip${filtro === k ? ' on' : ''}" onclick="window._lqLacFiltro='${k}';renderLaudomiroLacunas()">${rot}${n != null ? ` <b>${n}</b>` : ''}</button>`;
+  const dt = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+  const empresas = (l) => { const n = [...l.orgs].filter(o => o !== 'provedor').length; const p = l.orgs.has('provedor'); return n ? `${n} ${n === 1 ? 'empresa' : 'empresas'}${p ? ' e você' : ''}` : 'só você (Provedor)'; };
+  const item = (l) => {
+    const [rot, cls] = _LQ_TIPO[l.tipo];
+    let det = '';
+    if (l.tipo === 'sub') det = `${l.cas ? 'CAS ' + escapeHtml(l.cas) + ' · ' : ''}${escapeHtml(_LQ_FORA[l.fora] || '')} · em ${l.n} ${l.n === 1 ? 'FDS' : 'FDS'} de ${empresas(l)}${l.produtos.size ? `<br>Produtos: ${escapeHtml([...l.produtos].slice(0, 3).join(', '))}${l.produtos.size > 3 ? '…' : ''}` : ''}`;
+    if (l.tipo === 'nao_sei') det = `Perguntada ${l.n} ${l.n === 1 ? 'vez' : 'vezes'} · ${empresas(l)}`;
+    if (l.tipo === 'erro') det = `${l.comentario ? `<span class="lqp-com">“${escapeHtml(l.comentario)}”</span><br>` : ''}${escapeHtml(empresas(l))}`;
+    if (l.tipo === 'falha') det = `${l.n} ${l.n === 1 ? 'vez' : 'vezes'}${l.msgs[0] ? ` · <span class="lqp-cod">${escapeHtml(l.msgs[0].slice(0, 120))}</span>` : ''}`;
+    const acoes = l.st
+      ? `<span class="gi-badge ${l.st.status === 'resolvida' ? '' : 'gi-cinza'}">${l.st.status === 'resolvida' ? 'Resolvida' : 'Ignorada'} em ${dt(l.st.atualizado_em)}</span><button type="button" class="gi-btn" onclick="_lqLacMarcar('${escapeHtml(l.chave)}','${l.tipo}',null)">Reabrir</button>`
+      : `${(l.tipo === 'erro' || l.tipo === 'nao_sei') ? `<button type="button" class="gi-btn" onclick="_lqLacVer('${escapeHtml(l.chave)}')">Ver resposta</button>` : ''}<button type="button" class="gi-btn gi-laranja" onclick="_lqLacMarcar('${escapeHtml(l.chave)}','${l.tipo}','resolvida')"${semTabela ? ' disabled' : ''}>Resolvida</button><button type="button" class="gi-btn" onclick="_lqLacMarcar('${escapeHtml(l.chave)}','${l.tipo}','ignorada')"${semTabela ? ' disabled' : ''}>Ignorar</button>`;
+    return `<div class="lqp-it">
+      <span class="lqp-tipo ${cls}">${rot}</span>
+      <div class="gi-main"><b>${escapeHtml(l.titulo || '')}</b><small>${det}</small></div>
+      <div class="lqp-dir"><span class="lqp-n" title="Quantas vezes apareceu">${l.n}×</span><small>última ${dt(l.ultima)}</small></div>
+      <div class="lqp-acts">${acoes}</div>
+    </div>`;
+  };
+  setConteudo(`
+    <div class="gi-page">
+      <div>
+        <div class="gi-eyebrow">Painel GRID · Provedor</div>
+        <h2>Laudomiro</h2>
+        <p>O que o Laudomiro não soube responder nos últimos 90 dias. É daqui que sai a próxima atualização da base: confira na fonte oficial, publique e marque como resolvida.</p>
+      </div>
+      <div class="gi-acoes"><button class="gi-btn" onclick="_lqLacCopiar()">Copiar para revisão</button></div>
+    </div>
+    ${_lqProvAbas('lacunas')}
+    <div class="gi-kpirow">
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Em aberto</div><span class="gi-n">${abertas.length}</span><small class="gi-s">lacunas para revisar</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Substâncias fora da base</div><span class="gi-n">${conta('sub')}</span><small class="gi-s">vindas das FDS lidas</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Perguntas sem resposta</div><span class="gi-n">${conta('nao_sei')}</span><small class="gi-s">ele respondeu "não achei"</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Marcadas "Tem erro"</div><span class="gi-n">${conta('erro')}</span><small class="gi-s">pelos usuários</small></div>
+    </div>
+    ${semTabela ? `<div class="gi-passos-card" style="margin-bottom:16px"><div><b>Falta o PASSO-82 no banco</b><small>A lista aparece, mas os botões "Resolvida" e "Ignorar" só funcionam depois de rodar o SQL do PASSO-82.</small></div></div>` : ''}
+    ${pergR.error ? `<div class="gi-passos-card" style="margin-bottom:16px"><div><b>Não consegui ler as perguntas</b><small>Atualize a tela. Se continuar, avise o suporte.</small></div></div>` : ''}
+    <section class="gi-painel">
+      <div class="gi-painel-h lqp-filtros">
+        <div class="prov-chips" style="margin:0">${chip('todas', 'Todas', null)}${chip('erro', 'Tem erro', conta('erro'))}${chip('sub', 'Substâncias', conta('sub'))}${chip('nao_sei', 'Sem resposta', conta('nao_sei'))}${chip('falha', 'Falhas', conta('falha'))}</div>
+        <select class="lqp-sel" aria-label="Situação" onchange="window._lqLacStatus=this.value;renderLaudomiroLacunas()">
+          ${[['abertas', 'Em aberto'], ['resolvida', 'Resolvidas'], ['ignorada', 'Ignoradas'], ['todas', 'Todas']].map(([v, t]) => `<option value="${v}"${filtroSt === v ? ' selected' : ''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="gi-corpo">${vis.length ? vis.map(item).join('') : `<div class="gi-vazio">${filtroSt === 'abertas' ? 'Nada em aberto aqui. O Laudomiro deu conta de tudo neste filtro nos últimos 90 dias.' : 'Nenhuma lacuna nesta situação.'}</div>`}</div>
+    </section>`);
+}
+
+async function _lqLacMarcar(chave, tipo, status) {
+  try {
+    const q = status
+      ? sb.from('laudomiro_lacunas').upsert({ chave, tipo, status, atualizado_em: new Date().toISOString() }, { onConflict: 'chave' })
+      : sb.from('laudomiro_lacunas').delete().eq('chave', chave);
+    const { error } = await q;
+    if (error) throw error;
+    showToast(status === 'resolvida' ? 'Marcada como resolvida.' : status === 'ignorada' ? 'Lacuna ignorada.' : 'Lacuna reaberta.', 'success');
+  } catch (e) { showToast('Não consegui salvar. Confira se o PASSO-82 foi aplicado.', 'error'); }
+  renderLaudomiroLacunas();
+}
+
+async function _lqLacVer(chave) {
+  const l = (window._lqLacCache?.todas || []).find(x => x.chave === chave); if (!l) return;
+  const { data: r } = await sb.from('laudomiro_perguntas').select('pergunta,resposta,comentario,criado_em,org_id').eq('id', l.ids[0]).maybeSingle();
+  if (!r) { showToast('Não encontrei a conversa.', 'error'); return; }
+  const res = r.resposta || {};
+  const limpa = (t) => escapeHtml(String(t || '').replace(/\{\{\d+\}\}/g, ''));
+  const org = r.org_id ? (window._lqLacCache.nomes.get(r.org_id) || 'Empresa') : 'Você (Provedor)';
+  abrirModal('Pergunta e resposta', `
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">${escapeHtml(org)} · ${new Date(r.criado_em).toLocaleString('pt-BR')}</div>
+    <div style="background:var(--gray-50);border-radius:8px;padding:10px 12px;font-size:13.5px;margin-bottom:12px"><b>Pergunta:</b> ${escapeHtml(r.pergunta)}</div>
+    <div style="font-size:13.5px;line-height:1.6"><b>${limpa(res.titulo)}</b>${(res.resposta || []).map(p => `<p style="margin:8px 0 0">${limpa(p)}</p>`).join('')}${res.cuidado ? `<p style="margin:8px 0 0"><b>Cuidado:</b> ${limpa(res.cuidado)}</p>` : ''}</div>
+    ${r.comentario ? `<div style="margin-top:12px;border-left:3px solid var(--red);padding:8px 12px;background:var(--red-l);border-radius:6px;font-size:13px"><b>Comentário do usuário:</b> ${escapeHtml(r.comentario)}</div>` : ''}`,
+  '<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
+}
+
+function _lqLacCopiar() {
+  const c = window._lqLacCache; if (!c) return;
+  const ab = c.todas.filter(l => !l.st);
+  const sec = (t, rot, f) => { const xs = ab.filter(l => l.tipo === t); return xs.length ? `${rot}\n${xs.map(f).join('\n')}\n` : ''; };
+  const txt = [`Lacunas do Laudomiro (últimos 90 dias) — ${new Date().toLocaleDateString('pt-BR')}`, '',
+    sec('erro', 'RESPOSTAS MARCADAS "TEM ERRO":', l => `• ${l.titulo}${l.comentario ? ` — comentário: "${l.comentario}"` : ''}`),
+    sec('sub', 'SUBSTÂNCIAS DE FDS FORA DA BASE:', l => `• ${l.titulo}${l.cas ? ` (CAS ${l.cas})` : ''} — ${_LQ_FORA[l.fora] || ''} — ${l.n}x`),
+    sec('nao_sei', 'PERGUNTAS SEM RESPOSTA ("não achei"):', l => `• ${l.titulo} — ${l.n}x`),
+    sec('falha', 'FALHAS TÉCNICAS:', l => `• ${l.titulo} — ${l.n}x${l.msgs[0] ? ` — ${l.msgs[0]}` : ''}`)].filter(Boolean).join('\n');
+  navigator.clipboard?.writeText(txt).then(() => showToast('Lista copiada. Cole na conversa com o Claude para a revisão da base.', 'success'), () => showToast('Não foi possível copiar.', 'error'));
+}
+
 async function renderLaudomiroProvedor() {
+  if (window._lqProvAba === 'lacunas') return renderLaudomiroLacunas();  // v257
   setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Laudomiro</div>`);
   const ini = new Date(); ini.setDate(1); ini.setHours(0, 0, 0, 0);
   const mes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
@@ -8625,6 +8826,7 @@ async function renderLaudomiroProvedor() {
         <p>Uso do assistente de IA por organização em ${escapeHtml(mes)}. As perguntas feitas por você (Provedor) não gastam a cota do cliente.</p>
       </div>
     </div>
+    ${_lqProvAbas('uso')}
     <div class="gi-kpirow">
       <div class="gi-kpi gi-sm"><div class="gi-kh">Perguntas no mês</div><span class="gi-n">${totalUsadas}</span><small class="gi-s">em todas as organizações</small></div>
       <div class="gi-kpi gi-sm"><div class="gi-kh">Organizações com Laudomiro</div><span class="gi-n">${linhas.length}</span><small class="gi-s">com o módulo Campo ativo</small></div>
@@ -32631,7 +32833,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '256';
+  var APP_BUILD = '257';
   window.APP_BUILD = APP_BUILD;
 
   function _mostrarBannerAtualizacao(){
