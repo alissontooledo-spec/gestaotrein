@@ -8653,7 +8653,8 @@ function _lqLacunasDe(linhas, nomeOrg) {
       const vistos = new Set();
       for (const c of res.composicao || []) {
         if (c.base) continue;
-        const fora = c.fora || (!c.cas ? 'sem_cas' : (c.casOk === false ? 'cas_invalido' : 'fora_anexo11'));
+        const temCas = c.cas && /\d{2,7}-\d{2}-\d/.test(String(c.cas));  // v258: "NA", "-", "N/D" = sem CAS
+        const fora = !temCas ? 'sem_cas' : (c.fora || (c.casOk === false ? 'cas_invalido' : 'fora_anexo11'));
         if (fora === 'sem_cas') continue;  // a FDS não identifica: não dá para pôr na base
         const chave = 'sub:' + (c.cas || _lqNorm(c.nome));
         if (vistos.has(chave)) continue; vistos.add(chave);
@@ -32833,13 +32834,86 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '257';
+  var APP_BUILD = '258';
   window.APP_BUILD = APP_BUILD;
 
+  // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
+  // Muitos usuários não clicavam em "Atualizar" e ficavam dias na versão
+  // antiga. Agora, quando existe versão nova, o app recarrega SOZINHO num
+  // momento em que ninguém perde nada:
+  //   · quando a pessoa sai da aba/app (fica escondido) ou volta depois de
+  //     mais de 20 s fora;
+  //   · quando ela troca de tela pelo menu (a tela pedida já abre na nova);
+  //   · depois de 10 min sem mexer;
+  //   · logo ao abrir, antes de qualquer clique.
+  // Nunca recarrega com janela (modal) aberta, campo com texto em edição,
+  // envio de documentos em andamento, Laudomiro lendo arquivo, Modo
+  // Suporte ou sem internet. O botão "Atualizar" continua lá.
+  var _novaVersao = false, _escondidaDesde = 0, _ultimaAcao = 0, _carregouEm = Date.now();
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function(ev){
+    document.addEventListener(ev, function(){ _ultimaAcao = Date.now(); }, {passive: true, capture: true});
+  });
+  function _jaTentouNestaSessao(){
+    try { return sessionStorage.getItem('_gridRecarregouDe') === APP_BUILD; } catch(e) { return false; }
+  }
+  function _momentoSeguro(){
+    try {
+      if (!navigator.onLine) return false;
+      if (_jaTentouNestaSessao()) return false;      // já recarregou e o servidor ainda mandou esta versão: não insiste
+      if (window._envioBg) return false;             // documentos sendo gerados/enviados
+      if (typeof _suporteAtivo !== 'undefined' && _suporteAtivo) return false;  // recarregar sairia do Modo Suporte
+      var mo = document.getElementById('modalOverlay');
+      if (mo && mo.style.display && mo.style.display !== 'none') return false;
+      if (document.querySelector('.lq-carr')) return false;  // Laudomiro lendo FDS/foto
+      var a = document.activeElement;
+      if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && String(a.value || '').trim()) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  function _atualizarAgora(motivo){
+    try {
+      sessionStorage.setItem('_gridRecarregouDe', APP_BUILD);
+      sessionStorage.setItem('_gridAtualizouSozinho', motivo || '1');
+    } catch (e) {}
+    location.reload();
+  }
+  function _tentarAtualizar(motivo){
+    if (_novaVersao && _momentoSeguro()) { _atualizarAgora(motivo); return true; }
+    return false;
+  }
+  window._gridTentarAtualizar = _tentarAtualizar;
+  window._gridConferirVersao = function(){ _conferirVersao(); };
   function _mostrarBannerAtualizacao(){
+    _novaVersao = true;
+    // abriu agora e ainda não mexeu: troca já, antes de qualquer clique
+    if (!_ultimaAcao && Date.now() - _carregouEm < 15000 && _tentarAtualizar('abriu')) return;
+    if (document.hidden && _tentarAtualizar('escondido')) return;
     var el = document.getElementById('updateBanner');
     if (el) el.style.display = 'flex';
   }
+  // troca de tela pelo menu: a tela pedida já abre na versão nova
+  if (typeof window.irPara === 'function') {
+    var _irParaOriginal = window.irPara;
+    window.irPara = function(pagina, params){
+      if (_novaVersao && typeof pagina === 'string' && (!params || !Object.keys(params).length) && _momentoSeguro()) {
+        try { history.pushState({pagina: pagina}, '', '#' + pagina); } catch (e) {}
+        _atualizarAgora('trocou-de-tela');
+        return Promise.resolve();
+      }
+      return _irParaOriginal.apply(this, arguments);
+    };
+  }
+  // parado há 10 min com a tela aberta
+  setInterval(function(){
+    if (_novaVersao && Date.now() - Math.max(_ultimaAcao, _carregouEm) > 10 * 60 * 1000) _tentarAtualizar('parado');
+  }, 60 * 1000);
+  // aviso discreto depois da troca automática
+  try {
+    if (sessionStorage.getItem('_gridAtualizouSozinho')) {
+      sessionStorage.removeItem('_gridAtualizouSozinho');
+      setTimeout(function(){ if (typeof showToast === 'function') showToast('O GRID foi atualizado para a versão ' + APP_BUILD + '.', 'success', 4000); }, 2500);
+    }
+  } catch (e) {}
 
   // Compara a versão publicada com a que está rodando nesta aba. Resolve o
   // caso da aba deixada aberta o dia inteiro, que nenhuma política de
@@ -32881,10 +32955,11 @@ async function exportarRelatorioComparativoPDF() {
   setInterval(_conferirVersao, 15 * 60 * 1000);
   // Reconfere ao voltar para a aba, que é quando o usuário efetivamente olha.
   document.addEventListener('visibilitychange', function(){
-    if (!document.hidden) _conferirVersao();
+    if (document.hidden) { _escondidaDesde = Date.now(); _tentarAtualizar('escondido'); return; }
+    if (_novaVersao && _escondidaDesde && Date.now() - _escondidaDesde > 20000 && _tentarAtualizar('voltou')) return;
+    _conferirVersao();
   });
 })();
 </script>
 </body>
 </html>
-                                                                                                                                         
