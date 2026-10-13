@@ -1690,6 +1690,29 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .prov-tarja .pt-reg { font-size:11px; font-weight:500; color:var(--text-3) }
 .prov-tarja button { background:var(--amber-h); color:#fff; border:0; border-radius:7px; padding:5px 12px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; flex-shrink:0 }
 @media (max-width:860px) { .prov-ficha { grid-template-columns:1fr } .prov-tarja .pt-reg { display:none } }
+/* v262 — Sugestões do Laudomiro */
+.lqs-cont { font-style:normal; background:var(--amber); color:var(--navy); border-radius:20px; font-size:10.5px; font-weight:800; padding:1px 7px; margin-left:6px }
+.lqs-lista { display:grid; gap:12px; padding-top:12px }
+.lqs-card { border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:grid; gap:10px; background:var(--surface) }
+.lqs-h { display:grid; gap:4px; justify-items:start; min-width:0 }
+.lqs-q { font-size:14.5px; font-weight:800; color:var(--text-1); overflow-wrap:anywhere }
+.lqs-orig { font-size:11.5px; color:var(--text-3); line-height:1.5; overflow-wrap:anywhere }
+.lqs-prop { border-left:3px solid var(--amber); background:var(--bg,#F7F8FB); border-radius:0 8px 8px 0; padding:10px 14px; min-width:0 }
+.lqs-prop.lqs-falta { border-left-color:var(--text-3) }
+.lqs-prop small { font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--text-3) }
+.lqs-prop p { margin:4px 0 0; font-size:13px; line-height:1.55; color:var(--text-1); white-space:pre-wrap; overflow-wrap:anywhere }
+.lqs-meta { display:flex; flex-wrap:wrap; gap:8px }
+.lqs-chip { font-size:11.5px; background:var(--gray-100,#EEF1F6); color:var(--text-2); border-radius:20px; padding:4px 10px; overflow-wrap:anywhere }
+.lqs-chip.lqs-ok { background:var(--green-l); color:var(--green); font-weight:700 }
+.lqs-chip.lqs-warn { background:var(--amber-l); color:#92400E; font-weight:700 }
+.lqs-acts { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center }
+.lqs-acts .gi-btn { height:32px; font-size:12px }
+.gi-btn.lqs-apr { background:var(--green); border-color:var(--green); color:#fff }
+.gi-btn.lqs-rec { color:var(--red) }
+.lqs-lab { display:block; font-size:12px; font-weight:700; color:var(--text-2); margin:10px 0 4px }
+.lqs-lab:first-child { margin-top:0 }
+.lqs-txt { width:100%; box-sizing:border-box; font-family:inherit; font-size:13px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; resize:vertical }
+@media (max-width:600px) { .lqs-acts { justify-content:stretch } .lqs-acts .gi-btn { flex:1 } }
 /* v257 — Laudomiro do Provedor: abas e "O que ele não sabe" */
 .lqp-abas { display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:3px; gap:2px; margin:0 0 16px }
 .lqp-abas button { border:0; background:none; font-family:inherit; font-size:12.5px; font-weight:700; color:var(--text-2); padding:7px 14px; border-radius:7px; cursor:pointer }
@@ -3254,7 +3277,11 @@ let _sinoCarregando = false;
 // Chamada sempre que alguém já calculou os alertas (hoje: renderHomeProvedor)
 // — atualiza o badge sem precisar buscar de novo no banco.
 function _setSinoAlertas(alertas) {
-  _sinoAlertasCache = alertas || [];
+  // v262: "N sugestões do Laudomiro para aprovar" entra junto (não tem descarte: some ao decidir)
+  alertas = (alertas || []).filter(a => a.categoria !== 'laudomiro_sug');
+  if (window._lqSugPend > 0) alertas.push({ tipo: 'atencao', categoria: 'laudomiro_sug', assinatura: '', orgId: '', laudomiro: true,
+    texto: `${window._lqSugPend} ${window._lqSugPend === 1 ? 'sugestão' : 'sugestões'} do Laudomiro para aprovar` });
+  _sinoAlertasCache = alertas;
   _atualizarBadgeSino();
   if (_sinoAberto) _renderPainelSino();
 }
@@ -3287,6 +3314,7 @@ async function _carregarSinoDoBanco() {
     const dispensadosMap = new Map((dispensadosRows || []).map(d => [`${d.org_id}:${d.categoria}`, d.assinatura]));
     const { alertas, chavesAtuais } = _calcularAlertasProvedor(orgs || [], usuarios || [], orgsComColaborador, null, dispensadosMap);
     _setSinoAlertas(alertas);
+    _lqContarSug();  // v262
     _limparDispensasResolvidas(dispensadosRows, chavesAtuais); // segundo plano, não bloqueia o painel
   } catch(e) {
     console.warn('Sino de notificações:', e.message);
@@ -3320,11 +3348,11 @@ function _renderPainelSino() {
     </div>
     <div style="max-height:360px;overflow-y:auto">
       ${alertas.length ? alertas.map(a => `
-        <div onclick="_fecharSino();verOrgProvedor('${a.orgId}')" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap">
+        <div onclick="_fecharSino();${a.laudomiro ? `window._lqProvAba='sugestoes';irPara('laudomiro-uso')` : `verOrgProvedor('${a.orgId}')`}" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap">
           <span style="font-size:13px">${a.tipo==='critico'?`<span style="color:var(--red);display:inline-flex"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg></span>`:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5M12 17.2h.01"/></svg>'}</span>
           <span style="font-size:12.5px;color:var(--text-1);flex:1;min-width:140px">${a.texto}</span>
           ${a.acaoHtml || ''}
-          ${_htmlBtnDispensar(a)}
+          ${a.laudomiro ? '' : _htmlBtnDispensar(a)}
         </div>`).join('')
         : '<div style="padding:24px 14px;text-align:center;font-size:12.5px;color:var(--text-3)">Nenhum alerta no momento</div>'}
     </div>`;
@@ -8616,6 +8644,7 @@ function _lqProvAbas(ativa) {
   return `<div class="lqp-abas" role="tablist" aria-label="Laudomiro">
     <button type="button" role="tab" aria-selected="${ativa === 'uso'}" class="${ativa === 'uso' ? 'on' : ''}" onclick="_lqProvTrocarAba('uso')">Uso do mês</button>
     <button type="button" role="tab" aria-selected="${ativa === 'lacunas'}" class="${ativa === 'lacunas' ? 'on' : ''}" onclick="_lqProvTrocarAba('lacunas')">O que ele não sabe</button>
+    <button type="button" role="tab" aria-selected="${ativa === 'sugestoes'}" class="${ativa === 'sugestoes' ? 'on' : ''}" onclick="_lqProvTrocarAba('sugestoes')">Sugestões${window._lqSugPend ? `<em class="lqs-cont">${window._lqSugPend}</em>` : ''}</button>
   </div>`;
 }
 function _lqProvTrocarAba(aba) { window._lqProvAba = aba; renderLaudomiroProvedor(); }
@@ -8802,8 +8831,150 @@ function _lqCopiarOuMostrar(txt) {
   else antiga();
 }
 
+// ── v262 · Sugestões do Laudomiro ─────────────────────────────────────────
+// O Laudomiro escreve sozinho uma "pergunta frequente" para o que não soube
+// responder (toda segunda, ou no botão "Gerar sugestões agora"), testa e grava
+// em laudomiro_faq (PASSO-83). Aqui o Provedor aprova, edita ou recusa.
+// Aprovada → a função passa a usar em até 2 minutos, sem subir arquivo.
+async function _lqContarSug() {
+  try {
+    const { count, error } = await sb.from('laudomiro_faq').select('id', { count: 'exact', head: true }).eq('status', 'sugerida');
+    window._lqSugPend = error ? 0 : (count || 0);
+  } catch (e) { window._lqSugPend = 0; }
+  if (typeof _setSinoAlertas === 'function') _setSinoAlertas(_sinoAlertasCache);
+  return window._lqSugPend;
+}
+const _LQS_ST = { sugerida: 'Para aprovar', aprovada: 'Aprovadas', recusada: 'Recusadas', sem_fonte: 'Sem fonte na base' };
+async function renderLaudomiroSugestoes() {
+  setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Sugestões do Laudomiro</div>`);
+  const { data, error } = await sb.from('laudomiro_faq').select('*').order('criado_em', { ascending: false }).limit(500);
+  const linhas = data || [];
+  window._lqSugCache = new Map(linhas.map(l => [l.id, l]));
+  const por = (st) => linhas.filter(l => l.status === st);
+  window._lqSugPend = por('sugerida').length;
+  if (typeof _setSinoAlertas === 'function') _setSinoAlertas(_sinoAlertasCache);
+  const filtro = window._lqSugFiltro || 'sugerida';
+  const vis = por(filtro);
+  const dt = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+  const ultima = linhas.reduce((m, l) => (l.criado_em > m ? l.criado_em : m), '');
+  const tag = (l) => l.tipo === 'erro' ? `<span class="lqp-tipo t-err">Tem erro</span>` : l.tipo === 'manual' ? `<span class="lqp-tipo t-fal">Manual</span>` : `<span class="lqp-tipo t-ns">Não achei · ${l.n}×</span>`;
+  const teste = (t) => {
+    if (!t || t.falhou || !t.veredito) return `<span class="lqs-chip">Teste não rodou</span>`;
+    if (t.veredito === 'NAO_SEI') return `<span class="lqs-chip lqs-warn">Teste: ainda respondeu "não achei"</span>`;
+    return `<span class="lqs-chip ${t.usou ? 'lqs-ok' : 'lqs-warn'}">${t.usou ? 'Teste: respondeu usando a sugestão' : 'Teste: respondeu, mas sem usar a sugestão'}</span>`;
+  };
+  const card = (l) => {
+    const orig = l.tipo === 'erro'
+      ? `Pergunta: “${escapeHtml(l.pergunta_original || '')}”${l.comentario ? ` · comentário do usuário: “${escapeHtml(l.comentario)}”` : ''}`
+      : `Perguntada ${l.n} ${l.n === 1 ? 'vez' : 'vezes'} assim: “${escapeHtml(l.pergunta_original || '')}”`;
+    let corpo, acoes;
+    if (l.status === 'sem_fonte') {
+      corpo = `<div class="lqs-prop lqs-falta"><small>O que falta na base</small><p>${escapeHtml(l.falta || 'A base não traz esta resposta.')}</p></div>`;
+      acoes = `<button type="button" class="gi-btn" onclick="_lqSugDecidir('${l.id}','recusada')">Arquivar</button>`;
+    } else {
+      corpo = `<div class="lqs-prop"><small>Resposta proposta pelo Laudomiro</small><p>${escapeHtml(l.resposta || '')}</p></div>
+        <div class="lqs-meta"><span class="lqs-chip">Fonte: ${escapeHtml(l.fonte || '—')}</span>${l.status === 'sugerida' ? teste(l.teste) : ''}${l.motivo ? `<span class="lqs-chip">Motivo: ${escapeHtml(l.motivo)}</span>` : ''}</div>`;
+      acoes = l.status === 'sugerida'
+        ? `<button type="button" class="gi-btn lqs-rec" onclick="_lqSugRecusar('${l.id}')">Recusar</button><button type="button" class="gi-btn" onclick="_lqSugEditar('${l.id}')">Editar</button><button type="button" class="gi-btn lqs-apr" onclick="_lqSugDecidir('${l.id}','aprovada')">Aprovar</button>`
+        : l.status === 'aprovada'
+          ? `<span class="gi-badge">Na base desde ${dt(l.decidido_em)}</span><button type="button" class="gi-btn" onclick="_lqSugEditar('${l.id}')">Editar</button><button type="button" class="gi-btn" onclick="_lqSugDecidir('${l.id}','sugerida')">Tirar da base</button>`
+          : `<span class="gi-badge gi-cinza">Recusada em ${dt(l.decidido_em)}</span><button type="button" class="gi-btn" onclick="_lqSugDecidir('${l.id}','sugerida')">Reabrir</button>`;
+    }
+    return `<div class="lqs-card">
+      <div class="lqs-h">${tag(l)}<b class="lqs-q">${escapeHtml(l.pergunta || l.pergunta_original || '')}</b><small class="lqs-orig">${orig}</small></div>
+      ${corpo}
+      <div class="lqs-acts">${acoes}</div>
+    </div>`;
+  };
+  const opt = Object.entries(_LQS_ST).map(([v, t]) => `<option value="${v}"${filtro === v ? ' selected' : ''}>${t} (${por(v).length})</option>`).join('');
+  const vazio = {
+    sugerida: 'Nenhuma sugestão esperando você. Toda segunda de manhã o Laudomiro revisa sozinho o que não soube responder; se quiser, clique em "Gerar sugestões agora".',
+    aprovada: 'Nenhuma pergunta frequente aprovada ainda.', recusada: 'Nenhuma sugestão recusada.', sem_fonte: 'Nenhuma lacuna sem fonte na base.',
+  }[filtro];
+  setConteudo(`
+    <div class="gi-page">
+      <div>
+        <div class="gi-eyebrow">Painel GRID · Provedor</div>
+        <h2>Laudomiro</h2>
+        <p>Toda segunda de manhã, o Laudomiro escreve sozinho a correção do que não soube responder e testa a resposta. Nada entra na base sem o seu clique: aprove, edite ou recuse.</p>
+      </div>
+      <div class="gi-acoes"><button class="gi-btn" id="lqsGerar" onclick="_lqSugGerar()">Gerar sugestões agora</button></div>
+    </div>
+    ${_lqProvAbas('sugestoes')}
+    <div class="gi-kpirow">
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Para aprovar</div><span class="gi-n">${por('sugerida').length}</span><small class="gi-s">${ultima ? 'última revisão em ' + dt(ultima) : 'nenhuma revisão ainda'}</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Aprovadas</div><span class="gi-n">${por('aprovada').length}</span><small class="gi-s">já usadas nas respostas</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Recusadas</div><span class="gi-n">${por('recusada').length}</span><small class="gi-s">não voltam a ser propostas</small></div>
+      <div class="gi-kpi gi-sm"><div class="gi-kh">Sem fonte na base</div><span class="gi-n">${por('sem_fonte').length}</span><small class="gi-s">precisam de norma nova</small></div>
+    </div>
+    ${error ? `<div class="gi-passos-card" style="margin-bottom:16px"><div><b>Falta o PASSO-83 no banco</b><small>As sugestões aparecem depois de rodar o SQL do PASSO-83.</small></div></div>` : ''}
+    <section class="gi-painel">
+      <div class="gi-painel-h lqp-filtros"><h3>${_LQS_ST[filtro]}</h3>
+        <select class="lqp-sel" aria-label="Situação" onchange="window._lqSugFiltro=this.value;renderLaudomiroSugestoes()">${opt}</select>
+      </div>
+      <div class="gi-corpo lqs-lista">${vis.length ? vis.map(card).join('') : `<div class="gi-vazio">${vazio}</div>`}</div>
+    </section>`);
+}
+async function _lqSugDecidir(id, status, extra) {
+  const l = window._lqSugCache?.get(id); if (!l) return;
+  const agora = new Date().toISOString();
+  const mud = { status, decidido_em: status === 'sugerida' ? null : agora, decidido_por: status === 'sugerida' ? null : (usuarioAtual?.id || null), ...(extra || {}) };
+  if (status === 'sugerida') mud.motivo = null;
+  const { error } = await sb.from('laudomiro_faq').update(mud).eq('id', id);
+  if (error) { showToast('Não consegui salvar. Confira se o PASSO-83 foi aplicado.', 'error'); return; }
+  // a lacuna de origem sai da aba "O que ele não sabe"
+  if (status === 'aprovada' && l.tipo !== 'manual') {
+    await sb.from('laudomiro_lacunas').upsert({ chave: l.chave, tipo: l.tipo, status: 'resolvida', nota: 'Pergunta frequente aprovada', atualizado_em: agora }, { onConflict: 'chave' });
+  }
+  if (status === 'sugerida' && l.status === 'aprovada' && l.tipo !== 'manual') await sb.from('laudomiro_lacunas').delete().eq('chave', l.chave);
+  showToast({ aprovada: 'Aprovada. O Laudomiro passa a usar em até 2 minutos.', recusada: l.status === 'sem_fonte' ? 'Arquivada.' : 'Recusada. O Laudomiro não vai propor de novo.', sugerida: l.status === 'aprovada' ? 'Tirada da base. Voltou para aprovar.' : 'Reaberta.' }[status], 'success');
+  renderLaudomiroSugestoes();
+}
+function _lqSugRecusar(id) {
+  abrirModal('Recusar sugestão', `
+    <label class="lqs-lab" for="lqsMotivo">Por que recusar? (o Laudomiro não propõe de novo)</label>
+    <textarea id="lqsMotivo" class="lqs-txt" rows="3" maxlength="500" placeholder="Ex.: a norma citada foi revogada; resposta incompleta"></textarea>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="(function(){var m=document.getElementById('lqsMotivo').value.trim();fecharModal();_lqSugDecidir('${id}','recusada',{motivo:m||null})})()">Recusar</button>`);
+}
+function _lqSugEditar(id) {
+  const l = window._lqSugCache?.get(id); if (!l) return;
+  abrirModal('Editar sugestão', `
+    <label class="lqs-lab" for="lqsPerg">Pergunta</label>
+    <input id="lqsPerg" class="lqs-txt" maxlength="300" value="${escapeHtml(l.pergunta || '')}">
+    <label class="lqs-lab" for="lqsResp">Resposta</label>
+    <textarea id="lqsResp" class="lqs-txt" rows="6" maxlength="1500">${escapeHtml(l.resposta || '')}</textarea>
+    <label class="lqs-lab" for="lqsFonte">Fonte (norma e item)</label>
+    <input id="lqsFonte" class="lqs-txt" maxlength="200" value="${escapeHtml(l.fonte || '')}">`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn" onclick="_lqSugSalvarEdicao('${id}')">Salvar</button>`, true);
+}
+async function _lqSugSalvarEdicao(id) {
+  const v = (k) => (document.getElementById(k)?.value || '').trim();
+  const pergunta = v('lqsPerg'), resposta = v('lqsResp'), fonte = v('lqsFonte');
+  if (pergunta.length < 5 || resposta.length < 20) { showToast('Escreva a pergunta e uma resposta com pelo menos 20 letras.', 'error'); return; }
+  const { error } = await sb.from('laudomiro_faq').update({ pergunta, resposta, fonte: fonte || null }).eq('id', id);
+  if (error) { showToast('Não consegui salvar a edição.', 'error'); return; }
+  fecharModal();
+  const l = window._lqSugCache?.get(id);
+  showToast(l?.status === 'aprovada' ? 'Edição salva. O Laudomiro usa a versão nova em até 2 minutos.' : 'Edição salva. Agora é só aprovar.', 'success');
+  renderLaudomiroSugestoes();
+}
+async function _lqSugGerar() {
+  const b = document.getElementById('lqsGerar');
+  if (b) { b.disabled = true; b.textContent = 'Gerando… (até 2 minutos)'; }
+  try {
+    const { data, error } = await sb.functions.invoke('laudomiro-perguntar', { body: { acao: 'sugerir' } });
+    if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch (e) {} throw new Error(m); }
+    if (data?.ok === false) throw new Error(data.erro || 'Falhou.');
+    showToast(data?.mensagem || 'Pronto.', 'success', 5000);
+  } catch (e) { showToast('Não consegui gerar agora: ' + (e.message || 'erro'), 'error'); }
+  renderLaudomiroSugestoes();
+}
+
 async function renderLaudomiroProvedor() {
   if (window._lqProvAba === 'lacunas') return renderLaudomiroLacunas();  // v257
+  if (window._lqProvAba === 'sugestoes') return renderLaudomiroSugestoes();  // v262
   setMobileHeader(`<div class="mh-greeting">Provedor</div><div class="mh-name">Laudomiro</div>`);
   const ini = new Date(); ini.setDate(1); ini.setHours(0, 0, 0, 0);
   const mes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
@@ -32861,7 +33032,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '259';
+  var APP_BUILD = '262';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
