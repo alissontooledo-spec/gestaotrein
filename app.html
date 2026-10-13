@@ -8771,8 +8771,35 @@ function _lqLacCopiar() {
     sec('erro', 'RESPOSTAS MARCADAS "TEM ERRO":', l => `• ${l.titulo}${l.comentario ? ` — comentário: "${l.comentario}"` : ''}`),
     sec('sub', 'SUBSTÂNCIAS DE FDS FORA DA BASE:', l => `• ${l.titulo}${l.cas ? ` (CAS ${l.cas})` : ''} — ${_LQ_FORA[l.fora] || ''} — ${l.n}x`),
     sec('nao_sei', 'PERGUNTAS SEM RESPOSTA ("não achei"):', l => `• ${l.titulo} — ${l.n}x`),
-    sec('falha', 'FALHAS TÉCNICAS:', l => `• ${l.titulo} — ${l.n}x${l.msgs[0] ? ` — ${l.msgs[0]}` : ''}`)].filter(Boolean).join('\n');
-  navigator.clipboard?.writeText(txt).then(() => showToast('Lista copiada. Cole na conversa com o Claude para a revisão da base.', 'success'), () => showToast('Não foi possível copiar.', 'error'));
+    sec('falha', 'FALHAS TÉCNICAS:', l => `• ${l.titulo} — ${l.n}x${l.msgs[0] ? ` — ${l.msgs[0]}` : ''}`)].filter((x, i) => i < 2 || x).join('\n');
+  _lqCopiarOuMostrar(txt);
+}
+// v259: alguns navegadores (e janelas embutidas) bloqueiam a cópia automática.
+// Tenta a cópia normal, depois a antiga; se as duas falharem, abre a lista
+// numa janela já selecionada para a pessoa copiar com Ctrl+C (ou segurar e copiar).
+function _lqCopiarOuMostrar(txt) {
+  const ok = () => showToast('Lista copiada. Cole na conversa com o Claude para a revisão da base.', 'success');
+  const antiga = () => {
+    let foi = false;
+    try {
+      const el = document.createElement('textarea');
+      el.value = txt; el.setAttribute('readonly', ''); el.style.position = 'fixed'; el.style.top = '0'; el.style.opacity = '0';
+      document.body.appendChild(el); el.focus(); el.select();
+      foi = document.execCommand('copy');
+      document.body.removeChild(el);
+    } catch (e) { foi = false; }
+    if (foi) ok(); else mostrar();
+  };
+  const mostrar = () => {
+    abrirModal('Copiar para revisão', `
+      <p style="font-size:13px;color:var(--text-2);margin:0 0 10px">O navegador não deixou copiar sozinho. O texto abaixo já está selecionado: aperte <b>Ctrl + C</b> (no celular, toque e segure e escolha <b>Copiar</b>).</p>
+      <textarea id="lqCopTxt" readonly style="width:100%;height:280px;font:12px/1.5 ui-monospace,Consolas,monospace;padding:10px;border:1px solid var(--border,#E3E7EF);border-radius:6px;resize:vertical;box-sizing:border-box">${escapeHtml(txt)}</textarea>`,
+      `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
+       <button class="btn" onclick="(function(){var t=document.getElementById('lqCopTxt');t.focus();t.select();var f=false;try{f=document.execCommand('copy')}catch(e){}showToast(f?'Lista copiada.':'Aperte Ctrl + C para copiar.', f?'success':'info')})()">Copiar</button>`);
+    setTimeout(() => { const t = document.getElementById('lqCopTxt'); if (t) { t.focus(); t.select(); } }, 80);
+  };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(ok, antiga);
+  else antiga();
 }
 
 async function renderLaudomiroProvedor() {
@@ -32834,7 +32861,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '258';
+  var APP_BUILD = '259';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
