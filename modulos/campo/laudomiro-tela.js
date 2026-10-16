@@ -13,6 +13,10 @@
    Proposta aprovada: 08-Propostas-visuais/laudomiro-v254-v2-*.png.
    v255: campo limpa depois de enviar (celular); título do aviso de norma; CAS sem o número CE.
    v256: motivo de o componente não estar na base; foto inteira na miniatura; quem aparece na foto.
+   v263: histórico e conversa presos à pessoa logada (e à organização do Modo Suporte).
+   v264: até 5 FDS de uma vez, com quadro comparando os produtos (montado aqui, sem gastar
+   pergunta a mais); no computador, dá para arrastar os arquivos. Proposta aprovada:
+   08-Propostas-visuais/laudomiro-v265-varios-arquivos-v2.html.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
@@ -31,6 +35,21 @@ let _anexo = null;         // v254: arquivo escolhido, ainda não enviado { tipo
 let _menuAnexo = false;    // v254: menu do clipe aberto
 let _ctx = null;           // v254: "Conversando sobre" uma FDS { produto, contexto }
 let _copiarMenu = null;    // v254: turno com o menu "Copiar para…" aberto
+/* v263: tudo acima é da pessoa logada (e da organização aberta no Modo Suporte).
+   Se mudar quem está usando sem recarregar a página, a tela zera e busca de novo:
+   o histórico e a conversa de uma pessoa nunca aparecem para outra. */
+let _fila = [];            // v264: FDS escolhidas, ainda não enviadas (até 5) { tipo, nome, mime, base64, tam, chave }
+let _avisoFila = '';       // v264: aviso do último arquivo recusado na fila (repetido, passou de 5…)
+let _dono = null;
+const donoAtual = () => { const u = sessao.usuario(); return u?.id ? `${u.id}|${u.org_id || ''}` : ''; };
+function conferirDono() {
+  const d = donoAtual();
+  if (d === _dono) return;
+  _dono = d;
+  _status = null; _statusCarregando = false; _conv = []; _txt = ''; _painel = null;
+  _anexo = null; _menuAnexo = false; _ctx = null; _copiarMenu = null; _fila = []; _avisoFila = '';
+}
+const mesmoDono = (d) => d === _dono && d === donoAtual();
 
 const SEAL = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.7 7.5 10 4.4-1.3 7.5-5.4 7.5-10V5.6L12 2.8Z" stroke="#F59E0B" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.6 8v7.2h5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SEND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
@@ -92,12 +111,15 @@ function repintar() {
 async function carregarStatus() {
   if (_statusCarregando) return;
   _statusCarregando = true;
-  try { _status = await chamar({ acao: 'status' }); }
+  const d = _dono;
+  let st;
+  try { st = await chamar({ acao: 'status' }); }
   catch (e) {
     /* Função ainda não publicada (404) ou sem módulo: a tela fica no modo "em configuração". */
-    _status = { configurado: false, falha: e.message, restantes: null, recentes: [] };
+    st = { configurado: false, falha: e.message, restantes: null, recentes: [] };
   }
-  finally { _statusCarregando = false; repintar(); }
+  if (!mesmoDono(d)) return;  // v263: trocou a pessoa enquanto carregava: descarta
+  _status = st; _statusCarregando = false; repintar();
 }
 
 function saudacao() {
@@ -136,19 +158,24 @@ function compositor({ grande = false } = {}) {
   const off = (_status && !_status.configurado) || bloq;
   const ocupado = _conv.some(t => t.carregando);
   const anx = !off && anexosLigados();
+  const nf = _fila.length;
   const ph = bloq ? 'Seu perfil de acesso não inclui o Laudomiro' : off ? 'O Laudomiro está sendo configurado'
-    : _anexo ? (_anexo.tipo === 'fds' ? 'O que você quer saber deste produto? (opcional)' : 'O que você quer saber desta foto? (opcional)')
-      : _ctx ? 'Pergunte mais sobre este produto' : 'Pergunte ao Laudomiro';
+    : nf > 1 ? `Pergunta para as ${nf} FDS (opcional)`
+      : nf === 1 ? 'O que você quer saber deste produto? (opcional)'
+        : _anexo ? (_anexo.tipo === 'fds' ? 'O que você quer saber deste produto? (opcional)' : 'O que você quer saber desta foto? (opcional)')
+          : _ctx ? (_ctx.varios ? 'Pergunte mais sobre estes produtos' : 'Pergunte mais sobre este produto') : 'Pergunte ao Laudomiro';
+  const comAnexo = nf > 0 || !!_anexo;
   return `<div class="lq-comp-w">${anx && _menuAnexo ? menuAnexo() : ''}
-    ${_ctx && !_anexo ? `<span class="lq-ctx">${IC.pdf}<span>Conversando sobre: <b>${esc(_ctx.produto)}</b></span><button type="button" data-acao="campo:lq-ctx-sair" aria-label="Parar de conversar sobre este produto">${I.x}</button></span>` : ''}
-    ${anx ? chipAnexo() : ''}
+    ${_ctx && !comAnexo ? `<span class="lq-ctx">${IC.pdf}<span>Conversando sobre: <b>${esc(_ctx.produto)}</b></span><button type="button" data-acao="campo:lq-ctx-sair" aria-label="Parar de conversar sobre este produto">${I.x}</button></span>` : ''}
+    ${anx ? filaAnexos() : ''}
     <div class="lq-comp${grande ? ' grande' : ''}${off ? ' off' : ''}${anx ? ' com-clip' : ''}">
-      ${anx ? `<button type="button" class="lq-clip${_menuAnexo || _anexo ? ' on' : ''}" data-acao="campo:lq-clip" aria-label="Anexar FDS ou foto" aria-expanded="${_menuAnexo}">${IC.clip}</button>` : ''}
+      ${anx ? `<button type="button" class="lq-clip${_menuAnexo || comAnexo ? ' on' : ''}" data-acao="campo:lq-clip" aria-label="Anexar FDS ou foto" aria-expanded="${_menuAnexo}">${IC.clip}</button>` : ''}
       <input type="text" id="lqTxt" data-cp="lq.txt" data-cp-enter="lq.enviar" value="${esc(_txt)}" maxlength="1000" autocomplete="off"
         placeholder="${ph}" aria-label="Sua pergunta" ${off ? 'disabled' : ''}>
-      <button type="button" class="lq-env" data-acao="campo:lq-enviar" aria-label="Enviar pergunta" ${off || ocupado ? 'disabled' : ''}>${SEND}</button>
+      ${nf > 1 ? `<button type="button" class="lq-env lq-env-t" data-acao="campo:lq-enviar" ${off || ocupado ? 'disabled' : ''}>Comparar ${nf}</button>`
+        : `<button type="button" class="lq-env" data-acao="campo:lq-enviar" aria-label="Enviar pergunta" ${off || ocupado ? 'disabled' : ''}>${SEND}</button>`}
     </div></div>
-    <div class="lq-priv">${_anexo ? 'O arquivo não fica guardado no GRID: só a resposta. Não envie foto com rosto ou nome de trabalhador.' : 'Não escreva nome, CPF nem dados de trabalhadores.'}</div>`;
+    <div class="lq-priv">${nf > 1 ? `Usa ${nf + (_anexo ? 1 : 0)} perguntas da cota. Os arquivos não ficam guardados no GRID: só as respostas.` : comAnexo ? 'O arquivo não fica guardado no GRID: só a resposta. Não envie foto com rosto ou nome de trabalhador.' : 'Não escreva nome, CPF nem dados de trabalhadores.'}</div>`;
 }
 
 function inicio() {
@@ -160,7 +187,7 @@ function inicio() {
     <p class="lq-sub">Pergunte como perguntaria a um engenheiro de segurança. Ele responde com o item da norma.</p>
     ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil de acesso não inclui perguntas ao Laudomiro.</b> Peça ao administrador da sua empresa para liberar (Configurações → Laudomiro). As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> Logo você poderá perguntar aqui. Enquanto isso, as <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam funcionando.</div></div>` : ''}
     ${compositor({ grande: true })}
-    ${anexosLigados() && !_anexo ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" data-cp-foto="lq.fds">${IC.pdf}<span>Ler uma FDS (FISPQ)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
+    ${anexosLigados() && !_anexo && !_fila.length ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">${IC.pdf}<span>Ler FDS (até 5 para comparar)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
     <div class="lq-sug">${SUGESTOES.map(([r, p], i) => `<button type="button" class="lq-cd" data-acao="campo:lq-sug:${i}" ${off ? 'disabled' : ''}><small>${r}</small><b>${esc(p)}</b></button>`).join('')}</div>
     ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span>${r.tipo === 'fds' ? `<i class="lq-rt fds">FDS</i>${esc(r.pergunta.replace(/^FDS:\s*/, ''))}` : r.tipo === 'foto' ? `<i class="lq-rt foto">FOTO</i>${esc(r.pergunta.replace(/^Foto:\s*/, ''))}` : esc(r.pergunta)}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
   </section>`;
@@ -192,6 +219,7 @@ function textoComRefs(texto, turno, tIdx) {
 function tipoFonte(t) { return t.tipo === 'oficial' ? 'Texto oficial' : 'Ficha do Laudomiro'; }
 
 function resposta(turno, tIdx) {
+  if (turno.lote) return respostaLote(turno, tIdx);  // v264
   if (turno.carregando && turno.anexo) return carregandoAnexo(turno);
   if (turno.aviso) return avisoAnexo(turno);
   if (turno.resposta?.tipo === 'fds' && !turno.erro) return respostaFds(turno, tIdx);
@@ -216,7 +244,9 @@ function resposta(turno, tIdx) {
 }
 
 function conversa() {
-  const balao = (t) => t.anexo
+  const balao = (t) => t.lote
+    ? `<div class="lq-eu"><span><em class="anx">${IC.pdf}${t.lote.length} FDS</em>${esc(t.pergunta || 'Comparar estas FDS')}</span></div>`
+    : t.anexo
     ? `<div class="lq-eu"><span><em class="anx">${t.anexo.tipo === 'fds' ? IC.pdf : IC.cam}${esc(t.anexo.nome || '')}</em>${esc(t.pergunta || (t.anexo.tipo === 'fds' ? 'Ler esta FDS' : 'Quais pontos de atenção você vê aqui?'))}</span></div>`
     : `<div class="lq-eu"><span>${esc(t.pergunta)}</span></div>`;
   return `<div class="lq-fio">${_conv.map((t, i) => `${balao(t)}${resposta(t, i)}`).join('')}</div>
@@ -284,7 +314,7 @@ function menuAnexo() {
   return `<div class="lq-menu-fundo" data-acao="campo:lq-clip"></div>
   <div class="lq-menu" role="menu" aria-label="Anexar">
     <div class="lq-menu-h"><b>Anexar</b><button type="button" class="lq-x" data-acao="campo:lq-clip" aria-label="Fechar">${I.x}</button></div>
-    ${op('lq.fds', IC.pdf, 'pdf', 'Ler uma FDS (FISPQ)', 'PDF do fornecedor, até 8 MB. Ele resume e cruza com a base do GRID.', 'application/pdf,.pdf')}
+    ${op('lq.fds', IC.pdf, 'pdf', 'Ler FDS (FISPQ)', 'PDF do fornecedor, até 8 MB. Escolha até 5 de uma vez para comparar os produtos.', 'application/pdf,.pdf', 'multiple')}
     ${op('lq.camera', IC.cam, 'img', 'Tirar foto agora', 'Abre a câmera do celular.', 'image/*', 'capture="environment"', ' so-cel')}
     ${op('lq.galeria', IC.img, 'img', 'Analisar uma foto', 'Escolha uma foto do ambiente. Ele aponta o que enxerga.', 'image/jpeg,image/png,image/webp,image/*')}
   </div>`;
@@ -296,6 +326,25 @@ function chipAnexo() {
   return `<div class="lq-anx">${fds ? `<span class="ic pdf">${IC.pdf}</span>` : `<img class="lq-anx-img" src="${_anexo.thumb}" alt="">`}
     <div><b>${esc(_anexo.nome)}</b><small>${fds ? 'FDS em PDF' : 'Foto'} · ${tamanho(_anexo.tam)} · pronto para enviar</small></div>
     <button type="button" class="lq-x" data-acao="campo:lq-anx-tirar" aria-label="Tirar o anexo">${I.x}</button></div>`;
+}
+
+/* v264: lista das FDS escolhidas (até 5) e, se houver, a foto que vai depois, separada. */
+const MAX_FILA = 5;
+const PERG_LOTE = ['Qual exige respirador?', 'Alguma dá insalubridade?', 'Quais estão desatualizadas?'];
+function filaAnexos() {
+  if (!_fila.length) return chipAnexo();
+  const n = _fila.length;
+  const linhas = _fila.map((a, i) => `<div class="lq-anx lq-fl"><span class="ic pdf">${IC.pdf}</span>
+    <div><b>${esc(a.nome)}</b><small>${tamanho(a.tam)}</small></div>
+    <button type="button" class="lq-x" data-acao="campo:lq-fila-tirar:${i}" aria-label="Tirar ${esc(a.nome)}">${I.x}</button></div>`).join('');
+  return `<div class="lq-fila">
+    ${n > 1 ? `<div class="lq-grp">${n} FDS · vão ser comparadas</div>` : ''}
+    ${linhas}
+    ${_avisoFila ? `<div class="lq-fila-av" role="status">${esc(_avisoFila)}</div>` : ''}
+    ${n < MAX_FILA ? `<label class="lq-fila-mais"><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">+ Adicionar FDS</label>` : ''}
+    ${_anexo ? `<div class="lq-grp">1 foto · vai depois, separada</div>${chipAnexo()}` : ''}
+    ${n > 1 && !_txt ? `<div class="lq-psug">${PERG_LOTE.map((q, i) => `<button type="button" data-acao="campo:lq-fila-perg:${i}">${esc(q)}</button>`).join('')}</div>` : ''}
+  </div>`;
 }
 
 function tamanho(b) { return b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
@@ -327,16 +376,39 @@ async function reduzirFoto(arquivo) {
   return { base64, thumb: mini, tam: Math.floor(base64.length * 3 / 4) };
 }
 
+/* v264: impressão digital do arquivo, para não mandar a mesma FDS duas vezes. */
+async function digital(base64) {
+  try {
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(base64));
+    return [...new Uint8Array(h)].slice(0, 12).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch { return base64.length + ':' + base64.slice(0, 80) + base64.slice(-80); }
+}
+
+async function prepararFds(arquivos) {
+  const avisos = [];
+  for (const f of arquivos) {
+    const nome = f.name || 'FDS.pdf';
+    try {
+      if (_fila.length >= MAX_FILA) { avisos.push(`No máximo ${MAX_FILA} FDS por vez: "${nome}" ficou de fora.`); continue; }
+      if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(nome)) throw new Error(`"${nome}" não é PDF. A FDS precisa estar em PDF.`);
+      if (f.size > TAM_PDF) throw new Error(`"${nome}" passa de 8 MB. Peça ao fornecedor uma versão menor.`);
+      const base64 = await lerComoBase64(f);
+      if (!base64.startsWith('JVBER')) throw new Error(`"${nome}" não é um PDF.`);
+      const chave = await digital(base64);
+      if (_fila.some(a => a.chave === chave)) { avisos.push(`"${nome}" é igual a uma FDS que já está na lista e ficou de fora.`); continue; }
+      _fila.push({ tipo: 'fds', nome, mime: 'application/pdf', base64, tam: f.size, chave });
+    } catch (e) { avisos.push(e.message || `Não consegui abrir "${nome}".`); }
+  }
+  _avisoFila = avisos.join(' ');
+  if (avisos.length && !_fila.length) avisar(avisos[0], 'erro');
+}
+
 async function prepararArquivo(chave, arquivos) {
   const f = arquivos?.[0]; if (!f) return;
   _menuAnexo = false;
   try {
     if (chave === 'lq.fds') {
-      if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) throw new Error('A FDS precisa estar em PDF.');
-      if (f.size > TAM_PDF) throw new Error('O PDF passa de 8 MB. Peça ao fornecedor uma versão menor.');
-      const base64 = await lerComoBase64(f);
-      if (!base64.startsWith('JVBER')) throw new Error('Este arquivo não é um PDF.');
-      _anexo = { tipo: 'fds', nome: f.name || 'FDS.pdf', mime: 'application/pdf', base64, tam: f.size };
+      await prepararFds([...arquivos]);  // v264: várias de uma vez
     } else {
       if (f.type && !/^image\//.test(f.type)) throw new Error('Escolha uma foto.');
       const r = await reduzirFoto(f);
@@ -353,12 +425,14 @@ async function enviarAnexo(p) {
   if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return; }
   const a = _anexo; _anexo = null;
   const turno = { pergunta: p, anexo: { tipo: a.tipo, nome: a.nome, thumb: a.thumb || '' }, carregando: true, passo: 0, _arquivo: a };
+  const d = _dono;
   _ctx = null;  // a FDS nova (ou a foto) muda o assunto da conversa
   _conv.push(turno); _txt = ''; _painel = null; _copiarMenu = null; limparCampo();
   repintar(); rolarFim();
   const relogio = setInterval(() => { if (turno.passo < 3) { turno.passo++; repintar(); } }, 6000);
   try {
     const r = await chamar({ acao: 'anexo', tipo: a.tipo, arquivo: { nome: a.nome, mime: a.mime, base64: a.base64 }, pergunta: p || undefined });
+    if (!mesmoDono(d)) return;  // v263
     if (r.aviso) Object.assign(turno, { carregando: false, aviso: r.aviso });
     else {
       Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '', _arquivo: null });
@@ -367,10 +441,221 @@ async function enviarAnexo(p) {
       if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: `${a.tipo === 'fds' ? 'FDS' : 'Foto'}: ${a.nome}${p ? ' — ' + p : ''}`, tipo: a.tipo, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
     }
   } catch (e) {
+    if (!mesmoDono(d)) return;  // v263
     Object.assign(turno, { carregando: false, erro: e.message || 'O Laudomiro não conseguiu ler o arquivo.', podeRepetir: !['NAO_CONFIGURADO', 'COTA', 'SEM_PERMISSAO', 'ANEXO_BLOQUEADO'].includes(e.codigo) && e.status !== 400 && e.status !== 413 });
     if (e.codigo === 'ANEXO_BLOQUEADO' && _status) _status.anexos = false;
   } finally { clearInterval(relogio); }
   repintar(); rolarFim();
+}
+
+/* ══ v264 · várias FDS de uma vez ═════════════════════════════════════════
+   Cada FDS é a mesma leitura de hoje (ação "anexo", 1 pergunta da cota cada),
+   2 ao mesmo tempo. O quadro é montado aqui com as respostas: não chama a IA de novo. */
+const LOTE_JUNTAS = 2;
+async function enviarLote(p) {
+  if (_conv.some(t => t.carregando)) return;
+  if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return; }
+  const foto = _anexo;
+  if (_fila.length === 1) {  // uma FDS só: igual a antes
+    _anexo = _fila[0]; _fila = []; _avisoFila = '';
+    await enviarAnexo(p);
+    if (foto && !_conv.some(t => t.carregando)) { _anexo = foto; enviarAnexo(''); }
+    return;
+  }
+  const itens = _fila.map(a => ({ nome: a.nome, estado: 'fila', _arquivo: a }));
+  _fila = []; _avisoFila = ''; _anexo = null;
+  const turno = { pergunta: p, lote: itens, carregando: true };
+  const d = _dono;
+  _ctx = null;
+  _conv.push(turno); _txt = ''; _painel = null; _copiarMenu = null; limparCampo();
+  repintar(); rolarFim();
+  await rodarLote(turno, itens, d);
+  if (!mesmoDono(d)) return;
+  if (foto && !_conv.some(t => t.carregando)) { _anexo = foto; enviarAnexo(''); }
+}
+
+async function rodarLote(turno, itens, d) {
+  turno.carregando = true;
+  let prox = 0;
+  const trabalhador = async () => {
+    while (prox < itens.length) {
+      const it = itens[prox++];
+      if (it.estado === 'ok' || it.estado === 'aviso') continue;
+      const a = it._arquivo;
+      it.estado = 'lendo'; it.erro = ''; repintar();
+      try {
+        const r = await chamar({ acao: 'anexo', tipo: 'fds', arquivo: { nome: a.nome, mime: a.mime, base64: a.base64 }, pergunta: turno.pergunta || undefined });
+        if (!mesmoDono(d)) return;
+        if (r.aviso) Object.assign(it, { estado: 'aviso', aviso: r.aviso, _arquivo: null });
+        else {
+          Object.assign(it, { estado: 'ok', id: r.id, resposta: r.resposta, trechos: r.trechos || [], _arquivo: null });
+          if (_status && r.restantes != null) _status.restantes = r.restantes;
+          if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: `FDS: ${a.nome}${turno.pergunta ? ' — ' + turno.pergunta : ''}`, tipo: 'fds', criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
+        }
+      } catch (e) {
+        if (!mesmoDono(d)) return;
+        Object.assign(it, { estado: 'erro', erro: e.message || 'Não consegui ler esta FDS.', podeRepetir: !['NAO_CONFIGURADO', 'COTA', 'SEM_PERMISSAO', 'ANEXO_BLOQUEADO'].includes(e.codigo) && e.status !== 400 && e.status !== 413 });
+        if (e.codigo === 'ANEXO_BLOQUEADO' && _status) _status.anexos = false;
+      }
+      repintar();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(LOTE_JUNTAS, itens.length) }, trabalhador));
+  if (!mesmoDono(d)) return;
+  turno.carregando = false;
+  if (!_conv.includes(turno)) return;  // "Nova conversa" no meio da leitura: não muda a conversa nova
+  const oks = itens.filter(i => i.estado === 'ok');
+  if (oks.length) _ctx = { produto: oks.length === 1 ? oks[0].resposta.titulo : `${oks.length} produtos`, varios: oks.length > 1, contexto: contextoLote(oks) };
+  repintar(); rolarFim();
+  const naTela = /^#?laudomiro/.test(location.hash || '');
+  if (!naTela) avisar(`A comparação das ${itens.length} FDS ficou pronta. Abra o Laudomiro para ver.`);
+}
+
+/* Texto curto de todas as FDS para as perguntas seguintes (o servidor aceita até 2.500 letras). */
+function contextoLote(oks) {
+  const cada = Math.floor(2400 / oks.length);
+  return oks.map(i => String(i.resposta.contexto || '').slice(0, cada)).join(' | ');
+}
+
+/* Uma linha do quadro, tirada da resposta de cada FDS. */
+function linhaLote(r) {
+  const epi = r.quadros?.[1] || {};
+  const epiTxt = `${epi.titulo || ''} ${epi.texto || ''}`;
+  let resp, rc = '';
+  if (!epi.titulo || /não informado/i.test(epi.titulo)) { resp = 'Não diz'; rc = 'cz'; }
+  else if (/respirador|m[aá]scara|respirat[oó]ri|\bPFF|semifacial|facial inteira|filtro/i.test(epiTxt)) {
+    const f = /\bVO\b|vapor(es)? org/i.test(epiTxt) ? 'filtro VO' : (epiTxt.match(/\bPFF ?-?\d\b/i) || [''])[0].toUpperCase().replace(/\s|-/g, '');
+    resp = f ? `Sim, ${f}` : 'Sim'; rc = 'sim';
+  } else { resp = 'Não pede'; rc = 'cz'; }
+  const comBase = (r.composicao || []).filter(c => c.base?.grau);
+  const maior = comBase.sort((a, b) => (b.base.pct || 0) - (a.base.pct || 0))[0];
+  const algumFora = (r.composicao || []).some(c => !c.base);
+  const ins = maior ? { t: `${(GRAU_F[maior.base.grau] || [maior.base.grau])[0].replace(/^./, x => x.toUpperCase())} (${maior.base.pct}%)`, c: 'md', ag: comBase.map(c => c.base.nome.replace(/\s*\(.*\)$/, '')) }
+    : algumFora ? { t: 'Confira', c: 'cz', ag: [] } : { t: 'Não', c: 'cz', ag: [] };
+  const ano = (String(r.subtitulo || '').match(/\b(19|20)\d{2}\b/) || [''])[0];
+  const fds = r.aviso_norma_tipo === 'antiga' ? { t: `Antiga${ano ? ' (' + ano + ')' : ''}`, c: 'no' }
+    : r.aviso_norma_tipo === 'confirmar' ? { t: 'Confirmar norma', c: 'md' } : { t: ano || 'Atual', c: 'ok' };
+  const conf = r.conferencia || [];
+  const pede = [];
+  if (r.aviso_norma_tipo === 'antiga') pede.push('FDS atualizada (ABNT NBR 14725:2023)');
+  else if (r.aviso_norma_tipo === 'confirmar') pede.push('confirmar se a FDS segue a ABNT NBR 14725:2023');
+  if (resp === 'Não diz') pede.push('o EPI recomendado (seção 8)');
+  const semCas = (r.composicao || []).filter(c => !c.cas).map(c => c.nome);
+  const casErr = (r.composicao || []).filter(c => c.cas && c.casOk === false).map(c => c.nome);
+  if (semCas.length) pede.push(`o número CAS de: ${semCas.join(', ')}`);
+  if (casErr.length) pede.push(`corrigir o CAS de: ${casErr.join(', ')}`);
+  const sec = conf.find(c => /seções/.test(c.texto) && !c.ok); if (sec) pede.push(`a FDS completa (${sec.texto.replace(/ seções$/, ' seções')})`);
+  if (conf.some(c => /português/.test(c.texto) && !c.ok)) pede.push('a FDS em português');
+  if (conf.some(c => /telefone/i.test(c.texto) && !c.ok)) pede.push('o telefone de emergência');
+  return { produto: r.titulo, fornecedor: String(r.subtitulo || '').split(' · ')[0], resp, rc, ins, fds, pede, epi: epi.titulo || '', perigo: r.quadros?.[0]?.titulo || '', curta: r.curta || '' };
+}
+
+function respostaLote(turno, tIdx) {
+  const itens = turno.lote, n = itens.length;
+  const prontos = itens.filter(i => i.estado !== 'fila' && i.estado !== 'lendo').length;
+  const est = (i) => i.estado === 'ok' ? '<span class="lq-st ok">Pronta</span>' : i.estado === 'lendo' ? '<span class="lq-st and">Lendo…</span>'
+    : i.estado === 'fila' ? '<span class="lq-st fila">Na fila</span>' : i.estado === 'aviso' ? '<span class="lq-st no">Não é FDS</span>' : '<span class="lq-st no">Falhou</span>';
+  if (turno.carregando) {
+    return `<article class="lq-resp lq-lote" aria-live="polite">
+      <div class="lq-lote-h"><span class="lq-seal p">${SEAL}</span><div><b>Comparando ${n} FDS · ${prontos} de ${n} ${prontos === 1 ? 'pronta' : 'prontas'}</b>
+      <div class="lq-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${prontos}"><i style="width:${Math.round(((prontos + 0.35) / n) * 100)}%"></i></div></div></div>
+      <div class="lq-lote-l">${itens.map(i => `<div><b>${esc(i.nome)}</b>${est(i)}</div>`).join('')}</div>
+      <small class="lq-lote-n">Pode usar outra tela do GRID: avisamos quando terminar. Se um arquivo falhar, os outros continuam.</small>
+    </article>`;
+  }
+  const oks = itens.filter(i => i.estado === 'ok');
+  const L = oks.map(i => ({ i, l: linhaLote(i.resposta) }));
+  const nResp = L.filter(x => x.l.rc === 'sim').length, nIns = L.filter(x => x.l.ins.c === 'md').length, nVelha = L.filter(x => x.l.fds.c === 'no').length;
+  const nPede = L.filter(x => x.l.pede.length).length;
+  const linhaRes = (k, txt) => `<div><i>${k}</i><span>${txt}</span></div>`;
+  const resumo = oks.length ? [
+    linhaRes(nResp, nResp === 1 ? 'pede respirador' : 'pedem respirador'),
+    linhaRes(nIns, nIns === 1 ? 'tem agente com insalubridade na NR-15 (depende de avaliação)' : 'têm agente com insalubridade na NR-15 (depende de avaliação)'),
+    linhaRes(nVelha, nVelha === 1 ? 'FDS no modelo antigo: peça a nova ao fornecedor' : 'FDS no modelo antigo: peça as novas ao fornecedor'),
+  ].join('') : '';
+  const linhas = L.map(({ i, l }) => {
+    const k = itens.indexOf(i);
+    return `<tr><td><button type="button" class="lq-lk" data-acao="campo:lq-lote-abrir:${tIdx}.${k}" title="Ver a resposta completa">${esc(l.produto)}</button></td>
+      <td class="${l.rc}">${esc(l.resp)}</td><td class="${l.ins.c}">${esc(l.ins.t)}</td><td class="${l.fds.c}">${esc(l.fds.t)}</td></tr>`;
+  }).join('');
+  const falhas = itens.map((i, k) => (i.estado === 'erro' || i.estado === 'aviso') ? `<div class="lq-lote-f">${IC.erro}<div><b>${esc(i.nome)}</b><small>${esc(i.estado === 'aviso' ? i.aviso?.titulo || 'Este PDF não parece uma FDS.' : i.erro)}</small></div>
+      ${i.estado === 'erro' && i.podeRepetir ? `<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-lote-repetir:${tIdx}.${k}">Tentar de novo</button>` : ''}</div>` : '').join('');
+  const respostas = turno.pergunta && L.some(x => x.l.curta) ? `<div class="lq-sec"><h5>Resposta de cada FDS</h5><p class="lq-lote-q">${esc(turno.pergunta)}</p><div class="lq-lote-cur">${L.map(({ l }) => `<p><b>${esc(l.produto)}:</b> ${negritoInicio(l.curta || 'A FDS não responde.')}</p>`).join('')}</div></div>` : '';
+  return `<article class="lq-resp lq-lote">
+    <header class="lq-ver"><span class="lq-selo v-fds">FDS</span><div><h3>${oks.length === n ? `${n} FDS comparadas` : `${oks.length} de ${n} FDS comparadas`}</h3><p>Quadro montado com as respostas de cada FDS.</p></div></header>
+    ${resumo ? `<div class="lq-res-l">${resumo}</div>` : ''}
+    ${oks.length ? `<div class="lq-tab"><table>
+      <thead><tr><th>Produto</th><th><span class="lg">Respirador</span><span class="sm">Resp.</span></th><th><span class="lg">Insalubridade</span><span class="sm">Insalub.</span></th><th>FDS</th></tr></thead>
+      <tbody>${linhas}</tbody></table></div><small class="lq-lote-n">Toque no produto para ver a resposta completa.</small>` : ''}
+    ${respostas}
+    ${falhas}
+    ${oks.length ? `<footer class="lq-acts">
+      <button type="button" data-acao="campo:lq-lote-copiar:${tIdx}">${IC.copiar}<span>Copiar quadro</span></button>
+      <button type="button" data-acao="campo:lq-lote-planilha:${tIdx}">${IC.pdf}<span>Baixar planilha</span></button>
+      ${nPede ? `<button type="button" data-acao="campo:lq-lote-fornecedor:${tIdx}">${IC.copiar}<span>O que pedir ao fornecedor</span></button>` : ''}
+      <small>Indicação para o técnico. Não substitui laudo.</small>
+    </footer>` : ''}
+  </article>`;
+}
+
+function textoLote(turno, como) {
+  const L = turno.lote.filter(i => i.estado === 'ok').map(i => linhaLote(i.resposta));
+  if (como === 'fornecedor') {
+    const blocos = L.filter(l => l.pede.length).map(l => `${l.produto}${l.fornecedor ? ' (' + l.fornecedor + ')' : ''}:\n${l.pede.map(x => '• ' + x).join('\n')}`);
+    return ['Pedido ao fornecedor sobre as FDS', '', ...blocos.flatMap(b => [b, '']), 'Levantado pelo GRID (Laudomiro).'].join('\n').trim();
+  }
+  return [`Comparação de ${L.length} FDS`, '', ...L.map(l => `${l.produto}: respirador ${l.resp.toLowerCase()}; insalubridade ${l.ins.t.toLowerCase()}${l.ins.ag.length ? ' (' + l.ins.ag.join(', ') + ')' : ''}; FDS ${l.fds.t.toLowerCase()}${l.epi ? '; EPI pela FDS: ' + l.epi : ''}.`),
+    '', 'Insalubridade só se confirma com avaliação no local. Indicação do GRID (Laudomiro); não substitui laudo.'].join('\n');
+}
+
+function csvLote(turno) {
+  const L = turno.lote.filter(i => i.estado === 'ok').map(i => linhaLote(i.resposta));
+  // célula que começa com = + - @ vira texto (o Excel não executa como fórmula)
+  const q = (v) => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+  const cab = ['Produto', 'Fornecedor', 'Perigo principal', 'EPI pela FDS', 'Respirador', 'Insalubridade (base do GRID)', 'Agentes da NR-15', 'FDS', 'Pedir ao fornecedor'];
+  const lin = L.map(l => [l.produto, l.fornecedor, l.perigo, l.epi, l.resp, l.ins.t, l.ins.ag.join(', '), l.fds.t, l.pede.join('; ')]);
+  return '\ufeff' + [cab, ...lin].map(x => x.map(q).join(';')).join('\r\n');
+}
+
+function baixarPlanilha(turno) {
+  try {
+    const blob = new Blob([csvLote(turno)], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `comparacao-fds-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    avisar('Planilha baixada. Ela abre no Excel.');
+  } catch { avisar('Não consegui baixar a planilha neste aparelho.', 'erro'); }
+}
+
+/* Copia com a área de transferência ou, se o navegador bloquear, pelo jeito antigo. */
+function copiarTexto(txt, msgOk = 'Texto copiado.') {
+  const antigo = () => {
+    try {
+      const ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy'); ta.remove(); return ok;
+    } catch { return false; }
+  };
+  const fim = (ok) => avisar(ok ? msgOk : 'Não foi possível copiar neste aparelho.', ok ? 'ok' : 'erro');
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(() => fim(true), () => fim(antigo()));
+  else fim(antigo());
+}
+
+/* Abre a resposta completa de uma FDS do quadro como um item da conversa (com tudo que já existe: fichas, copiar, útil…). */
+function abrirDoLote(tIdx, k) {
+  const t = _conv[tIdx], it = t?.lote?.[k]; if (!it || it.estado !== 'ok') return;
+  if (it.aberto != null && _conv[it.aberto]?.id === it.id) { rolarPara(it.aberto); return; }
+  _conv.push({ pergunta: t.pergunta || '', anexo: { tipo: 'fds', nome: it.nome }, id: it.id, resposta: it.resposta, trechos: it.trechos || [], resumo: it.resposta.contexto || '' });
+  it.aberto = _conv.length - 1;
+  repintar(); rolarFim();
+}
+function rolarPara(i) {
+  setTimeout(() => {
+    const el = [...document.querySelectorAll('.lq-fio')].find(c => c.getBoundingClientRect().width > 0);
+    el?.querySelectorAll(':scope > .lq-resp')?.[i]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, 60);
 }
 
 function carregandoAnexo(turno) {
@@ -503,7 +788,30 @@ function ampliarFoto(tIdx) {
     <p style="margin:10px 0 0;font-size:12.5px;color:var(--text-3)">A foto não fica guardada no GRID: some ao sair desta conversa.</p>`, '<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
 }
 
+/* v264: no computador, arrastar FDS (PDF) ou uma foto para a tela do Laudomiro. */
+let _arrastarLigado = false;
+function ligarArrastar() {
+  if (_arrastarLigado || typeof document === 'undefined') return;
+  _arrastarLigado = true;
+  const pode = () => /^#?laudomiro/.test(location.hash || '') && _aba === 'perguntar' && anexosLigados() && !_conv.some(t => t.carregando);
+  const temArquivo = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  const marcar = (on) => document.querySelectorAll('.lq').forEach(x => x.classList.toggle('arrastando', on));
+  document.addEventListener('dragover', (e) => { if (!temArquivo(e) || !pode()) return; e.preventDefault(); marcar(true); });
+  document.addEventListener('dragleave', (e) => { if (!e.relatedTarget) marcar(false); });
+  document.addEventListener('drop', async (e) => {
+    if (!temArquivo(e) || !pode()) return;
+    e.preventDefault(); marcar(false);
+    const fs = [...(e.dataTransfer.files || [])];
+    const pdfs = fs.filter(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
+    const fotos = fs.filter(f => /^image\//.test(f.type));
+    if (!pdfs.length && !fotos.length) { avisar('Arraste FDS em PDF ou uma foto.', 'erro'); return; }
+    if (pdfs.length) await prepararArquivo('lq.fds', pdfs);
+    if (fotos.length) await prepararArquivo('lq.galeria', fotos.slice(0, 1));
+  });
+}
+
 export async function render(params = {}) {
+  conferirDono();  // v263
   if (params.id && L.porId?.(params.id)) _aba = 'fichas';
   // v252: pergunta feita no Início ("Pergunte ao Laudomiro") já chega enviada
   if (params.pergunta && !params.__lqEnviada) {
@@ -521,6 +829,7 @@ export async function render(params = {}) {
     enter: (chave, valor) => { if (chave === 'lq.enviar') { _txt = valor; enviar(); } },
     foto: (chave, arquivos) => (/^lq\./.test(chave) ? prepararArquivo(chave, arquivos) : undefined),  // v254: FDS e foto
   });
+  ligarArrastar();  // v264
   if (!_status) carregarStatus();
   return `<div class="lq${_painel ? ' com-painel' : ''}${_conv.length ? ' em-conversa' : ''}">${abas()}
     <div class="lq-corpo"><div class="lq-col">${_conv.length ? conversa() : inicio()}</div>${painel()}</div></div>`;
@@ -528,6 +837,7 @@ export async function render(params = {}) {
 
 async function enviar(texto) {
   const p = String(texto ?? (valorVisivel('#lqTxt') || _txt)).trim();
+  if (_fila.length && texto == null) { enviarLote(p); return; }  // v264
   if (_anexo && texto == null) { enviarAnexo(p); return; }  // v254
   if (p.length < 4) { avisar('Escreva a pergunta.', 'erro'); return; }
   if (_conv.some(t => t.carregando)) return;
@@ -535,15 +845,18 @@ async function enviar(texto) {
   if (_status && !_status.configurado) { avisar('O Laudomiro ainda está sendo configurado.', 'erro'); return; }
   const historico = _conv.filter(t => t.resposta).slice(-2).map(t => ({ pergunta: t.pergunta, resposta: t.resumo || '' }));
   const turno = { pergunta: p, carregando: true };
+  const d = _dono;
   _conv.push(turno); _txt = ''; _painel = null; limparCampo();
   repintar();
   rolarFim();
   try {
     const r = await chamar({ acao: 'perguntar', pergunta: p, historico, contexto: _ctx?.contexto || undefined });
+    if (!mesmoDono(d)) return;  // v263
     Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '' });
     if (_status && r.restantes != null) _status.restantes = r.restantes;
     if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: p, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
   } catch (e) {
+    if (!mesmoDono(d)) return;  // v263
     Object.assign(turno, { carregando: false, erro: e.message || 'O Laudomiro não respondeu.', podeRepetir: !['NAO_CONFIGURADO', 'COTA', 'SEM_PERMISSAO'].includes(e.codigo) });
     if (e.codigo === 'NAO_CONFIGURADO' && _status) _status.configurado = false;
     if (e.codigo === 'SEM_PERMISSAO' && _status) _status.permitido = false;
@@ -588,8 +901,10 @@ function pedirErro(i) {
 }
 
 async function abrirRecente(id) {
+  const d = _dono;
   try {
     const r = await chamar({ acao: 'ver', id });
+    if (!mesmoDono(d)) return;  // v263
     const tipo = r.resposta?.tipo;
     if (tipo === 'fds' || tipo === 'foto') {
       // v254: conversa de FDS ou foto (o arquivo não fica guardado: volta só a resposta)
@@ -603,7 +918,7 @@ async function abrirRecente(id) {
       _ctx = null;
     }
     _painel = null; _anexo = null; repintar();
-  } catch (e) { avisar(e.message, 'erro'); }
+  } catch (e) { if (mesmoDono(d)) avisar(e.message, 'erro'); }
 }
 
 export async function acao(nome, valor, redesenhar) {
@@ -613,6 +928,18 @@ export async function acao(nome, valor, redesenhar) {
   if (nome !== 'campo:lq-copiar-menu' && !/^campo:lq-copiar-como/.test(nome) && _copiarMenu != null) _copiarMenu = null;
   if (nome === 'campo:lq-clip') { _menuAnexo = !_menuAnexo; redesenhar(); return true; }
   if (nome === 'campo:lq-anx-tirar') { _anexo = null; redesenhar(); return true; }
+  if (nome === 'campo:lq-fila-tirar') { _fila.splice(+valor, 1); _avisoFila = ''; redesenhar(); return true; }  // v264
+  if (nome === 'campo:lq-fila-perg') { const q = PERG_LOTE[+valor]; if (q) { _txt = q; document.querySelectorAll('#lqTxt').forEach(el => { el.value = q; }); } redesenhar(); return true; }
+  if (nome === 'campo:lq-lote-abrir') { const [t, k] = String(valor).split('.').map(Number); abrirDoLote(t, k); return true; }
+  if (nome === 'campo:lq-lote-copiar') { const t = _conv[+valor]; if (t?.lote) copiarTexto(textoLote(t, 'quadro'), 'Quadro copiado.'); return true; }
+  if (nome === 'campo:lq-lote-fornecedor') { const t = _conv[+valor]; if (t?.lote) copiarTexto(textoLote(t, 'fornecedor'), 'Lista para o fornecedor copiada.'); return true; }
+  if (nome === 'campo:lq-lote-planilha') { const t = _conv[+valor]; if (t?.lote) baixarPlanilha(t); return true; }
+  if (nome === 'campo:lq-lote-repetir') {
+    const [ti, k] = String(valor).split('.').map(Number); const t = _conv[ti], it = t?.lote?.[k];
+    if (!it || it.estado !== 'erro' || !it._arquivo || _conv.some(x => x.carregando)) return true;
+    it.estado = 'fila'; rodarLote(t, [it], _dono).then(() => { const oks = t.lote.filter(i => i.estado === 'ok'); if (oks.length) _ctx = { produto: oks.length === 1 ? oks[0].resposta.titulo : `${oks.length} produtos`, varios: oks.length > 1, contexto: contextoLote(oks) }; repintar(); });
+    return true;
+  }
   if (nome === 'campo:lq-ctx-sair') { _ctx = null; redesenhar(); return true; }
   if (nome === 'campo:lq-copiar-menu') { _copiarMenu = _copiarMenu === +valor ? null : +valor; redesenhar(); return true; }
   if (nome === 'campo:lq-copiar-como') { const [t, como] = String(valor).split('.'); copiarComo(+t, como); return true; }
@@ -630,7 +957,7 @@ export async function acao(nome, valor, redesenhar) {
   if (_aba === 'fichas') return Fichas.acao(nome, valor, redesenhar);
   if (nome === 'campo:lq-enviar') { enviar(); return true; }
   if (nome === 'campo:lq-sug') { const s = SUGESTOES[+valor]; if (s) enviar(s[1]); return true; }
-  if (nome === 'campo:lq-nova') { _conv = []; _painel = null; _txt = ''; _ctx = null; _anexo = null; redesenhar(); return true; }
+  if (nome === 'campo:lq-nova') { _conv = []; _painel = null; _txt = ''; _ctx = null; _anexo = null; _fila = []; _avisoFila = ''; redesenhar(); return true; }
   if (nome === 'campo:lq-fonte') { const [t, n] = String(valor).split('.').map(Number); _painel = (_painel && _painel.t === t && _painel.n === n) ? null : { t, n }; redesenhar(); return true; }
   if (nome === 'campo:lq-fechar') { _painel = null; redesenhar(); return true; }
   if (nome === 'campo:lq-copiar') { copiar(+valor); return true; }
