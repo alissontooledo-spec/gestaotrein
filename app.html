@@ -1713,6 +1713,31 @@ svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 
 .lqs-lab:first-child { margin-top:0 }
 .lqs-txt { width:100%; box-sizing:border-box; font-family:inherit; font-size:13px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; resize:vertical }
 @media (max-width:600px) { .lqs-acts { justify-content:stretch } .lqs-acts .gi-btn { flex:1 } }
+/* v264 — placar da prova semanal */
+.lqpv { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; display:grid; gap:12px; margin:0 0 18px }
+.lqpv-h { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap }
+.lqpv-t { display:block; font-size:15px; font-weight:800; color:var(--text-1); margin-top:2px }
+.lqpv-s { display:block; font-size:12px; color:var(--text-3); line-height:1.5; margin-top:2px }
+.lqpv-nota { font-size:34px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; color:var(--text-1); margin-top:4px }
+.lqpv-nota small { font-size:15px; color:var(--text-3); font-weight:700 }
+.lqpv-var { font-size:12px; font-weight:800; border-radius:20px; padding:3px 10px; background:var(--green-l); color:var(--green); white-space:nowrap }
+.lqpv-var.neg { background:var(--red-l,#FEE8E7); color:var(--red) }
+.lqpv-var.igual { background:var(--gray-100,#EEF1F6); color:var(--text-2) }
+.lqpv-hist { display:flex; align-items:flex-end; gap:6px; height:76px }
+.lqpv-hist div { flex:1; max-width:40px; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:stretch; gap:4px; min-width:0 }
+.lqpv-hist i { display:block; background:var(--gray-100,#EEF1F6); border-radius:4px 4px 0 0 }
+.lqpv-hist i.on { background:var(--amber) }
+.lqpv-hist span { font-size:10px; color:var(--text-3); text-align:center; white-space:nowrap }
+.lqpv-and { font-size:12.5px; color:#92400E; background:var(--amber-l); border-radius:8px; padding:7px 12px }
+.lqpv-and.ok { color:var(--green); background:var(--green-l) }
+.lqpv-lista { display:grid; gap:6px }
+.lqpv-it { display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px; align-items:start; background:var(--bg,#F7F8FB); border-radius:8px; padding:8px 12px }
+.lqpv-it b { display:block; font-size:13px; color:var(--text-1); overflow-wrap:anywhere }
+.lqpv-it small { font-size:11.5px; color:var(--text-3); overflow-wrap:anywhere }
+.lqpv-tag { font-size:10.5px; font-weight:800; border-radius:6px; padding:3px 8px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; margin-top:1px }
+.lqpv-tag.pior { background:var(--red-l,#FEE8E7); color:var(--red) }
+.lqpv-tag.err { background:var(--gray-100,#EEF1F6); color:var(--text-2) }
+.lqpv-tag.mel { background:var(--green-l); color:var(--green) }
 /* v257 — Laudomiro do Provedor: abas e "O que ele não sabe" */
 .lqp-abas { display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:3px; gap:2px; margin:0 0 16px }
 .lqp-abas button { border:0; background:none; font-family:inherit; font-size:12.5px; font-weight:700; color:var(--text-2); padding:7px 14px; border-radius:7px; cursor:pointer }
@@ -2999,10 +3024,17 @@ function traduzErroSupabase(erro, textoPadrao) {
 // (a ordem não é garantida), e o DOMContentLoaded precisa saber para não
 // deixar a pessoa cair direto no app sem trocar a senha.
 let _flagRecuperacaoSenhaPendente = false;
-sb.auth.onAuthStateChange((event) => {
+sb.auth.onAuthStateChange((event, session) => {
   if (event === 'PASSWORD_RECOVERY') {
     _flagRecuperacaoSenhaPendente = true;
     _abrirModalDefinirNovaSenhaRecuperacao();
+  }
+  // v263: outra aba deste navegador saiu ou entrou com outra conta. Esta aba recarrega,
+  // para não mostrar dados de uma pessoa com o login de outra.
+  if (!window._gridSaindo && typeof usuarioAtual !== 'undefined' && usuarioAtual?.id
+      && (event === 'SIGNED_OUT' || (session?.user?.id && session.user.id !== usuarioAtual.id))) {
+    window._gridSaindo = true;
+    location.replace(location.pathname + location.search);
   }
 });
 
@@ -3665,14 +3697,16 @@ async function _sessaoExpirar() {
   clearTimeout(_sessaoTimerAviso);
   // Se está em modo suporte, encerrar antes de sair
   if (window._suporteAtivo) await encerrarModoSuporte(true);
-  await sb.auth.signOut();
+  window._gridSaindo = true;
+  try { sessionStorage.setItem('_gridSessaoExpirou', '1'); } catch (e) {}
+  try { await sb.auth.signOut(); } catch (e) {}
   _sessaoLimparAtividade();
   usuarioAtual = null;
   showScreen('screenLogin');
-  const err = document.getElementById('loginError');
-  if (err) { err.textContent = 'Sua sessão expirou por inatividade. Faça login novamente.'; err.classList.add('show'); }
-  const btn = document.getElementById('loginBtn');
-  if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+  // v263: recarrega a página, como já faz o "Sair". Sem isso, o que estava na memória das
+  // telas (Conversas recentes do Laudomiro, conversa aberta, dados do CRM) ficava para a
+  // próxima pessoa que entrasse neste aparelho. O aviso de sessão expirada volta depois.
+  location.replace(location.pathname + location.search);
 }
 
 function _sessaoIniciar() {
@@ -4533,6 +4567,12 @@ function hideLoading() {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  if (id === 'screenLogin') {  // v263: aviso depois do recarregamento da sessão expirada
+    let expirou = false;
+    try { expirou = sessionStorage.getItem('_gridSessaoExpirou') === '1'; } catch (e) {}  // apagado ao entrar (entrarNoApp)
+    const err = document.getElementById('loginError');
+    if (expirou && err) { err.textContent = 'Sua sessão expirou por inatividade. Faça login novamente.'; err.classList.add('show'); }
+  }
 }
 
 // ============================================================
@@ -5047,6 +5087,7 @@ async function _enviarRecuperacaoSenhaLogin() {
 }
 
 async function entrarNoApp() {
+  try { sessionStorage.removeItem('_gridSessaoExpirou'); } catch (e) {}  // v263
   // v200: perfil de acesso personalizado (PASSO-66). Sem ele, nada muda.
   await _carregarPerfilAcesso();
   _instalarGuardasDeAcao();
@@ -5155,6 +5196,7 @@ async function fazerLogout() {
   _sessaoEncerrar(); // limpar timers
   _fecharSino(); _sinoAlertasCache = []; _atualizarBadgeSino(); // limpar sino
   showLoading('Saindo...');
+  window._gridSaindo = true;  // v263: a própria aba está saindo (não recarregar pelo aviso de troca de conta)
   await sb.auth.signOut();
   _sessaoLimparAtividade();
   usuarioAtual = null;
@@ -8887,6 +8929,7 @@ async function renderLaudomiroSugestoes() {
     </div>`;
   };
   const opt = Object.entries(_LQS_ST).map(([v, t]) => `<option value="${v}"${filtro === v ? ' selected' : ''}>${t} (${por(v).length})</option>`).join('');
+  const prova = await _lqProvaHtml();  // v264
   const vazio = {
     sugerida: 'Nenhuma sugestão esperando você. Toda segunda de manhã o Laudomiro revisa sozinho o que não soube responder; se quiser, clique em "Gerar sugestões agora".',
     aprovada: 'Nenhuma pergunta frequente aprovada ainda.', recusada: 'Nenhuma sugestão recusada.', sem_fonte: 'Nenhuma lacuna sem fonte na base.',
@@ -8901,6 +8944,7 @@ async function renderLaudomiroSugestoes() {
       <div class="gi-acoes"><button class="gi-btn" id="lqsGerar" onclick="_lqSugGerar()">Gerar sugestões agora</button></div>
     </div>
     ${_lqProvAbas('sugestoes')}
+    ${prova}
     <div class="gi-kpirow">
       <div class="gi-kpi gi-sm"><div class="gi-kh">Para aprovar</div><span class="gi-n">${por('sugerida').length}</span><small class="gi-s">${ultima ? 'última revisão em ' + dt(ultima) : 'nenhuma revisão ainda'}</small></div>
       <div class="gi-kpi gi-sm"><div class="gi-kh">Aprovadas</div><span class="gi-n">${por('aprovada').length}</span><small class="gi-s">já usadas nas respostas</small></div>
@@ -8914,6 +8958,84 @@ async function renderLaudomiroSugestoes() {
       </div>
       <div class="gi-corpo lqs-lista">${vis.length ? vis.map(card).join('') : `<div class="gi-vazio">${vazio}</div>`}</div>
     </section>`);
+}
+// ── v264: placar da prova semanal (PASSO-84; função v265 roda toda segunda 08:00) ──
+async function _lqProvaHtml() {
+  let data, error;
+  try { ({ data, error } = await sb.from('laudomiro_prova').select('id,iniciada_em,concluida_em,total,certas,resultados').order('iniciada_em', { ascending: false }).limit(9)); }
+  catch (e) { error = e; }
+  if (error) return `<section class="lqpv"><div class="lqpv-h"><div><div class="gi-eyebrow">Prova da semana</div><b class="lqpv-t">Falta o PASSO-84 no banco</b><small class="lqpv-s">O placar aparece depois de rodar o SQL do PASSO-84 (vem junto da função v265).</small></div></div></section>`;
+  const rods = data || [];
+  window._lqProvaCache = rods;
+  const dt = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+  const feitas = rods.filter(r => r.concluida_em);
+  const aberta = rods.find(r => !r.concluida_em) || null;
+  const ult = feitas[0], ant = feitas[1];
+  const resp = (r) => (r?.resultados || []).length;
+  const rodando = window._lqProvaRodando;
+  const botao = rodando ? `<button type="button" class="gi-btn" disabled>Respondendo… ${rodando}</button>`
+    : aberta ? `<button type="button" class="gi-btn lqs-apr" onclick="_lqProvaRodar(false)">Continuar a prova (${resp(aberta)} de ${aberta.total || 40})</button>`
+      : `<button type="button" class="gi-btn lqs-apr" onclick="_lqProvaRodar(true)">Rodar a prova agora</button>`;
+  if (!ult) {
+    return `<section class="lqpv"><div class="lqpv-h"><div><div class="gi-eyebrow">Prova da semana</div>
+      <b class="lqpv-t">${aberta ? `Em andamento: ${resp(aberta)} de ${aberta.total || 40} respondidas` : 'Nenhuma prova ainda'}</b>
+      <small class="lqpv-s">Toda segunda, a partir das 08:00, o Laudomiro responde sozinho 40 perguntas fixas. O placar mostra se ele melhorou ou piorou.</small></div>
+      <div class="lqs-acts">${botao}</div></div></section>`;
+  }
+  const parcial = resp(ult) < (ult.total || 40);
+  const delta = ant && !parcial && resp(ant) >= (ant.total || 40) ? ult.certas - ant.certas : null;
+  const hist = feitas.slice(0, 8).reverse();
+  const mapaAnt = new Map((ant?.resultados || []).map(x => [x.id, x]));
+  const mud = [];
+  for (const x of ult.resultados || []) {
+    const a = mapaAnt.get(x.id);
+    if (a && a.ok && !x.ok) mud.push({ k: 0, tag: '<span class="lqpv-tag pior">Piorou</span>', x, txt: `Acertou na prova anterior. Agora: ${x.motivo || 'errou'}.` });
+    else if (!x.ok) mud.push({ k: 1, tag: `<span class="lqpv-tag err">${a && !a.ok ? 'Ainda erra' : 'Errou'}</span>`, x, txt: x.motivo || 'Errou.' });
+    else if (a && !a.ok && x.ok) mud.push({ k: 2, tag: '<span class="lqpv-tag mel">Melhorou</span>', x, txt: 'Errava na prova anterior. Agora acertou.' });
+  }
+  mud.sort((a, b) => a.k - b.k);
+  const MAXM = 6;
+  return `<section class="lqpv">
+    <div class="lqpv-h">
+      <div><div class="gi-eyebrow">Prova da semana · ${dt(ult.iniciada_em)}${parcial ? ' · parcial' : ''}</div>
+        <div class="lqpv-nota">${ult.certas}<small> de ${resp(ult)}</small></div></div>
+      ${delta != null ? `<span class="lqpv-var${delta < 0 ? ' neg' : delta === 0 ? ' igual' : ''}">${delta > 0 ? '+' + delta : delta === 0 ? 'igual' : delta} desde a prova anterior</span>` : ''}
+    </div>
+    ${hist.length > 1 ? `<div class="lqpv-hist" aria-label="Últimas provas">${hist.map(r => `<div title="${dt(r.iniciada_em)}: ${r.certas} de ${resp(r)}"><i class="${r.id === ult.id ? 'on' : ''}" style="height:${Math.max(6, Math.round((r.certas / Math.max(1, resp(r))) * 100))}%"></i><span>${dt(r.iniciada_em)}</span></div>`).join('')}</div>` : ''}
+    ${aberta ? `<div class="lqpv-and">Prova nova em andamento: ${resp(aberta)} de ${aberta.total || 40} respondidas.</div>` : ''}
+    ${mud.length ? `<div class="lqpv-lista"><div class="gi-eyebrow">${ant ? 'O que mudou' : 'O que ele errou'}</div>
+      ${mud.slice(0, MAXM).map(m => `<div class="lqpv-it">${m.tag}<div><b>${escapeHtml(m.x.p || m.x.id)}</b><small>${escapeHtml(m.txt)}</small></div></div>`).join('')}
+      ${mud.length > MAXM ? `<small class="lqpv-s">E mais ${mud.length - MAXM}. Veja em "Ver as ${resp(ult)}".</small>` : ''}</div>`
+      : `<div class="lqpv-and ok">Acertou todas desta prova.</div>`}
+    <div class="lqs-acts"><button type="button" class="gi-btn" onclick="_lqProvaVer('${ult.id}')">Ver as ${resp(ult)}</button>${botao}</div>
+  </section>`;
+}
+function _lqProvaVer(id) {
+  const r = (window._lqProvaCache || []).find(x => x.id === id); if (!r) return;
+  const lista = (r.resultados || []).map(x => `<div class="lqpv-it"><span class="lqpv-tag ${x.ok ? 'mel' : 'err'}">${x.ok ? 'Certa' : 'Errou'}</span><div><b>${escapeHtml(x.p || x.id)}</b><small>${x.ok ? escapeHtml(x.titulo || '') : escapeHtml(x.motivo || '')}</small></div></div>`).join('');
+  abrirModal(`Prova de ${new Date(r.iniciada_em).toLocaleDateString('pt-BR')}: ${r.certas} de ${(r.resultados || []).length}`,
+    `<div class="lqpv-lista">${lista || '<p>Nenhuma resposta ainda.</p>'}</div>`, '<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>', true);
+}
+async function _lqProvaRodar(nova) {
+  if (window._lqProvaRodando) return;
+  if (nova && !(await confirmarAcao('Rodar a prova agora? São 40 perguntas, 5 por vez, e leva uns 5 minutos. Custa menos de US$ 0,10. Pode continuar usando o GRID.', 'Rodar a prova', false))) return;
+  let forcar = !!nova, voltas = 0;
+  window._lqProvaRodando = '0 de 40';
+  if (document.getElementById('lqsGerar')) renderLaudomiroSugestoes();
+  try {
+    while (voltas++ < 12) {
+      const { data, error } = await sb.functions.invoke('laudomiro-perguntar', { body: { acao: 'prova', forcar } });
+      forcar = false;
+      if (error || !data) throw new Error('A função não respondeu. Tente de novo em alguns minutos.');
+      if (data.ok === false) throw new Error(data.erro || 'Não consegui rodar a prova.');
+      if (data.mensagem) { showToast(data.mensagem, 'success'); break; }
+      window._lqProvaRodando = `${data.respondidas} de ${data.total}`;
+      if (document.getElementById('lqsGerar')) renderLaudomiroSugestoes();
+      if (data.concluida) { showToast(`Prova concluída: ${data.certas} de ${data.total}.`, 'success'); break; }
+    }
+  } catch (e) { showToast(e.message || 'Não consegui rodar a prova.', 'error'); }
+  window._lqProvaRodando = null;
+  if (document.getElementById('lqsGerar')) renderLaudomiroSugestoes();
 }
 async function _lqSugDecidir(id, status, extra) {
   const l = window._lqSugCache?.get(id); if (!l) return;
@@ -33032,7 +33154,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '262';
+  var APP_BUILD = '264';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
