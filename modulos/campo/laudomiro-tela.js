@@ -17,10 +17,15 @@
    v264: até 5 FDS de uma vez, com quadro comparando os produtos (montado aqui, sem gastar
    pergunta a mais); no computador, dá para arrastar os arquivos. Proposta aprovada:
    08-Propostas-visuais/laudomiro-v265-varios-arquivos-v2.html.
+   v266 (app): perguntas sobre os dados da empresa (vencimentos, quem não tem um treinamento,
+   turmas, avaliações de campo). O servidor só classifica a pergunta; os dados são buscados
+   aqui, com o login de quem perguntou (laudomiro-dados.js), e nunca vão para a IA.
+   Proposta aprovada: 08-Propostas-visuais/laudomiro-grupo3-ligado-ao-grid.html.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
 import * as L from './laudomiro.js';
+import * as Dados from './laudomiro-dados.js';
 import { I, esc, ligarTela, avisar, ponte, valorVisivel } from './comum.js';
 import { cliente as clienteBanco } from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
@@ -62,6 +67,8 @@ const IC = {
   clip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 11-8.6 8.6a5 5 0 0 1-7-7l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l8-8"/></svg>',
   pdf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
   cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+  tab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>',
+  turma: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>',
   img: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>',
 };
 const GHS = {
@@ -189,7 +196,7 @@ function inicio() {
     ${compositor({ grande: true })}
     ${anexosLigados() && !_anexo && !_fila.length ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">${IC.pdf}<span>Ler FDS (até 5 para comparar)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
     <div class="lq-sug">${SUGESTOES.map(([r, p], i) => `<button type="button" class="lq-cd" data-acao="campo:lq-sug:${i}" ${off ? 'disabled' : ''}><small>${r}</small><b>${esc(p)}</b></button>`).join('')}</div>
-    ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span>${r.tipo === 'fds' ? `<i class="lq-rt fds">FDS</i>${esc(r.pergunta.replace(/^FDS:\s*/, ''))}` : r.tipo === 'foto' ? `<i class="lq-rt foto">FOTO</i>${esc(r.pergunta.replace(/^Foto:\s*/, ''))}` : esc(r.pergunta)}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
+    ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span>${r.tipo === 'fds' ? `<i class="lq-rt fds">FDS</i>${esc(r.pergunta.replace(/^FDS:\s*/, ''))}` : r.tipo === 'foto' ? `<i class="lq-rt foto">FOTO</i>${esc(r.pergunta.replace(/^Foto:\s*/, ''))}` : r.tipo === 'dados' ? `<i class="lq-rt dados">DADOS</i>${esc(r.pergunta)}` : esc(r.pergunta)}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
   </section>`;
 }
 
@@ -224,6 +231,7 @@ function resposta(turno, tIdx) {
   if (turno.aviso) return avisoAnexo(turno);
   if (turno.resposta?.tipo === 'fds' && !turno.erro) return respostaFds(turno, tIdx);
   if (turno.resposta?.tipo === 'foto' && !turno.erro) return respostaFoto(turno, tIdx);
+  if (turno.dados && !turno.erro) return respostaDados(turno, tIdx);  // v266
   if (turno.carregando) return `<article class="lq-resp lq-carr" aria-live="polite"><span class="lq-seal p">${SEAL}</span><div><b>Consultando as normas…</b><small>Buscando os itens que respondem a sua pergunta.</small></div></article>`;
   if (turno.erro) return `<article class="lq-resp lq-falha">${IC.erro}<div><b>${esc(turno.erro)}</b>${turno.podeRepetir ? `<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-repetir:${tIdx}">Tentar de novo</button>` : ''}</div></article>`;
   const r = turno.resposta; if (!r) return '';
@@ -241,6 +249,89 @@ function resposta(turno, tIdx) {
       <small>Indicação para o técnico. Não substitui laudo.</small>
     </footer>
   </article>`;
+}
+
+/* ── v266: resposta com os dados da empresa ────────────────────────────────
+   Os nomes aparecem só aqui, buscados pelo app; não saem para a IA. */
+const LIM_DADOS = 8, LIM_TUDO = 300;
+function respostaDados(turno, tIdx) {
+  const selo = '<span class="lq-dg"><i aria-hidden="true"></i>Dados do GRID · não saem para a IA</span>';
+  if (turno.carregandoDados || !turno.res) {
+    return `<article class="lq-resp lq-dados" aria-live="polite">${selo}<div class="lq-carr2"><span class="lq-seal p">${SEAL}</span><div><b>Buscando nos dados do GRID…</b><small>Só você vê o resultado, com as permissões do seu login.</small></div></div></article>`;
+  }
+  const res = turno.res;
+  const rodapeAv = turno.id ? `<button type="button" class="${turno.nota === 'util' ? 'on' : ''}" data-acao="campo:lq-util:${tIdx}" aria-pressed="${turno.nota === 'util'}">${IC.util}<span>Útil</span></button>
+      <button type="button" class="${turno.nota === 'erro' ? 'on' : ''}" data-acao="campo:lq-erro:${tIdx}">${IC.erro}<span>Tem erro</span></button>` : '';
+  if (!res.ok) {
+    return `<article class="lq-resp lq-dados">${selo}<div class="lq-dados-msg">${I.info}<div><b>${esc(res.texto)}</b>${res.repetir ? `<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-dados-de-novo:${tIdx}">Tentar de novo</button>` : ''}</div></div>
+      ${rodapeAv ? `<footer class="lq-acts">${rodapeAv}</footer>` : ''}</article>`;
+  }
+  const contagem = (turno.dados?.formato === 'contagem' && !turno.verLista && res.contagem?.length) ? res.contagem : null;
+  const lim = turno.verTudo ? LIM_TUDO : LIM_DADOS;
+  const cel = (x) => x.acao ? `<td class="${x.c || ''}"><button type="button" class="lq-lk" data-acao="${esc(x.acao)}">${esc(x.t)}</button></td>` : `<td class="${x.c || ''}">${x.c === 'b' ? `<b>${esc(x.t)}</b>` : esc(x.t)}</td>`;
+  const tabela = res.linhas.length ? `<div class="lq-tab lq-tab-d"><table>
+      <thead><tr>${res.colunas.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${res.linhas.slice(0, lim).map(l => `<tr>${l.map(cel).join('')}</tr>`).join('')}</tbody></table></div>
+      ${res.linhas.length > lim && turno.verTudo ? `<small class="lq-lote-n">Mostrando ${LIM_TUDO} de ${res.linhas.length}. A planilha traz todas.</small>` : ''}` : '';
+  const resumo = contagem ? `<div class="lq-cont">${contagem.slice(0, 8).map(g => `<div><span class="n">${g.n}</span><div><b>${esc(g.rot)}</b>${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</div></div>`).join('')}</div>` : '';
+  const grupos = (res.grupos || []).filter(g => g.n >= 1);
+  const g0 = grupos[0];
+  const btnTurma = grupos.length === 1
+    ? `<button type="button" class="lq-dbtn ap" data-acao="campo:lq-dados-montar:${tIdx}.0">${IC.turma}<span>${g0.n === res.pessoas ? `Montar turma com essas ${g0.n} pessoas` : `Montar turma: ${esc(g0.rot)} (${g0.n})`}</span></button>`
+    : '';
+  const variasTurmas = grupos.length > 1 ? `<div class="lq-sec"><h5>Montar turma</h5><div class="lq-dgr">${grupos.map((g, k) => `<button type="button" data-acao="campo:lq-dados-montar:${tIdx}.${k}"><span class="n">${g.n}</span><b>${esc(g.rot)}</b><span class="ir">Criar turma</span></button>`).join('')}</div></div>` : '';
+  return `<article class="lq-resp lq-dados">
+    ${selo}
+    <header class="lq-dh"><h3>${esc(res.titulo)}</h3><p>${esc(res.sub)}</p></header>
+    ${contagem ? resumo : tabela}
+    ${res.nota && res.linhas.length ? `<small class="lq-lote-n">${esc(res.nota)}</small>` : ''}
+    ${variasTurmas}
+    ${res.linhas.length ? `<div class="lq-dacts">
+      ${contagem ? `<button type="button" class="lq-dbtn" data-acao="campo:lq-dados-lista:${tIdx}">Ver a lista</button>`
+        : res.linhas.length > LIM_DADOS ? `<button type="button" class="lq-dbtn" data-acao="campo:lq-dados-tudo:${tIdx}">${turno.verTudo ? 'Mostrar menos' : `Ver ${res.linhas.length === 1 ? 'a' : 'as'} ${res.linhas.length}`}</button>` : ''}
+      <button type="button" class="lq-dbtn" data-acao="campo:lq-dados-csv:${tIdx}">${IC.tab}<span>Baixar planilha</span></button>
+      ${btnTurma}
+    </div>` : ''}
+    <footer class="lq-acts">
+      ${res.linhas.length ? `<button type="button" data-acao="campo:lq-copiar:${tIdx}">${IC.copiar}<span>Copiar</span></button>` : ''}
+      ${rodapeAv}
+      <small>Dados de agora, com as permissões do seu login.</small>
+    </footer>
+  </article>`;
+}
+
+async function carregarDados(turno) {
+  const d = _dono;
+  turno.carregandoDados = true; turno.res = null; repintar();
+  try {
+    const res = await Dados.executar(turno.dados);
+    if (!mesmoDono(d)) return;
+    turno.res = res;
+  } catch (e) {
+    if (!mesmoDono(d)) return;
+    console.warn('Laudomiro: dados indisponíveis', e?.message || e);
+    turno.res = { ok: false, repetir: true, texto: navigator.onLine === false ? 'Sem internet agora. Os dados do GRID precisam de conexão.' : 'Não consegui buscar os dados agora. Tente de novo.' };
+  }
+  turno.carregandoDados = false; repintar();
+}
+
+function baixarDados(turno) {
+  try {
+    const blob = new Blob([Dados.csvQuadro(turno.res)], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${turno.res.arquivo || 'dados'}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    avisar('Planilha baixada. Ela abre no Excel.');
+  } catch { avisar('Não consegui baixar a planilha neste aparelho.', 'erro'); }
+}
+
+function montarTurmaDados(tIdx, k) {
+  const g = _conv[tIdx]?.res?.grupos?.[k]; const p = ponte();
+  if (!g || typeof p.montarTurma !== 'function') return;
+  _conv[tIdx].recarregar = true;
+  p.montarTurma({ clienteId: g.clienteId, catalogoId: g.cursoId, travar: true, origemConfIds: g.ids.slice() });
 }
 
 function conversa() {
@@ -831,6 +922,8 @@ export async function render(params = {}) {
   });
   ligarArrastar();  // v264
   if (!_status) carregarStatus();
+  // v266: voltou de "Montar turma": refaz a busca (quem ganhou turma passa a "Turma marcada" e sai do botão)
+  _conv.filter(t => t.recarregar && t.dados).forEach(t => { t.recarregar = false; setTimeout(() => carregarDados(t), 0); });
   return `<div class="lq${_painel ? ' com-painel' : ''}${_conv.length ? ' em-conversa' : ''}">${abas()}
     <div class="lq-corpo"><div class="lq-col">${_conv.length ? conversa() : inicio()}</div>${painel()}</div></div>`;
 }
@@ -850,11 +943,14 @@ async function enviar(texto) {
   repintar();
   rolarFim();
   try {
-    const r = await chamar({ acao: 'perguntar', pergunta: p, historico, contexto: _ctx?.contexto || undefined });
+    const ult = _conv[_conv.length - 2];  // v266: continuação de uma pergunta sobre os dados ("e no cliente X?")
+    const dadosAnterior = !_ctx && ult?.dados ? ult.dados : undefined;
+    const r = await chamar({ acao: 'perguntar', pergunta: p, historico, contexto: _ctx?.contexto || undefined, dadosAnterior, aceitaDados: true });
     if (!mesmoDono(d)) return;  // v263
-    Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '' });
+    Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '', dados: r.dados || null });
+    if (r.dados) carregarDados(turno);  // v266: o app busca os dados (a IA não vê)
     if (_status && r.restantes != null) _status.restantes = r.restantes;
-    if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: p, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
+    if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: p, tipo: r.dados ? 'dados' : '', criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
   } catch (e) {
     if (!mesmoDono(d)) return;  // v263
     Object.assign(turno, { carregando: false, erro: e.message || 'O Laudomiro não respondeu.', podeRepetir: !['NAO_CONFIGURADO', 'COTA', 'SEM_PERMISSAO'].includes(e.codigo) });
@@ -874,6 +970,7 @@ function rolarFim() {
 
 function copiar(i) {
   const t = _conv[i]; const r = t?.resposta; if (!r) return;
+  if (t.dados) { if (t.res?.ok) copiarTexto(Dados.textoQuadro(t.res), 'Quadro copiado.'); return; }  // v266
   const mapa = new Map((t.trechos || []).map(x => [x.n, x.rotulo]));
   const tira = (s) => String(s || '').replace(/\{\{(\d+)\}\}/g, (m, n) => (mapa.get(+n) ? `(${mapa.get(+n)})` : '')).replace(/\s{2,}/g, ' ').trim();
   const txt = [`${(VEREDITO[r.veredito] || VEREDITO.INFO)[0]}: ${r.titulo}`, r.subtitulo, '', ...r.resposta.map(tira), r.cuidado ? '\nCuidado: ' + tira(r.cuidado) : '',
@@ -912,6 +1009,11 @@ async function abrirRecente(id) {
       _conv = [{ pergunta: perg, anexo: { tipo, nome: r.resposta.arquivo || '' }, id: r.id, resposta: r.resposta, trechos: r.trechos || [], nota: r.avaliacao || null,
         resumo: tipo === 'fds' ? (r.resposta.contexto || '') : r.resposta.titulo }];
       _ctx = tipo === 'fds' ? { produto: r.resposta.titulo, contexto: r.resposta.contexto || '' } : null;
+    } else if (tipo === 'dados' && r.resposta?.consulta) {
+      // v266: a conversa guarda só a pergunta e o tipo de consulta; os dados são buscados de novo, atualizados
+      _conv = [{ pergunta: r.pergunta, id: r.id, resposta: r.resposta, trechos: [], nota: r.avaliacao || null, dados: r.resposta.consulta, resumo: r.resposta.titulo || '' }];
+      _ctx = null; _painel = null; _anexo = null; repintar(); carregarDados(_conv[0]);
+      return;
     } else {
       _conv = [{ pergunta: r.pergunta, id: r.id, resposta: r.resposta, trechos: r.trechos || [], nota: r.avaliacao || null,
         resumo: [r.resposta?.titulo, ...(r.resposta?.resposta || [])].join(' ').replace(/\{\{\d+\}\}/g, '') }];
@@ -940,6 +1042,13 @@ export async function acao(nome, valor, redesenhar) {
     it.estado = 'fila'; rodarLote(t, [it], _dono).then(() => { const oks = t.lote.filter(i => i.estado === 'ok'); if (oks.length) _ctx = { produto: oks.length === 1 ? oks[0].resposta.titulo : `${oks.length} produtos`, varios: oks.length > 1, contexto: contextoLote(oks) }; repintar(); });
     return true;
   }
+  // v266: perguntas sobre os dados da empresa
+  if (nome === 'campo:lq-dados-tudo') { const t = _conv[+valor]; if (t) { t.verTudo = !t.verTudo; redesenhar(); } return true; }
+  if (nome === 'campo:lq-dados-lista') { const t = _conv[+valor]; if (t) { t.verLista = true; redesenhar(); } return true; }
+  if (nome === 'campo:lq-dados-csv') { const t = _conv[+valor]; if (t?.res?.ok) baixarDados(t); return true; }
+  if (nome === 'campo:lq-dados-montar') { const [t, k] = String(valor).split('.').map(Number); montarTurmaDados(t, k); return true; }
+  if (nome === 'campo:lq-dados-de-novo') { const t = _conv[+valor]; if (t?.dados) carregarDados(t); return true; }
+  if (nome === 'campo:lq-dados-turma') { const p = ponte(); if (typeof p.verTurma === 'function') p.verTurma(valor); return true; }
   if (nome === 'campo:lq-ctx-sair') { _ctx = null; redesenhar(); return true; }
   if (nome === 'campo:lq-copiar-menu') { _copiarMenu = _copiarMenu === +valor ? null : +valor; redesenhar(); return true; }
   if (nome === 'campo:lq-copiar-como') { const [t, como] = String(valor).split('.'); copiarComo(+t, como); return true; }
