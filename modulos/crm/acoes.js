@@ -779,6 +779,13 @@ export default async function acoes(acao, { redesenhar }) {
      sozinho, em ate 30s (PASSO-40) — nao ha QR de verdade para mostrar aqui
      ainda (pendencia de UI separada), entao o aviso deixa isso claro. */
   if (acao === 'crm:add-numero') {
+    /* v271: números de WhatsApp por plano (0 / 1 / 3, mais os contratados à parte). O banco também trava (PASSO-86). */
+    const limWa = typeof ponte.limitePlano === 'function' ? ponte.limitePlano('whatsapp') : Infinity;
+    if (Number.isFinite(limWa)) {
+      let ligados = 0;
+      try { ligados = (await dados.listar('crm_caixas')).filter(c => c.ativa !== false).length; } catch (e) { ligados = 0; }
+      if (ligados >= limWa) { ponte.modalLimite?.('whatsapp', limWa); return true; }
+    }
     ponte.abrirModal('Adicionar número de WhatsApp', `
       ${linha('Nome desta caixa *', `<input id="crmN_nome" style="${CAMPO}" placeholder="Ex.: Comercial, Financeiro, Filial Joinville">`)}
       ${linha('Horário de atendimento (opcional)', `<input id="crmN_horario" style="${CAMPO}" placeholder="Ex.: Seg a sex · 08h-18h">`)}
@@ -833,6 +840,15 @@ export default async function acoes(acao, { redesenhar }) {
     const mostrar = (t) => { const e = document.getElementById('crmReconectarEstado'); if (e) e.textContent = t; };
     const botao = () => document.getElementById('crmReligarAgora');
     if (botao()) botao().disabled = true;
+
+    // v271: se o contrato não permitir religar, não desliga (senão o número ficaria desligado de vez).
+    try {
+      const lim = ponte.limitePlano ? ponte.limitePlano('whatsapp') : Infinity;
+      if (Number.isFinite(lim)) {
+        const outros = (await dados.listar('crm_caixas')).filter(c => c.ativa !== false && String(c.id) !== String(id)).length;
+        if (outros >= lim) { ponte.fecharModal?.(); ponte.modalLimite?.('whatsapp', lim); return true; }
+      }
+    } catch (e) { /* sem a contagem, segue; o banco decide */ }
 
     try {
       await dados.definirCaixaAtiva(id, false);
