@@ -3101,17 +3101,68 @@ const PLANO_NIVEL = { starter: 1, pro: 2, enterprise: 3 };
 // Limites numéricos por plano — fonte única de verdade.
 // Qualquer limite novo (usuários, turmas, etc.) deve ser adicionado aqui,
 // nunca como número mágico direto no código da tela.
+// v271 (17/10/2026): planos novos, aprovados pelo Alisson (05-Decisoes/2026-10-17-precos-dos-planos.md).
+// Os códigos no banco continuam starter/pro/enterprise; os nomes mudaram.
+const PLANO_NOME  = { starter: 'Essencial', pro: 'Profissional', enterprise: 'Clínica' };
+const PLANO_PRECO = { starter: 297, pro: 597, enterprise: 797 };
+const PRECO_UNIDADE_EXTRA = 297, PRECO_WHATSAPP_EXTRA = 49, PRECO_PACOTE_PERGUNTAS = 49, PERGUNTAS_POR_PACOTE = 200;
 const LIMITES_PLANO = {
-  starter:    { maxUsuarios: 3 },
-  pro:        { maxUsuarios: Infinity },
-  enterprise: { maxUsuarios: Infinity },
+  starter:    { maxUsuarios: 3,        maxEmpresas: 15,       perguntas: 100,  whatsapp: 0 },
+  pro:        { maxUsuarios: 10,       maxEmpresas: 60,       perguntas: 300,  whatsapp: 1 },
+  enterprise: { maxUsuarios: Infinity, maxEmpresas: Infinity, perguntas: 1000, whatsapp: 3 },
 };
+const planoNome = (p) => PLANO_NOME[p || 'starter'] || PLANO_NOME.starter;
+// Plano oculto "Parceiro" (organizacoes.parceiro): limites do Clínica, não aparece no site; só o Provedor liga.
+const planoNomeOrg = (org) => org?.parceiro ? 'Parceiro' : planoNome(org?.plano);
+
+// Limite de uma organização (o plano + o que foi contratado à parte).
+// `org` = linha de organizacoes; sem as colunas novas (PASSO-86 não rodado), vale só o plano.
+function limiteDaOrg(org, chave) {
+  const p = org?.parceiro ? 'enterprise' : ((org && org.plano) || 'starter');
+  const base = (LIMITES_PLANO[p] || LIMITES_PLANO.starter)[chave];
+  const unidadesExtras = p === 'enterprise' ? Math.max(0, (Number(org?.unidades) || 1) - 1) : 0;
+  if (chave === 'whatsapp')  return base + unidadesExtras + (Number(org?.extra_whatsapp) || 0);
+  if (chave === 'perguntas') return base + 500 * unidadesExtras + PERGUNTAS_POR_PACOTE * (Number(org?.extra_perguntas) || 0);
+  return base ?? Infinity;
+}
+// Valor de tabela por mês (sem desconto); o valor combinado fica em organizacoes.valor_mensal.
+function valorTabelaOrg(org) {
+  const p = (org && org.plano) || 'starter';
+  const un = p === 'enterprise' ? Math.max(0, (Number(org?.unidades) || 1) - 1) : 0;
+  return (PLANO_PRECO[p] || 0) + un * PRECO_UNIDADE_EXTRA + (Number(org?.extra_whatsapp) || 0) * PRECO_WHATSAPP_EXTRA + (Number(org?.extra_perguntas) || 0) * PRECO_PACOTE_PERGUNTAS;
+}
+const valorMensalOrg = (org) => (org && org.valor_mensal != null && org.valor_mensal !== '') ? Number(org.valor_mensal) : valorTabelaOrg(org);
 
 // Retorna o limite numérico do plano atual para a chave informada
 function limitePlano(chave) {
   if (usuarioAtual?.perfil === 'provedor') return Infinity;
-  const cfg = LIMITES_PLANO[usuarioAtual?.orgPlano] || LIMITES_PLANO.starter;
-  return cfg[chave] ?? Infinity;
+  return limiteDaOrg({ plano: usuarioAtual?.orgPlano, ...(usuarioAtual?.orgExtras || {}) }, chave);
+}
+
+// Aviso de limite do plano (usuários, empresas, números de WhatsApp).
+function modalLimite(tipo, limite) {
+  const parceiro = !!usuarioAtual?.orgExtras?.parceiro;
+  const atual = parceiro ? 'Parceiro' : planoNome(usuarioAtual?.orgPlano);
+  const prox = usuarioAtual?.orgPlano === 'starter' ? 'pro' : 'enterprise';
+  const dica = (k, un) => (parceiro || usuarioAtual?.orgPlano === 'enterprise') ? '' : ` No ${PLANO_NOME[prox]}: ${Number.isFinite(LIMITES_PLANO[prox][k]) ? LIMITES_PLANO[prox][k] + ' ' + un : un + ' sem limite'}.`;
+  const o = { usuarios: ['Limite de usuários do plano', `O plano ${atual} permite até ${limite} usuários ativos.`, 'Desative alguém que não usa mais o GRID ou mude de plano.' + dica('maxUsuarios', 'usuários')],
+              empresas: ['Limite de empresas do plano', `O plano ${atual} permite até ${limite} empresas atendidas.`, 'Desative uma empresa que não atende mais ou mude de plano.' + dica('maxEmpresas', 'empresas')],
+              whatsapp: ['Limite de números de WhatsApp', limite > 0 ? `O seu contrato permite ${limite} ${limite === 1 ? 'número' : 'números'} de WhatsApp.` : `O plano ${atual} não inclui números de WhatsApp.`, 'Cada número a mais custa R$ 49 por mês.'] }[tipo];
+  abrirModal(o[0], `<div style="padding:4px 0 8px">
+      <p style="font-size:14px;color:var(--text-1);line-height:1.6;margin:0 0 6px"><b>${o[1]}</b></p>
+      <p style="font-size:13.5px;color:var(--text-2);line-height:1.6;margin:0">${o[2]} Para mudar, fale com a Toledo Labs.</p></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
+     <a href="https://wa.me/5547992809019?text=${encodeURIComponent('Olá! Quero mudar o plano do GRID da minha empresa.')}" target="_blank" rel="noopener" class="btn btn-amber" onclick="fecharModal()">Falar no WhatsApp</a>`);
+}
+
+// Empresas (clientes): confere antes de cadastrar `novas` empresas. O banco também trava (PASSO-86).
+async function _cabeEmpresas(novas = 1) {
+  const lim = limitePlano('maxEmpresas');
+  if (!Number.isFinite(lim)) return true;
+  const { count, error } = await sb.from('clientes').select('id', { count: 'exact', head: true }).eq('org_id', usuarioAtual.org_id).eq('ativo', true);
+  if (error) return true;  // sem a contagem, quem decide é o banco
+  if ((count || 0) + novas > lim) { modalLimite('empresas', lim); return false; }
+  return true;
 }
 
 function _nivelPlano() {
@@ -3126,9 +3177,8 @@ function planoAtinge(minPlano) {
 
 // Exibe modal de upgrade quando recurso não está disponível no plano atual
 function modalUpgrade(recurso, planoNecessario) {
-  const nomes = { starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' };
-  const atual  = nomes[usuarioAtual?.orgPlano] || 'Starter';
-  const necessario = nomes[planoNecessario] || 'Pro';
+  const atual  = usuarioAtual?.orgExtras?.parceiro ? 'Parceiro' : planoNome(usuarioAtual?.orgPlano);
+  const necessario = PLANO_NOME[planoNecessario] || PLANO_NOME.pro;
   abrirModal('Recurso não disponível', `
     <div style="text-align:center;padding:8px 0 16px">
       <div style="font-size:40px;margin-bottom:12px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
@@ -3245,11 +3295,11 @@ function _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje, di
   const trialVencido  = orgsAll.filter(o => o.ativo && !o.assinatura_id && o.trial_fim && diasAte(o.trial_fim) < 0);
   const orgsSemAdmin  = orgsAll.filter(o => o.ativo && !usrsAll.some(u => u.org_id === o.id && u.perfil === 'administrador' && u.ativo));
 
-  const limiteStarter = LIMITES_PLANO.starter.maxUsuarios;
   const orgsPertoLimite = orgsAll.filter(o => {
-    if (!o.ativo || (o.plano && o.plano !== 'starter')) return false;
-    const ativosOrg = usrsAll.filter(u => u.org_id === o.id && u.ativo).length;
-    return ativosOrg >= limiteStarter - 1;
+    const lim = limiteDaOrg(o, 'maxUsuarios');
+    if (!o.ativo || !Number.isFinite(lim)) return false;
+    const ativosOrg = usrsAll.filter(u => u.org_id === o.id && u.ativo && u.perfil !== 'provedor').length;
+    return ativosOrg >= lim - 1;
   });
   const orgsSemColaborador = orgsAll.filter(o =>
     o.ativo && !orgsComColaborador.has(o.id) && diasDesde(o.created_at) >= 7
@@ -3268,7 +3318,7 @@ function _calcularAlertasProvedor(orgsAll, usrsAll, orgsComColaborador, hoje, di
     ...trialVencendo.map(o => ({ tipo:'atencao', categoria:'trial_vencendo', assinatura:o.trial_fim, texto:`Trial vence em ${diasAte(o.trial_fim)}d: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:'<span style="font-size:11px;color:var(--amber-text);opacity:.7">Lembrete automático agendado</span>' })),
     ...orgsSemAdmin.map(o => ({ tipo:'atencao', categoria:'sem_admin', assinatura:'ativo', texto:`Sem administrador ativo: ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('+ Criar administrador', `abrirModalUsuarioOrg('${o.id}')`) })),
     ...orgsSemColaborador.map(o => ({ tipo:'atencao', categoria:'sem_colaborador', assinatura:'ativo', texto:`Nenhum colaborador cadastrado (criada há ${diasDesde(o.created_at)}d): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:_btnAcao('<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M15.5 8.5a4.5 4.5 0 0 1-5.9 5.9L4 20l-.7-.7 5.6-5.6a4.5 4.5 0 0 1 5.9-5.9l-2.6 2.6 2.1 2.1z"/></svg> Ajudar no onboarding', `iniciarModoSuporte('${o.id}')`) })),
-    ...orgsPertoLimite.map(o => ({ tipo:'atencao', categoria:'perto_limite', assinatura:'ativo', texto:`Perto do limite do plano Starter (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo).length}/${limiteStarter} usuários): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:`<a href="https://wa.me/5547992809019?text=${encodeURIComponent(`Olá! Vi que a organização ${o.nome} está perto do limite de usuários do plano Starter — bom momento pra oferecer upgrade.`)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg> Oferecer upgrade</a>` })),
+    ...orgsPertoLimite.map(o => ({ tipo:'atencao', categoria:'perto_limite', assinatura:'ativo', texto:`Perto do limite do plano ${planoNome(o.plano)} (${usrsAll.filter(u=>u.org_id===o.id&&u.ativo&&u.perfil!=='provedor').length}/${limiteDaOrg(o,'maxUsuarios')} usuários): ${escapeHtml(o.nome)}`, orgId:o.id, acaoHtml:`<a href="https://wa.me/5547992809019?text=${encodeURIComponent(`Olá! Vi que a organização ${o.nome} está perto do limite de usuários do plano Starter — bom momento pra oferecer upgrade.`)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r-sm);border:none;background:rgba(255,255,255,.55);color:var(--navy);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg> Oferecer upgrade</a>` })),
   ];
 
   const chavesAtuais = new Set(candidatos.map(a => `${a.orgId}:${a.categoria}`));
@@ -3797,6 +3847,7 @@ async function iniciarModoSuporte(orgId) {
       orgCorPrimaria:    usuarioAtual.orgCorPrimaria,
       orgCertAplicarCor: usuarioAtual.orgCertAplicarCor,
       orgSocIntegracaoAtiva: usuarioAtual.orgSocIntegracaoAtiva,
+      orgExtras:   usuarioAtual.orgExtras,
     };
 
     // Buscar dados da org para simular o perfil de administrador
@@ -3809,6 +3860,8 @@ async function iniciarModoSuporte(orgId) {
     usuarioAtual.org_id     = orgId;
     usuarioAtual.orgNome    = org?.nome  || orgPrev?.nome || 'Organização';
     usuarioAtual.orgPlano   = org?.plano || 'starter';
+    usuarioAtual.orgExtras  = undefined;  // v271: contrato da org atendida (PASSO-86)
+    try { const { data: ex, error: exErr } = await sb.from('organizacoes').select('unidades,extra_whatsapp,extra_perguntas,parceiro').eq('id', orgId).maybeSingle(); if (!exErr && ex) usuarioAtual.orgExtras = ex; } catch (e) {}
     // Sem isso, os PDFs gerados em Modo Suporte caem sempre no nome em texto
     // (a logo é lida só de usuarioAtual.orgLogoUrl — ver carregarLogoOrgPDF)
     usuarioAtual.orgLogoUrl = org?.logo_url || null;
@@ -3871,6 +3924,7 @@ async function encerrarModoSuporte(silencioso = false) {
   usuarioAtual.org_id     = estado.org_id     || null;
   usuarioAtual.orgNome    = estado.orgNome    || null;
   usuarioAtual.orgPlano   = estado.orgPlano   || null;
+  usuarioAtual.orgExtras  = estado.orgExtras;
   usuarioAtual.orgLogoUrl = estado.orgLogoUrl || null;
   usuarioAtual.orgCorPrimaria    = estado.orgCorPrimaria    || null;
   usuarioAtual.orgCertAplicarCor = estado.orgCertAplicarCor || false;
@@ -5156,6 +5210,11 @@ async function entrarNoApp() {
     }
     if (org?.nome)  usuarioAtual.orgNome  = org.nome;
     if (org?.plano) usuarioAtual.orgPlano = org.plano; // 'starter' | 'pro' | 'enterprise'
+    // v271: o que foi contratado à parte (PASSO-86). Consulta separada: sem as colunas, o login segue normal.
+    try {
+      const { data: ex, error: exErr } = await sb.from('organizacoes').select('unidades,extra_whatsapp,extra_perguntas,parceiro').eq('id', usuarioAtual.org_id).maybeSingle();
+      if (!exErr && ex) usuarioAtual.orgExtras = ex;
+    } catch (e) {}
     usuarioAtual.orgTrialFim = org?.trial_fim || null;
     // Branding Enterprise: aplica cor/logo da organização, se configurados
     if (org?.cor_primaria) document.documentElement.style.setProperty('--navy', org.cor_primaria);
@@ -5399,7 +5458,9 @@ async function _iniciarPlataforma() {
       },
       janelaConformidade: () => JANELA_CONFORMIDADE_DIAS,
       podeRota: (rota) => _podeRota(rota),
-      planoPro: () => planoAtinge('pro'),
+      planoPro: () => true,   // v271: vencimentos em todos os planos
+      limitePlano: (k) => limitePlano(k),
+      modalLimite: (t, l) => modalLimite(t, l),
       montarTurma: (opts) => abrirModalTurma(null, opts),
       verTurma: (id) => verTurma(id),
       botoes: (rotulo, id) => `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
@@ -6574,9 +6635,7 @@ async function renderHomeProvedor() {
   const starters    = orgsAll.filter(o => o.ativo && (!o.plano || o.plano === 'starter')).length;
   const pros        = orgsAll.filter(o => o.ativo && o.plano === 'pro').length;
   const enterprises = orgsAll.filter(o => o.ativo && o.plano === 'enterprise').length;
-  const mrrStarter  = starters * 197;
-  const mrrPro      = pros * 397;
-  const mrr         = mrrStarter + mrrPro; // enterprise é sob consulta
+  const mrr         = orgsAll.filter(o => o.ativo).reduce((t, o) => t + valorMensalOrg(o), 0);  // v271: valor combinado (ou de tabela)
 
   // Central de alertas — lógica movida para _calcularAlertasProvedor
   // (fonte única de verdade), pra poder ser reaproveitada pelo sino de
@@ -6600,7 +6659,7 @@ async function renderHomeProvedor() {
   const _badgePlano = (plano, ativo) => {
     if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
     const map = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
-    const label = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+    const label = PLANO_NOME;
     const p = plano || 'starter';
     return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
   };
@@ -6679,8 +6738,8 @@ async function renderHomeProvedor() {
       <div class="gi-kpi">
         <div class="gi-kh">MRR estimado</div>
         <span class="gi-n">R$${mrr.toLocaleString('pt-BR')}</span>
-        <small class="gi-s">${pros} Pro · ${starters} Starter · ${enterprises} Enterprise</small>
-        <div class="gi-tr gi-neutro">Enterprise sob consulta</div>
+        <small class="gi-s">${starters} Essencial · ${pros} Profissional · ${enterprises} Clínica</small>
+        <div class="gi-tr gi-neutro">Valor combinado de cada organização</div>
       </div>
     </div>
 
@@ -7036,11 +7095,11 @@ function abrirModalNovaOrg() {
     ${_cnpjRow('mOrgCnpj','','mOrgNome','','','')}
     <div class="field"><label>Plano contratado *</label>
       <select id="mOrgPlano" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="starter">Starter — R$ 197/mês</option>
-        <option value="pro">Pro — R$ 397/mês</option>
-        <option value="enterprise">Enterprise — Sob consulta</option>
+        <option value="starter">Essencial — R$ 297/mês</option>
+        <option value="pro">Profissional — R$ 597/mês</option>
+        <option value="enterprise">Clínica — R$ 797/mês + R$ 297 por unidade a mais</option>
       </select>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px">Starter e Pro geram cobrança recorrente. Enterprise é negociado à parte.</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px">A cobrança é criada à mão no Asaas, com o valor combinado (veja Editar organização).</div>
     </div>
     <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 10px;padding-top:14px;border-top:1px solid var(--border)">Administrador inicial</div>
     <div class="field"><label>Nome do administrador *</label><input type="text" id="mOrgAdmNome" placeholder="Nome completo"></div>
@@ -7063,9 +7122,7 @@ async function salvarNovaOrg() {
   if (!admNome)  { showToast('Nome do administrador é obrigatório', 'error'); return; }
   if (!admEmail) { showToast('E-mail do administrador é obrigatório', 'error'); return; }
   if (!admSenha || admSenha.length < 6) { showToast('Senha mínima de 6 caracteres', 'error'); return; }
-  if ((plano === 'starter' || plano === 'pro') && !cnpj) {
-    showToast('CNPJ é obrigatório para gerar a assinatura no Asaas (Starter/Pro)', 'error'); return;
-  }
+
 
   try {
     setBtnModalLoading(true);
@@ -7104,8 +7161,9 @@ async function salvarNovaOrg() {
       throw new Error(resultado.error || 'Erro ao criar administrador');
     }
 
-    // 3. Criar a assinatura recorrente no Asaas (apenas Starter/Pro; Enterprise é manual)
-    if (plano === 'starter' || plano === 'pro') {
+    // 3. v271: a assinatura no Asaas passou a ser criada à mão, com o valor combinado
+    //    (preços novos e desconto de fundador ainda não estão na automação do Asaas).
+    if (false) {
       try {
         const resAsaas = await fetch(`${SUPABASE_URL}/functions/v1/criar-assinatura-asaas`, {
           method: 'POST',
@@ -7226,9 +7284,9 @@ async function verOrgProvedor(orgId) {
   const concT     = turmsData.filter(t => t.status === 'concluida').length;
 
   const plano     = orgData.plano || 'starter';
-  const planoNome = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' }[plano] || 'Starter';
+  const planoNome = PLANO_NOME[plano] || 'Essencial';
   const planoClrDark = { starter:'#93C5FD', pro:'var(--amber)', enterprise:'#E8EBF2' }[plano] || '#93C5FD';
-  const planoValor= { starter:'R$ 197/mês', pro:'R$ 397/mês', enterprise:'Sob consulta' }[plano] || 'R$ 197/mês';
+  const planoValor= `R$ ${valorMensalOrg(orgData).toLocaleString('pt-BR')}/mês`;
   const venc      = orgData.assinatura_vencimento ? new Date(orgData.assinatura_vencimento).toLocaleDateString('pt-BR') : null;
   const scoreSaude = calcularScoreSaude(orgData, {
     temAdmin: usrsData.some(u => u.perfil === 'administrador' && u.ativo),
@@ -7907,15 +7965,15 @@ async function desativarOrg(orgId) {
 // ── Alterar plano de uma organização (Provedor) ──
 function abrirModalAlterarPlano(orgId, planoAtual) {
   _modalCurrentId = orgId;
-  const nomes  = { starter:'Starter — R$ 197/mês', pro:'Pro — R$ 397/mês', enterprise:'Enterprise — Sob consulta' };
+  const nomes  = PLANO_NOME;
   abrirModal('Alterar plano', `
     <div style="margin-bottom:16px">
       <div style="font-size:13px;color:var(--text-2);margin-bottom:12px">A mudança de plano vale a partir de agora.</div>
       <div class="field"><label>Plano contratado *</label>
         <select id="mAlterarPlano" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-          <option value="starter" ${planoAtual==='starter'?'selected':''}>Starter — R$ 197/mês</option>
-          <option value="pro"     ${planoAtual==='pro'    ?'selected':''}>Pro — R$ 397/mês</option>
-          <option value="enterprise" ${planoAtual==='enterprise'?'selected':''}>Enterprise — Sob consulta</option>
+          <option value="starter" ${planoAtual==='starter'?'selected':''}>Essencial — R$ 297/mês</option>
+          <option value="pro" ${planoAtual==='pro'?'selected':''}>Profissional — R$ 597/mês</option>
+          <option value="enterprise" ${planoAtual==='enterprise'?'selected':''}>Clínica — R$ 797/mês + R$ 297 por unidade a mais</option>
         </select>
       </div>
       <div style="background:var(--amber-l);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;font-size:12px;color:var(--amber-text);margin-top:4px">
@@ -7941,28 +7999,12 @@ async function alterarPlanoOrg() {
       .select('email').eq('org_id', orgId).eq('perfil','administrador').eq('ativo', true)
       .limit(1).maybeSingle();
 
-    const { data: { session } } = await sb.auth.getSession();
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/gerenciar-assinatura-asaas`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': SUPABASE_KEY,
-      },
-      body: JSON.stringify({
-        org_id: orgId,
-        action: 'atualizar',
-        novo_plano: novoPlano,
-        nome: org.nome,
-        cnpj: org.cnpj,
-        email: adm?.email,
-      }),
-    });
-    const resultado = await res.json();
-    if (!res.ok) throw new Error(resultado.error || 'Erro ao atualizar assinatura no Asaas');
+    // v271: o plano é gravado aqui; a cobrança do Asaas é ajustada à mão (valor combinado).
+    const { error: ePlano } = await sb.from('organizacoes').update({ plano: novoPlano }).eq('id', orgId);
+    if (ePlano) throw ePlano;
 
     fecharModal();
-    showToast('Plano alterado com sucesso!', 'success');
+    showToast('Plano alterado. Ajuste a cobrança no Asaas para o novo valor.', 'success', 6000);
     await verOrgProvedor(orgId);
   } catch(e) {
     setBtnModalLoading(false);
@@ -8364,7 +8406,7 @@ async function renderHomeAdmin(opcoes = {}) {
 // pendências tratadas fora, sugestão de reciclagem), para os números nunca divergirem.
 // Sem IA e sem dado novo: só lê o que a pessoa já pode ver (RLS do login).
 async function _giCarregarRenovacoes(token, oi) {
-  const podeConf = _podeRota('conformidade') && typeof planoAtinge === 'function' && planoAtinge('pro');
+  const podeConf = _podeRota('conformidade');  // v271: em todos os planos
   const comCampo = (typeof _modulosAtivos !== 'undefined' && Array.isArray(_modulosAtivos)) && _modulosAtivos.includes('campo') && _podeRota('campo');  // perfil de acesso personalizado pode esconder o campo
   if (!podeConf && !comCampo) return;
   if (podeConf) _setElBoth('giRenov', '<div class="rx-sec-t">Renovações</div><div class="gi5-carregando">Conferindo vencimentos…</div>');
@@ -9274,7 +9316,7 @@ async function renderLaudomiroProvedor() {
   const ini = new Date(); ini.setDate(1); ini.setHours(0, 0, 0, 0);
   const mes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
   const [orgsR, modsR, cotaR, cfgR, pergR] = await Promise.all([
-    sb.from('organizacoes').select('id,nome,ativo').order('nome'),
+    sb.from('organizacoes').select('*').order('nome'),  // v271: plano e extras definem a cota
     sb.from('organizacoes_modulos').select('org_id,modulo,ativo'),
     sb.from('laudomiro_cota').select('org_id,limite_mes'),
     sb.from('laudomiro_config').select('org_id,perfis_padrao'),
@@ -9293,7 +9335,7 @@ async function renderLaudomiroProvedor() {
   }
   const rotPerfil = { administrador: 'Administrador', comercial: 'Comercial', instrutor: 'Instrutor' };
   const linhas = (orgsR.data || []).filter(o => o.ativo && comCampo.has(o.id)).map(o => {
-    const lim = Number.isFinite(limites.get(o.id)) ? limites.get(o.id) : 300;
+    const lim = Number.isFinite(limites.get(o.id)) ? limites.get(o.id) : limiteDaOrg(o, 'perguntas');  // v271
     const us = usadas.get(o.id) || 0;
     return { o, lim, us, pct: lim > 0 ? Math.round(us / lim * 100) : 100, erros: erros.get(o.id) || 0, perfis: (perfis.get(o.id) || ['administrador']).map(p => rotPerfil[p] || p) };
   }).sort((a, b) => b.us - a.us || a.o.nome.localeCompare(b.o.nome));
@@ -9392,7 +9434,7 @@ async function renderFinanceiroProvedor() {
   ]);
   const orgsAll = orgs || [];
   const hoje = new Date();
-  const VALOR_PLANO = { starter: 197, pro: 397, enterprise: 0 }; // enterprise sob consulta, não soma no MRR
+  const VALOR_PLANO = PLANO_PRECO;  // v271: tabela nova
 
   const ativasComPlano = orgsAll.filter(o => o.ativo);
   const starters    = ativasComPlano.filter(o => (!o.plano || o.plano === 'starter')).length;
@@ -9703,10 +9745,10 @@ async function renderFinanceiroProvedor() {
 
   // ── Ranking de organizações por plano/valor ──
   const ranking = [...ativasComPlano]
-    .map(o => ({ nome:o.nome, plano:o.plano||'starter', valor: VALOR_PLANO[o.plano||'starter'] || 0 }))
+    .map(o => ({ nome:o.nome, plano:o.plano||'starter', valor: valorMensalOrg(o) }))
     .sort((a,b) => b.valor - a.valor)
     .slice(0, 8);
-  const _labelPlano = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+  const _labelPlano = PLANO_NOME;
   const htmlRanking = ranking.length ? ranking.map(r => `
     <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);min-width:0">
       <span style="font-size:13px;color:var(--text-1);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.nome)}</span>
@@ -9931,12 +9973,12 @@ function _renderAdocaoConteudo(filtro) {
       <span style="font-size:12px;font-weight:700;color:${corPct(r.pct)};min-width:80px;text-align:right;flex-shrink:0;white-space:nowrap">${r.usamCount}/${totalOrgs} (${r.pct}%)</span>
     </div>`).join('');
 
-  const _labelPlano = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+  const _labelPlano = PLANO_NOME;
   const htmlLista = lista.length ? lista.map(o => `
     <div onclick="verOrgProvedor('${o.id}')" style="display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid var(--border);cursor:pointer;flex-wrap:wrap">
       <div style="flex:1;min-width:140px">
         <div style="font-size:13.5px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(o.nome)}</div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:1px">${!o.ativo?'Inativa · ':''}${_labelPlano[o.plano]||'Starter'}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:1px">${!o.ativo?'Inativa · ':''}${planoNomeOrg(o)}</div>
       </div>
       <div style="display:flex;gap:3px;flex-shrink:0">
         ${o.recursos.map(r => `<span style="width:9px;height:9px;border-radius:2.5px;background:${r.usado?'var(--navy)':'var(--border)'};display:inline-block" title="${r.label}: ${r.usado?'em uso':'não usado'}"></span>`).join('')}
@@ -10231,9 +10273,9 @@ function _renderOrgsLista(orgs) {
       </select>
       <select id="filtroOrgPlano" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosOrgs()">
         <option value="">Todos os planos</option>
-        <option value="starter">Starter</option>
-        <option value="pro">Pro</option>
-        <option value="enterprise">Enterprise</option>
+        <option value="starter">Essencial</option>
+        <option value="pro">Profissional</option>
+        <option value="enterprise">Clínica</option>
       </select>
       <select id="ordenarOrgs" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none" onchange="aplicarFiltrosOrgs()">
         <option value="nome_asc">Nome (A-Z)</option>
@@ -10270,7 +10312,7 @@ function _htmlListaOrgs(orgs) {
   const _badgePlanoLista = (plano, ativo) => {
     if (!ativo) return '<span class="badge badge-gray">Inativa</span>';
     const map   = { starter:'badge-blue', pro:'badge-amber', enterprise:'badge-navy' };
-    const label = { starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+    const label = PLANO_NOME;
     const p = plano || 'starter';
     return `<span class="badge ${map[p]||'badge-gray'}">${label[p]||p}</span>`;
   };
@@ -10461,14 +10503,15 @@ function abrirModalOrg(id=null) {
     <div class="field"><label>E-mail</label><input type="email" id="mOrgEmail" value="${escapeHtml(org?.email||'')}" placeholder="contato@consultoria.com.br"></div>
     <div class="field"><label>Telefone</label><input type="tel" id="mOrgTel" value="${escapeHtml(org?.telefone||'')}" placeholder="(11) 99999-9999"></div>
     <div class="field"><label>Plano contratado *</label>
-      <select id="mOrgPlano" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
-        <option value="starter" ${planoAtual==='starter'?'selected':''}>Starter — R$ 197/mês</option>
-        <option value="pro" ${planoAtual==='pro'?'selected':''}>Pro — R$ 397/mês</option>
-        <option value="enterprise" ${planoAtual==='enterprise'?'selected':''}>Enterprise — Sob consulta</option>
+      <select id="mOrgPlano" onchange="_orgContratoAtualizar()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+        <option value="starter" ${planoAtual==='starter'?'selected':''}>Essencial — R$ 297/mês</option>
+        <option value="pro" ${planoAtual==='pro'?'selected':''}>Profissional — R$ 597/mês</option>
+        <option value="enterprise" ${planoAtual==='enterprise'?'selected':''}>Clínica — R$ 797/mês + R$ 297 por unidade a mais</option>
       </select>
     </div>
+    ${_orgContratoHtml(org)}
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Personalização visual <span style="font-weight:400;text-transform:none">(benefício Enterprise)</span></div>
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Personalização visual <span style="font-weight:400;text-transform:none">(benefício do plano Clínica)</span></div>
 
       <div class="field" style="margin:0 0 4px"><label>Cor de destaque na interface</label><input type="color" id="mOrgCorPrimaria" value="${org?.cor_primaria||'#1E2A4A'}" style="width:100%;height:40px;padding:2px;border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer"></div>
       <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;line-height:1.5">Aplica a cor no menu e nos botões, para os usuários desta organização.</div>
@@ -10496,7 +10539,7 @@ function abrirModalOrg(id=null) {
             <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('mOrgLogoFile').click()">Enviar arquivo</button>
             ${org?.logo_url ? `<button type="button" class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="removerLogoOrganizacao('${org.id}')">Remover</button>` : ''}
           </div>
-          <div id="mOrgLogoStatus" style="font-size:11px;color:var(--text-3);margin-top:5px">PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise</div>
+          <div id="mOrgLogoStatus" style="font-size:11px;color:var(--text-3);margin-top:5px">PNG ou JPG · até 2 MB · aplica-se só no plano Clínica</div>
         </div>
       </div>
       <input type="hidden" id="mOrgLogoUrl" value="${org?.logo_url||''}">
@@ -10533,6 +10576,7 @@ function abrirModalOrg(id=null) {
     </div>` : ''}`,
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarOrg()">${org?'Salvar':'Cadastrar'}</button>`);
+  _orgContratoAtualizar();  // v271
 }
 
 async function uploadLogoOrganizacao(inputEl, orgId) {
@@ -10544,7 +10588,7 @@ async function uploadLogoOrganizacao(inputEl, orgId) {
   // upload salva direto no banco, sem passar pelo botão "Salvar" do modal.
   const planoSelecionado = document.getElementById('mOrgPlano')?.value || 'starter';
   if (planoSelecionado !== 'enterprise') {
-    showToast('A logomarca só é aplicada em organizações no plano Enterprise. Selecione o plano Enterprise antes de enviar.', 'error');
+    showToast('A logomarca só é aplicada em organizações no plano Clínica. Selecione o plano Clínica antes de enviar.', 'error');
     inputEl.value = '';
     return;
   }
@@ -10593,11 +10637,11 @@ async function uploadLogoOrganizacao(inputEl, orgId) {
     _atualizarPreviewLogoOrg(urlFinal);
     const orgCache = _orgsCache.find(o=>o.id===orgId);
     if (orgCache) orgCache.logo_url = urlFinal;
-    if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise';
+    if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Clínica';
     showToast('Logomarca enviada!','success');
   } catch(e) {
     showToast(traduzErroSupabase(e,'Erro ao enviar logomarca'),'error');
-    if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Enterprise';
+    if (statusEl) statusEl.textContent = 'PNG ou JPG · até 2 MB · aplica-se só no plano Clínica';
   } finally {
     inputEl.value = '';
   }
@@ -10652,7 +10696,7 @@ async function uploadArteFundoOrg(inputEl, orgId, campo) {
 
   const planoSelecionado = document.getElementById('mOrgPlano')?.value || 'starter';
   if (planoSelecionado !== 'enterprise') {
-    showToast('A personalização do certificado só é aplicada em organizações no plano Enterprise. Selecione o plano Enterprise antes de enviar.', 'error');
+    showToast('A personalização do certificado só é aplicada em organizações no plano Clínica. Selecione o plano Clínica antes de enviar.', 'error');
     inputEl.value = '';
     return;
   }
@@ -11132,6 +11176,61 @@ async function _salvarEditorCertCapa() {
   } catch(e) { showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
+// ── v271: contrato da organização (unidades, extras, fundador, valor combinado) ──
+// Só aparece quando o banco já tem as colunas (PASSO-86) ou numa organização nova.
+function _orgContratoHtml(org) {
+  if (org && !('unidades' in org)) return '';
+  const n = (v, d) => Number.isFinite(Number(v)) ? Number(v) : d;
+  const inp = 'width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1)';
+  return `<div id="mOrgContrato" style="margin:6px 0 4px;padding:14px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg)">
+    <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">Contrato</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;align-items:end">
+      <div class="field" style="margin:0" id="mOrgUnidadesW"><label>Unidades</label><input type="number" min="1" step="1" id="mOrgUnidades" value="${n(org?.unidades,1)}" oninput="_orgContratoAtualizar()" style="${inp}"></div>
+      <div class="field" style="margin:0"><label>WhatsApp extra</label><input type="number" min="0" step="1" id="mOrgExtraWhats" value="${n(org?.extra_whatsapp,0)}" oninput="_orgContratoAtualizar()" style="${inp}"></div>
+      <div class="field" style="margin:0"><label>Pacotes +200</label><input type="number" min="0" step="1" id="mOrgExtraPerg" value="${n(org?.extra_perguntas,0)}" oninput="_orgContratoAtualizar()" style="${inp}"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:12px 0 10px;font-size:13.5px;color:var(--text-1);cursor:pointer"><input type="checkbox" id="mOrgFundador" ${org?.fundador ? 'checked' : ''} onchange="_orgContratoAtualizar(true)"> Cliente fundador (30% de desconto enquanto ativo)</label>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin:-2px 0 12px;font-size:13.5px;color:var(--text-1);cursor:pointer"><input type="checkbox" id="mOrgParceiro" ${org?.parceiro ? 'checked' : ''} onchange="_orgContratoAtualizar()" style="margin-top:3px"> <span>Plano oculto <b>Parceiro</b><br><span style="font-size:12px;color:var(--text-3)">Limites do Clínica, sem aparecer no site. O cliente vê "Parceiro".</span></span></label>
+    <div class="field" style="margin:0"><label>Valor combinado por mês</label><div style="position:relative"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:14px">R$</span><input type="text" inputmode="decimal" id="mOrgValor" ${org?.valor_mensal != null ? 'data-manual="1"' : ''} value="${org?.valor_mensal != null ? Number(org.valor_mensal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}" oninput="this.dataset.manual='1';_orgContratoAtualizar()" style="${inp};padding-left:40px"></div></div>
+    <div id="mOrgResumo" style="font-size:12.5px;color:var(--text-2);margin-top:10px;line-height:1.6"></div>
+  </div>`;
+}
+function _orgContratoLer() {
+  const v = (id) => document.getElementById(id);
+  if (!v('mOrgContrato')) return null;
+  const plano = v('mOrgPlano')?.value || 'starter';
+  const int = (id, min) => Math.max(min, parseInt(v(id)?.value, 10) || min);
+  // "R$ 1.234,56", "765,80" ou "765.80" → 765.8 (vírgula ou um ponto seguido de 1–2 dígitos = centavos)
+  const bruto = String(v('mOrgValor')?.value || '').replace(/[^\d.,]/g, '');
+  const valorTxt = !v('mOrgValor')?.dataset.manual ? ''
+    : bruto.includes(',') ? bruto.replace(/\./g, '').replace(',', '.')
+    : /\.\d{1,2}$/.test(bruto) ? bruto.replace(/\.(?=.*\.)/g, '') : bruto.replace(/\./g, '');
+  return { plano, unidades: plano === 'enterprise' ? int('mOrgUnidades', 1) : 1, extra_whatsapp: int('mOrgExtraWhats', 0), extra_perguntas: int('mOrgExtraPerg', 0),
+           fundador: !!v('mOrgFundador')?.checked, parceiro: !!v('mOrgParceiro')?.checked, valor_mensal: (valorTxt === '' || !Number.isFinite(Number(valorTxt))) ? null : Math.round(Number(valorTxt) * 100) / 100 };
+}
+function _orgContratoAtualizar(trocouFundador) {
+  const c = _orgContratoLer(); if (!c) return;
+  const w = document.getElementById('mOrgUnidadesW'); if (w) w.style.display = c.plano === 'enterprise' ? '' : 'none';
+  const tabela = valorTabelaOrg(c), sugerido = Math.round(tabela * (c.fundador ? 0.7 : 1) * 100) / 100;
+  const vi = document.getElementById('mOrgValor');
+  const br = (x) => x.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Fundador sem valor gravado (de antes do 271): grava o valor com desconto.
+  if (vi && !trocouFundador && !vi.dataset.manual && c.fundador) { vi.value = br(sugerido); vi.dataset.manual = '1'; c.valor_mensal = sugerido; }
+  else if (vi && (trocouFundador || !vi.dataset.manual)) {
+    vi.value = br(sugerido);
+    // Valor de tabela fica vazio no banco (acompanha o plano); com desconto de fundador, grava o valor.
+    if (trocouFundador) vi.dataset.manual = c.fundador ? '1' : '';
+    c.valor_mensal = vi.dataset.manual ? sugerido : null;
+  }
+  if (vi) vi.placeholder = br(sugerido);
+  const qtd = (x, nome) => Number.isFinite(x) ? `${x.toLocaleString('pt-BR')} ${nome}` : `${nome} sem limite`;
+  const rs = (x) => 'R$ ' + x.toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(x) ? 0 : 2, maximumFractionDigits: 2 });
+  const r = document.getElementById('mOrgResumo');
+  if (r) r.innerHTML = `${c.parceiro ? '<b>Parceiro</b> · ' : ''}Tabela: <b>${rs(tabela)}</b>${c.fundador ? ` · com 30%: <b>${rs(sugerido)}</b>` : ''}<br>
+    Limites: ${qtd(limiteDaOrg(c,'maxUsuarios'),'usuários')} · ${qtd(limiteDaOrg(c,'maxEmpresas'),'empresas')} · ${qtd(limiteDaOrg(c,'perguntas'),'perguntas por mês')} · ${qtd(limiteDaOrg(c,'whatsapp'),'WhatsApp')}<br>
+    <span style="color:var(--text-3)">A cobrança no Asaas é criada ou ajustada à mão com o valor combinado.</span>`;
+}
+
 async function salvarOrg() {
   const nome = document.getElementById('mOrgNome')?.value.trim();
   if (!nome) { showToast('Nome é obrigatório','error'); return; }
@@ -11157,14 +11256,21 @@ async function salvarOrg() {
     cert_texto_rodape: plano==='enterprise' ? (document.getElementById('mOrgTextoRodape')?.value.trim()||null) : null,
   };
   if (plano !== 'enterprise') dados.cert_nivel_personalizacao = 'padrao';
+  const contrato = _orgContratoLer();  // v271 (PASSO-86)
+  if (contrato) Object.assign(dados, { unidades: contrato.unidades, extra_whatsapp: contrato.extra_whatsapp, extra_perguntas: contrato.extra_perguntas, fundador: contrato.fundador, parceiro: contrato.parceiro, valor_mensal: contrato.valor_mensal });
   try {
     setBtnModalLoading(true);
     let novaOrgId = null;
+    // v271: sem o PASSO-86 o banco não conhece as colunas do contrato; grava o resto e avisa.
+    const semContrato = (d) => { const c = { ...d }; ['unidades','extra_whatsapp','extra_perguntas','fundador','parceiro','valor_mensal'].forEach(k => delete c[k]); return c; };
+    const faltaColuna = (e) => /unidades|extra_whatsapp|extra_perguntas|fundador|parceiro|valor_mensal/.test(String(e?.message || ''));
     if (_modalCurrentId) {
-      const {error} = await sb.from('organizacoes').update(dados).eq('id',_modalCurrentId);
+      let {error} = await sb.from('organizacoes').update(dados).eq('id',_modalCurrentId);
+      if (error && contrato && faltaColuna(error)) ({error} = await sb.from('organizacoes').update(semContrato(dados)).eq('id',_modalCurrentId));
       if (error) throw error;
     } else {
-      const {data: orgCriada, error} = await sb.from('organizacoes').insert({...dados,ativo:true}).select('id').single();
+      let {data: orgCriada, error} = await sb.from('organizacoes').insert({...dados,ativo:true}).select('id').single();
+      if (error && contrato && faltaColuna(error)) ({data: orgCriada, error} = await sb.from('organizacoes').insert({...semContrato(dados),ativo:true}).select('id').single());
       if (error) throw error;
       novaOrgId = orgCriada?.id || null;
     }
@@ -11464,14 +11570,20 @@ async function criarUsuarioOrg() {
   const whatsapp        = document.getElementById('mUsrWhats')?.value.trim()||null;
   if (!nome||!email||!senha) { showToast('Preencha todos os campos','error'); return; }
   if (senha.length<6) { showToast('Senha deve ter no mínimo 6 caracteres','error'); return; }
-  // ── Guard Starter: limite de usuários ativos por plano ──
-  if (!planoAtinge('pro')) {
+  // ── v271: limite de usuários ativos por plano (3 / 10 / sem limite). O banco também trava (PASSO-86). ──
+  {
     const orgId = _modalCurrentId || usuarioAtual.org_id;
-    const {count} = await sb.from('usuarios').select('id', {count:'exact',head:true}).eq('org_id', orgId).eq('ativo', true);
-    if (count >= limitePlano('maxUsuarios')) {
-      fecharModal();
-      modalUpgrade('Limite de usuários atingido', 'pro');
-      return;
+    // Provedor: vale o plano da organização escolhida (o banco trava mesmo para ele, porque quem grava é a Edge Function).
+    const orgAlvo = usuarioAtual?.perfil === 'provedor' ? (_orgsCache || []).find(o => o.id === orgId) : null;
+    const lim = orgAlvo ? limiteDaOrg(orgAlvo, 'maxUsuarios') : limitePlano('maxUsuarios');
+    if (Number.isFinite(lim) && orgId) {
+      const {count} = await sb.from('usuarios').select('id', {count:'exact',head:true}).eq('org_id', orgId).eq('ativo', true).neq('perfil', 'provedor');
+      if (count >= lim) {
+        if (orgAlvo) { showToast(`${orgAlvo.nome} está no limite do plano ${planoNomeOrg(orgAlvo)} (${lim} usuários). Mude o plano ou marque Parceiro antes de criar.`, 'error'); return; }
+        fecharModal();
+        modalLimite('usuarios', lim);
+        return;
+      }
     }
   }
   try {
@@ -11833,6 +11945,7 @@ async function salvarCliente() {
     opcao_simples: _valorBooleano('mCliOpcaoSimples'),
     opcao_mei: _valorBooleano('mCliOpcaoMei'),
   };
+  if (!_modalCurrentId && !(await _cabeEmpresas(1))) return;  // v271
   try {
     setBtnModalLoading(true);
     const {error} = _modalCurrentId ? await sb.from('clientes').update(dados).eq('id',_modalCurrentId) : await sb.from('clientes').insert({...dados,org_id:usuarioAtual.org_id,ativo:true});
@@ -11966,6 +12079,7 @@ function previewImportacaoClientes(e) {
 
 async function executarImportacaoClientes() {
   if (!_dadosImportacaoClientes.length) { showToast('Selecione um arquivo CSV válido','error'); return; }
+  if (!(await _cabeEmpresas(_dadosImportacaoClientes.length))) return;  // v271
   try {
     setBtnModalLoading(true);
     // org_id sempre explícito — cada linha importada pertence exclusivamente
@@ -12711,7 +12825,7 @@ async function renderConformidade(manterEstado = false) {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Conformidade</div>`);
   fabOcultar();
 
-  if (!planoAtinge('pro')) {
+  if (false) {  // v271: Conformidade em todos os planos
     setConteudo(`
       <div class="card" style="text-align:center;padding:32px 24px">
         <div style="width:52px;height:52px;border-radius:50%;background:#EEF1F6;color:var(--navy);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">${ICONS.shield}</div>
@@ -16146,6 +16260,7 @@ async function salvarClienteRapido() {
     org_id: usuarioAtual.org_id,
     ativo: true,
   };
+  if (!(await _cabeEmpresas(1))) return;  // v271
   try {
     setBtnModalLoading(true);
     const {data, error} = await sb.from('clientes').insert(dados).select().single();
@@ -17163,14 +17278,27 @@ async function renderCfgEmpresa() {
   try { const { data } = await sb.from('organizacoes').select('nome,cnpj,plano,trial_fim,assinatura_vencimento,logo_url,soc_integracao_ativa').eq('id', orgId).maybeSingle(); org = data; } catch (e) {}
   try { const { count } = await sb.from('usuarios').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('ativo', true); ativos = count; } catch (e) {}
   const plano = (org?.plano || usuarioAtual.orgPlano || 'starter');
-  const nomePlano = { starter: 'Starter', pro: 'Pro', enterprise: 'Enterprise' }[plano] || plano;
+  const orgLim = { plano, ...(usuarioAtual.orgExtras || {}) };
+  const nomePlano = planoNomeOrg(orgLim);
+  let empresasAtivas = null;
+  try { const { count } = await sb.from('clientes').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('ativo', true); empresasAtivas = count; } catch (e) {}
   const cnpj = String(org?.cnpj || '').replace(/\D/g, '');
   const cnpjFmt = cnpj.length === 14 ? cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : (org?.cnpj || '—');
   const data = (d) => { if (!d) return null; const x = new Date(d); return isNaN(x) ? null : x.toLocaleDateString('pt-BR'); };
   const validade = data(org?.assinatura_vencimento) || (org?.trial_fim ? 'Teste até ' + data(org.trial_fim) : null);
   const NOMES = { treinamentos: 'Treinamentos', crm: 'CRM', campo: 'Avaliação de Campo' };
   const mods = ['treinamentos', ...(_modulosAtivos || []).filter(m => m !== 'treinamentos')];
-  const limite = !planoAtinge('pro') ? limitePlano('maxUsuarios') : null;
+  const limite = Number.isFinite(limiteDaOrg(orgLim, 'maxUsuarios')) ? limiteDaOrg(orgLim, 'maxUsuarios') : null;
+  const limEmp = Number.isFinite(limiteDaOrg(orgLim, 'maxEmpresas')) ? limiteDaOrg(orgLim, 'maxEmpresas') : null;
+  // v271: uso de um limite; acima do limite fica em destaque, sem bloquear o que já existe
+  const _cxUso = (rot, oQue, usado, lim) => {
+    if (usado == null) return linha(rot, '', '—');
+    if (!lim) return linha(rot, `Sem limite de ${oQue} no plano.`, String(usado));
+    const acima = usado > lim, cheio = usado >= lim;
+    const sub = acima ? `<span style="color:var(--red-text,#B42318)">Acima do limite do plano (${lim}). Quem já está continua; novos cadastros ficam travados.</span>`
+      : cheio ? `<span style="color:var(--amber-text)">No limite do plano. Para cadastrar mais, mude de plano.</span>` : `O plano permite até ${lim}.`;
+    return linha(rot, sub, `<span style="${acima ? 'color:var(--red-text,#B42318);font-weight:700' : ''}">${usado} de ${lim}</span>`);
+  };
   const linha = (rot, sub, valor) => `<div class="cx-row"><div class="l"><b>${rot}</b>${sub ? `<span>${sub}</span>` : ''}</div><div class="r"><div class="v">${valor}</div></div></div>`;
   setConteudo(`<div class="cx-h"><div><h1>Empresa e plano</h1><p>Os dados que aparecem nos certificados e o que está contratado. Para alterar algum deles, fale com o suporte do GRID.</p></div></div>
     <div class="cx-sec"><div class="cx-sec-h"><div><b>Dados da empresa</b><span>Usados nos certificados e nos documentos emitidos.</span></div></div>
@@ -17181,7 +17309,12 @@ async function renderCfgEmpresa() {
     <div class="cx-sec"><div class="cx-sec-h"><div><b>Plano</b><span>O que a empresa tem contratado no GRID.</span></div></div>
       ${linha('Plano', '', `<span class="cx-pill cx-p-navy">${escapeHtml(nomePlano)}</span>`)}
       ${validade ? linha('Validade', '', escapeHtml(validade)) : ''}
-      ${linha('Pessoas ativas', limite ? `O plano permite até ${limite}.` : 'Sem limite de pessoas no plano.', ativos == null ? '—' : String(ativos) + (limite ? ` de ${limite}` : ''))}
+      ${_cxUso('Pessoas ativas', 'pessoas', ativos, limite)}
+      ${_cxUso('Empresas atendidas', 'empresas', empresasAtivas, limEmp)}
+      ${(_modulosAtivos || []).includes('campo') ? linha('Laudomiro', 'FDS e fotos também contam. A cota volta todo dia 1º.', `${limiteDaOrg(orgLim, 'perguntas').toLocaleString('pt-BR')} perguntas por mês`) : ''}
+      ${(_modulosAtivos || []).includes('crm') ? linha('Números de WhatsApp', limiteDaOrg(orgLim, 'whatsapp') ? 'Quantos números podem ficar ligados ao mesmo tempo.' : '', limiteDaOrg(orgLim, 'whatsapp') ? String(limiteDaOrg(orgLim, 'whatsapp')) : `<span class="cx-muted">Não incluído no plano ${escapeHtml(nomePlano)}</span>`) : ''}
+      ${orgLim.parceiro ? '' : `<div class="cx-row"><div class="l"><b>Precisa de mais?</b><span>Mais pessoas, empresas, perguntas ou números de WhatsApp.</span></div><div class="r"><a class="btn btn-outline btn-sm" style="width:auto" href="https://wa.me/5547992809019?text=${encodeURIComponent('Olá! Quero mudar o plano do GRID da minha empresa.')}" target="_blank" rel="noopener">Mudar de plano</a></div></div>`}
+      ${plano === 'enterprise' && Number(orgLim.unidades) > 1 ? linha('Unidades', '', String(orgLim.unidades)) : ''}
       ${linha('Módulos', '', `<span style="display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${mods.map(m => `<span class="cx-pill cx-p-gray">${NOMES[m] || escapeHtml(m)}</span>`).join('')}</span>`)}
       ${linha('Integração com o SOC', 'Busca de funcionários direto do SOC.', org?.soc_integracao_ativa ? '<span class="cx-pill cx-p-green"><i class="cx-dot"></i>Ligada</span>' : '<span class="cx-pill cx-p-gray">Desligada</span>')}
     </div>`);
@@ -18033,6 +18166,7 @@ async function executarImportacaoSOC() {
 
     // 1) Empresas novas primeiro — colaboradores dependem do cliente_id
     const empresasNovas = _socImportEmpresas.filter(e=>!e.existente);
+    if (empresasNovas.length && !(await _cabeEmpresas(empresasNovas.length))) { setBtnModalLoading(false); return; }  // v271
     if (empresasNovas.length) {
       // soc_codigo_empresa só vem preenchido quando a origem é a busca ao
       // vivo (_socWs*) — a importação da planilha Modelo 1 nunca grava esse
@@ -24836,7 +24970,7 @@ async function renderRelatorios() {
     tudo('compromissos', 'id,instrutor_id,tipo,titulo,data,hora_inicio,hora_fim,local,empresa_id,clientes(nome),concluido,cancelado', q => q.eq('cancelado', false))
       .then(r => r, e => ({ data: null, error: e || { message: 'falha' } })),
     // Só o PDF Executivo usa (a seção Conformidade saiu desta tela, a pedido).
-    planoAtinge('pro') ? calcConformidade().catch(() => null) : Promise.resolve(null),
+    calcConformidade().catch(() => null),  // v271
   ]);
   const falha = [tR, cliR, usrR, docR, envR, sesR, presR, partR, avR, compR].find(r => !r || r.error);
   if (falha) {
@@ -25493,7 +25627,7 @@ function _relFaixaDestinosHtml() { return ''; }
 function _relRecentesHtml() { return ''; }
 
 function _rxAbrirExportar() {
-  const pro = planoAtinge('pro');
+  const pro = true;  // v271: relatórios em todos os planos
   const op = (titulo, texto, js, bloqueado) => `<button class="rx-exp" onclick="${bloqueado ? '' : 'fecharModal();'}${js}">
       <span class="rx-exp-i">${bloqueado ? _RX_IC_LOCK : _RX_IC_DOC}</span><span><b>${titulo}</b><small>${texto}</small></span></button>`;
   abrirModal('Exportar relatório', `<div class="rx-exp-l">
@@ -25713,7 +25847,7 @@ function _renderRelatorioInstrutorDetalhe() {
   const d = _rxInstrutoresDados(b).find(i => i.id === id);
   if (!d) { relIrParaDestino('instrutores'); return; }
   setMobileHeader(`<div class="mh-greeting">Instrutor</div><div class="mh-name">${_rxEsc(d.nome)}</div>`);
-  const pro = planoAtinge('pro');
+  const pro = true;  // v271: relatórios em todos os planos
   const acoes = `<button class="btn btn-outline btn-sm" onclick="window.print()">${_RX_IC_PRINT}Imprimir</button>
     <button class="btn btn-outline btn-sm" onclick="exportarRelatorioInstrutorCSV('${_rxEsc(id)}')">${_RX_IC_SHEET}Planilha</button>
     ${pro ? `<button class="btn btn-primary btn-sm" style="width:auto" onclick="exportarRelatorioInstrutorPDF('${_rxEsc(id)}')">${_RX_IC_DOC}PDF do instrutor</button>`
@@ -26513,7 +26647,7 @@ function exportarRelatorioInstrutorCSV(instrutorId) {
 
 async function exportarRelatorioInstrutorPDF(instrutorId) {
   try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
-  if (!planoAtinge('pro')) { modalUpgrade('PDF do instrutor', 'pro'); return; }
+
   const raw = window._relRaw || {};
   const bx = _rxBase();
   // Nome também de quem já saiu da equipe (usuariosTodos), como na tela.
@@ -26683,7 +26817,7 @@ function exportarRelatorioCSV() {
 
 async function exportarRelatorioExecutivoPDF() {
   try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
-  if (!planoAtinge('pro')) { modalUpgrade('Relatório Executivo em PDF', 'pro'); return; }
+
   showToast('Gerando PDF Executivo...', 'info');
   const raw = window._relRaw || {};
   const { turmas: tAll, participantes: partAll, sessoes: sesAll, usuarios: usrAll, clientes: cliAll, pendencias: pendAll, certPorTurma } = raw;
@@ -27152,7 +27286,8 @@ function _eqRender() {
     ['inativos', 'Inativos', inat.length]].filter(([k, , n]) => k === 'todos' || n > 0);
   if (!F.some(f => f[0] === st.filtro)) st.filtro = 'todos';
   const lista = st.filtro === 'inativos' ? inat : ativos.filter(u => st.filtro === 'todos' || u.perfil === st.filtro);
-  const plano = !planoAtinge('pro') ? `Starter · máx. ${limitePlano('maxUsuarios')} usuários ativos` : `${usuarioAtual.orgPlano === 'enterprise' ? 'Enterprise' : 'Pro'} · usuários ilimitados`;
+  const _nomeP = usuarioAtual?.orgExtras?.parceiro ? 'Parceiro' : planoNome(usuarioAtual.orgPlano);
+  const plano = Number.isFinite(limitePlano('maxUsuarios')) ? `${_nomeP} · máx. ${limitePlano('maxUsuarios')} usuários ativos` : `${_nomeP} · usuários ilimitados`;
   const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const linhas = lista.map(u => {
     const p = _eqPerfil(u);
@@ -32620,7 +32755,7 @@ async function renderDocumentosTurma(turmaId) {
     // ---- Card único de envio por e-mail (substitui os dois cards antigos) ----
     let htmlEnvioConteudo;
     let htmlChecklistEnvio = '';
-    if (!planoAtinge('pro')) {
+    if (false) {  // v271: envio por e-mail em todos os planos
       htmlEnvioConteudo = `
         <div style="display:flex;align-items:center;gap:10px;background:var(--amber-l);border:1px solid var(--amber);padding:12px;border-radius:var(--r-md)">
           <span style="font-size:20px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
@@ -32675,7 +32810,7 @@ async function renderDocumentosTurma(turmaId) {
     }
 
     const htmlEnvio = `
-      <div class="card" data-docs-turma="${turmaId}" style="border:2px solid ${planoAtinge('pro') && todosConcluidos && emailCliente ? 'var(--navy)' : 'var(--border)'};background:rgba(23,37,65,.03)">
+      <div class="card" data-docs-turma="${turmaId}" style="border:2px solid ${todosConcluidos && emailCliente ? 'var(--navy)' : 'var(--border)'};background:rgba(23,37,65,.03)">
         <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:6px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg> Envio para o cliente</div>
         <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.5">
           Gera automaticamente os documentos pendentes e envia tudo por e-mail para a empresa cliente em uma única ação.
@@ -32730,7 +32865,7 @@ function _abrirDrawerDocumento(which) {
 // v227: em segundo plano — sem tela travada e sem o segundo clique em
 // "Confirmar envio" (o botão "Gerar tudo e enviar por e-mail" já é a confirmação).
 async function gerarTudoEnviarEmail(turmaId) {
-  if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return; }
+
   if (window._envioBg) {
     showToast(window._envioBg.turmaId === turmaId
       ? 'Os documentos desta turma já estão sendo gerados e enviados. Acompanhe no aviso do canto da tela.'
@@ -32968,7 +33103,7 @@ async function revogarCertificado(turmaId, colaboradorId) {
 }
 
 async function enviarDocumentosPorEmail(turmaId, opts = {}) {
-  if (!planoAtinge('pro')) { modalUpgrade('Envio automático de documentos', 'pro'); return false; }
+
   // v227: vindo de "Gerar tudo e enviar", o próprio botão já foi a confirmação.
   // confirm() nao funciona em WebView/mobile — usar modal customizado
   const confirmado = opts.semConfirmar ? true : await new Promise(resolve => {
@@ -33248,7 +33383,7 @@ function _buildKpiGrid({tAtivas,tConcluidas,tConcluidasAnt,partUnicos,partUnicos
 
 async function exportarRelatorioComparativoPDF() {
   try { await _garantirJsPDF(); } catch(e) { showToast('Não foi possível carregar o gerador de PDF. Verifique sua conexão e tente novamente.','error'); return; }
-  if (!planoAtinge('pro')) { modalUpgrade('Relatório Comparativo em PDF', 'pro'); return; }
+
   const { turmas: tAll, participantes: partAll, sessoes: sesAll, certPorTurma } = window._relRaw || {};
   if (!tAll || !tAll.length) { showToast('Nenhum dado para exportar', 'info'); return; }
   const meses = 6; // PDF: compara os últimos 6 meses com os 6 anteriores
@@ -33380,7 +33515,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '270';
+  var APP_BUILD = '271';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
