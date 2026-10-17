@@ -1,6 +1,7 @@
 /* ══════════════════════════════════════════════════════════════════════════
    GRID · modulos/campo/laudomiro-dados.js — perguntas sobre os DADOS DA EMPRESA
    dentro do Laudomiro (app 266, 16/10/2026; grupo 3 "Ligado ao GRID").
+   App 267: resposta vazia diz o que vem depois (próximo vencimento, próxima turma, próxima visita).
    Proposta aprovada: 08-Propostas-visuais/laudomiro-grupo3-ligado-ao-grid.html.
 
    Como funciona (LGPD):
@@ -27,6 +28,21 @@ const dm = (d) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 const dataDe = (aaaammdd) => { const [a, m, d] = String(aaaammdd || '').slice(0, 10).split('-').map(Number); return a ? new Date(a, m - 1, d) : null; };
 const dma = (aaaammdd) => { const d = dataDe(aaaammdd); return d ? `${dm(d)}/${String(d.getFullYear()).slice(2)}` : '—'; };
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+/** Data completa (dd/mm/aaaa), usada quando o próximo evento pode estar em outro ano. */
+const dmaa = (aaaammdd) => { const d = dataDe(aaaammdd); return d ? `${dm(d)}/${d.getFullYear()}` : '—'; };
+/** Título com zero: "Nenhuma pessoa…" em vez de "0 pessoas…". */
+const qtd = (n, um, varios, nenhum) => n === 0 ? `${nenhum} ${um}` : plural(n, um, varios);
+const maiuscula = (t) => t ? t[0].toUpperCase() + t.slice(1) : t;
+/** "O próximo vencimento de NR-35 é em 27/06/2028 (12 pessoas)." — o mais próximo entre `regs` (todos com diffDias). */
+export function proximoVencimento(regs, rotCurso = '') {
+  if (!regs || !regs.length) return '';
+  const min = regs.reduce((m, x) => (x.diffDias < m ? x.diffDias : m), Infinity);
+  const mesmos = regs.filter((x) => x.diffDias === min);
+  const pessoas = new Set(mesmos.map((x) => x.colaborador_id)).size;
+  const cursos = [...new Set(mesmos.map((x) => x.treinamentoNome).filter(Boolean))];
+  const qual = rotCurso ? '' : cursos.length === 1 ? `, ${cursos[0]}` : cursos.length > 1 ? `, ${cursos.length} treinamentos` : '';
+  return `O próximo vencimento${rotCurso ? ` de ${rotCurso}` : ''} é em ${dmaa(mesmos[0].data_vencimento)} (${plural(pessoas, 'pessoa', 'pessoas')}${qual}).`;
+}
 const MAX_PESSOAS = 20000;
 
 /* ── nomes ──────────────────────────────────────────────────────────────── */
@@ -156,11 +172,11 @@ async function vencimentos(c, oi) {
   const rotCurso = umCurso ? (c.curso.match(/nr\s*-?\s*\d+/i) ? c.curso.toUpperCase().replace(/\s+/g, '').replace(/^NR(\d)/, 'NR-$1') : [...cursos][0] || c.curso) : '';
   const quando = c.situacao === 'vencidos' ? `vencido${atras.rotulo ? ' ' + atras.rotulo : ''}` : comVencidos ? `vencido ou vencendo ${jan.rotulo}` : `vencendo ${jan.rotulo}`;
   const titulo = umCurso
-    ? `${plural(pessoas, 'pessoa', 'pessoas')} com ${rotCurso} ${quando}`
-    : `${plural(lista.length, 'treinamento', 'treinamentos')} ${quando.replace(/^vencido\b/, 'vencidos')}${lista.length ? ` · ${plural(pessoas, 'pessoa', 'pessoas')}` : ''}`;
+    ? `${qtd(pessoas, 'pessoa', 'pessoas', 'Nenhuma')} com ${rotCurso} ${quando}`
+    : `${qtd(lista.length, 'treinamento', 'treinamentos', 'Nenhum')} ${quando.replace(/^vencido\b/, lista.length > 1 ? 'vencidos' : 'vencido')}${lista.length ? ` · ${plural(pessoas, 'pessoa', 'pessoas')}` : ''}`;
   const sub = lista.length
     ? [varios || plural(clientes, 'cliente', 'clientes'), 'ordenado pelo vencimento', nAgend ? `${nAgend} já com turma marcada` : '', vencidosFora ? `fora da lista: ${vencidosFora} já ${vencidosFora === 1 ? 'vencido' : 'vencidos'}` : ''].filter(Boolean).join(' · ')
-    : vencidosFora ? `Nada vence nesse período. Há ${vencidosFora} já ${vencidosFora === 1 ? 'vencido' : 'vencidos'}: pergunte "quais estão vencidos?".` : 'Nada encontrado com esses filtros.';
+    : vazioVencimentos({ c, base, jan, atras, lim, ini, comVencidos, vencidosFora, rotCurso: umCurso ? rotCurso : '', varios });
   const colunas = ['Pessoa', 'Cliente', ...(umCurso ? [] : ['Treinamento']), 'Vence em', 'Situação'];
   const linhas = lista.map((x) => {
     const d = x.diffDias;
@@ -191,6 +207,27 @@ async function vencimentos(c, oi) {
     grupos = [...m.values()].map((g) => ({ clienteId: g.clienteId, cursoId: g.cursoId, rot: g.rot, ids: g.ids, n: g.pessoas.size })).filter((g) => g.n >= 2).sort((a, b) => b.n - a.n).slice(0, 3);  // como no Início: turma de 1 pessoa não vira sugestão
   }
   return { ok: true, titulo, sub, colunas, linhas, total: lista.length, pessoas, contagem, grupos, arquivo: 'vencimentos' };
+}
+
+/** Resposta vazia: em vez de "nada encontrado", diz o que vem depois (16/10, app 267). */
+function vazioVencimentos({ c, base, jan, atras, lim, ini, comVencidos, vencidosFora, rotCurso, varios }) {
+  const partes = [];
+  if (c.situacao === 'vencidos') {
+    partes.push(`Nenhum vencido${atras.rotulo ? ' ' + atras.rotulo : ''}.`);
+    const antigos = atras.desde != null ? base.filter((x) => x.diffDias < atras.desde).length : 0;
+    if (antigos) partes.push(`Há ${antigos} ${antigos === 1 ? 'vencido' : 'vencidos'} antes disso: pergunte "quais estão vencidos?".`);
+    partes.push(proximoVencimento(base.filter((x) => x.diffDias >= 0), rotCurso));
+  } else {
+    partes.push(`Nenhum ${comVencidos ? 'vencido nem vencendo' : 'vence'} ${jan.rotulo}.`);
+    const antes = ini > 0 ? base.filter((x) => x.diffDias >= 0 && x.diffDias < ini) : [];
+    if (antes.length) partes.push(`Antes desse período, ${plural(new Set(antes.map((x) => x.colaborador_id)).size, 'pessoa tem', 'pessoas têm')} vencimento (o primeiro em ${dmaa(antes.reduce((a, x) => (x.diffDias < a.diffDias ? x : a)).data_vencimento)}).`);
+    const depois = proximoVencimento(base.filter((x) => x.diffDias > lim), rotCurso);
+    partes.push(depois ? (antes.length ? depois.replace(/^O próximo/, 'Depois desse período, o próximo') : depois) : '');
+    if (vencidosFora) partes.push(`Há ${vencidosFora} já ${vencidosFora === 1 ? 'vencido' : 'vencidos'}: pergunte "quais estão vencidos?".`);
+  }
+  if (!partes.slice(1).some(Boolean) && !vencidosFora) partes.push(c.situacao === 'vencidos' ? `Também não há vencimento futuro${rotCurso ? ` de ${rotCurso}` : ''} na Conformidade.` : `Não há vencimento${rotCurso ? ` de ${rotCurso}` : ''} depois disso na Conformidade.`);
+  if (varios) partes.push(varios + '.');
+  return partes.filter(Boolean).join(' ');
 }
 
 /* ── quem não tem um treinamento ────────────────────────────────────────── */
@@ -253,14 +290,16 @@ async function semTreinamento(c, oi) {
   const nomesAchados = idsCli ? [...new Set(idsCli.map((id) => nomeCli.get(id)).filter(Boolean))] : [];
   const rot = c.curso.match(/nr\s*-?\s*\d+/i) ? c.curso.toUpperCase().replace(/\s+/g, '').replace(/^NR(\d)/, 'NR-$1') : c.curso;
   const sub = [
-    lista.length ? [`${nunca} nunca ${nunca === 1 ? 'fez' : 'fizeram'}`, vencidas ? `${vencidas} com o treinamento vencido` : '', marcadas ? `${marcadas} já com turma marcada` : ''].filter(Boolean).join(' · ') : 'Todos têm o treinamento em dia.',
+    lista.length ? [`${nunca} nunca ${nunca === 1 ? 'fez' : 'fizeram'}`, vencidas ? `${vencidas} com o treinamento vencido` : '', marcadas ? `${marcadas} já com turma marcada` : ''].filter(Boolean).join(' · ')
+      : cols.length ? ['Todos têm o treinamento em dia.', proximoVencimento(cols.filter((x) => !desligado.has(x.id)).flatMap((x) => (doCurso.get(x.id) || []).filter((r) => r.diffDias >= 0)), rot)].filter(Boolean).join(' ')
+        : 'Nenhum colaborador cadastrado.',
     comExcecao ? `${comExcecao} com exceção registrada na Conformidade (fora da lista)` : '',
     nomesAchados.length > 1 ? `clientes: ${nomesClientes(nomesAchados)}` : '',
     cols.truncado ? `mostrando os primeiros ${MAX_PESSOAS} colaboradores; filtre por cliente` : '',
   ].filter(Boolean).join(' · ');
   return {
     ok: true,
-    titulo: `${plural(lista.length, 'pessoa', 'pessoas')} sem ${rot} válido${nomesAchados.length === 1 ? ` em ${nomesAchados[0]}` : ''}`,
+    titulo: `${qtd(lista.length, 'pessoa', 'pessoas', 'Nenhuma')} sem ${rot} válido${nomesAchados.length === 1 ? ` em ${nomesAchados[0]}` : ''}`,
     sub,
     nota: 'Lista todos os colaboradores cadastrados. Nem todos precisam deste treinamento: confira a função de cada um.',
     colunas: ['Pessoa', 'Cliente', 'Situação'],
@@ -277,20 +316,20 @@ async function turmas(c, oi) {
   const data = await lerTudo(() => sb().from('turmas')
     .select('id,status,cliente_id,clientes(nome),catalogo(nome),sessoes(data,cancelada),turma_participantes(id)')
     .eq('org_id', oi).in('status', ['agendada', 'em_andamento']).order('id'));
-  const lista = data.map((t) => {
+  const todas = data.map((t) => {
     const datas = (t.sessoes || []).filter((s) => !s.cancelada && s.data).map((s) => String(s.data).slice(0, 10)).sort();
     const noPeriodo = datas.filter((d) => d >= a && d <= b);
-    return { t, quando: noPeriodo[0] || null, fim: datas[datas.length - 1] || null };
+    return { t, quando: noPeriodo[0] || null, depois: datas.find((d) => d > b) || null, fim: datas[datas.length - 1] || null };
   })
-    .filter(({ t, quando }) => quando && casaCurso(t.catalogo?.nome, c.curso) && casaCliente(t.clientes?.nome, c.cliente))
-    .sort((x, y) => x.quando.localeCompare(y.quando));
+    .filter(({ t }) => casaCurso(t.catalogo?.nome, c.curso) && casaCliente(t.clientes?.nome, c.cliente));
+  const lista = todas.filter(({ quando }) => quando).sort((x, y) => x.quando.localeCompare(y.quando));
   const porCurso = new Map();
   lista.forEach(({ t }) => { const k = t.catalogo?.nome || 'Curso'; const g = porCurso.get(k) || { n: 0, cli: new Set() }; g.n++; g.cli.add(t.clientes?.nome || '—'); porCurso.set(k, g); });
   const pessoas = lista.reduce((s, { t }) => s + (t.turma_participantes || []).length, 0);
   return {
     ok: true,
-    titulo: `${plural(lista.length, 'turma', 'turmas')} ${jan.rotulo.startsWith('até') ? `até ${jan.rotulo.slice(4)}` : jan.rotulo}`,
-    sub: lista.length ? [plural(pessoas, 'pessoa inscrita', 'pessoas inscritas'), 'ordenado pela data'].join(' · ') : 'Nenhuma turma marcada nesse período.',
+    titulo: `${qtd(lista.length, 'turma', 'turmas', 'Nenhuma')} ${jan.rotulo.startsWith('até') ? `até ${jan.rotulo.slice(4)}` : jan.rotulo}`,
+    sub: lista.length ? [plural(pessoas, 'pessoa inscrita', 'pessoas inscritas'), 'ordenado pela data'].join(' · ') : vazioTurmas(todas, jan),
     colunas: ['Data', 'Curso', 'Cliente', 'Pessoas', 'Situação'],
     linhas: lista.map(({ t, quando }) => [
       { t: dma(quando), c: 'b' }, { t: t.catalogo?.nome || 'Curso', acao: `campo:lq-dados-turma:${t.id}` }, { t: t.clientes?.nome || '—' },
@@ -300,6 +339,18 @@ async function turmas(c, oi) {
     contagem: [...porCurso.entries()].map(([rot, g]) => ({ n: g.n, rot, sub: g.cli.size === 1 ? [...g.cli][0] : plural(g.cli.size, 'cliente', 'clientes') })).sort((x, y) => y.n - x.n),
     grupos: [], arquivo: 'turmas',
   };
+}
+
+/** Sem turma no período: diz quando é a próxima (mesmos filtros de curso e cliente). */
+function vazioTurmas(todas, jan) {
+  const prox = todas.filter((x) => x.depois).sort((x, y) => x.depois.localeCompare(y.depois));
+  const ini = `Nenhuma turma marcada ${jan.rotulo}.`;
+  if (!prox.length) return `${ini} Não há turma marcada depois disso.`;
+  const mesmoDia = prox.filter((x) => x.depois === prox[0].depois);
+  const t = prox[0].t;
+  const qual = mesmoDia.length === 1 ? `: ${t.catalogo?.nome || 'Curso'} · ${t.clientes?.nome || '—'}` : ` (${mesmoDia.length} turmas)`;
+  const andamento = mesmoDia.length === 1 && t.status === 'em_andamento';
+  return `${ini} ${andamento ? 'O próximo encontro (turma já em andamento)' : 'A próxima'} é em ${dmaa(prox[0].depois)}${qual}.`;
 }
 
 /* ── avaliações de campo sem concluir ───────────────────────────────────── */
@@ -314,10 +365,23 @@ async function campo(c, oi) {
     if (r.error) throw r.error;
     (r.data || []).forEach((x) => nomes.set(x.id, x.nome));
   }
-  let lista = data.filter((x) => casaCliente(nomes.get(x.cliente_id) || '', c.cliente));
+  const doCliente = data.filter((x) => casaCliente(nomes.get(x.cliente_id) || '', c.cliente));
+  let lista = doCliente, vazio = c.cliente ? `Nenhuma avaliação sem concluir para "${c.cliente}".` : 'Todas as avaliações estão concluídas.';
+  let quando = 'sem concluir';
   if (c.periodo || c.dias) {
     const jan = janela(c, 30), a = iso(jan.ini), b = iso(jan.fim);
-    lista = lista.filter((x) => x.data_visita && String(x.data_visita).slice(0, 10) >= a && String(x.data_visita).slice(0, 10) <= b);
+    quando = `sem concluir com visita ${jan.rotulo}`;
+    const dv = (x) => String(x.data_visita || '').slice(0, 10);
+    lista = doCliente.filter((x) => x.data_visita && dv(x) >= a && dv(x) <= b);
+    if (doCliente.length) {
+      const prox = doCliente.filter((x) => x.data_visita && dv(x) > b).sort((x, y) => dv(x).localeCompare(dv(y)))[0];
+      const semData = doCliente.filter((x) => !x.data_visita).length;
+      const antes = doCliente.filter((x) => x.data_visita && dv(x) < a).length;
+      vazio = [`Nenhuma visita marcada ${jan.rotulo}.`,
+        prox ? `A próxima é em ${dmaa(prox.data_visita)} (${prox.numero || 'sem número'} · ${nomes.get(prox.cliente_id) || '—'}).` : '',
+        antes ? `${maiuscula(plural(antes, 'avaliação sem concluir tem', 'avaliações sem concluir têm'))} a visita antes desse período: pergunte "quais avaliações estão sem concluir?".` : '',
+        semData ? `${plural(semData, 'avaliação está', 'avaliações estão')} sem data de visita.` : ''].filter(Boolean).join(' ');
+    }
   }
   const hoje = iso(new Date());
   lista.sort((x, y) => String(x.data_visita || '9').localeCompare(String(y.data_visita || '9')));
@@ -326,8 +390,8 @@ async function campo(c, oi) {
   lista.forEach((x) => porSit.set(x.situacao, (porSit.get(x.situacao) || 0) + 1));
   return {
     ok: true,
-    titulo: `${plural(lista.length, 'avaliação de campo', 'avaliações de campo')} sem concluir`,
-    sub: lista.length ? [plural(new Set(lista.map((x) => x.cliente_id)).size, 'cliente', 'clientes'), atrasadas ? `${atrasadas} com a visita atrasada` : '', 'ordenado pela visita'].filter(Boolean).join(' · ') : 'Todas as avaliações estão concluídas.',
+    titulo: `${qtd(lista.length, 'avaliação de campo', 'avaliações de campo', 'Nenhuma')} ${quando}`,
+    sub: lista.length ? [plural(new Set(lista.map((x) => x.cliente_id)).size, 'cliente', 'clientes'), atrasadas ? `${atrasadas} com a visita atrasada` : '', 'ordenado pela visita'].filter(Boolean).join(' · ') : vazio,
     colunas: ['Avaliação', 'Cliente', 'Visita', 'Situação'],
     linhas: lista.map((x) => {
       const atras = x.situacao === 'agendada' && x.data_visita && String(x.data_visita).slice(0, 10) < hoje;
