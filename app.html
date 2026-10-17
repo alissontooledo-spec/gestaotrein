@@ -5345,6 +5345,23 @@ async function _iniciarPlataforma() {
          dela sem modulo nenhum. Passar pela ponte evita a segunda copia: o
          modulo pede, nao reimplementa. */
       alertas: (itens) => _alertaLista(itens),
+      /* v266: o Laudomiro responde perguntas sobre os dados da empresa. O módulo pede e a casca
+         responde com a MESMA conta da tela Conformidade, a mesma regra de permissão e o mesmo
+         modal de turma (com as pessoas já incluídas, como a sugestão do Início). */
+      conformidade: async () => {
+        // cache de 60 s por organização: perguntas seguidas não releem tudo (empresa grande)
+        const oi = usuarioAtual?.org_id, cc = window._lqConfCache;
+        if (cc && cc.oi === oi && Date.now() - cc.t < 60000) return cc.data;
+        const c = await calcConformidade();
+        window._confPorId = Object.assign(window._confPorId || {}, Object.fromEntries([...c.todosAtivos, ...c.tratados].map(x => [x.id, x])));
+        window._lqConfCache = { oi, t: Date.now(), data: c };
+        return c;
+      },
+      janelaConformidade: () => JANELA_CONFORMIDADE_DIAS,
+      podeRota: (rota) => _podeRota(rota),
+      planoPro: () => planoAtinge('pro'),
+      montarTurma: (opts) => abrirModalTurma(null, opts),
+      verTurma: (id) => verTurma(id),
       botoes: (rotulo, id) => `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
         <button class="btn btn-navy" id="${id}">${rotulo}</button>`,
       aoConfirmar: (id, fn) => {
@@ -8320,7 +8337,7 @@ async function _giCarregarRenovacoes(token, oi) {
       else {
         const [cf, ativos] = await Promise.all([
           calcConformidade(),
-          sb.from('catalogo').select('id').eq('org_id', oi).eq('ativo', true).neq('arquivado', true),
+          sb.from('catalogo').select('id').eq('org_id', oi).eq('ativo', true).or('arquivado.is.null,arquivado.eq.false'),
         ]);
         conf = cf;
         // curso inativo ou arquivado não vira sugestão de turma
@@ -12553,7 +12570,9 @@ async function calcConformidade() {
 
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   const todosRows = (rows||[]).map(r => {
-    const dtVenc = new Date(r.data_vencimento+'T12:00:00');
+    // v266: meia-noite com meia-noite. Com T12:00 a conta dava meio dia a mais e o arredondamento
+    // somava 1 dia (vencido há 2 dias aparecia "há 1"; vence em 6 aparecia "7").
+    const dtVenc = new Date(r.data_vencimento+'T00:00:00');
     const diffDias = Math.round((dtVenc - hoje) / 86400000);
     let status;
     if (diffDias < 0) status = 'vencido';
@@ -16143,7 +16162,7 @@ async function salvarTurma() {
     }
     // v265: turma sugerida no Início — inclui as pessoas do grupo e marca as pendências como agendadas
     if (!_modalCurrentId && Array.isArray(origemConfIds) && origemConfIds.length) {
-      window._giConfCache = null;
+      window._giConfCache = null; window._lqConfCache = null;
       try {
         const rv = await _giVincularGrupoTurma(salva[0].id, cli, origemConfIds);
         if (rv.etapa) showToast(rv.etapa === 'pessoas' ? 'Turma criada, mas não consegui incluir as pessoas sugeridas. Inclua pela tela da turma.' : 'Turma criada e pessoas incluídas, mas as pendências não foram marcadas como agendadas. Marque pela Conformidade.', 'error');
@@ -16186,12 +16205,12 @@ async function _giVincularGrupoTurma(turmaId, clienteId, confIds) {
   })));
   if (eP && eP.code !== '23505') return { incluidas: 0, esperadas, etapa: 'pessoas' };
   const agora = new Date().toISOString();
-  const motivo = 'Turma criada a partir da sugestão do Início.';
+  const motivo = 'Turma criada a partir de uma sugestão do GRID (Início ou Laudomiro).';
   const confOk = itens.filter(x => validos.includes(x.colaborador_id));
   const { data: marcadas, error: eC } = await sb.from('conformidade_status').update({
     status_excecao: 'renovacao_agendada', motivo_excecao: motivo, turma_vinculada_id: turmaId,
     excecao_definida_por: usuarioAtual.id, excecao_definida_em: agora,
-  }).eq('org_id', oi).in('id', confOk.map(x => x.id)).select('id');
+  }).eq('org_id', oi).in('id', confOk.map(x => x.id)).is('status_excecao', null).select('id');  // v266: pendência já tratada (ex.: outra turma) não muda de turma
   // RLS pode negar sem erro: confere quantas linhas mudaram
   if (eC || (marcadas || []).length < confOk.length) return { incluidas: validos.length, esperadas, etapa: 'pendencias' };
   try {
@@ -33321,7 +33340,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '265';
+  var APP_BUILD = '266';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
