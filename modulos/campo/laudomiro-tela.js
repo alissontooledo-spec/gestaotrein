@@ -151,7 +151,7 @@ function abas() {
     ? `<span class="lq-cota-t"><b>${_status.restantes}</b> ${_status.restantes === 1 ? 'pergunta restante' : 'perguntas restantes'} em ${esc(_status.mes || 'este mês')}</span>` : '';
   const nova = _aba === 'perguntar' && _conv.length ? '<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-nova">Nova conversa</button>' : '';
   return `<div class="lq-topo">
-    <div class="lq-id"><span class="lq-seal">${SEAL}</span><div><b>Laudomiro</b><small>Engenheiro de segurança do GRID</small></div></div>
+    <div class="lq-id"><span class="lq-seal">${SEAL}</span><div><b>Laudomiro</b><small>Especialista em segurança do trabalho</small></div></div>
     <div class="lq-abas" role="tablist" aria-label="Laudomiro">
       <button type="button" role="tab" aria-selected="${_aba === 'perguntar'}" class="${_aba === 'perguntar' ? 'on' : ''}" data-acao="campo:lq-aba:perguntar">${IC.perg}<span>Perguntar</span></button>
       <button type="button" role="tab" aria-selected="${_aba === 'fichas'}" class="${_aba === 'fichas' ? 'on' : ''}" data-acao="campo:lq-aba:fichas">${IC.fichas}<span>Fichas<span class="lq-ab-x"> dos agentes</span></span><i>${n}</i></button>
@@ -191,7 +191,7 @@ function inicio() {
   const rec = (_status?.recentes || []).slice(0, 5);
   return `<section class="lq-ini">
     <h2 class="lq-h">${saudacao()} O que você precisa resolver?</h2>
-    <p class="lq-sub">Pergunte como perguntaria a um engenheiro de segurança. Ele responde com o item da norma.</p>
+    <p class="lq-sub">Pergunte como perguntaria a um especialista em segurança do trabalho. Ele responde com o item da norma.</p>
     ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil de acesso não inclui perguntas ao Laudomiro.</b> Peça ao administrador da sua empresa para liberar (Configurações → Laudomiro). As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> Logo você poderá perguntar aqui. Enquanto isso, as <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam funcionando.</div></div>` : ''}
     ${compositor({ grande: true })}
     ${anexosLigados() && !_anexo && !_fila.length ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">${IC.pdf}<span>Ler FDS (até 5 para comparar)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
