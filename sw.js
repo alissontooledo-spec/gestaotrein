@@ -20,7 +20,7 @@
 // version.json e o `APP_BUILD` dentro do app.html — os três com o mesmo
 // número. É o único passo manual do processo.
 
-const BUILD    = '266';
+const BUILD    = '267';
 const CACHE    = 'grid-' + BUILD;
 const FALLBACK = './app.html';
 
@@ -107,7 +107,10 @@ self.addEventListener('install', (event) => {
       // addAll falha inteiro se um único arquivo faltar; aqui cada um é
       // independente, para um ícone ausente não impedir a instalação.
       .then((cache) => Promise.all([
-        ...ASSETS.map((u) => cache.add(u).catch(() => null)),
+        // app 267: ícones mudaram sem mudar de nome; busca direto do servidor (sem o cache de 10 min do navegador).
+        ...ASSETS.map((u) => fetch(u, { cache: 'reload' })
+          .then((res) => res && res.ok ? cache.put(u, res) : null)
+          .catch(() => null)),
         ...CODIGO.map((u) => fetch(u, { cache: 'reload' })
           .then((res) => res && res.ok ? cache.put(u, res) : null)
           .catch(() => null))

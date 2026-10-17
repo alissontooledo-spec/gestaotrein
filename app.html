@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GRID">
-<meta name="description" content="GRID: gestão de treinamentos de segurança do trabalho: turmas, certificados, conformidade e agenda de instrutores.">
+<meta name="description" content="GRID · Segurança inteligente: treinamentos e certificados, avaliações de campo, conformidade e o Laudomiro, num só lugar.">
 <title>GRID</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
@@ -92,11 +92,12 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,
 
 /* ── Login Screen ── */
 #screenLogin{background:#0D1424;align-items:center;justify-content:center;padding:24px;background-image:radial-gradient(circle,rgba(255,255,255,.07) 1px,transparent 1.2px),radial-gradient(ellipse at 60% 20%,rgba(42,60,100,.5) 0%,transparent 60%);background-size:14px 14px,100% 100%}
-.login-card{background:linear-gradient(180deg,var(--navy-2) 0%,var(--navy) 100%);border:1px solid rgba(255,255,255,.08);border-radius:var(--r-2xl);padding:40px 36px;width:100%;max-width:400px;box-shadow:0 8px 36px rgba(0,0,0,.35)}
+#screenLogin{justify-content:flex-start;overflow-y:auto}
+.login-card{margin:auto;flex-shrink:0;background:linear-gradient(180deg,var(--navy-2) 0%,var(--navy) 100%);border:1px solid rgba(255,255,255,.08);border-radius:var(--r-2xl);padding:40px 36px;width:100%;max-width:400px;box-shadow:0 8px 36px rgba(0,0,0,.35)}
 .login-logo{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:26px}
-.login-logo-icon{width:56px;height:auto;margin-bottom:12px;filter:drop-shadow(0 2px 10px rgba(245,158,11,.35))}
+.login-logo-icon{width:56px;height:auto;margin-bottom:12px;filter:drop-shadow(0 2px 6px rgba(245,158,11,.22))}
 .login-logo-text{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.4px;line-height:1.1}
-.login-logo-sub{font-size:11px;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.6px;text-transform:uppercase;margin-top:4px}
+.login-logo-sub{font-size:12.5px;color:rgba(255,255,255,.62);font-weight:500;letter-spacing:.1px;margin-top:4px}
 .login-title{font-size:19px;font-weight:700;color:#fff;margin-bottom:4px;letter-spacing:-.3px;text-align:center}
 .login-sub{font-size:13px;color:rgba(255,255,255,.55);margin-bottom:24px;text-align:center}
 .field{margin-bottom:16px}
@@ -115,7 +116,15 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',system-ui,
 #screenLogin .field input{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff}
 #screenLogin .field input::placeholder{color:rgba(255,255,255,.35)}
 #screenLogin .field input:-webkit-autofill,#screenLogin .field input:-webkit-autofill:hover,#screenLogin .field input:-webkit-autofill:focus{-webkit-text-fill-color:#fff;-webkit-box-shadow:0 0 0px 1000px #1F2F52 inset;transition:background-color 9999s ease-in-out 0s}
-.login-forgot{display:block;margin-top:8px;font-size:11.5px;color:var(--amber);font-weight:600;cursor:pointer;text-align:right}
+.login-forgot{display:block;margin:4px 0 0 auto;padding:6px 0;background:none;border:none;font-family:inherit;font-size:13px;color:var(--amber);font-weight:600;cursor:pointer;text-align:right}
+.login-forgot:hover{text-decoration:underline}
+/* app 267: Mostrar senha e aviso de Caps Lock */
+.login-senha{position:relative}
+#screenLogin .login-senha input{padding-right:96px}
+.login-ver{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;border:none;background:transparent;color:rgba(255,255,255,.72);font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 10px;border-radius:6px;cursor:pointer}
+.login-ver:hover,.login-ver:focus-visible{background:rgba(255,255,255,.08);color:#fff}
+.login-caps{display:none;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#FCD34D}
+.login-caps.show{display:flex}
 #screenLogin .btn-primary{background:var(--amber);color:var(--navy)}
 #screenLogin .btn-primary:hover{background:var(--amber-h)}
 
@@ -1618,8 +1627,8 @@ body.sidebar-mini .sidebar-item { height: 38px; padding: 0; justify-content: cen
    qualquer tamanho. Em <svg>, height:auto nao resolve como em <img>,
    entao a altura vem da proporcao real do vetor (0.850).
    Larguras identicas as que o app ja usava: 28px na barra, 56px no acesso. */
-svg.sidebar-logo-icon { width: 28px; height: 32.9px; display: block; flex-shrink: 0 }
-svg.login-logo-icon { width: 56px; height: 65.9px; display: block; flex-shrink: 0 }
+svg.sidebar-logo-icon { width: 28px; height: 32.8px; display: block; flex-shrink: 0 }
+svg.login-logo-icon { width: 56px; height: 65.7px; display: block; flex-shrink: 0 }
 
 /* ===== Início no conceito da Lovable (set/2026) ==========================
    Valores copiados de MODELOS-PROPOSTOS/FONTE-DOS-DEMAIS-MODELOS.html,
@@ -2825,23 +2834,27 @@ body .cp-col-h{font-size:13px;font-weight:700}
 <div class="screen active" id="screenLogin">
   <div class="login-card">
     <div class="login-logo">
-      <svg class="login-logo-icon" viewBox="11.0 11.0 232.0 273.0" role="img" aria-label="GRID" style="color:var(--amber)" fill="currentColor"><path d="M 11.00,163.00 L 11.00,215.00 L 15.00,218.00 L 30.00,226.00 L 67.00,249.00 L 72.00,248.00 L 112.00,224.00 L 108.00,220.00 L 53.00,187.00 L 48.00,185.00 L 18.00,166.00 Z M 129.00,76.00 L 69.00,112.00 L 69.00,183.00 L 126.00,218.00 L 186.00,185.00 L 189.00,178.00 L 197.00,179.00 L 197.00,191.00 L 84.00,257.00 L 127.00,284.00 L 243.00,216.00 L 243.00,132.00 L 188.00,131.00 L 186.00,110.00 Z M 142.00,69.00 L 143.00,72.00 L 146.00,73.00 L 161.00,83.00 L 171.00,88.00 L 176.00,92.00 L 181.00,94.00 L 200.00,106.00 L 221.00,94.00 L 223.00,92.00 L 228.00,90.00 L 240.00,82.00 L 243.00,81.00 L 243.00,79.00 L 237.00,76.00 L 220.00,65.00 L 215.00,63.00 L 208.00,58.00 L 203.00,56.00 L 198.00,52.00 L 193.00,50.00 L 186.00,45.00 L 182.00,45.00 L 175.00,50.00 Z M 171.00,36.00 L 127.00,11.00 L 11.00,80.00 L 11.00,146.00 L 57.00,173.00 L 57.00,105.00 L 169.00,39.00 Z" fill-rule="evenodd"/></svg>
+      <svg class="login-logo-icon" viewBox="0 0 659 773" role="img" aria-label="GRID" style="color:var(--amber)" fill="currentColor"><polygon points="659,339 419,339 331,390 331,462 527,462 527,506 204,699 330,773 659,580"/><polygon points="454,72 330,0 0,193 0,388 130,466 130,265"/><polygon points="0,428 0,578 168,678 295,605"/><polygon points="365,167 536,268 659,268 659,195 490,94"/></svg>
       <div class="login-logo-text">GRID</div>
-      <div class="login-logo-sub">Gestão de Treinamentos</div>
+      <div class="login-logo-sub">Segurança inteligente</div>
     </div>
-    <div class="login-title">Bem-vindo de volta</div>
-    <div class="login-sub">Acesse sua conta para continuar</div>
+    <div class="login-title">Acesse o GRID</div>
+    <div class="login-sub">Entre com seu e-mail e sua senha.</div>
     <div class="login-error" id="loginError"></div>
     <form id="loginForm" onsubmit="event.preventDefault(); fazerLogin(); return false;">
       <div class="field"><label for="loginEmail">E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email" inputmode="email"></div>
       <div class="field">
         <label for="loginPass">Senha</label>
-        <input type="password" id="loginPass" placeholder="..." autocomplete="current-password">
-        <span onclick="abrirRecuperacaoSenhaLogin()" class="login-forgot">Esqueceu sua senha?</span>
+        <div class="login-senha">
+          <input type="password" id="loginPass" placeholder="Sua senha" autocomplete="current-password" onkeydown="_loginCaps(event)" onkeyup="_loginCaps(event)" onblur="_loginCaps(null)">
+          <button type="button" class="login-ver" id="loginVer" onclick="_loginVerSenha()" aria-label="Mostrar senha" aria-pressed="false" aria-controls="loginPass"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Mostrar</span></button>
+        </div>
+        <div class="login-caps" id="loginCaps" role="status"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l9 9h-5v6H8v-6H3z"/></svg>A tecla Caps Lock está ligada</div>
+        <button type="button" onclick="abrirRecuperacaoSenhaLogin()" class="login-forgot">Esqueci minha senha</button>
       </div>
       <button class="btn-primary" id="loginBtn" type="submit">Entrar</button>
     </form>
-    <div class="login-footer">GRID · 2026</div>
+    <div class="login-footer">GRID · Toledo Labs · 2026</div>
     <div style="text-align:center;margin-top:10px;font-size:11px">
       <a href="/privacidade.html" target="_blank" rel="noopener" style="color:rgba(255,255,255,.45);text-decoration:none">Privacidade</a>
       <span style="color:rgba(255,255,255,.25);margin:0 6px">·</span>
@@ -2870,7 +2883,7 @@ body .cp-col-h{font-size:13px;font-weight:700}
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <div class="sidebar-logo-row">
-        <svg class="sidebar-logo-icon" viewBox="11.0 11.0 232.0 273.0" role="img" aria-label="GRID" style="color:var(--amber)" fill="currentColor"><path d="M 11.00,163.00 L 11.00,215.00 L 15.00,218.00 L 30.00,226.00 L 67.00,249.00 L 72.00,248.00 L 112.00,224.00 L 108.00,220.00 L 53.00,187.00 L 48.00,185.00 L 18.00,166.00 Z M 129.00,76.00 L 69.00,112.00 L 69.00,183.00 L 126.00,218.00 L 186.00,185.00 L 189.00,178.00 L 197.00,179.00 L 197.00,191.00 L 84.00,257.00 L 127.00,284.00 L 243.00,216.00 L 243.00,132.00 L 188.00,131.00 L 186.00,110.00 Z M 142.00,69.00 L 143.00,72.00 L 146.00,73.00 L 161.00,83.00 L 171.00,88.00 L 176.00,92.00 L 181.00,94.00 L 200.00,106.00 L 221.00,94.00 L 223.00,92.00 L 228.00,90.00 L 240.00,82.00 L 243.00,81.00 L 243.00,79.00 L 237.00,76.00 L 220.00,65.00 L 215.00,63.00 L 208.00,58.00 L 203.00,56.00 L 198.00,52.00 L 193.00,50.00 L 186.00,45.00 L 182.00,45.00 L 175.00,50.00 Z M 171.00,36.00 L 127.00,11.00 L 11.00,80.00 L 11.00,146.00 L 57.00,173.00 L 57.00,105.00 L 169.00,39.00 Z" fill-rule="evenodd"/></svg>
+        <svg class="sidebar-logo-icon" viewBox="0 0 659 773" role="img" aria-label="GRID" style="color:var(--amber)" fill="currentColor"><polygon points="659,339 419,339 331,390 331,462 527,462 527,506 204,699 330,773 659,580"/><polygon points="454,72 330,0 0,193 0,388 130,466 130,265"/><polygon points="0,428 0,578 168,678 295,605"/><polygon points="365,167 536,268 659,268 659,195 490,94"/></svg>
         <div>
           <div class="sidebar-logo-name">G<span class="lg-r">R</span>ID</div>
           <div class="sidebar-tagline">Segurança inteligente</div>
@@ -5015,7 +5028,33 @@ function _blindarPerfil(u) {
   }
 }
 
+// app 267: Mostrar/Ocultar a senha e aviso de Caps Lock na tela de login.
+function _loginVerSenha() {
+  const i = document.getElementById('loginPass'), b = document.getElementById('loginVer');
+  if (!i || !b) return;
+  const mostrar = i.type === 'password';
+  i.type = mostrar ? 'text' : 'password';
+  b.setAttribute('aria-pressed', String(mostrar));
+  const t = b.querySelector('span'); if (t) t.textContent = mostrar ? 'Ocultar' : 'Mostrar';
+  const sv = b.querySelector('svg'); if (sv) sv.innerHTML = _loginOlho(mostrar);
+  i.focus();
+}
+function _loginOlho(fechado) {   // função (não const): funciona mesmo se o script parar antes desta linha
+  return fechado ? '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><path d="M14.12 14.12a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>' : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+}
+function _loginCaps(ev) {
+  const el = document.getElementById('loginCaps'); if (!el) return;
+  const ligado = !!(ev && typeof ev.getModifierState === 'function' && ev.getModifierState('CapsLock'));
+  el.classList.toggle('show', ligado);
+}
+function _loginOcultarSenha() {
+  const i = document.getElementById('loginPass'), b = document.getElementById('loginVer');
+  if (i && i.type !== 'password') i.type = 'password';
+  if (b) { b.setAttribute('aria-pressed', 'false'); const t = b.querySelector('span'); if (t) t.textContent = 'Mostrar'; const sv = b.querySelector('svg'); if (sv) sv.innerHTML = _loginOlho(false); }
+}
+
 async function fazerLogin() {
+  _loginOcultarSenha();   // a senha nunca fica visível depois de entrar (e o navegador oferece salvar)
   const email = document.getElementById('loginEmail').value.trim();
   const senha = document.getElementById('loginPass').value;
   const err   = document.getElementById('loginError');
@@ -33340,7 +33379,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '266';
+  var APP_BUILD = '267';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
@@ -33417,7 +33456,7 @@ async function exportarRelatorioComparativoPDF() {
   try {
     if (sessionStorage.getItem('_gridAtualizouSozinho')) {
       sessionStorage.removeItem('_gridAtualizouSozinho');
-      setTimeout(function(){ if (typeof showToast === 'function') showToast('O GRID foi atualizado para a versão ' + APP_BUILD + '.', 'success', 4000); }, 2500);
+      setTimeout(function(){ if (typeof showToast === 'function') showToast('O GRID foi atualizado.', 'success', 4000); }, 2500);
     }
   } catch (e) {}
 
