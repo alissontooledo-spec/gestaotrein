@@ -191,7 +191,7 @@ function inicio() {
   const rec = (_status?.recentes || []).slice(0, 5);
   return `<section class="lq-ini">
     <h2 class="lq-h">${saudacao()} O que você precisa resolver?</h2>
-    <p class="lq-sub">Pergunte como perguntaria a um especialista em segurança do trabalho. Ele responde com o item da norma.</p>
+    <p class="lq-sub">Faça a pergunta como faria a um especialista. Ele responde com o item da norma.</p>
     ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil de acesso não inclui perguntas ao Laudomiro.</b> Peça ao administrador da sua empresa para liberar (Configurações → Laudomiro). As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> Logo você poderá perguntar aqui. Enquanto isso, as <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam funcionando.</div></div>` : ''}
     ${compositor({ grande: true })}
     ${anexosLigados() && !_anexo && !_fila.length ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">${IC.pdf}<span>Ler FDS (até 5 para comparar)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
