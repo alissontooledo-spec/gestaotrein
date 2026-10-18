@@ -2732,6 +2732,17 @@ table.cx-t{width:100%;border-collapse:collapse}
 .lqh-t{flex:none;min-width:0}.lqh-t b{display:block;font-size:14px;color:var(--navy)}.lqh-t small{display:block;font-size:12px;color:#5E6782}
 .lqh input{flex:1;min-width:0;height:40px;border:1px solid #D5DBE6;border-radius:10px;padding:0 14px;font:inherit;font-size:14px;color:var(--navy);background:#F8F9FC}
 .lqh input:focus{outline:none;border-color:var(--navy);background:#fff}
+/* v273: unidades */
+.uni-foco{cursor:pointer;white-space:nowrap}.uni-foco u{text-decoration:none;border-bottom:1px dotted currentColor}
+.uni-menu{position:fixed;z-index:9999;min-width:200px;background:#fff;border-radius:10px;box-shadow:0 10px 28px rgba(23,37,65,.18);padding:5px}
+.uni-menu button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;font-size:13.5px;color:var(--navy);padding:8px 12px;border-radius:7px;cursor:pointer}
+.uni-menu button small{display:block;font-size:11.5px;color:var(--text-3);font-weight:500}
+.uni-menu button.on{background:#EEF1F6;font-weight:700}.uni-menu button:hover{background:#F4F6FA}
+.uni-tag{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:99px;border:1px solid #D5DBE6;color:#5E6782;font-size:11.5px;font-weight:600;vertical-align:1px}
+.uni-pre{display:none;color:var(--navy);font-weight:700}
+@media(max-width:720px){.uni-tag{display:none}.uni-pre{display:inline}}
+.uni-op{display:flex;gap:8px;align-items:center;font-weight:500;margin:8px 0}.uni-op input{width:auto;margin:0}.uni-op span{color:var(--text-3);font-size:12.5px}
+.uni-lista{display:flex;flex-wrap:wrap;gap:4px 18px;margin-left:24px}
 @media(max-width:900px){.lqh{flex-wrap:wrap}.lqh-t{flex:1}.lqh input{flex:1 1 100%;order:3;font-size:16px}.lqh .btn{order:4;width:100%}.lqh-t small{display:none}}
 .cfg-sec{padding:18px}
 .cfg-sec-h h3{font-size:15px;font-weight:700;color:var(--text-1);margin:0 0 4px}
@@ -3114,6 +3125,203 @@ const LIMITES_PLANO = {
 const planoNome = (p) => PLANO_NOME[p || 'starter'] || PLANO_NOME.starter;
 // Plano oculto "Parceiro" (organizacoes.parceiro): limites do Clínica, não aparece no site; só o Provedor liga.
 const planoNomeOrg = (org) => org?.parceiro ? 'Parceiro' : planoNome(org?.plano);
+
+// ── v273: Unidades da rede (PASSO-87) ─────────────────────────────────────
+// Sem o PASSO-87 (UNI.ok = false) ou com 1 unidade só, nada disso aparece.
+// A escolha de unidade ("foco") fica no banco: o sistema inteiro passa a
+// mostrar só aquela unidade, sem cada tela precisar filtrar.
+const UNI = { ok: false, lista: [], minhas: [], foco: null };
+const uniAtivas = () => UNI.lista.filter(u => u.ativo);
+const uniMulti = () => UNI.ok && uniAtivas().length > 1;
+const uniSouRede = () => usuarioAtual?.perfil === 'provedor' || !UNI.minhas.length;
+const uniVisiveis = () => uniSouRede() ? uniAtivas() : uniAtivas().filter(u => UNI.minhas.includes(u.id));
+const uniPrincipal = () => UNI.lista.find(u => u.principal) || null;
+const uniPorId = (id) => UNI.lista.find(u => u.id === id) || uniPrincipal();
+const uniCurto = (nome) => String(nome || '').replace(/^Unidade\s+/i, '');
+const uniDoCliente = (c) => (c && c.unidade_id) || uniPrincipal()?.id || null;
+const uniPodeEscolher = () => uniMulti() && uniVisiveis().length > 1;
+async function uniCarregar() {
+  UNI.ok = false; UNI.lista = []; UNI.minhas = []; UNI.foco = null;
+  if (!usuarioAtual?.org_id || !usuarioAtual?.id) return;
+  try {
+    const [l, m, f] = await Promise.all([
+      sb.from('unidades').select('id,nome,cnpj,cidade,uf,endereco,logo_url,principal,ativo').eq('org_id', usuarioAtual.org_id).order('principal', { ascending: false }).order('nome'),
+      sb.from('usuarios_unidades').select('unidade_id').eq('usuario_id', usuarioAtual.id),
+      sb.from('usuarios_foco_unidade').select('unidade_id').eq('usuario_id', usuarioAtual.id).maybeSingle(),
+    ]);
+    if (l.error || m.error) return;   // sem o PASSO-87: tudo como antes
+    UNI.ok = true;
+    UNI.lista = l.data || [];
+    UNI.minhas = (m.data || []).map(x => x.unidade_id);
+    UNI.foco = (!f.error && f.data?.unidade_id) || null;
+  } catch (e) { UNI.ok = false; }
+}
+function uniRotuloFoco() {
+  if (UNI.foco) return uniPorId(UNI.foco)?.nome || '';
+  if (uniSouRede()) return 'Toda a rede';
+  return UNI.minhas.length > 1 ? 'Minhas unidades' : (uniPorId(UNI.minhas[0])?.nome || '');
+}
+// Texto do perfil no rodapé do menu e no topo do celular
+function uniSufixoPerfil() {
+  if (!uniMulti() || usuarioAtual?.perfil === 'provedor') return '';
+  if (uniSouRede()) return ' da rede';
+  return ' · ' + UNI.minhas.map(id => uniCurto(uniPorId(id)?.nome)).filter(Boolean).join(', ');
+}
+async function uniFocar(id) {
+  try {
+    const q = id ? sb.from('usuarios_foco_unidade').upsert({ usuario_id: usuarioAtual.id, unidade_id: id })
+                 : sb.from('usuarios_foco_unidade').delete().eq('usuario_id', usuarioAtual.id);
+    const { error } = await q;
+    if (error) throw error;
+    location.reload();
+  } catch (e) { showToast('Não foi possível trocar a unidade: ' + traduzErroSupabase(e, 'erro'), 'error'); }
+}
+// Filtro das listas (igual aos outros filtros da barra)
+function uniFiltroHtml() {
+  if (!uniPodeEscolher()) return '';
+  const todas = uniSouRede() ? 'Todas as unidades' : 'Minhas unidades';
+  return `<select class="turmas-filtro-select uni-filtro" onchange="uniFocar(this.value || null)" aria-label="Unidade">
+    <option value="">${todas}</option>${uniVisiveis().map(u => `<option value="${u.id}" ${UNI.foco === u.id ? 'selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}</select>`;
+}
+// Escolha discreta na linha da data do Início
+function uniLinhaDataHtml() {
+  if (!uniPodeEscolher()) return '';
+  return `<span class="uni-foco" role="button" tabindex="0" onclick="uniMenuFoco(this, event)" onkeydown="if(event.key==='Enter')uniMenuFoco(this, event)"> · <u>${escapeHtml(uniRotuloFoco())}</u> <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>`;
+}
+function uniMenuFoco(el, ev) {
+  ev?.stopPropagation();
+  document.querySelectorAll('.uni-menu').forEach(m => m.remove());
+  const r = el.getBoundingClientRect();
+  const m = document.createElement('div');
+  m.className = 'uni-menu';
+  m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 230)) + 'px';
+  m.style.top = (r.bottom + 6) + 'px';
+  const item = (id, nome, sub) => `<button type="button" class="${(UNI.foco || null) === id ? 'on' : ''}" onclick="uniFocar(${id ? `'${id}'` : 'null'})">${escapeHtml(nome)}${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</button>`;
+  m.innerHTML = item(null, uniSouRede() ? 'Toda a rede' : 'Minhas unidades', 'Todas juntas')
+    + uniVisiveis().map(u => item(u.id, u.nome, [u.cidade, u.uf].filter(Boolean).join('/'))).join('');
+  document.body.appendChild(m);
+  setTimeout(() => document.addEventListener('click', function f() { m.remove(); document.removeEventListener('click', f); }), 0);
+}
+// Etiqueta da unidade em cada empresa (só para quem vê mais de uma unidade, sem foco)
+function uniEtiquetaHtml(c) {
+  if (!uniMulti() || UNI.foco || uniVisiveis().length < 2) return '';
+  return `<span class="uni-tag">${escapeHtml(uniCurto(uniPorId(uniDoCliente(c))?.nome))}</span>`;
+}
+function uniPrefixoHtml(c) {
+  if (!uniMulti() || UNI.foco || uniVisiveis().length < 2) return '';
+  return `<b class="uni-pre">${escapeHtml(uniCurto(uniPorId(uniDoCliente(c))?.nome))} · </b>`;
+}
+// Logo do certificado: a da unidade da empresa, se houver; senão, a da organização
+function uniLogoDaEmpresa(unidadeId) {
+  if (!UNI.ok) return null;
+  const u = uniPorId(unidadeId);
+  return (u && !u.principal && u.logo_url) || null;   // a principal sempre usa a logo da organização
+}
+// Campo "Unidade que atende" no cadastro de empresa (só quem cuida da rede)
+function uniCampoClienteHtml(c) {
+  if (!uniMulti() || uniVisiveis().length < 2) return '';
+  const atual = c ? uniDoCliente(c) : (UNI.foco || (uniSouRede() ? uniPrincipal()?.id : UNI.minhas[0]));
+  const opcoes = uniVisiveis().slice();
+  if (atual && !opcoes.some(u => u.id === atual) && uniPorId(atual)) opcoes.push(uniPorId(atual));   // unidade desativada: mantém a atual
+  return `<div class="field"><label>Unidade que atende *</label>
+    <select id="mCliUnidade" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1)">
+      ${opcoes.map(u => `<option value="${u.id}" ${u.id === atual ? 'selected' : ''}>${escapeHtml(u.nome)}${u.ativo ? '' : ' (desativada)'}</option>`).join('')}
+    </select><div style="font-size:11.5px;color:var(--text-3);margin-top:4px">Turmas, colaboradores e certificados desta empresa ficam nesta unidade.</div></div>`;
+}
+// Bloco "Onde esta pessoa atua" no cadastro de pessoa (só quem cuida da rede, na própria organização)
+async function uniBlocoPessoaHtml(orgId, usuarioId) {
+  if (!uniMulti() || !uniSouRede() || orgId !== usuarioAtual.org_id) return '';
+  let marcadas = [];
+  if (usuarioId) {
+    const { data } = await sb.from('usuarios_unidades').select('unidade_id').eq('usuario_id', usuarioId);
+    marcadas = (data || []).map(x => x.unidade_id);
+  }
+  const rede = !marcadas.length;
+  return `<div class="field" id="mUsrUniBox"><label>Onde esta pessoa atua *</label>
+    <label class="uni-op"><input type="radio" name="mUsrUniModo" value="rede" ${rede ? 'checked' : ''} onchange="document.getElementById('mUsrUniLista').style.opacity=this.checked?.45:1"> Toda a rede <span>(vê e trabalha em todas as unidades)</span></label>
+    <label class="uni-op"><input type="radio" name="mUsrUniModo" value="unidades" ${rede ? '' : 'checked'} onchange="document.getElementById('mUsrUniLista').style.opacity=this.checked?1:.45"> Só nestas unidades:</label>
+    <div id="mUsrUniLista" class="uni-lista" style="opacity:${rede ? .45 : 1}">${uniAtivas().map(u => `<label class="uni-op"><input type="checkbox" value="${u.id}" ${marcadas.includes(u.id) ? 'checked' : ''}> ${escapeHtml(u.nome)}</label>`).join('')}</div></div>`;
+}
+// Grava onde a pessoa atua. "Só nestas unidades" sem nenhuma marcada vira "Toda a rede"? Não: recusa.
+async function uniSalvarPessoa(usuarioId) {
+  const box = document.getElementById('mUsrUniBox');
+  if (!box || !usuarioId) return true;
+  const modo = box.querySelector('input[name="mUsrUniModo"]:checked')?.value || 'rede';
+  const ids = modo === 'unidades' ? [...box.querySelectorAll('#mUsrUniLista input:checked')].map(i => i.value) : [];
+  if (modo === 'unidades' && !ids.length) { showToast('Marque pelo menos uma unidade (ou escolha "Toda a rede"). As unidades desta pessoa não foram alteradas.', 'error'); return false; }
+  try {
+    // Uma operação só no banco: ou grava tudo, ou nada muda.
+    const { error } = await sb.rpc('grid_definir_unidades_pessoa', { p_usuario: usuarioId, p_unidades: ids });
+    if (error) throw error;
+    return true;
+  } catch (e) { showToast('Os dados da pessoa foram salvos, mas onde ela atua não foi gravado: ' + traduzErroSupabase(e, 'erro'), 'error'); return false; }
+}
+function uniValidarPessoa() {
+  const box = document.getElementById('mUsrUniBox');
+  if (!box) return true;
+  const modo = box.querySelector('input[name="mUsrUniModo"]:checked')?.value || 'rede';
+  if (modo === 'unidades' && !box.querySelector('#mUsrUniLista input:checked')) { showToast('Marque pelo menos uma unidade, ou escolha "Toda a rede".', 'error'); return false; }
+  return true;
+}
+// ── Configurações → Unidades ──
+async function renderCfgUnidades() {
+  setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Unidades</div>`);
+  fabOcultar();
+  await uniCarregar();
+  const lim = Math.max(1, Number(usuarioAtual?.orgExtras?.unidades) || 1);
+  const ativas = uniAtivas();
+  const cheio = ativas.length >= lim;
+  const ehProv = usuarioAtual?.perfil === 'provedor' || !!window._suporteAtivo || (typeof _suporteAtivo !== 'undefined' && _suporteAtivo);
+  let contagem = new Map();
+  try {
+    const { data } = await sb.from('clientes').select('unidade_id').eq('org_id', usuarioAtual.org_id).eq('ativo', true);
+    (data || []).forEach(c => { const k = c.unidade_id || uniPrincipal()?.id; contagem.set(k, (contagem.get(k) || 0) + 1); });
+  } catch (e) {}
+  const linha = (rot, sub, valor) => `<div class="cx-row"><div class="l"><b>${rot}</b>${sub ? `<span>${sub}</span>` : ''}</div><div class="r"><div class="v">${valor}</div></div></div>`;
+  const un = (u) => `<div class="cx-row"><div class="l"><b style="display:flex;align-items:center;gap:8px">${escapeHtml(u.nome)}${u.principal ? '<span class="cx-pill cx-p-gray">Principal</span>' : ''}${u.ativo ? '' : '<span class="cx-pill cx-p-gray">Desativada</span>'}</b>
+      <span>${escapeHtml([[u.cidade, u.uf].filter(Boolean).join('/'), u.cnpj ? 'CNPJ ' + u.cnpj : ''].filter(Boolean).join(' · ') || 'Sem CNPJ e cidade cadastrados')}</span></div>
+      <div class="r" style="display:flex;gap:16px;align-items:center"><div style="text-align:right;font-size:13px;color:var(--text-3)"><b style="color:var(--navy);font-size:15px">${contagem.get(u.id) || 0}</b> empresas</div>
+      <button class="btn btn-outline btn-sm" style="width:auto" onclick="uniAbrirModal('${u.id}')">Editar</button></div></div>`;
+  setConteudo(`<div class="cx-h"><div><h1>Unidades</h1><p>Cada unidade tem os seus dados no certificado e as suas empresas atendidas. Quem atua em toda a rede vê todas; quem atua numa unidade vê só a dela.</p></div></div>
+    <div class="cx-sec"><div class="cx-sec-h"><div><b>Unidades da rede</b><span>${ativas.length} de ${lim} ${lim === 1 ? 'unidade' : 'unidades'} do contrato.</span></div>
+      <button class="btn btn-outline btn-sm" style="width:auto;margin-left:auto${cheio ? ';opacity:.45;cursor:not-allowed' : ''}" ${cheio ? 'disabled title="Todas as unidades do contrato já foram cadastradas"' : ''} onclick="uniAbrirModal()">+ Nova unidade</button></div>
+      ${UNI.lista.map(un).join('')}
+      <div class="cx-row"><div class="l"><b>Precisa de mais uma unidade?</b><span>Cada unidade a mais custa R$ 297 por mês e traz +1 número de WhatsApp e +500 perguntas ao Laudomiro.</span></div><div class="r"><a class="btn btn-outline btn-sm" style="width:auto" href="https://wa.me/5547992809019?text=${encodeURIComponent('Olá! Quero contratar mais uma unidade no GRID.')}" target="_blank" rel="noopener">Falar com a Toledo Labs</a></div></div>
+    </div>
+    <div class="cx-sec"><div class="cx-sec-h"><div><b>O que é da rede</b><span>Vale para todas as unidades.</span></div></div>
+      ${linha('Catálogo de treinamentos', 'Cursos, cargas horárias e modelos de certificado. Só quem atua em toda a rede altera.', 'Um só para a rede')}
+      ${linha('Laudomiro', 'As perguntas do mês são da rede e usadas por todas as unidades.', `${limitePlano('perguntas').toLocaleString('pt-BR')} perguntas por mês`)}
+      ${linha('Pessoas da equipe', 'Cadastradas por quem atua em toda a rede. Em cada pessoa, marque onde ela atua.', '')}
+    </div>`);
+}
+function uniAbrirModal(id = null) {
+  const u = id ? UNI.lista.find(x => x.id === id) : null;
+  const inp = (rot, idc, val, ph = '') => `<div class="field"><label>${rot}</label><input type="text" id="${idc}" value="${escapeHtml(val || '')}" placeholder="${ph}"></div>`;
+  abrirModal(u ? 'Editar unidade' : 'Nova unidade', `
+    ${inp('Nome da unidade *', 'mUniNome', u?.nome, 'Ex.: Unidade Norte')}
+    ${inp('CNPJ', 'mUniCnpj', u?.cnpj, '00.000.000/0000-00')}
+    <div style="display:grid;grid-template-columns:1fr 90px;gap:12px">${inp('Cidade', 'mUniCidade', u?.cidade)}${inp('UF', 'mUniUf', u?.uf, 'SC')}</div>
+    ${inp('Endereço', 'mUniEndereco', u?.endereco, 'Rua, número, bairro')}
+    <div class="field"><label>Logo dos certificados</label><div style="padding:12px;border:1.5px dashed var(--border);border-radius:10px;color:var(--text-3);font-size:13px">${u?.logo_url ? 'Esta unidade tem logo própria nos certificados.' : 'Sem logo própria: os certificados usam a logo da rede.'} Para trocar, fale com a Toledo Labs.</div></div>
+    ${u && !u.principal ? `<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:6px"><input type="checkbox" id="mUniAtiva" ${u.ativo ? 'checked' : ''} style="width:auto"> Unidade ativa</label>` : ''}`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-navy" onclick="uniSalvar(${u ? `'${u.id}'` : 'null'})">Salvar</button>`);
+}
+async function uniSalvar(id) {
+  const v = (k) => (document.getElementById(k)?.value || '').trim();
+  const nome = v('mUniNome');
+  if (!nome) { showToast('Dê um nome para a unidade.', 'error'); return; }
+  const dados = { nome, cnpj: v('mUniCnpj') || null, cidade: v('mUniCidade') || null, uf: v('mUniUf').toUpperCase() || null, endereco: v('mUniEndereco') || null };
+  const at = document.getElementById('mUniAtiva'); if (at) dados.ativo = at.checked;
+  try {
+    setBtnModalLoading(true);
+    const q = id ? sb.from('unidades').update(dados).eq('id', id).select('id') : sb.from('unidades').insert({ ...dados, org_id: usuarioAtual.org_id }).select('id');
+    const { data, error } = await q;
+    if (error) throw error;
+    if (!data || !data.length) throw new Error('Você não tem permissão para alterar as unidades.');
+    fecharModal(); showToast(id ? 'Unidade atualizada.' : 'Unidade cadastrada.', 'success');
+    await renderCfgUnidades();
+  } catch (e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e, 'Erro ao salvar a unidade'), 'error'); }
+}
 
 // Limite de uma organização (o plano + o que foi contratado à parte).
 // `org` = linha de organizacoes; sem as colunas novas (PASSO-86 não rodado), vale só o plano.
@@ -5215,6 +5423,7 @@ async function entrarNoApp() {
       const { data: ex, error: exErr } = await sb.from('organizacoes').select('unidades,extra_whatsapp,extra_perguntas,parceiro').eq('id', usuarioAtual.org_id).maybeSingle();
       if (!exErr && ex) usuarioAtual.orgExtras = ex;
     } catch (e) {}
+    await uniCarregar();   // v273
     usuarioAtual.orgTrialFim = org?.trial_fim || null;
     // Branding Enterprise: aplica cor/logo da organização, se configurados
     if (org?.cor_primaria) document.documentElement.style.setProperty('--navy', org.cor_primaria);
@@ -5362,7 +5571,7 @@ let _plataformaCarregando = null;   // promessa de _iniciarPlataforma (ver irPar
    e de modulo sem perguntar ao modulo — que pode ainda nao ter carregado. */
 const TITULOS_NATIVOS = new Set(['home','orgs','financeiro','adocao','logs','clientes',
   'colaboradores','catalogo','conformidade','turmas','agendaequipe','equipe','agenda',
-  'historico','relatorios','conta','configuracoes','perfis','cfg-avisos','cfg-empresa','cfg-laudomiro']);
+  'historico','relatorios','conta','configuracoes','perfis','cfg-avisos','cfg-empresa','cfg-laudomiro','cfg-unidades']);
 let _modulosAtivos = [];
 
 // A lista de modulos contratados muda raramente (uma venda, uma renovacao).
@@ -5701,7 +5910,7 @@ const _PERFIS_CATALOGO = {
 const _TELA_MODULO = {};
 _PERFIS_CATALOGO.modulos.forEach(m => m.telas.forEach(([t]) => { _TELA_MODULO[t] = m.id; }));
 // Rotas que não são tela do catálogo, mas pertencem a uma.
-const _ROTA_TELA = { 'crm-lead':'crm-funil', 'crm-funis':'crm-funil', 'crm-respostas':'crm-conversas', 'crm-numeros-status':'crm-numeros', perfis:'equipe', laudomiro:'campo', 'cfg-avisos':'configuracoes', 'cfg-empresa':'configuracoes', 'cfg-laudomiro':'equipe' };
+const _ROTA_TELA = { 'crm-lead':'crm-funil', 'crm-funis':'crm-funil', 'crm-respostas':'crm-conversas', 'crm-numeros-status':'crm-numeros', perfis:'equipe', laudomiro:'campo', 'cfg-avisos':'configuracoes', 'cfg-empresa':'configuracoes', 'cfg-unidades':'configuracoes', 'cfg-laudomiro':'equipe' };
 const _telaDaRota = (rota) => rota && rota.startsWith('campo') ? 'campo' : (_ROTA_TELA[rota] || rota);
 
 function _permAtual() { return usuarioAtual && usuarioAtual._perm ? usuarioAtual._perm : null; }
@@ -6410,7 +6619,7 @@ function configurarNavegacao() {
   av.style.background = '#34466B';   // v219: âmbar só na marca e no item ativo
   av.style.color = '#fff';
   document.getElementById('sidebarNome').textContent = usuarioAtual.nome;
-  document.getElementById('sidebarPerfil').textContent = labelPerfil(perfil);
+  document.getElementById('sidebarPerfil').textContent = labelPerfil(perfil) + uniSufixoPerfil();
   _configurarSinoVisibilidade();
   _sidebarAplicarEstadoMini();
 }
@@ -6446,7 +6655,7 @@ function marcarNavAtivo(id) {
   if (bn) bn.classList.add('active');
 }
 
-const TITULOS = {configuracoes:'Configurações','cfg-avisos':'Avisos automáticos','cfg-empresa':'Empresa e plano','cfg-laudomiro':'Laudomiro',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria','laudomiro-uso':'Laudomiro',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos',
+const TITULOS = {configuracoes:'Configurações','cfg-avisos':'Avisos automáticos','cfg-empresa':'Empresa e plano','cfg-unidades':'Unidades','cfg-laudomiro':'Laudomiro',home:'Início',orgs:'Organizações',financeiro:'Financeiro',adocao:'Adoção de Recursos',logs:'Logs / Auditoria','laudomiro-uso':'Laudomiro',turmas:'Turmas',clientes:'Clientes',colaboradores:'Colaboradores',catalogo:'Catálogo de Treinamentos',conformidade:'Controle de Conformidade',relatorios:'Relatórios',equipe:'Equipe',agenda:'Minha Agenda',agendaequipe:'Agenda da Equipe',historico:'Histórico',conta:'Minha conta',documentos:'Documentos',
   // 26/09 (v198): rotas da Avaliação de Campo (as ocultas não passam pelo menu)
   perfis:'Perfis de acesso',laudomiro:'Laudomiro',campo:'Avaliações de campo','campo-avaliacao':'Avaliação de campo','campo-ghe':'GHE','campo-finalizar':'Finalizar avaliação','campo-catalogo':'Catálogo da ficha','campo-funcionarios':'Conferir funcionários','campo-tipos':'Tipos de documento','campo-matriz':'Matriz de risco','campo-plano':'Plano de ação','campo-soc':'Lançar no SOC','campo-acoes':'Planos de ação','campo-agentes':'Laudomiro','campo-encerrar':'Encerrar a visita','campo-escritorio':'Escritório'};
 
@@ -6525,6 +6734,7 @@ async function irPara(pagina, params={}) {
       case 'configuracoes': await renderConfiguracoes(); break;
       case 'cfg-avisos':    await renderCfgAvisos(); break;      // v250
       case 'cfg-empresa':   await renderCfgEmpresa(); break;
+      case 'cfg-unidades':  await renderCfgUnidades(); break;   // v273
       case 'cfg-laudomiro': await renderCfgLaudomiro(); break;
       case 'agenda':        await renderAgenda(); break;
       case 'historico':     await renderHistorico(); break;
@@ -8312,7 +8522,7 @@ function _giAvisosHtml(av, docs) {
 
 function _giView218(d, extras) {
   const k = d.k;
-  const topo = `<div class="gi-page"><div><div class="gi-eyebrow">${_rxEsc(extras.dataLonga)}</div><h2>${_rxEsc(extras.saudacao)}, ${_rxEsc(extras.nome)}</h2><p>${_rxEsc(extras.mensagem)}</p></div>
+  const topo = `<div class="gi-page"><div><div class="gi-eyebrow">${_rxEsc(extras.dataLonga)}${uniLinhaDataHtml()}</div><h2>${_rxEsc(extras.saudacao)}, ${_rxEsc(extras.nome)}</h2><p>${_rxEsc(extras.mensagem)}</p></div>
     <div class="gi-acoes"><button class="gi-btn gi-laranja" data-nav="turmas">Nova turma</button>
     ${_podeRota('agendaequipe') ? `<button class="gi-btn" data-nav="agendaequipe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg> Agenda da equipe</button>` : ''}</div></div>`;
   const grande = (titulo, n, s, corpo, js) => `<div class="gi-kpi gi5-k" onclick="${js}"><div class="gi-kh">${titulo}</div><div class="gi5-nl"><span class="gi-n">${n}</span><small class="gi-s">${s}</small></div>${corpo}</div>`;
@@ -8359,7 +8569,7 @@ async function renderHomeAdmin(opcoes = {}) {
   ]);
   const saiu = () => token !== window._giToken || (typeof paginaAtual !== 'undefined' && paginaAtual !== 'home');
   if (saiu()) return;
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${escapeHtml(usuarioAtual.nome)}</div><div class="mh-badge">${_ehComercial ? 'Comercial' : 'Administrador'}</div>`);
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${escapeHtml(usuarioAtual.nome)}</div><div class="mh-badge">${_ehComercial ? 'Comercial' : 'Administrador'}${escapeHtml(uniSufixoPerfil())}</div>`);
   const falha = [tR, sR, cR, compR, uR].find(r => !r || r.error);
   if (falha) {
     // Mesmo princípio dos Relatórios: nunca mostrar número calculado com dado incompleto.
@@ -11205,12 +11415,12 @@ function _orgContratoLer() {
   const valorTxt = !v('mOrgValor')?.dataset.manual ? ''
     : bruto.includes(',') ? bruto.replace(/\./g, '').replace(',', '.')
     : /\.\d{1,2}$/.test(bruto) ? bruto.replace(/\.(?=.*\.)/g, '') : bruto.replace(/\./g, '');
-  return { plano, unidades: plano === 'enterprise' ? int('mOrgUnidades', 1) : 1, extra_whatsapp: int('mOrgExtraWhats', 0), extra_perguntas: int('mOrgExtraPerg', 0),
+  return { plano, unidades: (plano === 'enterprise' || !!v('mOrgParceiro')?.checked) ? int('mOrgUnidades', 1) : 1, extra_whatsapp: int('mOrgExtraWhats', 0), extra_perguntas: int('mOrgExtraPerg', 0),
            fundador: !!v('mOrgFundador')?.checked, parceiro: !!v('mOrgParceiro')?.checked, valor_mensal: (valorTxt === '' || !Number.isFinite(Number(valorTxt))) ? null : Math.round(Number(valorTxt) * 100) / 100 };
 }
 function _orgContratoAtualizar(trocouFundador) {
   const c = _orgContratoLer(); if (!c) return;
-  const w = document.getElementById('mOrgUnidadesW'); if (w) w.style.display = c.plano === 'enterprise' ? '' : 'none';
+  const w = document.getElementById('mOrgUnidadesW'); if (w) w.style.display = (c.plano === 'enterprise' || c.parceiro) ? '' : 'none';   // v273: Parceiro também pode ter unidades
   const tabela = valorTabelaOrg(c), sugerido = Math.round(tabela * (c.fundador ? 0.7 : 1) * 100) / 100;
   const vi = document.getElementById('mOrgValor');
   const br = (x) => x.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -11308,6 +11518,7 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
     if (error || !data) { showToast('Usuário não encontrado', 'error'); return; }
     u = data;
   }
+  const _uniBloco = await uniBlocoPessoaHtml(orgId, usuarioId);   // v273
 
   // Documentos do instrutor (assinatura digitalizada) — liberado para
   // Provedor/Administrador cadastrarem/gerenciarem em nome do instrutor
@@ -11372,6 +11583,7 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
         ${_opcoesPerfilUsuario(u, _perfisOrg)}
       </select>
       ${(_perfisOrg || []).length ? '<div style="font-size:11px;color:var(--text-3);margin-top:4px">Perfis personalizados aparecem abaixo do perfil padrão de que partem (Configurações → Perfis de acesso).</div>' : ''}</div>
+    ${_uniBloco}
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Identificação profissional <span style="font-weight:400;text-transform:none">(exibida no certificado)</span></div>
       <div class="field"><label>Formação</label><input type="text" id="mUsrFormacao" value="${escapeHtml(u?.formacao||'')}" placeholder="Ex: Bacharel em Engenharia de Segurança do Trabalho"></div>
@@ -11504,6 +11716,7 @@ async function salvarUsuarioOrg() {
   const cpf             = document.getElementById('mUsrCpf')?.value.trim()||null;
   const whatsapp        = document.getElementById('mUsrWhats')?.value.trim()||null;
   if (!nome) { showToast('Nome é obrigatório', 'error'); return; }
+  if (!uniValidarPessoa()) return;   // v273
 
   try {
     setBtnModalLoading(true);
@@ -11521,6 +11734,7 @@ async function salvarUsuarioOrg() {
       return;
     }
     await _salvarValorInstrutor(usuarioId);
+    if (!(await uniSalvarPessoa(usuarioId))) { setBtnModalLoading(false); return; }   // v273
     fecharModal();
     showToast('Usuário atualizado com sucesso!', 'success');
     await verUsuarioEquipe(usuarioId);
@@ -11570,6 +11784,7 @@ async function criarUsuarioOrg() {
   const whatsapp        = document.getElementById('mUsrWhats')?.value.trim()||null;
   if (!nome||!email||!senha) { showToast('Preencha todos os campos','error'); return; }
   if (senha.length<6) { showToast('Senha deve ter no mínimo 6 caracteres','error'); return; }
+  if (!uniValidarPessoa()) return;   // v273
   // ── v271: limite de usuários ativos por plano (3 / 10 / sem limite). O banco também trava (PASSO-86). ──
   {
     const orgId = _modalCurrentId || usuarioAtual.org_id;
@@ -11605,6 +11820,7 @@ async function criarUsuarioOrg() {
       const { error: ePa } = await sb.from('usuarios').update({ perfil_acesso_id: perfilAcessoId }).eq('id', resultado.userId);
       if (ePa) showToast('Usuário criado, mas o perfil de acesso não foi aplicado: ' + traduzErroSupabase(ePa, 'erro'), 'error');
     }
+    if (resultado.userId && !(await uniSalvarPessoa(resultado.userId))) { fecharModal(); showToast(`${nome} foi criado(a). Abra o cadastro e marque de novo onde a pessoa atua.`, 'error'); return; }   // v273
     fecharModal(); showToast(`${nome} criado com sucesso!`,'success');
   } catch(e) {
     setBtnModalLoading(false);
@@ -11646,6 +11862,7 @@ async function renderClientes() {
     </div>
     <div class="turmas-filtros">
       <div class="turmas-busca"><span class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><input type="search" id="buscaCliente" placeholder="Buscar por nome ou CNPJ..." oninput="aplicarFiltrosClientes()"></div>
+      ${uniFiltroHtml()}
       <select id="filtroClienteStatus" class="turmas-filtro-select" onchange="aplicarFiltrosClientes()">
         <option value="">Todos os status</option>
         <option value="ativo">Ativos</option>
@@ -11723,8 +11940,8 @@ function _htmlListaClientes(lista) {
     <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s,box-shadow .12s" data-action="verCliente" data-id="${c.id}" onmouseover="this.style.background='var(--gray-50)';this.style.boxShadow='inset 0 0 0 1px var(--border-2)'" onmouseout="this.style.background='';this.style.boxShadow=''">
       <div style="width:34px;height:34px;border-radius:7px;background:${corBg};color:${cor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.3px">${iniciais(c.nome)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}</div>
-        <div style="font-size:12.5px;color:#66728A;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${escapeHtml(c.cidade)}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.nome)}${uniEtiquetaHtml(c)}</div>
+        <div style="font-size:12.5px;color:#66728A;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${uniPrefixoHtml(c)}${[c.cnpj?`CNPJ ${c.cnpj}`:null,c.cidade?`${escapeHtml(c.cidade)}${c.uf?'/'+c.uf:''}`:null,c.email].filter(Boolean).join(' · ')||'Sem informações adicionais'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="badge ${c.ativo?'badge-green':'badge-gray'}">${c.ativo?'Ativo':'Inativo'}</span>
@@ -11877,6 +12094,7 @@ function abrirModalCliente(id=null) {
   _modalCurrentId = id;
   const c = id ? _clientesCache.find(x=>x.id===id) : null;
   abrirModal(c?'Editar cliente':'Novo cliente', `
+    ${uniCampoClienteHtml(c)}
     <div class="field"><label>Nome *</label><input type="text" id="mCliNome" value="${escapeHtml(c?.nome||'')}" placeholder="Razão social"></div>
     ${_cnpjRow('mCliCnpj', c?.cnpj||'', 'mCliNome', 'mCliCidade', 'mCliUf', 'mCliEmail', 'mCliCnae', 'mCli')}
     <input type="hidden" id="mCliCnae" value="${c?.cnae||''}">
@@ -11924,6 +12142,7 @@ async function salvarCliente() {
   }
   const dados = {
     nome,
+    ...(document.getElementById('mCliUnidade') ? { unidade_id: document.getElementById('mCliUnidade').value || null } : {}),   // v273
     cnpj: _valorCampo('mCliCnpj'),
     cnae: _valorCampo('mCliCnae'),
     cnae_descricao: _valorCampo('mCliCnaeDesc'),
@@ -12141,6 +12360,7 @@ async function renderColaboradores() {
     </div>
     <div class="turmas-filtros">
       <div class="turmas-busca"><span class="ic"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><input type="search" id="buscaColab" placeholder="Buscar por nome ou CPF..." oninput="aplicarFiltrosColabs()"></div>
+      ${uniFiltroHtml()}
       <select id="filtroColabEmpresa" class="turmas-filtro-select" onchange="aplicarFiltrosColabs()">
         <option value="">Todas as empresas</option>
         <option value="__sem__">Sem empresa vinculada</option>
@@ -14075,6 +14295,7 @@ async function renderTurmas(abaInicial) {
            Quem só quer buscar tem a barra limpa; quem precisa recortar abre
            o painel. O contador no botão diz quantos filtros estão ligados,
            para nunca existir filtro ativo invisível. -->
+      ${uniFiltroHtml()}
       <button type="button" id="turmasBtnFiltros" class="turmas-fbtn" onclick="_turmasTogglePainel()" title="Filtrar turmas">
         <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
         Filtros <span id="turmasFiltrosBadge" class="fbadge" style="display:none">0</span>
@@ -17233,6 +17454,7 @@ const _cfgAdmin = () => ['administrador', 'provedor'].includes(usuarioAtual?.per
 const _cfgTemModulo = (m) => (_modulosAtivos || []).includes(m);
 const _CFG_ITENS = [
   { id:'cfg-empresa',   g:'Organização',             l:'Empresa e plano',     ic:'bldg',   d:'Dados da empresa, plano e módulos',        ver:() => _cfgAdmin() },
+  { id:'cfg-unidades',  g:'Organização',             l:'Unidades',            ic:'bldg',   d:'Unidades da rede e o que cada uma atende',  ver:() => _cfgAdmin() && UNI.ok && uniSouRede() && (uniMulti() || Number(usuarioAtual?.orgExtras?.unidades) > 1) },
   { id:'equipe',        g:'Organização',             l:'Equipe',              ic:'users',  d:'Quem usa o GRID e com qual perfil',         ver:() => _podeRota('equipe') },
   { id:'perfis',        g:'Organização',             l:'Perfis de acesso',    ic:'shield', d:'Quem vê o quê no sistema',                  ver:() => _podeRota('perfis') },
   { id:'cfg-avisos',    g:'Comunicação',             l:'Avisos automáticos',  ic:'chat',   d:'Confirmação e lembrete por WhatsApp',       ver:() => _podeRota('configuracoes') },
@@ -27301,7 +27523,7 @@ function _eqRender() {
   }).join('');
   const vazio = !lista.length ? `<tr><td colspan="${temLq ? 5 : 4}" style="padding:28px 20px;text-align:center;color:#7A8299;cursor:default">Ninguém neste filtro.</td></tr>` : '';
   setConteudo(`<div class="cx-h"><div><h1>Equipe</h1><p>Quem usa o GRID na sua empresa e com qual perfil de acesso. Pessoas inativas não entram no sistema, mas o histórico delas fica guardado.</p></div>
-      <div class="cx-acts" style="align-items:center"><span class="cx-pill cx-p-navy">${plano}</span><button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.userplus || ''} Adicionar pessoa</button></div></div>
+      <div class="cx-acts" style="align-items:center"><span class="cx-pill cx-p-navy">${plano}</span>${(!uniMulti() || uniSouRede()) ? `<button class="btn btn-amber" onclick="abrirModalUsuarioOrg('${usuarioAtual.org_id}')">${ICONS.userplus || ''} Adicionar pessoa</button>` : ''}</div></div>
     <div class="cx-sec">
       <div class="cx-kpis"><div><b>${ativos.length}</b><span>pessoas ativas</span></div><div><b>${ativos.filter(u => u.perfil === 'instrutor').length}</b><span>instrutores</span></div><div><b>${inat.length}</b><span>inativas</span></div></div>
       <div class="cx-tb"><input type="search" class="cx-busca" placeholder="Buscar por nome ou e-mail" aria-label="Buscar na equipe" oninput="_eqBuscar(this.value)">
@@ -30994,7 +31216,7 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
     await _garantirJsPDF();
     if (!sessaoId) throw new Error('Encontro não informado — não é possível gerar a ficha de presença.');
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria),sessoes(*,usuarios!instrutor_id(nome,assinatura_path,conselho_classe,sigla_conselho,uf_registro,especialidade,formacao,cpf)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj' + (UNI.ok ? ',unidade_id' : '') + '),catalogo(nome,carga_horaria),sessoes(*,usuarios!instrutor_id(nome,assinatura_path,conselho_classe,sigla_conselho,uf_registro,especialidade,formacao,cpf)),turma_participantes(*,colaboradores(nome,cpf,cargo)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — a ficha de presença ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -31077,7 +31299,7 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
     // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
     const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
     // Logomarca da organização (plano Enterprise), se houver
-    const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
+    const imgLogoOrg = await carregarLogoOrgPDF(uniLogoDaEmpresa(t.clientes?.unidade_id) || usuarioAtual.orgLogoUrl);   // v273: logo da unidade
 
     if (_isAvanteseg) {
       const _logoAvantesegFicha = await carregarArteFundoOrgPDF(`assets/certificados/avanteseg/logo-transparente.png?v=${AVANTESEG_ASSETS_V}`);
@@ -31431,7 +31653,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
   try {
     await Promise.all([_garantirJsPDF(), _garantirDOMPurify()]);
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj' + (UNI.ok ? ',unidade_id' : '') + '),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -31503,7 +31725,7 @@ async function gerarCertificadoIndividual(turmaId, colaboradorId, baixarAoGerar 
     // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
     const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
     // Logomarca da organização (plano Enterprise), se houver
-    const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
+    const imgLogoOrg = await carregarLogoOrgPDF(uniLogoDaEmpresa(t.clientes?.unidade_id) || usuarioAtual.orgLogoUrl);   // v273: logo da unidade
     // Assinatura digital do aluno, capturada na execução da aula, se houver.
     // 2026-08-16, a pedido do Alisson: a partir de agora essa assinatura NAO
     // e mais desenhada no certificado individual (ela e passada como null
@@ -31965,7 +32187,7 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
   try {
     await Promise.all([_garantirJsPDF(), _garantirDOMPurify()]);
     const {data:t, error} = await sb.from('turmas')
-      .select('*,clientes(nome,cnpj),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
+      .select('*,clientes(nome,cnpj' + (UNI.ok ? ',unidade_id' : '') + '),catalogo(nome,carga_horaria,descricao,conteudo_programatico,validade_meses),sessoes(*,usuarios!instrutor_id(nome,conselho_classe,sigla_conselho,especialidade,assinatura_path,formacao,uf_registro,cpf)),turma_participantes(*,colaboradores(nome,cargo,cpf)),organizacoes(id,nome,cnpj,cor_primaria,cert_aplicar_cor_documentos,cert_texto_rodape,cert_nivel_personalizacao,cert_modelo_base_id,cert_arte_fundo_url,cert_arte_fundo_verso_url,cert_layout_campos)')
       .eq('id', turmaId).single();
     if (error) throw error;
     if (!t.sessoes || !t.sessoes.length) throw new Error('Esta turma não tem nenhum agendamento registrado — o certificado ficaria sem data e sem instrutor. Adicione ao menos um agendamento antes de gerar.');
@@ -32018,7 +32240,7 @@ async function gerarCertificadoColetivo(turmaId, baixarAoGerar = true) {
     // Assinatura digitalizada do instrutor (upload em Minha Conta), se houver
     const imgAssinaturaInstrutor = await carregarAssinaturaInstrutorPDF(ag?.usuarios?.assinatura_path);
     // Logomarca da organização (plano Enterprise), se houver
-    const imgLogoOrg = await carregarLogoOrgPDF(usuarioAtual.orgLogoUrl);
+    const imgLogoOrg = await carregarLogoOrgPDF(uniLogoDaEmpresa(t.clientes?.unidade_id) || usuarioAtual.orgLogoUrl);   // v273: logo da unidade
 
     const dtObj = new Date(dataCert+'T12:00:00');
     const dtVal = new Date(dtObj); dtVal.setMonth(dtVal.getMonth()+valMeses);
@@ -33515,7 +33737,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '272';
+  var APP_BUILD = '273';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
