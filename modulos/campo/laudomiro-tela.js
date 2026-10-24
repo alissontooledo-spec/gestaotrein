@@ -33,6 +33,8 @@
 import * as Fichas from './agentes.js';
 import * as L from './laudomiro.js';
 import * as Dados from './laudomiro-dados.js';
+import * as Calc from './laudomiro-calc.js';   // v281: dose de ruído
+import * as Docs from './laudomiro-docs.js';   // v281: baixar em Word e PDF
 import { I, esc, ligarTela, avisar, ponte, valorVisivel } from './comum.js';
 import { cliente as clienteBanco } from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
@@ -80,6 +82,11 @@ const IC = {
   clip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 11-8.6 8.6a5 5 0 0 1-7-7l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l8-8"/></svg>',
   pdf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
   cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+  mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  ruido: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 11v2"/></svg>',
+  calc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/></svg>',
+  word: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13l1.5 5 2.5-4 2.5 4 1.5-5"/></svg>',
+  baixar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   tab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>',
   turma: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>',
   img: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>',
@@ -182,8 +189,105 @@ function painelDoc(turno, tIdx) {
     ${(d.conferir || []).length ? `<p class="lq-doc-al">${IC.erro}<span>Confira estes números no texto da norma: <b>${d.conferir.map(esc).join(', ')}</b></span></p>` : ''}
     <div class="lq-doc-t">${docLegivel(d.texto)}</div>
     <p class="lq-doc-n">Revise e complete os campos entre colchetes antes de usar. Gerado em ${hoje}. O laudo é do profissional responsável.</p>
-    <div class="lq-doc-a"><button type="button" class="lq-lnk" data-acao="campo:lq-doc-refazer:${tIdx}">Montar de novo</button><button type="button" class="btn btn-primary btn-sm" data-acao="campo:lq-doc-copiar:${tIdx}" id="lqDocCopiar${tIdx}">${IC.copiar} ${d.copiado ? 'Copiado' : 'Copiar texto'}</button></div>`}
+    <div class="lq-doc-a"><button type="button" class="lq-lnk" data-acao="campo:lq-doc-refazer:${tIdx}">Montar de novo</button>
+      <span class="lq-doc-bx"><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-doc-baixar:${tIdx}.docx" title="Baixar em Word">${IC.word} Word</button><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-doc-baixar:${tIdx}.pdf" title="Baixar em PDF">${IC.baixar} PDF</button>
+      <button type="button" class="btn btn-primary btn-sm" data-acao="campo:lq-doc-copiar:${tIdx}" id="lqDocCopiar${tIdx}">${IC.copiar} ${d.copiado ? 'Copiado' : 'Copiar texto'}</button></span></div>`}
   </aside>`;
+}
+
+/* ══ v281 · baixar em Word e PDF ═══════════════════════════════════════════ */
+const NOTA_DOC = 'Texto de apoio gerado pelo Laudomiro. Revise e complete os campos entre colchetes antes de usar. O laudo é do profissional responsável.';
+async function baixarDoc(fmt, dados) {
+  try { await Docs.baixar(fmt === 'pdf' ? 'pdf' : 'docx', dados); avisar(fmt === 'pdf' ? 'PDF baixado.' : 'Arquivo do Word baixado.', 'sucesso'); }
+  catch (e) { avisar(e?.message || 'Não foi possível gerar o arquivo agora.', 'erro'); }
+}
+
+/* ══ v281 · Calcular: dose de ruído (NR-15, Anexo 1) ══════════════════════ */
+let _fichaAbrir = null;   // v281: sugestão "Ver a ficha" abre direto o agente
+let _calc = [{ nivel: '', horas: '', minutos: '' }, { nivel: '', horas: '', minutos: '' }];
+function focarCalc(i) { const el = [...document.querySelectorAll(`[data-cp="lq.calc.${i}.nivel"]`)].find((x) => x.getBoundingClientRect().width > 0); el?.focus?.(); }
+const textoCalc = (r) => `MEMÓRIA DE CÁLCULO DA DOSE DE RUÍDO (NR-15, ANEXO 1)\n\n${Calc.memoria(r)}`;
+function resultadoCalc() {
+  const r = Calc.calcular(_calc);
+  if (!r.itens.length && !r.erros.length) return `<div class="lq-calc-vazio"><b>Informe o nível e o tempo de cada período.</b><span>O resultado aparece aqui conforme você digita. <button type="button" class="lq-lnk" data-acao="campo:lq-calc-exemplo">Ver um exemplo</button></span></div>`;
+  const c = Calc.conclusao(r);
+  const linhas = r.itens.map((x) => `<li><span class="n">${Calc.nivelTxt(x.nivel)}</span><span class="t">${Calc.duracao(x.min)}</span><span class="f">${
+    x.tipo === 'abaixo' ? 'abaixo de 80, não entra' : x.tipo === 'acima' ? 'acima de 115 dB(A)' : x.tipo === 'acao' ? `só nível de ação: <b>${Calc.num(x.acao, 3)}</b><small>de 80 a 85 não entra na soma da NR-15</small>` : `${Number.isInteger(x.min) ? x.min : Calc.num(x.min, 1)} ÷ ${x.limite} = <b>${Calc.num(x.fracao, 3)}</b>${x.tipo === 'intermediario' ? `<small>usa o limite de ${x.ref} dB(A), item 4</small>` : ''}`}</span></li>`).join('');
+  return `<div class="lq-calc-r ${c.nivel}" role="status" aria-live="polite">
+      ${r.erros.length ? '' : `<div class="lq-calc-dose"><span>Dose</span><b>${Calc.num(r.dose * 100, 1)}%</b><small>Soma das frações ${Calc.num(r.dose, 3)}</small>${r.doseAcao !== r.dose ? `<small>Nível de ação: ${Calc.num(r.doseAcao * 100, 1)}%</small>` : ''}</div>`}
+      <div class="lq-calc-c"><span class="lq-selo"><i></i>${c.titulo}</span><p>${c.texto}</p>${r.erros.length ? '' : Calc.avisos(r).map((a) => `<p class="${/^Confira/.test(a) ? 'av' : 'nt'}">${esc(a)}</p>`).join('')}</div>
+    </div>
+    ${r.erros.length ? '' : `<h4 class="lq-calc-h4">Memória de cálculo</h4>
+    <ol class="lq-calc-mem">${linhas}</ol>`}
+    <p class="lq-calc-obs">O protetor auricular não entra nesta conta. A neutralização pelo EPI é avaliada à parte (NR-15, item 15.4.1, alínea b). Para aposentadoria especial valem as regras do INSS, que dependem do período. Esta conta não substitui o LTCAT.</p>
+    ${r.erros.length ? '' : `<div class="lq-calc-acoes"><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-calc-baixar:docx">${IC.word} Word</button><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-calc-baixar:pdf">${IC.baixar} PDF</button><button type="button" class="btn btn-primary btn-sm" data-acao="campo:lq-calc-copiar">${IC.copiar} Copiar memória</button></div>`}
+`;
+}
+function pintarResultado() {
+  const r = Calc.calcular(_calc), html = resultadoCalc();
+  document.querySelectorAll('.lq-calc-res').forEach((el) => { el.innerHTML = html; });
+  document.querySelectorAll('[data-cp^="lq.calc."]').forEach((el) => {
+    const [, , i, campo] = el.dataset.cp.split('.');
+    const e = r.erros.find((x) => x.i === +i && (x.campo === campo || (x.campo === 'tempo' && campo !== 'nivel')));
+    el.toggleAttribute('aria-invalid', !!e);
+  });
+  document.querySelectorAll('.lq-calc-err').forEach((el) => { el.textContent = r.erros.length ? `Período ${r.erros[0].i + 1}: ${r.erros[0].msg}` : ''; });
+}
+function painelCalc() {
+  const campo = (i, k, ph, max) => `<input type="text" inputmode="decimal" autocomplete="off" maxlength="${max}" data-cp="lq.calc.${i}.${k}" value="${esc(_calc[i][k])}" placeholder="${ph}" aria-label="${k === 'nivel' ? 'Nível em dB(A)' : k === 'horas' ? 'Horas' : 'Minutos'} do período ${i + 1}">`;
+  return `<aside class="lq-painel lq-painel-doc lq-painel-calc" aria-label="Dose de ruído">
+    <div class="lq-p-h"><div><h4>Dose de ruído</h4><small>NR-15, Anexo 1. A conta é feita aqui e não gasta pergunta.</small></div>
+      <button type="button" class="lq-x" data-acao="campo:lq-fechar" aria-label="Fechar">${I.x}</button></div>
+    <div class="lq-calc-tab" role="group" aria-label="Períodos medidos">
+      <div class="lq-calc-th"><span>Nível dB(A)</span><span>Horas</span><span>Minutos</span><span></span></div>
+      ${_calc.map((l, i) => `<div class="lq-calc-tr"><span class="lq-calc-i">${i + 1}</span>${campo(i, 'nivel', 'ex.: 90', 6)}${campo(i, 'horas', '0', 4)}${campo(i, 'minutos', '0', 3)}<button type="button" class="lq-x" data-acao="campo:lq-calc-tirar:${i}" aria-label="Tirar o período ${i + 1}">${I.x}</button></div>`).join('')}
+    </div>
+    <p class="lq-calc-err" role="alert"></p>
+    <div class="lq-calc-bt">${_calc.length < 12 ? '<button type="button" class="lq-lnk" data-acao="campo:lq-calc-mais">+ Adicionar período</button>' : ''}<button type="button" class="lq-lnk lq-lnk-m" data-acao="campo:lq-calc-limpar">Limpar</button></div>
+    <details class="lq-calc-q"><summary>Ver o Quadro do Anexo 1</summary>
+      <table><thead><tr><th>dB(A)</th><th>Máxima exposição diária</th></tr></thead><tbody>${Calc.QUADRO.map(([n, m]) => `<tr><td>${n}</td><td>${Calc.duracao(m)}</td></tr>`).join('')}</tbody></table>
+      <p>Nível intermediário usa o limite do nível imediatamente mais elevado (item 4). Acima de 115 dB(A) sem proteção adequada não é permitido (item 5).</p>
+    </details>
+    <div class="lq-calc-res">${resultadoCalc()}</div>
+  </aside>`;
+}
+
+/* v281: "ruído 90 dB 2h e 85 dB 3h" no campo já preenche a calculadora (a pessoa confere antes). */
+const RX_PER = /(\d{2,3}(?:[.,]\d)?)\s*(?:db|decib\w*)(?:\s*\(?a\)?)?(?:\s*(?:por|durante|em|de|,)?\s*(?:(\d{1,2})\s*(?:h|hs|hora|horas)\b(?:\s*(?:e\s*)?(\d{1,2})\s*min\w*)?|(\d{1,2})h(\d{2})(?:\s*min\w*)?(?!\d)|(\d{1,3})\s*min\w*))?/gi;
+function periodosDoTexto(t) {
+  const out = [];
+  for (const m of String(t || '').matchAll(RX_PER)) {
+    out.push({ nivel: m[1], horas: m[2] || m[4] || '', minutos: m[3] || m[5] || m[6] || '' });
+  }
+  return out.slice(0, 12);
+}
+function preencherCalc(t) {
+  if (_calc.some((l) => String(l.nivel || '').trim())) return;  // não apaga o que a pessoa já digitou
+  const p = periodosDoTexto(t);
+  if (p.length) _calc = p.length > 1 ? p : [...p, { nivel: '', horas: '', minutos: '' }];
+}
+/* Sugestão embaixo do campo enquanto a pessoa escreve. Toque abre a ferramenta sem gastar pergunta. */
+const NAO_FICHA = new Set(['agente', 'agentes', 'risco', 'riscos', 'norma', 'normas', 'quais', 'qual', 'precisa', 'pode', 'empresa', 'trabalho', 'trabalhador', 'exposicao', 'limite', 'tolerancia', 'insalubridade', 'laudo', 'ficha', 'como', 'quando', 'para', 'sobre', 'esta', 'este', 'deste', 'desta']);
+function sugestao(t) {
+  if (_painel?.calc) return '';  // a calculadora já está aberta
+  const x = L.norm(t);
+  if (x.length < 4) return '';
+  const outroAgente = /\b(radia|benzen|quimic|poeira|silica|vibra|calor|ibutg|msv|ppm|mg\/m)/.test(x);
+  if (!outroAgente && (/\b(ruido|dosimetr|decibel)\b.*\b(dose|calcul|\d{2,3} ?db)/.test(x) || /\bdose\b.*\b(ruido|db)\b/.test(x) || /\b\d{2,3}(?:[.,]\d)? ?db\b.{0,30}\b\d{1,2} ?(h|hs|hora|horas|min)\b/.test(x)))
+    return `<button type="button" class="lq-sug-b" data-acao="campo:lq-calc-abrir:txt">${IC.ruido}<span>Abrir a calculadora de dose de ruído</span></button>`;
+  const palavras = x.split(/[^a-z0-9-]+/).filter((w) => w.length >= 5 && !NAO_FICHA.has(w));
+  if (palavras.length && x.split(/\s+/).length <= 6) {
+    const w = palavras[palavras.length - 1];
+    const a = L.buscar(w)[0];
+    // a palavra precisa ser uma palavra inteira do nome ou de um sinônimo do agente (não só o começo)
+    if (a && [a.nome, ...(a.sinonimos || [])].some((n) => L.norm(n).split(/[^a-z0-9-]+/).includes(w)))
+      return `<button type="button" class="lq-sug-b" data-acao="campo:lq-ficha:${esc(a.id)}">${IC.fichas}<span>Ver a ficha: ${esc(a.nome)}</span></button>`;
+  }
+  return '';
+}
+function atualizarSugestao() {
+  const h = _fila.length || _anexo ? '' : sugestao(_txt);
+  document.querySelectorAll('.lq-sugi').forEach((el) => { if (el.innerHTML !== h) el.innerHTML = h; });
 }
 
 const VEREDITO = {
@@ -248,18 +352,16 @@ function semPermissao() {
   return !!p && !(p.acoes || {}).usar_laudomiro;
 }
 
+/* v281: sem abas. Fichas e Calcular viram ferramentas do botão + do campo (proposta do designer, 24/10). */
 function abas() {
-  const n = L.AGENTES.length;
-  const cota = _aba === 'perguntar' && !semPermissao() && _status?.configurado && _status.restantes != null
-    ? `<span class="lq-cota-t"><b>${_status.restantes}</b> ${_status.restantes === 1 ? 'pergunta restante' : 'perguntas restantes'} em ${esc(_status.mes || 'este mês')}</span>` : '';
-  const nova = _aba === 'perguntar' && _conv.length ? '<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-nova">Nova conversa</button>' : '';
-  return `<div class="lq-topo">
-    <div class="lq-abas" role="tablist" aria-label="Laudomiro">
-      <button type="button" role="tab" aria-selected="${_aba === 'perguntar'}" class="${_aba === 'perguntar' ? 'on' : ''}" data-acao="campo:lq-aba:perguntar">${IC.perg}<span>Perguntar</span></button>
-      <button type="button" role="tab" aria-selected="${_aba === 'fichas'}" class="${_aba === 'fichas' ? 'on' : ''}" data-acao="campo:lq-aba:fichas">${IC.fichas}<span>Fichas<span class="lq-ab-x"> dos agentes</span></span><i>${n}</i></button>
-    </div>
-    <div class="lq-cota">${cota}${nova}</div>
+  if (_aba === 'fichas') return `<div class="lq-topo lq-topo-f">
+    <button type="button" class="lq-volta" data-acao="campo:lq-aba:perguntar">${I.chevL || '‹'}<span>Voltar ao Laudomiro</span></button>
+    <h2 class="lq-topo-t">Fichas dos agentes <i>${L.AGENTES.length}</i></h2>
   </div>`;
+  const cota = !semPermissao() && _status?.configurado && _status.restantes != null
+    ? `<span class="lq-cota-t"><b>${_status.restantes}</b> ${_status.restantes === 1 ? 'pergunta restante' : 'perguntas restantes'} em ${esc(_status.mes || 'este mês')}</span>` : '';
+  const nova = _conv.length ? '<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-nova">Nova conversa</button>' : '';
+  return cota || nova ? `<div class="lq-topo"><div class="lq-cota">${cota}${nova}</div></div>` : '';
 }
 
 function compositor({ grande = false } = {}) {
@@ -278,14 +380,14 @@ function compositor({ grande = false } = {}) {
     : _anexo?.tipo === 'foto' ? 'Evite foto com rosto ou crachá. O arquivo não fica guardado.'
       : comAnexo ? 'O arquivo não fica guardado. Só a resposta.' : '';
   const alerta = avisoDados(_txt);
-  return `<div class="lq-comp-w">${anx && _menuAnexo ? menuAnexo() : ''}
+  return `<div class="lq-comp-w">${_menuAnexo ? menuAnexo(anx) : ''}
     ${_ctx && !comAnexo ? `<span class="lq-ctx">${IC.pdf}<span>Conversando sobre: <b>${esc(_ctx.produto)}</b></span><button type="button" data-acao="campo:lq-ctx-sair" aria-label="Parar de conversar sobre este produto">${I.x}</button></span>` : ''}
     ${anx ? filaAnexos() : ''}
     <div class="lq-comp lq-comp2${grande ? ' grande' : ''}${off ? ' off' : ''}${_ouvindo ? ' ouvindo' : ''}">
       <textarea id="lqTxt" rows="1" data-cp="lq.txt" data-cp-enter="lq.enviar" maxlength="1000" autocomplete="off" enterkeyhint="send"
         placeholder="${_ouvindo ? 'Ouvindo. Toque no microfone para parar.' : ph}" aria-label="Sua pergunta" ${off ? 'disabled' : ''}>${esc(_txt)}</textarea>
       <div class="lq-ferr">
-        ${anx ? `<button type="button" class="lq-clip${_menuAnexo || comAnexo ? ' on' : ''}" data-acao="campo:lq-clip" aria-label="Anexar FDS ou foto" aria-expanded="${_menuAnexo}" title="Anexar FDS ou foto">${IC.clip}</button>` : ''}
+        <button type="button" class="lq-clip lq-mais-b${_menuAnexo || comAnexo ? ' on' : ''}" data-acao="campo:lq-clip" aria-label="Anexar ou usar ferramenta" aria-haspopup="menu" aria-expanded="${_menuAnexo}" title="Anexar ou usar ferramenta">${IC.mais}</button>
         ${!off && !comAnexo ? botaoEstilo() : ''}
         <span class="lq-ferr-d">
         ${!off && !comAnexo && Voz() ? `<button type="button" class="lq-mic${_ouvindo ? ' on' : ''}" data-acao="campo:lq-mic" aria-pressed="${_ouvindo}" aria-label="${_ouvindo ? 'Parar de ouvir' : 'Perguntar falando'}" title="${_ouvindo ? 'Parar de ouvir' : 'Perguntar falando'}">${_ouvindo ? '<span class="lq-mic-o"></span>' : IC.mic}</button>` : ''}
@@ -295,6 +397,7 @@ function compositor({ grande = false } = {}) {
       </div>
     </div>
     <p class="lq-alerta${fixo && !alerta ? ' neutro' : ''}" role="status" aria-live="polite" data-fixo="${esc(fixo)}">${esc(alerta || fixo)}</p>
+    <div class="lq-sugi">${comAnexo ? '' : sugestao(_txt)}</div>
   </div>`;
 }
 
@@ -343,9 +446,27 @@ function inicio() {
       : _status?.falha === 'rede' ? `<b>Não consegui falar com o Laudomiro agora.</b> <button type="button" class="lq-lnk" data-acao="campo:lq-status-de-novo">Tentar de novo</button>.`
         : '<b>O Laudomiro está sendo configurado.</b>'} As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : ''}
     ${compositor({ grande: true })}
+    ${!off ? novidades() : ''}
     ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span><i class="lq-rti" aria-label="${r.tipo === 'fds' ? 'FDS' : r.tipo === 'foto' ? 'Foto' : r.tipo === 'dados' ? 'Dados da empresa' : 'Pergunta'}">${icTipo[r.tipo] || IC.perg}</i>${esc(tira(r))}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
     <p class="lq-resp-pro">O Laudomiro orienta com base nas normas. O laudo é do profissional responsável.</p>
   </section>`;
+}
+
+/* v281: mudança de norma que começa a valer (lista mantida pelo GRID, conferida no texto oficial). */
+function novidades() {
+  const lista = (_status?.novidades || []).filter((n) => !lerLocal(`novidade:${n.id}`)).slice(0, 3);
+  if (!lista.length) return '';
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const quandoVale = (iso) => {
+    const [a, m, d] = String(iso).split('-').map(Number); const dt = new Date(a, m - 1, d);
+    const dias = Math.round((dt - hoje) / 864e5), data = dt.toLocaleDateString('pt-BR');
+    return dias > 1 ? `Vale a partir de ${data}, daqui a ${dias} dias.` : dias === 1 ? `Vale a partir de amanhã, ${data}.` : dias === 0 ? `Vale a partir de hoje, ${data}.` : `Em vigor desde ${data}.`;
+  };
+  return `<div class="lq-nov"><h4>Mudanças nas normas</h4>${lista.map((n) => `<div class="lq-nov-i">
+      <span class="lq-nov-nr">${esc(n.nr)}</span>
+      <div><b>${esc(n.titulo)}</b><small>${esc(n.portaria ? n.portaria + '. ' : '')}${quandoVale(n.vigora_em)}</small></div>
+      <span class="lq-nov-a">${n.pergunta ? `<button type="button" class="lq-lnk" data-acao="campo:lq-nov-perg:${esc(n.id)}">Perguntar</button>` : ''}<button type="button" class="lq-x" data-acao="campo:lq-nov-ok:${esc(n.id)}" aria-label="Ocultar este aviso" title="Ocultar">${I.x}</button></span>
+    </div>`).join('')}</div>`;
 }
 
 function quando(iso) {
@@ -363,7 +484,8 @@ function textoComRefs(texto, turno, tIdx) {
     const t = mapa.get(+n); if (!t || vistos.has(+n)) return '';
     vistos.add(+n);
     const on = _painel && _painel.t === tIdx && _painel.n === +n;
-    return ` <button type="button" class="lq-it${on ? ' on' : ''}" data-acao="campo:lq-fonte:${tIdx}.${+n}" title="Ver o texto: ${esc(t.fonte)}">${esc(String(t.rotulo).replace(/\s*·\s*/g, ', '))}</button>`;
+    const norma = t.tipo === 'oficial';  // v281: nota do Laudomiro não se parece com item de norma
+    return ` <button type="button" class="lq-it${norma ? '' : ' nota'}${on ? ' on' : ''}" data-acao="campo:lq-fonte:${tIdx}.${+n}" title="${norma ? `Ver o texto: ${esc(t.fonte || t.rotulo)}` : 'Nota de apoio do Laudomiro. Não é texto da norma.'}">${esc(rotuloCurto(t))}</button>`;
   })
     // v252: citação repetida tirada não deixa "()" ou "( , )" sobrando
     .replace(/\(\s*(?:,\s*)*\)/g, '')
@@ -371,6 +493,14 @@ function textoComRefs(texto, turno, tIdx) {
     .replace(/\s+([.,;:])/g, '$1');
 }
 
+/* v281: "NR-24, item 24.3.4" para texto oficial. Nota do Laudomiro aparece como nota, para ninguém citar no laudo. */
+function rotuloCurto(t) {
+  const r = String(t.rotulo || '');
+  if (t.tipo === 'oficial') return r.replace(/\s*·\s*/g, ', ');
+  if (t.tipo === 'agente') return 'ficha do agente';
+  const nr = (r.match(/\bNR-?\s?(\d{1,2})\b/i) || [])[1];
+  return nr ? `nota do Laudomiro sobre a NR-${nr.padStart(2, '0')}` : 'nota do Laudomiro';
+}
 function tipoFonte(t) { return t.tipo === 'oficial' ? 'Texto oficial' : 'Ficha do Laudomiro'; }
 
 function resposta(turno, tIdx) {
@@ -505,14 +635,17 @@ function limparMd(x) {
 
 function painel() {
   if (!_painel) return '';
+  if (_painel.calc) { setTimeout(pintarResultado, 0); return painelCalc(); }  // v281
   if (_painel.doc) return painelDoc(_conv[_painel.t], _painel.t);  // v278
   const t = (_conv[_painel.t]?.trechos || []).find(x => x.n === _painel.n);
   if (!t) return '';
   return `<aside class="lq-painel" aria-label="Texto da norma">
-    <div class="lq-p-h"><div><small>${esc(t.fonte.replace(/^Texto oficial:\s*/, 'Texto oficial · ').replace(/^Ficha do Laudomiro:\s*/, 'Ficha do Laudomiro · ').replace(/^Base de agentes do Laudomiro:\s*/, 'Ficha do agente · '))}</small><h4>${esc(t.rotulo)}</h4>${t.secao ? `<p>${esc(t.secao)}</p>` : ''}</div>
+    <div class="lq-p-h"><div>${t.tipo === 'oficial' || t.tipo === 'agente'
+      ? `<small>${esc(String(t.fonte || '').replace(/^Texto oficial:\s*/, 'Texto oficial, ').replace(/^Base de agentes do Laudomiro:\s*/, 'Ficha do agente, '))}</small><h4>${esc(rotuloCurto(t))}</h4>${t.secao ? `<p>${esc(t.secao)}</p>` : ''}`
+      : `<small>${esc(rotuloCurto(t).replace(/^nota/, 'Nota'))}</small><h4>${esc(t.secao || String(t.rotulo || '').split('·').pop().trim())}</h4>`}</div>
       <button type="button" class="lq-x" data-acao="campo:lq-fechar" aria-label="Fechar">${I.x}</button></div>
     <blockquote>${esc(limparMd(t.tipo === 'agente' ? fichaAgente(t.texto) : t.texto))}</blockquote>
-    <div class="lq-p-m">Texto copiado da base do Laudomiro${t.tipo === 'oficial' ? ' (texto oficial)' : ''}. Toque em outro item da resposta para trocar.</div>
+    <div class="lq-p-m">${t.tipo === 'oficial' ? 'Texto oficial, copiado da base do Laudomiro.' : '<b>Nota de apoio do Laudomiro. Não é texto da norma: no laudo, cite o item oficial.</b>'} Toque em outro item da resposta para trocar.</div>
   </aside>`;
 }
 
@@ -553,15 +686,21 @@ function limparCampo() { document.querySelectorAll('#lqTxt').forEach((el) => { e
 
 const anexosLigados = () => !!_status?.anexos && !semPermissao() && !!_status?.configurado;
 
-function menuAnexo() {
+function menuAnexo(anx = true) {
   const op = (chave, ic, cor, titulo, sub, accept, extra = '', cls = '') =>
-    `<label class="lq-mo${cls}"><input type="file" hidden accept="${accept}" ${extra} data-cp-foto="${chave}"><span class="ic ${cor}">${ic}</span><span><b>${titulo}</b><small>${sub}</small></span></label>`;
+    `<label class="lq-mo${cls}" role="menuitem"><input type="file" hidden accept="${accept}" ${extra} data-cp-foto="${chave}"><span class="ic ${cor}">${ic}</span><span><b>${titulo}</b><small>${sub}</small></span></label>`;
+  const fer = (acao, ic, titulo, sub, extra = '') =>
+    `<button type="button" class="lq-mo" role="menuitem" data-acao="${acao}"><span class="ic fer">${ic}</span><span><b>${titulo}${extra}</b><small>${sub}</small></span></button>`;
   return `<div class="lq-menu-fundo" data-acao="campo:lq-clip"></div>
-  <div class="lq-menu" role="menu" aria-label="Anexar">
-    <div class="lq-menu-h"><b>Anexar</b><button type="button" class="lq-x" data-acao="campo:lq-clip" aria-label="Fechar">${I.x}</button></div>
-    ${op('lq.fds', IC.pdf, 'pdf', 'Ler FDS (FISPQ)', 'PDF do fornecedor, até 8 MB. Escolha até 5 de uma vez para comparar os produtos.', 'application/pdf,.pdf', 'multiple')}
+  <div class="lq-menu lq-menu-mais" role="menu" aria-label="Anexar ou usar ferramenta">
+    <div class="lq-menu-h"><b>Anexar ou usar ferramenta</b><button type="button" class="lq-x" data-acao="campo:lq-clip" aria-label="Fechar">${I.x}</button></div>
+    ${anx ? `<p class="lq-menu-g">Anexar</p>
+    ${op('lq.fds', IC.pdf, 'pdf', 'Ficha de segurança (FDS)', 'PDF do fornecedor, até 8 MB. Até 5 para comparar.', 'application/pdf,.pdf', 'multiple')}
     ${op('lq.camera', IC.cam, 'img', 'Tirar foto agora', 'Abre a câmera do celular.', 'image/*', 'capture="environment"', ' so-cel')}
-    ${op('lq.galeria', IC.img, 'img', 'Analisar uma foto', 'Escolha uma foto do ambiente. Ele aponta o que enxerga.', 'image/jpeg,image/png,image/webp,image/*')}
+    ${op('lq.galeria', IC.img, 'img', 'Foto do local', 'Ele aponta os riscos que enxerga.', 'image/jpeg,image/png,image/webp,image/*')}` : ''}
+    <p class="lq-menu-g">Ferramentas</p>
+    ${fer('campo:lq-calc-abrir', IC.ruido, 'Calcular dose de ruído', 'NR-15, Anexo 1. Não gasta pergunta.')}
+    ${fer('campo:lq-aba:fichas', IC.fichas, 'Consultar ficha de agente', 'Limites, insalubridade e aposentadoria.', ` <i class="lq-mo-n">${L.AGENTES.length}</i>`)}
   </div>`;
 }
 
@@ -1074,11 +1213,15 @@ export async function render(params = {}) {
   }
   ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">Laudomiro</div>`);
   if (_aba === 'fichas') {
-    const html = await Fichas.render({ ...params, embutido: true });
+    const html = await Fichas.render({ ...params, ...(_fichaAbrir ? { id: _fichaAbrir } : {}), embutido: true }); _fichaAbrir = null;
     return `<div class="lq lq-na-ficha">${abas()}${html}</div>`;
   }
   ligarTela({
-    digitar: (chave, valor, el) => { if (chave === 'lq.txt') { _txt = valor; atualizarAviso(); crescer(el); } },
+    digitar: (chave, valor, el) => {
+      if (chave === 'lq.txt') { _txt = valor; atualizarAviso(); atualizarSugestao(); crescer(el); return; }
+      const m = /^lq\.calc\.(\d+)\.(nivel|horas|minutos)$/.exec(chave);  // v281
+      if (m && _calc[+m[1]]) { _calc[+m[1]][m[2]] = valor; pintarResultado(); }
+    },
     enter: (chave, valor) => { if (chave === 'lq.enviar') { _txt = valor; enviar(); } },
     foto: (chave, arquivos) => (/^lq\./.test(chave) ? prepararArquivo(chave, arquivos) : undefined),  // v254: FDS e foto
   });
@@ -1229,14 +1372,23 @@ function comecarAOuvir(V = Voz()) {
 if (typeof document !== 'undefined' && !window.__lqMenusFora) {
   window.__lqMenusFora = true;
   const aberto = () => _menuAnexo || _menuEstilo || _copiarMenu != null;
-  const fechar = () => { _menuAnexo = false; _menuEstilo = false; _copiarMenu = null; repintar(); };
+  const fechar = (semRedesenhar) => {
+    _menuAnexo = false; _menuEstilo = false; _copiarMenu = null;
+    // tocou num campo de digitar: só tira o menu, sem redesenhar (o campo não perde o foco)
+    if (semRedesenhar) document.querySelectorAll('.lq-menu, .lq-copiar, .lq-menu-fundo').forEach((el) => el.remove());
+    else repintar();
+  };
   document.addEventListener('click', (ev) => {
     if (!aberto()) return;
     const t = ev.target;
     if (t?.closest?.('.lq-menu, .lq-copiar, [data-acao^="campo:lq-clip"], [data-acao^="campo:lq-estilo"], [data-acao^="campo:lq-copiar"]')) return;
-    fechar();
+    fechar(!!t?.closest?.('input, textarea'));
   });
-  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && aberto()) fechar(); });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    if (aberto()) fechar();
+    else if (_painel?.calc || _painel?.doc) { _painel = null; repintar(); }
+  });
 }
 if (typeof window !== 'undefined' && !window.__lqVozLigada) {
   window.__lqVozLigada = true;
@@ -1348,13 +1500,35 @@ export async function acao(nome, valor, redesenhar) {
     tu.marcados ||= new Set(); tu.marcados.has(i) ? tu.marcados.delete(i) : tu.marcados.add(i); redesenhar(); return true;
   }
   if (nome === 'campo:lq-ampliar') { ampliarFoto(+valor); return true; }
-  if (nome === 'campo:lq-aba') { _aba = valor === 'fichas' ? 'fichas' : 'perguntar'; _painel = null; redesenhar(); window.scrollTo?.(0, 0); return true; }
+  if (nome === 'campo:lq-aba') { _menuAnexo = false; _aba = valor === 'fichas' ? 'fichas' : 'perguntar'; _painel = null; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (_aba === 'fichas') return Fichas.acao(nome, valor, redesenhar);
   if (nome === 'campo:lq-enviar') { enviar(); return true; }
   if (nome === 'campo:lq-mic') { ouvir(); return true; }  // v278
   if (nome === 'campo:lq-mic-ok') { gravarLocal('aviso-voz', '1'); comecarAOuvir(); return true; }
   if (nome === 'campo:lq-doc-refazer') { const t = _conv[+valor]; if (t?.doc?.tipo) montarDocumento(+valor, t.doc.tipo, true); return true; }
   if (nome === 'campo:lq-doc-fechar') { const t = _conv[+valor]; if (t) { t.doc = null; redesenhar(); } return true; }
+  if (nome === 'campo:lq-doc-baixar') {  // v281: Word e PDF montados no aparelho
+    const [ti, fmt] = String(valor).split('.'); const t = _conv[+ti];
+    if (t?.doc?.texto) baixarDoc(fmt, { titulo: DOCS[t.doc.tipo]?.[2] || 'Documento', subtitulo: `Feito a partir de: ${t.resposta?.titulo || ''}`, texto: t.doc.texto, nota: NOTA_DOC });
+    return true;
+  }
+  if (nome === 'campo:lq-nov-ok') { gravarLocal(`novidade:${valor}`, '1'); redesenhar(); return true; }  // v281
+  if (nome === 'campo:lq-nov-perg') {  // põe a pergunta no campo, sem enviar (a pessoa decide gastar a pergunta)
+    const n = (_status?.novidades || []).find((x) => x.id === valor);
+    if (n?.pergunta) { _txt = n.pergunta; redesenhar(); setTimeout(() => { const el = [...document.querySelectorAll('#lqTxt')].find((x) => x.getBoundingClientRect().width > 0); if (el) { el.value = _txt; el.focus(); el.setSelectionRange?.(_txt.length, _txt.length); } }, 60); }
+    return true;
+  }
+  if (nome === 'campo:lq-ficha') { _menuAnexo = false; _aba = 'fichas'; _painel = null; _fichaAbrir = valor; redesenhar(); window.scrollTo?.(0, 0); return true; }  // v281
+  if (nome === 'campo:lq-calc-abrir') {  // v281: abre no painel ao lado (tela cheia no celular)
+    _menuAnexo = false; if (valor === 'txt') preencherCalc(_txt);
+    _painel = { calc: true }; redesenhar(); setTimeout(() => focarCalc(Math.max(0, _calc.findIndex((l) => !l.nivel))), 80); return true;
+  }
+  if (nome === 'campo:lq-calc-mais') { if (_calc.length < 12) _calc.push({ nivel: '', horas: '', minutos: '' }); redesenhar(); setTimeout(() => focarCalc(_calc.length - 1), 60); return true; }
+  if (nome === 'campo:lq-calc-tirar') { _calc.splice(+valor, 1); if (!_calc.length) _calc.push({ nivel: '', horas: '', minutos: '' }); redesenhar(); return true; }
+  if (nome === 'campo:lq-calc-limpar') { _calc = [{ nivel: '', horas: '', minutos: '' }, { nivel: '', horas: '', minutos: '' }]; redesenhar(); return true; }
+  if (nome === 'campo:lq-calc-exemplo') { _calc = [{ nivel: '90', horas: '2', minutos: '' }, { nivel: '87,3', horas: '3', minutos: '' }, { nivel: '80', horas: '3', minutos: '' }]; redesenhar(); return true; }
+  if (nome === 'campo:lq-calc-copiar') { const r = Calc.calcular(_calc); if (r.itens.length && !r.erros.length) copiarTexto(textoCalc(r), 'Memória de cálculo copiada.'); return true; }
+  if (nome === 'campo:lq-calc-baixar') { const r = Calc.calcular(_calc); if (r.itens.length && !r.erros.length) baixarDoc(valor, { titulo: 'Memória de cálculo da dose de ruído', subtitulo: 'NR-15, Anexo 1. Local, função e data da medição: [preencher]', texto: Calc.memoria(r), nota: 'Conta feita pelo Laudomiro com os valores informados. Confira os níveis e tempos medidos. O laudo é do profissional responsável.' }); return true; }
   if (nome === 'campo:lq-doc-copiar') { const t = _conv[+valor]; if (t?.doc?.texto) { copiarTexto(t.doc.texto, 'Texto copiado.'); t.doc.copiado = true; redesenhar(); setTimeout(() => { if (t.doc) { t.doc.copiado = false; repintar(); } }, 2000); } return true; }
   if (nome === 'campo:lq-estilo') { mudarEstilo(valor); _menuEstilo = false; redesenhar(); return true; }  // v275
   if (nome === 'campo:lq-status-de-novo') { _status = null; carregarStatus(); redesenhar(); return true; }  // v279

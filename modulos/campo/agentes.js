@@ -63,6 +63,7 @@ function pintarResultado() {
 
 export async function render(params = {}) {
   if (params.id && L.porId(params.id) && params.id !== _sel) { _sel = params.id; _verFicha = true; _ctx = {}; }
+  else if (params.id && params.id === _sel) _verFicha = true;  // v281: "Ver a ficha" do mesmo agente abre a ficha, não a lista
   ligarTela({ digitar: (chave, valor) => {
     const k = CAMPOS[chave], m = /^lm\.(pn|pt)\.(\d+)$/.exec(chave || '');
     if (k) { _ctx[k] = valor; pintarResultado(); }

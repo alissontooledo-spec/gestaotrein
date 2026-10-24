@@ -1923,3 +1923,137 @@ textarea.cp-inp{min-height:84px;resize:vertical;line-height:1.45}
 .lq-r2 .lq-it{font-weight:500}
 @media(max-width:700px){.lq-comp.lq-comp2 textarea{padding-top:6px}}
 .lq-ferr .lq-env.lq-env-t{width:auto;padding:0 14px;font-weight:700;white-space:nowrap}
+
+/* ══ v281 · Calcular (dose de ruído) e baixar Word/PDF ═══════════════════ */
+.lq-doc-a{justify-content:space-between;flex-wrap:wrap;row-gap:8px}
+.lq-doc-bx{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.lq-calc{max-width:1040px;margin:8px auto 40px}
+.lq-calc-cab h2{margin:0;font-size:26px;line-height:1.2;font-weight:700;letter-spacing:-.5px;color:#172541}
+.lq-calc-cab p{margin:6px 0 24px;font-size:14px;line-height:1.5;color:#64748B;max-width:62ch}
+.lq-calc-grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:40px;align-items:start}
+.lq-calc-th,.lq-calc-tr{display:grid;grid-template-columns:22px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 36px;gap:8px;align-items:center}
+.lq-calc-th{padding:0 0 6px;font-size:12px;font-weight:600;color:#64748B}
+.lq-calc-th span:first-child{grid-column:2}
+.lq-calc-tr{margin-bottom:8px}
+.lq-calc-i{font-size:13px;font-weight:600;color:#94A3B8;text-align:center}
+.lq-calc-tr input{width:100%;min-width:0;height:42px;border:1px solid #D5DBE6;border-radius:10px;background:#fff;padding:0 12px;font:inherit;font-size:16px;color:#172541;font-variant-numeric:tabular-nums}
+.lq-calc-tr input:focus{outline:0;border-color:#172541;box-shadow:0 0 0 3px rgba(23,37,65,.08)}
+.lq-calc-tr input[aria-invalid]{border-color:#B45309}
+.lq-calc-tr .lq-x{width:36px;height:36px;color:#94A3B8}
+.lq-calc-err{min-height:18px;margin:2px 0 4px 30px;font-size:13px;color:#B45309}
+.lq-calc-err:empty{min-height:0;margin:0}
+.lq-calc-bt{display:flex;gap:20px;align-items:center;margin:6px 0 0 30px}
+.lq-lnk-m{color:#64748B;font-weight:600;text-decoration-color:#CBD5E1}
+.lq-calc-q{margin:28px 0 0 30px;font-size:13px;color:#475569}
+.lq-calc-q summary{cursor:pointer;font-weight:600;color:#172541}
+.lq-calc-q table{border-collapse:collapse;margin:10px 0 8px;font-variant-numeric:tabular-nums}
+.lq-calc-q th,.lq-calc-q td{text-align:left;padding:4px 18px 4px 0;border-bottom:1px solid #E8ECF2}
+.lq-calc-q th{font-size:12px;color:#64748B;font-weight:600}
+.lq-calc-q p{margin:6px 0 0;line-height:1.5;max-width:46ch}
+.lq-calc-vazio{border:1px dashed #CBD5E1;border-radius:14px;padding:22px;color:#475569;font-size:14px;line-height:1.5}
+.lq-calc-vazio b{display:block;color:#172541;margin-bottom:4px}
+.lq-calc-r{display:flex;gap:28px;align-items:flex-start;padding:4px 0 20px;border-bottom:1px solid #E8ECF2}
+.lq-calc-dose span{display:block;font-size:13px;font-weight:600;color:#64748B}
+.lq-calc-dose b{display:block;font-size:44px;line-height:1.05;font-weight:700;letter-spacing:-1px;color:#172541;font-variant-numeric:tabular-nums}
+.lq-calc-dose small{display:block;font-size:12px;color:#64748B;margin-top:2px}
+.lq-calc-c{padding-top:4px;min-width:0}
+.lq-calc-c .lq-selo{display:inline-flex;align-items:center;gap:8px;background:none;padding:0;font-size:14px;font-weight:600;color:#172541;border-radius:0;letter-spacing:0}
+.lq-calc-c .lq-selo i{width:9px;height:9px;border-radius:50%;background:#16A34A;flex:none}
+.lq-calc-r.acao .lq-selo i{background:#F59E0B}
+.lq-calc-r.lt .lq-selo i{background:#DC2626}
+.lq-calc-r.lt .lq-calc-dose b{color:#B91C1C}
+.lq-calc-c p{margin:6px 0 0;font-size:14px;line-height:22px;color:#1F2A3D;max-width:52ch}
+.lq-calc-c p.av{color:#B45309}
+.lq-calc-h4{margin:18px 0 8px;font-size:13px;font-weight:600;color:#64748B}
+.lq-calc-mem{list-style:none;margin:0;padding:0;counter-reset:m}
+.lq-calc-mem li{display:grid;grid-template-columns:96px 90px minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid #F1F4F8;font-size:14px;color:#1F2A3D;font-variant-numeric:tabular-nums}
+.lq-calc-mem .n{font-weight:600;color:#172541}
+.lq-calc-mem .f small{display:block;font-size:12px;color:#64748B}
+.lq-calc-obs{margin:14px 0 0;font-size:12.5px;line-height:1.55;color:#64748B;max-width:62ch}
+.lq-calc-acoes{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:18px}
+.lq-calc-acoes .btn,.lq-doc-bx .btn{display:inline-flex;align-items:center;gap:6px;width:auto}
+.lq-calc-acoes svg,.lq-doc-bx svg{width:15px;height:15px}
+@media(max-width:900px){
+  .lq-calc-grid{grid-template-columns:1fr;gap:28px}
+  .lq-calc-cab h2{font-size:22px}
+  .lq-calc-tr input{height:46px}
+  .lq-calc-tr .lq-x{width:44px;height:44px}
+  .lq-calc-th,.lq-calc-tr{grid-template-columns:18px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 44px;gap:6px}
+  .lq-calc-err,.lq-calc-bt,.lq-calc-q{margin-left:24px}
+  .lq-calc-r{gap:18px}
+  .lq-calc-dose b{font-size:36px}
+  .lq-calc-mem li{grid-template-columns:82px 74px minmax(0,1fr);font-size:13.5px}
+  .lq-calc-acoes .btn{flex:1;justify-content:center;min-height:44px}
+  .lq-doc-bx{width:100%}.lq-doc-bx .btn{flex:1;justify-content:center;min-height:44px}
+}
+/* v281: nota do Laudomiro diferente de item de norma */
+.lq-r2 .lq-it.nota{font-weight:400;color:#64748B;font-size:.93em;text-decoration-color:#CBD5E1}
+.lq-r2 .lq-it.nota::before{content:'('}.lq-r2 .lq-it.nota::after{content:')'}
+.lq-p-m b{color:#B45309;font-weight:600}
+@media(max-width:900px){.lq-calc-r{flex-direction:column;gap:10px}}
+/* v281: mudanças nas normas (início) */
+.lq-nov{margin-top:28px}
+.lq-nov h4{margin:0 0 6px;font-size:13px;font-weight:600;color:#64748B}
+.lq-nov-i{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid #E8ECF2}
+.lq-nov-i:last-child{border-bottom:1px solid #E8ECF2}
+.lq-nov-nr{font-size:13px;font-weight:700;color:#172541;font-variant-numeric:tabular-nums}
+.lq-nov-i b{display:block;font-size:14.5px;font-weight:500;line-height:1.4;color:#1F2A3D}
+.lq-nov-i small{display:block;margin-top:2px;font-size:12.5px;color:#64748B}
+.lq-nov-a{display:inline-flex;align-items:center;gap:10px}
+.lq-nov-a .lq-x{width:32px;height:32px;color:#94A3B8;border:0;background:none}
+@media(max-width:700px){.lq-nov-i{grid-template-columns:48px minmax(0,1fr);row-gap:6px}.lq-nov-a{grid-column:2;justify-content:space-between}.lq-nov-a .lq-x{width:44px;height:44px}}
+@media(max-width:700px){.lq-nov-i{grid-template-columns:1fr;row-gap:2px;padding:14px 0 8px}.lq-nov-nr{font-size:12px;color:#64748B}.lq-nov-a{grid-column:1}}
+.lq-calc-r.erro .lq-selo i{background:#B45309}.lq-calc-r.erro{border-bottom:0}
+@media(min-width:901px){.lq-painel-doc{max-height:calc(100vh - 230px)}}
+.lq-painel-doc>*{flex-shrink:0}
+/* v281b: sem abas. Botão + com Anexar e Ferramentas. Calculadora no painel. */
+.lq-topo{justify-content:flex-end;min-height:36px}
+.lq-topo-f{justify-content:flex-start;gap:14px;align-items:center}
+.lq-volta{display:inline-flex;align-items:center;gap:6px;border:0;background:none;font:inherit;font-size:14px;font-weight:600;color:#172541;cursor:pointer;padding:8px 10px 8px 4px;border-radius:8px}
+.lq-volta svg{width:18px;height:18px}
+.lq-volta:hover{background:#EEF1F6}
+.lq-topo-t{margin:0;font-size:18px;font-weight:700;color:#172541;letter-spacing:-.2px}
+.lq-topo-t i{font-style:normal;font-size:13px;font-weight:600;color:#94A3B8;margin-left:4px}
+.lq-ferr .lq-mais-b svg{width:20px;height:20px}
+.lq-menu-mais{width:340px}
+.lq-menu-g{margin:6px 10px 2px;font-size:12px;font-weight:600;color:#64748B}
+.lq-menu-g:first-of-type{margin-top:4px}
+button.lq-mo{border:0;background:none;font:inherit}
+.lq-mo:hover{background:#F4F6FA}
+.lq-mo .ic.fer{background:#EEF1F6;color:#172541}
+.lq-mo-n{font-style:normal;font-weight:600;font-size:12px;color:#94A3B8;margin-left:4px}
+.lq-sug:empty{display:none}
+.lq-sug{margin:2px 0 0}
+.lq-sug-b{display:inline-flex;align-items:center;gap:8px;border:1px solid #D5DBE6;background:#fff;border-radius:999px;padding:7px 14px 7px 10px;font:inherit;font-size:13.5px;font-weight:600;color:#172541;cursor:pointer;min-height:36px}
+.lq-sug-b svg{width:16px;height:16px;color:#B45309}
+.lq-sug-b:hover{border-color:#172541}
+.lq-painel-calc .lq-p-h small{margin-top:4px}
+.lq-painel-calc .lq-calc-r{flex-direction:column;gap:10px;padding-bottom:16px}
+.lq-painel-calc .lq-calc-dose b{font-size:38px}
+.lq-painel-calc .lq-calc-mem li{grid-template-columns:80px 64px minmax(0,1fr);font-size:13.5px}
+.lq-painel-calc .lq-calc-err,.lq-painel-calc .lq-calc-bt,.lq-painel-calc .lq-calc-q{margin-left:28px}
+.lq-painel-calc .lq-calc-th,.lq-painel-calc .lq-calc-tr{grid-template-columns:20px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 36px;gap:6px}
+.lq-painel-calc .lq-calc-res{margin-top:6px;border-top:1px solid #E8ECF2;padding-top:16px}
+.lq-painel-calc .lq-calc-acoes{position:sticky;bottom:-18px;background:#fff;margin:14px -20px -18px;padding:12px 20px;border-top:1px solid #E8ECF2;justify-content:flex-end}
+.lq-painel-calc .lq-calc-vazio{padding:16px}
+.lq-painel-calc .lq-calc-q{margin-top:14px;margin-bottom:6px}
+@media(min-width:901px){.lq.com-painel .lq-corpo{grid-template-columns:minmax(0,1fr) 440px}}
+@media(max-width:900px){
+  .lq-menu-mais{width:auto}
+  .lq-painel-calc .lq-calc-acoes{bottom:-24px;margin:14px -18px -24px;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px))}
+  .lq-painel-calc .lq-calc-th,.lq-painel-calc .lq-calc-tr{grid-template-columns:18px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 44px}
+  .lq-sug-b{min-height:44px}
+  .lq-topo{min-height:0}
+}
+@media(min-width:901px){.lq-ini .lq-menu-mais{top:calc(100% - 52px);bottom:auto}}
+.lq-sug-b span{white-space:nowrap}
+.lq-sugi:empty{display:none}
+.lq-sugi{margin:2px 0 0;display:block}
+.lq-sug-b{max-width:100%}
+.lq-sug-b span{white-space:normal;text-align:left}
+.lq-menu-mais .lq-mo .ic{background:#EEF1F6;color:#172541}
+.lq-calc-dose small+small{margin-top:0}
+@media(max-width:900px){.lq-na-ficha:has(.lmx-topo.na-ficha) .lq-topo-f{display:none}}
+/* v281b: o menu de baixo do celular passa de 64px quando "Agenda da Equipe" quebra em duas linhas */
+@media(max-width:900px){.lq-comp-fixo{bottom:calc(78px + env(safe-area-inset-bottom,0px))}.lq-fio{padding-bottom:190px}}
+.lq-calc-c p.nt{font-size:13px;line-height:20px;color:#64748B}
