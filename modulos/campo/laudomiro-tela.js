@@ -26,6 +26,8 @@
    visita o Laudomiro pergunta. Cada resposta pode ser vista em outro estilo sem gastar pergunta
    da cota (o servidor reescreve a mesma resposta, com o mesmo veredito; as versões ficam no turno).
    v276 (24/10/2026): sem os 3 cartões de sugestão no início (pedido do Alisson).
+   v278: "Copiar para…" nas respostas (Ordem de serviço, DDS de 5 minutos, Plano de ação do PGR),
+   montado pelo servidor sem gastar cota; e perguntar falando (microfone do aparelho, quando ele permitir).
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
@@ -53,6 +55,7 @@ let _avisoFila = '';       // v264: aviso do último arquivo recusado na fila (r
 let _dono = null;
 let _estilo = null;        // v275: 'simples' | 'tecnico' | 'completo' (da pessoa, não da organização)
 let _menuEstilo = false;   // v275: menu "Resposta: …" aberto
+let _ouvindo = false, _reconhecer = null;  // v278: perguntar falando
 const donoAtual = () => { const u = sessao.usuario(); return u?.id ? `${u.id}|${u.org_id || ''}` : ''; };
 function conferirDono() {
   const d = donoAtual();
@@ -61,12 +64,14 @@ function conferirDono() {
   _status = null; _statusCarregando = false; _conv = []; _txt = ''; _painel = null;
   _anexo = null; _menuAnexo = false; _ctx = null; _copiarMenu = null; _fila = []; _avisoFila = '';
   _estilo = null; _menuEstilo = false;  // v275
+  pararDeOuvir();  // v278
 }
 const mesmoDono = (d) => d === _dono && d === donoAtual();
 
 const SEAL = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.7 7.5 10 4.4-1.3 7.5-5.4 7.5-10V5.6L12 2.8Z" stroke="#F59E0B" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.6 8v7.2h5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SEND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
 const IC = {
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   copiar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
   util: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 11v9H4v-9h3Zm0 0 4-7a2 2 0 0 1 2 2v3h5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 16.8 20H7"/></svg>',
   erro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>',
@@ -99,9 +104,9 @@ const SUGESTOES = [
 /* v275: estilo da resposta. Na primeira visita a pessoa escolhe; até lá, o Comercial fica no Simples
    e os demais na Técnica. A escolha fica no aparelho, presa à pessoa logada (não é da organização). */
 const ESTILOS = {
-  simples: ['Simples', 'Sem termos técnicos, para quem não é da área'],
-  tecnico: ['Técnica', 'Com o item da norma, para o técnico de segurança'],
-  completo: ['Para laudo', 'Com itens, exceções e prazos, para laudo e parecer'],
+  simples: ['Simples', 'Direto, sem termos técnicos'],
+  tecnico: ['Técnica', 'Com itens da norma'],
+  completo: ['Para laudo', 'Redação formal para documento'],
 };
 const REESCREVENDO = { simples: 'Reescrevendo em linguagem simples…', tecnico: 'Reescrevendo na versão técnica…', completo: 'Reescrevendo a versão para laudo…' };
 const chaveLocal = (k) => `grid:lq-${k}:${_dono || ''}`;
@@ -123,20 +128,67 @@ function botaoEstilo() {
     <div class="lq-menu lq-menu-est" role="menu" aria-label="Como o Laudomiro responde">
       <div class="lq-menu-h"><b>Como o Laudomiro responde</b><button type="button" class="lq-x" data-acao="campo:lq-estilo-menu" aria-label="Fechar">${I.x}</button></div>
       ${Object.entries(ESTILOS).map(([k, [nome, dica]]) => `<button type="button" role="menuitemradio" aria-checked="${atual === k}" class="lq-mo lq-mo-est${atual === k ? ' on' : ''}" data-acao="campo:lq-estilo:${k}"><span class="ck">${atual === k ? '✓' : ''}</span><span><b>${nome}</b><small>${dica}</small></span></button>`).join('')}
-      <p class="lq-est-nota">Vale para as próximas perguntas.</p>
-    </div>` : ''}<button type="button" class="lq-est-b${_menuEstilo ? ' on' : ''}" data-acao="campo:lq-estilo-menu" aria-expanded="${_menuEstilo}" aria-haspopup="menu">Resposta: <b>${ESTILOS[atual][0]}</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span>`;
+    </div>` : ''}<button type="button" class="lq-est-b${_menuEstilo ? ' on' : ''}" data-acao="campo:lq-estilo-menu" aria-expanded="${_menuEstilo}" aria-haspopup="menu" aria-label="Como o Laudomiro responde: ${ESTILOS[atual][0]}">${ESTILOS[atual][0]}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span>`;
 }
-/* Primeira visita: o Laudomiro pergunta como a pessoa prefere as respostas. */
-function cartaoEstilo() {
-  if (estiloEscolhido()) return '';
-  const atual = estilo();
-  return `<div class="lq-prim"><b>Como você prefere as respostas?</b><small>Dá para trocar a qualquer momento, embaixo do campo de digitar.</small>
-    <div class="lq-prim-op">${Object.entries(ESTILOS).map(([k, [nome, dica]]) => `<button type="button" class="${atual === k ? 'on' : ''}" aria-pressed="${atual === k}" data-acao="campo:lq-estilo:${k}"><b>${nome}</b><small>${dica}</small></button>`).join('')}</div></div>`;
+/* v278: menu ⋯ da resposta (documentos e avisar erro). No celular, Copiar e Útil entram aqui também. */
+function menuMais(turno, tIdx) {
+  const aberto = _copiarMenu === tIdx;
+  const docs = turno.id && r_podeDoc(turno);
+  const it = (acao, txt, cls = '') => `<button type="button" role="menuitem" class="${cls}" data-acao="${acao}">${txt}</button>`;
+  const itens = [
+    turno.id ? it(`campo:lq-util:${tIdx}`, turno.nota === 'util' ? 'Marcada como útil' : 'Marcar como útil', 'so-cel') : '',
+    docs ? it(`campo:lq-copiar-como:${tIdx}.os`, 'Montar ordem de serviço') : '',
+    docs ? it(`campo:lq-copiar-como:${tIdx}.dds`, 'Montar roteiro de DDS') : '',
+    docs ? it(`campo:lq-copiar-como:${tIdx}.pa`, 'Montar linha do plano de ação') : '',
+    turno.id ? `<hr>${it(`campo:lq-erro:${tIdx}`, turno.nota === 'erro' ? 'Erro avisado' : 'Avisar erro na resposta')}` : '',
+  ].join('');
+  return `<span class="cp">${aberto ? `<div class="lq-copiar lq-mais" role="menu">${itens}</div>` : ''}<button type="button" class="lq-ib${aberto ? ' on' : ''}" data-acao="campo:lq-copiar-menu:${tIdx}" aria-expanded="${aberto}" aria-haspopup="menu" aria-label="Mais opções" title="Mais opções"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></span>`;
+}
+function botaoCopiarPara(turno, tIdx) {
+  const podeDoc = !!turno.id && r_podeDoc(turno);
+  if (!podeDoc) return `<button type="button" data-acao="campo:lq-copiar:${tIdx}">${IC.copiar}<span>Copiar</span></button>`;
+  const aberto = _copiarMenu === tIdx;
+  const ops = [['resp', 'Só a resposta', ''], ...Object.entries(DOCS).map(([k, [t, sub]]) => [k, t, sub])];
+  return `<span class="cp">${aberto ? `<div class="lq-copiar" role="menu">${ops.map(([k, t, sub]) => `<button type="button" role="menuitem" data-acao="campo:lq-copiar-como:${tIdx}.${k}">${t}${sub ? `<small>${sub}</small>` : ''}</button>`).join('')}</div>` : ''}
+      <button type="button" class="${aberto ? 'on' : ''}" data-acao="campo:lq-copiar-menu:${tIdx}" aria-expanded="${aberto}" aria-haspopup="menu">${IC.copiar}<span>Copiar para…</span></button></span>`;
+}
+const r_podeDoc = (t) => t.resposta && t.resposta.veredito !== 'NAO_SEI' && !t.dados && (!t.criado_em || Date.now() - new Date(t.criado_em).getTime() < 7 * 864e5);
+
+/* v278: textos prontos montados a partir da resposta (o servidor usa os mesmos trechos e não gasta cota). */
+const DOCS = {
+  os: ['Para a ordem de serviço', 'Riscos, o que fazer e o que é proibido', 'Ordem de serviço'],
+  dds: ['Para o DDS de 5 minutos', 'Roteiro para falar com a equipe', 'Roteiro do DDS'],
+  pa: ['Para o plano de ação do PGR', 'O que fazer, prazo, responsável e evidência', 'Linha do plano de ação'],
+};
+/* Títulos do texto em maiúsculas aparecem como "Abertura" na tela; o texto copiado continua igual. */
+function docLegivel(texto) {
+  return String(texto || '').split('\n').map((l) => {
+    const t = l.trim();
+    if (t.length > 3 && /\p{Lu}/u.test(t) && t === t.toUpperCase() && !/^\[/.test(t)) {
+      const m = t.replace(/:$/, '').toLowerCase().replace(/\b(nr|pgr|epi|epc|dds|os|mte|ca)\b/g, (x) => x.toUpperCase());
+      return `<b>${esc(m.charAt(0).toUpperCase() + m.slice(1))}</b>`;
+    }
+    return esc(l);
+  }).join('\n');
+}
+function painelDoc(turno, tIdx) {
+  const d = turno?.doc; if (!d) return '';
+  const [, , titulo] = DOCS[d.tipo] || [];
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  return `<aside class="lq-painel lq-painel-doc" aria-label="${titulo}" aria-busy="${!!d.carregando}">
+    <div class="lq-p-h"><div><h4>${titulo}</h4><small>Feito a partir de: ${esc(turno.resposta?.titulo || '')}</small></div>
+      <button type="button" class="lq-x" data-acao="campo:lq-fechar" aria-label="Fechar">${I.x}</button></div>
+    ${d.carregando ? '<p class="lq-doc-c">Montando o texto…</p>' : `
+    ${(d.conferir || []).length ? `<p class="lq-doc-al">${IC.erro}<span>Confira estes números no texto da norma: <b>${d.conferir.map(esc).join(', ')}</b></span></p>` : ''}
+    <div class="lq-doc-t">${docLegivel(d.texto)}</div>
+    <p class="lq-doc-n">Revise e complete os campos entre colchetes antes de usar. Gerado em ${hoje}. O laudo é do profissional responsável.</p>
+    <div class="lq-doc-a"><button type="button" class="lq-lnk" data-acao="campo:lq-doc-refazer:${tIdx}">Montar de novo</button><button type="button" class="btn btn-primary btn-sm" data-acao="campo:lq-doc-copiar:${tIdx}" id="lqDocCopiar${tIdx}">${IC.copiar} ${d.copiado ? 'Copiado' : 'Copiar texto'}</button></div>`}
+  </aside>`;
 }
 
 const VEREDITO = {
-  SIM: ['SIM', 'v-sim'], NAO: ['NÃO', 'v-nao'], DEPENDE: ['DEPENDE', 'v-dep'],
-  INFO: ['RESPOSTA', 'v-info'], NAO_SEI: ['NÃO ACHEI', 'v-ns'],
+  SIM: ['Sim', 'v-sim'], NAO: ['Não', 'v-nao'], DEPENDE: ['Depende', 'v-dep'],
+  INFO: ['Resposta', 'v-info'], NAO_SEI: ['Não achei', 'v-ns'],
 };
 
 const sb = () => { const c = clienteBanco(); if (!c) throw new Error('Banco indisponível. Recarregue o sistema.'); return c; };
@@ -197,7 +249,6 @@ function abas() {
     ? `<span class="lq-cota-t"><b>${_status.restantes}</b> ${_status.restantes === 1 ? 'pergunta restante' : 'perguntas restantes'} em ${esc(_status.mes || 'este mês')}</span>` : '';
   const nova = _aba === 'perguntar' && _conv.length ? '<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-nova">Nova conversa</button>' : '';
   return `<div class="lq-topo">
-    <div class="lq-id"><span class="lq-seal">${SEAL}</span><div><b>Laudomiro</b><small>Especialista em segurança do trabalho</small></div></div>
     <div class="lq-abas" role="tablist" aria-label="Laudomiro">
       <button type="button" role="tab" aria-selected="${_aba === 'perguntar'}" class="${_aba === 'perguntar' ? 'on' : ''}" data-acao="campo:lq-aba:perguntar">${IC.perg}<span>Perguntar</span></button>
       <button type="button" role="tab" aria-selected="${_aba === 'fichas'}" class="${_aba === 'fichas' ? 'on' : ''}" data-acao="campo:lq-aba:fichas">${IC.fichas}<span>Fichas<span class="lq-ab-x"> dos agentes</span></span><i>${n}</i></button>
@@ -212,37 +263,81 @@ function compositor({ grande = false } = {}) {
   const ocupado = _conv.some(t => t.carregando);
   const anx = !off && anexosLigados();
   const nf = _fila.length;
-  const ph = bloq ? 'Seu perfil de acesso não inclui o Laudomiro' : off ? 'O Laudomiro está sendo configurado'
+  const ph = bloq ? 'Seu perfil não inclui o Laudomiro' : off ? 'O Laudomiro está sendo configurado'
     : nf > 1 ? `Pergunta para as ${nf} FDS (opcional)`
       : nf === 1 ? 'O que você quer saber deste produto? (opcional)'
         : _anexo ? (_anexo.tipo === 'fds' ? 'O que você quer saber deste produto? (opcional)' : 'O que você quer saber desta foto? (opcional)')
-          : _ctx ? (_ctx.varios ? 'Pergunte mais sobre estes produtos' : 'Pergunte mais sobre este produto') : 'Pergunte ao Laudomiro';
+          : _ctx ? (_ctx.varios ? 'Pergunte mais sobre estes produtos' : 'Pergunte mais sobre este produto') : _conv.length ? 'Pergunte mais' : 'Pergunte sobre NR, FDS ou foto';
   const comAnexo = nf > 0 || !!_anexo;
+  const fixo = nf > 1 ? `Usa ${nf + (_anexo ? 1 : 0)} perguntas da cota. Os arquivos não ficam guardados.`
+    : _anexo?.tipo === 'foto' ? 'Evite foto com rosto ou crachá. O arquivo não fica guardado.'
+      : comAnexo ? 'O arquivo não fica guardado. Só a resposta.' : '';
+  const alerta = avisoDados(_txt);
   return `<div class="lq-comp-w">${anx && _menuAnexo ? menuAnexo() : ''}
     ${_ctx && !comAnexo ? `<span class="lq-ctx">${IC.pdf}<span>Conversando sobre: <b>${esc(_ctx.produto)}</b></span><button type="button" data-acao="campo:lq-ctx-sair" aria-label="Parar de conversar sobre este produto">${I.x}</button></span>` : ''}
     ${anx ? filaAnexos() : ''}
-    <div class="lq-comp${grande ? ' grande' : ''}${off ? ' off' : ''}${anx ? ' com-clip' : ''}">
-      ${anx ? `<button type="button" class="lq-clip${_menuAnexo || comAnexo ? ' on' : ''}" data-acao="campo:lq-clip" aria-label="Anexar FDS ou foto" aria-expanded="${_menuAnexo}">${IC.clip}</button>` : ''}
-      <input type="text" id="lqTxt" data-cp="lq.txt" data-cp-enter="lq.enviar" value="${esc(_txt)}" maxlength="1000" autocomplete="off"
-        placeholder="${ph}" aria-label="Sua pergunta" ${off ? 'disabled' : ''}>
-      ${nf > 1 ? `<button type="button" class="lq-env lq-env-t" data-acao="campo:lq-enviar" ${off || ocupado ? 'disabled' : ''}>Comparar ${nf}</button>`
-        : `<button type="button" class="lq-env" data-acao="campo:lq-enviar" aria-label="Enviar pergunta" ${off || ocupado ? 'disabled' : ''}>${SEND}</button>`}
-    </div></div>
-    <div class="lq-comp-pe">${!off && !comAnexo ? botaoEstilo() : ''}<div class="lq-priv">${nf > 1 ? `Usa ${nf + (_anexo ? 1 : 0)} perguntas da cota. Os arquivos não ficam guardados no GRID: só as respostas.` : comAnexo ? 'O arquivo não fica guardado no GRID: só a resposta. Não envie foto com rosto ou nome de trabalhador.' : 'Não escreva nome, CPF nem dados de trabalhadores.'}</div></div>`;
+    <div class="lq-comp lq-comp2${grande ? ' grande' : ''}${off ? ' off' : ''}${_ouvindo ? ' ouvindo' : ''}">
+      <textarea id="lqTxt" rows="1" data-cp="lq.txt" data-cp-enter="lq.enviar" maxlength="1000" autocomplete="off" enterkeyhint="send"
+        placeholder="${_ouvindo ? 'Ouvindo. Toque no microfone para parar.' : ph}" aria-label="Sua pergunta" ${off ? 'disabled' : ''}>${esc(_txt)}</textarea>
+      <div class="lq-ferr">
+        ${anx ? `<button type="button" class="lq-clip${_menuAnexo || comAnexo ? ' on' : ''}" data-acao="campo:lq-clip" aria-label="Anexar FDS ou foto" aria-expanded="${_menuAnexo}" title="Anexar FDS ou foto">${IC.clip}</button>` : ''}
+        ${!off && !comAnexo ? botaoEstilo() : ''}
+        <span class="lq-ferr-d">
+        ${!off && !comAnexo && Voz() ? `<button type="button" class="lq-mic${_ouvindo ? ' on' : ''}" data-acao="campo:lq-mic" aria-pressed="${_ouvindo}" aria-label="${_ouvindo ? 'Parar de ouvir' : 'Perguntar falando'}" title="${_ouvindo ? 'Parar de ouvir' : 'Perguntar falando'}">${_ouvindo ? '<span class="lq-mic-o"></span>' : IC.mic}</button>` : ''}
+        ${nf > 1 ? `<button type="button" class="lq-env lq-env-t" data-acao="campo:lq-enviar" ${off || ocupado ? 'disabled' : ''}>Comparar ${nf}</button>`
+          : `<button type="button" class="lq-env" data-acao="campo:lq-enviar" aria-label="Enviar pergunta" ${off || ocupado ? 'disabled' : ''}>${SEND}</button>`}
+        </span>
+      </div>
+    </div>
+    <p class="lq-alerta${fixo && !alerta ? ' neutro' : ''}" role="status" aria-live="polite" data-fixo="${esc(fixo)}">${esc(alerta || fixo)}</p>
+  </div>`;
+}
+
+/* v278: aviso só quando parece haver dado pessoal no que está sendo escrito (não impede o envio). */
+const NAO_NOME = new Set(['NR', 'Bom', 'Boa', 'Dia', 'Tarde', 'Noite', 'Olá', 'Oi', 'Obrigado', 'Obrigada', 'Portaria', 'MTE', 'MTP', 'Norma', 'Anexo', 'Item', 'Brasil', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo', 'Ministério', 'Trabalho', 'Laudomiro', 'GRID', 'Qual', 'Quais', 'Como', 'Quando', 'Onde', 'Precisa', 'Pode', 'Posso', 'Devo', 'Existe', 'Tem', 'Meu', 'Minha', 'Nosso', 'Nossa', 'Um', 'Uma', 'O', 'A', 'Os', 'As', 'De', 'Da', 'Do', 'Ficha', 'Técnica', 'São', 'Paulo', 'Rio', 'Janeiro', 'Santa', 'Catarina', 'Minas', 'Gerais']);
+function avisoDados(t) {
+  t = String(t || '');
+  if (/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(t)) return 'Isso parece um CPF. O Laudomiro não precisa dele para responder.';
+  const frases = t.split(/[.!?\n]+/);
+  for (const f of frases) {
+    const pal = f.trim().split(/\s+/);
+    let seq = 0;
+    for (let i = 0; i < pal.length; i++) {  // precisa de 2 palavras seguidas com inicial maiúscula
+      const w = pal[i].replace(/[^\p{L}]/gu, '');
+      const nome = /^\p{Lu}\p{Ll}{1,}$/u.test(w) && !NAO_NOME.has(w);
+      const liga = seq > 0 && /^(de|da|do|dos|das)$/.test(w);
+      seq = nome ? seq + 1 : liga ? seq : 0;
+      if (seq >= 2) return 'Isso parece o nome de uma pessoa. Troque pela função, como o soldador.';
+    }
+  }
+  return '';
+}
+/* O campo cresce até 5 linhas enquanto a pessoa escreve (onde o navegador não faz sozinho). */
+function crescer(el) {
+  if (!el || el.tagName !== 'TEXTAREA' || CSS.supports?.('field-sizing', 'content')) return;
+  el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 132) + 'px';
+}
+function atualizarAviso() {
+  const a = avisoDados(_txt);
+  document.querySelectorAll('.lq-alerta').forEach((el) => {
+    const v = a || el.dataset.fixo || '';
+    if (el.textContent !== v) el.textContent = v;
+    el.classList.toggle('neutro', !a && !!el.dataset.fixo);
+  });
 }
 
 function inicio() {
   const bloq = semPermissao();
   const off = (_status && !_status.configurado) || bloq;
   const rec = (_status?.recentes || []).slice(0, 5);
+  const icTipo = { fds: IC.pdf, foto: IC.img, dados: IC.tab };
+  const tira = (r) => r.tipo === 'fds' ? r.pergunta.replace(/^FDS:\s*/, '') : r.tipo === 'foto' ? r.pergunta.replace(/^Foto:\s*/, '') : r.pergunta;
   return `<section class="lq-ini">
     <h2 class="lq-h">${saudacao()} O que você precisa resolver?</h2>
-    <p class="lq-sub">Faça a pergunta como faria a um especialista. Ele responde com o item da norma.</p>
-    ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil de acesso não inclui perguntas ao Laudomiro.</b> Peça ao administrador da sua empresa para liberar (Configurações → Laudomiro). As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> Logo você poderá perguntar aqui. Enquanto isso, as <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam funcionando.</div></div>` : ''}
+    ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil não inclui o Laudomiro.</b> Peça a liberação ao administrador. As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : ''}
     ${compositor({ grande: true })}
-    ${!off ? cartaoEstilo() : ''}
-    ${anexosLigados() && !_anexo && !_fila.length ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">${IC.pdf}<span>Ler FDS (até 5 para comparar)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
-    ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span>${r.tipo === 'fds' ? `<i class="lq-rt fds">FDS</i>${esc(r.pergunta.replace(/^FDS:\s*/, ''))}` : r.tipo === 'foto' ? `<i class="lq-rt foto">FOTO</i>${esc(r.pergunta.replace(/^Foto:\s*/, ''))}` : r.tipo === 'dados' ? `<i class="lq-rt dados">DADOS</i>${esc(r.pergunta)}` : esc(r.pergunta)}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
+    ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span><i class="lq-rti" aria-label="${r.tipo === 'fds' ? 'FDS' : r.tipo === 'foto' ? 'Foto' : r.tipo === 'dados' ? 'Dados da empresa' : 'Pergunta'}">${icTipo[r.tipo] || IC.perg}</i>${esc(tira(r))}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
+    <p class="lq-resp-pro">O Laudomiro orienta com base nas normas. O laudo é do profissional responsável.</p>
   </section>`;
 }
 
@@ -261,7 +356,7 @@ function textoComRefs(texto, turno, tIdx) {
     const t = mapa.get(+n); if (!t || vistos.has(+n)) return '';
     vistos.add(+n);
     const on = _painel && _painel.t === tIdx && _painel.n === +n;
-    return ` <button type="button" class="lq-it${on ? ' on' : ''}" data-acao="campo:lq-fonte:${tIdx}.${+n}" title="Ver o texto: ${esc(t.fonte)}">${esc(t.rotulo)}</button>`;
+    return ` <button type="button" class="lq-it${on ? ' on' : ''}" data-acao="campo:lq-fonte:${tIdx}.${+n}" title="Ver o texto: ${esc(t.fonte)}">${esc(String(t.rotulo).replace(/\s*·\s*/g, ', '))}</button>`;
   })
     // v252: citação repetida tirada não deixa "()" ou "( , )" sobrando
     .replace(/\(\s*(?:,\s*)*\)/g, '')
@@ -278,7 +373,7 @@ function resposta(turno, tIdx) {
   if (turno.resposta?.tipo === 'fds' && !turno.erro) return respostaFds(turno, tIdx);
   if (turno.resposta?.tipo === 'foto' && !turno.erro) return respostaFoto(turno, tIdx);
   if (turno.dados && !turno.erro) return respostaDados(turno, tIdx);  // v266
-  if (turno.carregando) return `<article class="lq-resp lq-carr" aria-live="polite"><span class="lq-seal p">${SEAL}</span><div><b>Consultando as normas…</b><small>Buscando os itens que respondem a sua pergunta.</small></div></article>`;
+  if (turno.carregando) return `<article class="lq-resp lq-carr" aria-live="polite"><span class="lq-seal p">${SEAL}</span><div><b>Consultando as normas</b><small>Buscando os itens que respondem.</small></div></article>`;
   if (turno.erro) return `<article class="lq-resp lq-falha">${IC.erro}<div><b>${esc(turno.erro)}</b>${turno.podeRepetir ? `<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-repetir:${tIdx}">Tentar de novo</button>` : ''}</div></article>`;
   const r = turno.resposta; if (!r) return '';
   const [vt, vc] = VEREDITO[r.veredito] || VEREDITO.INFO;
@@ -286,23 +381,18 @@ function resposta(turno, tIdx) {
   const est = turno.estilo || 'tecnico';
   const recente = !turno.criado_em || Date.now() - new Date(turno.criado_em).getTime() < 864e5;  // o servidor só reescreve até 24 h
   const podeVer = !!turno.id && recente;
-  const ultimo = _conv.map((x, i) => (x.resposta && !x.dados ? i : -1)).filter(i => i >= 0).pop();
-  const dica = podeVer && est !== 'simples' && tIdx === ultimo && !lerLocal('dica-estilo');  // só na última resposta
-  const reesc = !podeVer ? (turno.id ? `<div class="lq-reesc"><span class="lq-reesc-t">Para ver em outro estilo, pergunte de novo.</span></div>` : '') : `<div class="lq-reesc"><span class="lq-reesc-t">Ver esta resposta:</span><span class="lq-reesc-op" role="group" aria-label="Ver esta resposta em outro estilo">${Object.entries(ESTILOS).map(([k, [nome]]) =>
-      `<button type="button" aria-pressed="${est === k}" class="${est === k ? 'on' : ''}" data-acao="campo:lq-reescrever:${tIdx}.${k}" ${turno.reescrevendo ? 'disabled' : ''}>${nome}</button>`).join('')}</span>
-    ${turno.reescrevendo ? `<span class="lq-reesc-c">${REESCREVENDO[turno.reescrevendo]}</span>` : ''}
-    ${dica ? `<div class="lq-dica" role="note"><span>Achou difícil? Toque em <b>Simples</b> e o Laudomiro explica de novo, sem gastar pergunta.</span><button type="button" data-acao="campo:lq-dica-ok">Entendi</button></div>` : ''}</div>`;
-  return `<article class="lq-resp${turno.reescrevendo ? ' lq-reesc-on' : ''}" aria-busy="${!!turno.reescrevendo}">${turno.avisoLeitor ? `<span class="sr-only" role="status">${esc(turno.avisoLeitor)}</span>` : ''}
-    <header class="lq-ver"><span class="lq-selo ${vc}">${vt}</span><div><h3>${esc(r.titulo)}</h3>${r.subtitulo ? `<p>${esc(r.subtitulo)}</p>` : ''}</div></header>
+  const seletor = podeVer ? `<span class="lq-reesc-op lq-vers" role="group" aria-label="Ver esta resposta em outro estilo">${Object.entries(ESTILOS).map(([k, [nome]]) =>
+      `<button type="button" aria-pressed="${est === k}" class="${est === k ? 'on' : ''}" data-acao="campo:lq-reescrever:${tIdx}.${k}" ${turno.reescrevendo ? 'disabled' : ''}>${nome}</button>`).join('')}</span>` : '';
+  return `<article class="lq-resp lq-r2${turno.reescrevendo ? ' lq-reesc-on' : ''}" aria-busy="${!!turno.reescrevendo}">${turno.avisoLeitor ? `<span class="sr-only" role="status">${esc(turno.avisoLeitor)}</span>` : ''}
+    <header class="lq-ver"><span class="lq-selo ${vc}"><i></i>${vt}</span><div><h3>${esc(r.titulo)}</h3>${r.subtitulo ? `<p>${esc(r.subtitulo)}</p>` : ''}</div></header>
     <div class="lq-txt">${(r.resposta || []).map(p => `<p>${textoComRefs(p, turno, tIdx)}</p>`).join('')}</div>
-    ${r.cuidado ? `<div class="lq-cuid">${IC.erro}<div><b>Cuidado:</b> ${textoComRefs(r.cuidado, turno, tIdx)}</div></div>` : ''}
-    ${fontes.length ? `<div class="lq-fontes">${fontes.slice(0, 4).map(t => `<button type="button" class="lq-fo" data-acao="campo:lq-fonte:${tIdx}.${t.n}"><small>${tipoFonte(t)}</small><b>${esc(t.rotulo)}</b></button>`).join('')}</div>` : ''}
-    ${reesc}
-    <footer class="lq-acts">
-      <button type="button" data-acao="campo:lq-copiar:${tIdx}">${IC.copiar}<span>Copiar</span></button>
-      ${turno.id ? `<button type="button" class="${turno.nota === 'util' ? 'on' : ''}" data-acao="campo:lq-util:${tIdx}" aria-pressed="${turno.nota === 'util'}">${IC.util}<span>Útil</span></button>
-      <button type="button" class="${turno.nota === 'erro' ? 'on' : ''}" data-acao="campo:lq-erro:${tIdx}">${IC.erro}<span>Tem erro</span></button>` : ''}
-      <small>${est === 'simples' ? 'Orientação geral. Confirme com o técnico ou engenheiro de segurança da empresa.' : 'Indicação para o técnico. Não substitui laudo.'}</small>
+    ${r.cuidado ? `<div class="lq-cuid"><div><b>Cuidado</b>${textoComRefs(r.cuidado, turno, tIdx)}</div></div>` : ''}
+    <footer class="lq-acoes">${seletor}${turno.reescrevendo ? `<span class="lq-reesc-c">${REESCREVENDO[turno.reescrevendo]}</span>` : ''}
+      <span class="lq-ic">
+        <button type="button" class="lq-ib" data-acao="campo:lq-copiar:${tIdx}" aria-label="Copiar resposta" title="Copiar resposta">${IC.copiar}</button>
+        ${turno.id ? `<button type="button" class="lq-ib so-pc${turno.nota === 'util' ? ' on' : ''}" data-acao="campo:lq-util:${tIdx}" aria-pressed="${turno.nota === 'util'}" aria-label="Resposta útil" title="Resposta útil">${IC.util}</button>` : ''}
+        ${menuMais(turno, tIdx)}
+      </span>
     </footer>
   </article>`;
 }
@@ -408,6 +498,7 @@ function limparMd(x) {
 
 function painel() {
   if (!_painel) return '';
+  if (_painel.doc) return painelDoc(_conv[_painel.t], _painel.t);  // v278
   const t = (_conv[_painel.t]?.trechos || []).find(x => x.n === _painel.n);
   if (!t) return '';
   return `<aside class="lq-painel" aria-label="Texto da norma">
@@ -551,6 +642,7 @@ async function prepararFds(arquivos) {
 }
 
 async function prepararArquivo(chave, arquivos) {
+  pararDeOuvir();  // v278
   const f = arquivos?.[0]; if (!f) return;
   _menuAnexo = false;
   try {
@@ -925,6 +1017,13 @@ function textoCopiar(turno, como) {
 
 function copiarComo(tIdx, como) {
   const t = _conv[tIdx]; if (!t?.resposta) return;
+  const tipo = t.resposta.tipo;
+  if (tipo !== 'fds' && tipo !== 'foto') {  // v278: resposta de texto
+    _copiarMenu = null;
+    if (como === 'resp') { repintar(); copiar(tIdx); return; }
+    if (DOCS[como]) { montarDocumento(tIdx, como); return; }
+    return;
+  }
   _copiarMenu = null; repintar();
   navigator.clipboard?.writeText(textoCopiar(t, como)).then(() => avisar('Texto copiado.'), () => avisar('Não foi possível copiar neste aparelho.', 'erro'));
 }
@@ -972,7 +1071,7 @@ export async function render(params = {}) {
     return `<div class="lq lq-na-ficha">${abas()}${html}</div>`;
   }
   ligarTela({
-    digitar: (chave, valor) => { if (chave === 'lq.txt') _txt = valor; },
+    digitar: (chave, valor, el) => { if (chave === 'lq.txt') { _txt = valor; atualizarAviso(); crescer(el); } },
     enter: (chave, valor) => { if (chave === 'lq.enviar') { _txt = valor; enviar(); } },
     foto: (chave, arquivos) => (/^lq\./.test(chave) ? prepararArquivo(chave, arquivos) : undefined),  // v254: FDS e foto
   });
@@ -985,6 +1084,7 @@ export async function render(params = {}) {
 }
 
 async function enviar(texto) {
+  if (_ouvindo) pararDeOuvir();  // v278: o que chegar depois não volta para o campo
   const p = String(texto ?? (valorVisivel('#lqTxt') || _txt)).trim();
   if (_fila.length && texto == null) { enviarLote(p); return; }  // v264
   if (_anexo && texto == null) { enviarAnexo(p); return; }  // v254
@@ -1041,6 +1141,87 @@ async function reescrever(tIdx, est) {
   }
   t.reescrevendo = null;
   repintar();
+}
+
+/* v278: pede ao servidor o texto do documento (Ordem de serviço, DDS, Plano de ação). */
+async function montarDocumento(tIdx, tipo, refazer = false) {
+  const t = _conv[tIdx];
+  if (!t?.id || t.doc?.carregando) return;
+  const est = t.estilo || 'tecnico';
+  const chaveDoc = `${tipo}:${est}`;
+  const salvo = !refazer && t.docs?.[chaveDoc];
+  if (salvo) { t.doc = { tipo, texto: salvo.texto || salvo, conferir: salvo.conferir || [] }; _painel = { t: tIdx, doc: tipo }; repintar(); return; }
+  const d = _dono;
+  t.doc = { tipo, carregando: true }; _painel = { t: tIdx, doc: tipo }; repintar();
+  try {
+    const r = await chamar({ acao: 'documento', id: t.id, tipo, estilo: est });
+    if (!mesmoDono(d)) return;
+    t.docs = { ...(t.docs || {}), [chaveDoc]: { texto: r.texto, conferir: r.conferir || [] } };
+    t.doc = { tipo, texto: r.texto, conferir: r.conferir || [] };
+    t.avisoLeitor = `${DOCS[tipo][2]} pronto.`;
+  } catch (e) {
+    if (!mesmoDono(d)) return;
+    t.doc = null; if (_painel?.doc === tipo && _painel.t === tIdx) _painel = null;
+    avisar(e.message || 'Não foi possível montar o texto agora.', 'erro');
+  }
+  repintar();
+  if (t.doc?.texto) setTimeout(() => document.getElementById(`lqDocCopiar${tIdx}`)?.focus({ preventScroll: true }), 80);
+}
+
+/* v278: perguntar falando. Usa o reconhecimento de voz do próprio navegador (Chrome, Edge, Safari).
+   O texto aparece no campo e a pessoa confere antes de enviar. */
+const Voz = () => window.SpeechRecognition || window.webkitSpeechRecognition || null;
+function pararDeOuvir(descartar = true) {
+  const r = _reconhecer; _reconhecer = null; _ouvindo = false;
+  if (!r) return;
+  if (descartar) { r.onresult = r.onerror = r.onend = null; try { r.abort(); } catch { /* já parou */ } }
+  else { r._parando = true; try { r.stop(); } catch { /* já parou */ } }  // o navegador ainda entrega a última frase
+}
+const ERRO_VOZ = {
+  'no-speech': 'Não ouvi nada. Toque no microfone e fale.',
+  'audio-capture': 'Nenhum microfone encontrado neste aparelho.',
+  network: 'Sem conexão com o serviço de voz. Digite a pergunta.',
+  'not-allowed': 'Libere o microfone para o GRID nas permissões do navegador.',
+  'service-not-allowed': 'Este aparelho não permite ditar aqui. Use o microfone do teclado ou digite.',
+};
+/* Antes do primeiro uso: a fala vai para o serviço de voz do navegador (LGPD, transparência). */
+function ouvir() {
+  if (_ouvindo) { pararDeOuvir(false); repintar(); return; }
+  const V = Voz(); if (!V) { avisar('Este aparelho não permite perguntar falando. Digite a pergunta.', 'erro'); return; }
+  if (!lerLocal('aviso-voz')) {
+    const p = ponte();
+    if (typeof p.abrirModal === 'function') {
+      p.abrirModal('Perguntar falando', `<p style="margin:0 0 10px;line-height:1.6">Sua fala é convertida em texto pelo serviço de voz do navegador (Google no Chrome e Android, Apple no Safari, Microsoft no Edge). O áudio não passa pelo GRID.</p><p style="margin:0;line-height:1.6"><b>Não fale nomes nem dados de trabalhadores.</b> O texto aparece no campo e você confere antes de enviar.</p>`,
+        `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-primary" onclick="fecharModal();window.GRID?.tratarAcao?.('campo:lq-mic-ok')">Entendi, usar o microfone</button>`);
+      return;
+    }
+  }
+  comecarAOuvir(V);
+}
+function comecarAOuvir(V = Voz()) {
+  if (!V || _ouvindo) return;
+  const rec = new V();
+  rec.lang = 'pt-BR'; rec.interimResults = true; rec.continuous = false;
+  const antes = (valorVisivel('#lqTxt') || _txt || '').trim();
+  rec.onresult = (ev) => {
+    if (rec !== _reconhecer && !rec._parando) return;
+    let fin = '';
+    for (const x of ev.results) if (x.isFinal) { const s = String(x[0]?.transcript || '').trim(); fin = s.startsWith(fin) ? s : `${fin} ${s}`.trim(); }
+    const ult = ev.results[ev.results.length - 1];
+    const falado = !ult || ult.isFinal ? fin : `${fin} ${String(ult[0]?.transcript || '')}`.trim();
+    _txt = (antes ? antes + ' ' : '') + falado;
+    document.querySelectorAll('#lqTxt').forEach((el) => { el.value = _txt; crescer(el); });
+    atualizarAviso();
+  };
+  rec.onerror = (ev) => { if (rec === _reconhecer && ERRO_VOZ[ev?.error]) avisar(ERRO_VOZ[ev.error], 'erro'); };
+  rec.onend = () => { if (rec !== _reconhecer && !rec._parando) return; if (rec === _reconhecer) { _reconhecer = null; _ouvindo = false; } repintar(); };
+  try { _reconhecer = rec; _ouvindo = true; rec.start(); repintar(); }
+  catch { _reconhecer = null; _ouvindo = false; avisar('Não foi possível usar o microfone agora.', 'erro'); }
+}
+if (typeof window !== 'undefined' && !window.__lqVozLigada) {
+  window.__lqVozLigada = true;
+  addEventListener('hashchange', () => { if (_ouvindo && !/^#?(laudomiro|campo-agentes)/.test(location.hash)) pararDeOuvir(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && _ouvindo) { pararDeOuvir(); repintar(); } });
 }
 
 function rolarFim() {
@@ -1100,7 +1281,7 @@ async function abrirRecente(id) {
       const estR = r.resposta?.estilo || 'tecnico';  // v275
       const versoes = { [estR]: { resposta: r.resposta, trechos: r.trechos || [] } };
       Object.entries(r.resposta?._versoes || {}).forEach(([k, v]) => { if (ESTILOS[k] && v) versoes[k] = { resposta: { ...r.resposta, ...v, estilo: k }, trechos: r.trechos || [] }; });
-      _conv = [{ pergunta: r.pergunta, id: r.id, resposta: r.resposta, trechos: r.trechos || [], nota: r.avaliacao || null, estilo: estR, versoes, criado_em: r.criado_em,
+      _conv = [{ pergunta: r.pergunta, id: r.id, resposta: r.resposta, trechos: r.trechos || [], nota: r.avaliacao || null, estilo: estR, versoes, criado_em: r.criado_em, docs: Object.fromEntries(Object.entries(r.resposta?._docs || {}).map(([k, v]) => [k.includes(':') ? k : `${k}:tecnico`, typeof v === 'string' ? { texto: v, conferir: [] } : { texto: String(v?.texto || ''), conferir: Array.isArray(v?.conferir) ? v.conferir.map(String) : [] }])),
         resumo: [r.resposta?.titulo, ...(r.resposta?.resposta || [])].join(' ').replace(/\{\{\d+\}\}/g, '') }];
       _ctx = null;
     }
@@ -1113,7 +1294,7 @@ export async function acao(nome, valor, redesenhar) {
   // v254: um clique em qualquer outra coisa fecha os menus abertos
   if (nome !== 'campo:lq-clip' && _menuAnexo) _menuAnexo = false;
   if (nome !== 'campo:lq-copiar-menu' && !/^campo:lq-copiar-como/.test(nome) && _copiarMenu != null) _copiarMenu = null;
-  if (nome === 'campo:lq-clip') { _menuAnexo = !_menuAnexo; _menuEstilo = false; redesenhar(); return true; }
+  if (nome === 'campo:lq-clip') { pararDeOuvir(); _menuAnexo = !_menuAnexo; _menuEstilo = false; redesenhar(); return true; }
   if (nome === 'campo:lq-anx-tirar') { _anexo = null; redesenhar(); return true; }
   if (nome === 'campo:lq-fila-tirar') { _fila.splice(+valor, 1); _avisoFila = ''; redesenhar(); return true; }  // v264
   if (nome === 'campo:lq-fila-perg') { const q = PERG_LOTE[+valor]; if (q) { _txt = q; document.querySelectorAll('#lqTxt').forEach(el => { el.value = q; }); } redesenhar(); return true; }
@@ -1150,12 +1331,17 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lq-aba') { _aba = valor === 'fichas' ? 'fichas' : 'perguntar'; _painel = null; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (_aba === 'fichas') return Fichas.acao(nome, valor, redesenhar);
   if (nome === 'campo:lq-enviar') { enviar(); return true; }
+  if (nome === 'campo:lq-mic') { ouvir(); return true; }  // v278
+  if (nome === 'campo:lq-mic-ok') { gravarLocal('aviso-voz', '1'); comecarAOuvir(); return true; }
+  if (nome === 'campo:lq-doc-refazer') { const t = _conv[+valor]; if (t?.doc?.tipo) montarDocumento(+valor, t.doc.tipo, true); return true; }
+  if (nome === 'campo:lq-doc-fechar') { const t = _conv[+valor]; if (t) { t.doc = null; redesenhar(); } return true; }
+  if (nome === 'campo:lq-doc-copiar') { const t = _conv[+valor]; if (t?.doc?.texto) { copiarTexto(t.doc.texto, 'Texto copiado.'); t.doc.copiado = true; redesenhar(); setTimeout(() => { if (t.doc) { t.doc.copiado = false; repintar(); } }, 2000); } return true; }
   if (nome === 'campo:lq-estilo') { mudarEstilo(valor); _menuEstilo = false; redesenhar(); return true; }  // v275
   if (nome === 'campo:lq-estilo-menu') { _menuEstilo = !_menuEstilo; _menuAnexo = false; redesenhar(); return true; }
   if (nome === 'campo:lq-dica-ok') { gravarLocal('dica-estilo', '1'); redesenhar(); return true; }
   if (nome === 'campo:lq-reescrever') { const [t, est] = String(valor).split('.'); reescrever(+t, est); return true; }
   if (nome === 'campo:lq-sug') { const s = SUGESTOES[+valor]; if (s) enviar(s[1]); return true; }
-  if (nome === 'campo:lq-nova') { _conv = []; _painel = null; _txt = ''; _ctx = null; _anexo = null; _fila = []; _avisoFila = ''; redesenhar(); return true; }
+  if (nome === 'campo:lq-nova') { pararDeOuvir(); _conv = []; _painel = null; _txt = ''; _ctx = null; _anexo = null; _fila = []; _avisoFila = ''; redesenhar(); return true; }
   if (nome === 'campo:lq-fonte') { const [t, n] = String(valor).split('.').map(Number); _painel = (_painel && _painel.t === t && _painel.n === n) ? null : { t, n }; redesenhar(); return true; }
   if (nome === 'campo:lq-fechar') { _painel = null; redesenhar(); return true; }
   if (nome === 'campo:lq-copiar') { copiar(+valor); return true; }
