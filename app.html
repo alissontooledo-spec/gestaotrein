@@ -12009,6 +12009,7 @@ function verCliente(id) {
         <div class="detail-actions">
           <button class="btn btn-navy" data-action="editarCliente" data-id="${c.id}">${ICONS.edit} Editar dados</button>
           <button class="btn btn-outline" data-action="toggleCliente" data-id="${c.id}">${c.ativo?'Desativar cliente':'Reativar cliente'}</button>
+          ${_podeAcao('exportar_relatorios') ? `<button class="btn btn-outline" onclick="abrirDossie('${c.id}')" title="PDF com treinamentos, riscos por GHE e plano de ação desta empresa">${ICONS.doc || ''} Dossiê para fiscalização</button>` : ''}
           ${(_modulosAtivos || []).includes('crm') ? `<button class="btn btn-outline" onclick="irPara('crm-empresa',{id:'${c.id}'})" title="Negócios, contatos e atividades desta empresa no CRM — mesmo cadastro">${ICONS.target} Ver conta no CRM</button>` : ''}
         </div>`:''}
       </div>
@@ -12421,6 +12422,21 @@ function _htmlListaColabs(lista) {
   }).join('');
 }
 
+/* v282: Dossiê para fiscalização (módulo separado, carregado só quando abre). */
+async function abrirDossie(clienteId, colaboradorId) {
+  if (!_podeAcao('exportar_relatorios')) { showToast('Seu perfil de acesso não permite exportar relatórios.', 'error'); return; }
+  try {
+    const m = await import('./modulos/dossie/dossie.js?v=' + APP_BUILD);
+    await _dossiePdfSafeCarregar().catch(() => {});
+    m.abrir({ sb, usuario: usuarioAtual, clienteId, colaboradorId: colaboradorId || null,
+      garantirJsPDF: _garantirJsPDF, garantirPdfLib: _garantirPdfLib, pdfSafe: _dossiePdfSafe,
+      avisar: (msg, tipo) => showToast(msg, tipo === 'error' ? 'error' : 'success') });
+  } catch (e) { showToast('Não foi possível abrir o dossiê. Confira a internet e tente de novo.', 'error'); }
+}
+/* O pdfSafe do app tira acentos e corta em 400 letras. O dossiê usa o do módulo Campo, que mantém acentos. */
+async function _dossiePdfSafeCarregar() { if (!window.__dossiePdfSafe) window.__dossiePdfSafe = (await import('./modulos/campo/pdfgerar.js?v=' + APP_BUILD)).pdfSafe; }
+const _dossiePdfSafe = (t) => (window.__dossiePdfSafe ? window.__dossiePdfSafe(t) : pdfSafe(t));
+
 async function verColab(id) {
   const c = _colabsCache.find(x=>x.id===id);
   if (!c) return;
@@ -12474,6 +12490,7 @@ async function verColab(id) {
         ${podeMgr?`
         <div class="detail-actions">
           <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">Editar dados</button>
+          ${c.cliente_id && _podeAcao('exportar_relatorios') ? `<button class="btn btn-outline" onclick="abrirDossie('${c.cliente_id}','${c.id}')" title="PDF com os treinamentos deste colaborador e o que falta">${ICONS.doc || ''} Dossiê para fiscalização</button>` : ''}
         </div>`:''}
       </div>
 
@@ -33737,7 +33754,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '281';
+  var APP_BUILD = '282';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
