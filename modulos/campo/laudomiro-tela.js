@@ -25,6 +25,7 @@
    guardado no aparelho e preso à pessoa logada. Escolha junto do campo de digitar; na primeira
    visita o Laudomiro pergunta. Cada resposta pode ser vista em outro estilo sem gastar pergunta
    da cota (o servidor reescreve a mesma resposta, com o mesmo veredito; as versões ficam no turno).
+   v276 (24/10/2026): sem os 3 cartões de sugestão no início (pedido do Alisson).
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
@@ -241,7 +242,6 @@ function inicio() {
     ${compositor({ grande: true })}
     ${!off ? cartaoEstilo() : ''}
     ${anexosLigados() && !_anexo && !_fila.length ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">${IC.pdf}<span>Ler FDS (até 5 para comparar)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
-    <div class="lq-sug">${SUGESTOES.map(([r, p], i) => `<button type="button" class="lq-cd" data-acao="campo:lq-sug:${i}" ${off ? 'disabled' : ''}><small>${r}</small><b>${esc(p)}</b></button>`).join('')}</div>
     ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span>${r.tipo === 'fds' ? `<i class="lq-rt fds">FDS</i>${esc(r.pergunta.replace(/^FDS:\s*/, ''))}` : r.tipo === 'foto' ? `<i class="lq-rt foto">FOTO</i>${esc(r.pergunta.replace(/^Foto:\s*/, ''))}` : r.tipo === 'dados' ? `<i class="lq-rt dados">DADOS</i>${esc(r.pergunta)}` : esc(r.pergunta)}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
   </section>`;
 }
