@@ -21,6 +21,10 @@
    turmas, avaliações de campo). O servidor só classifica a pergunta; os dados são buscados
    aqui, com o login de quem perguntou (laudomiro-dados.js), e nunca vão para a IA.
    Proposta aprovada: 08-Propostas-visuais/laudomiro-grupo3-ligado-ao-grid.html.
+   v275 (24/10/2026): estilo da resposta escolhido por cada pessoa (Simples, Técnica, Para laudo),
+   guardado no aparelho e preso à pessoa logada. Escolha junto do campo de digitar; na primeira
+   visita o Laudomiro pergunta. Cada resposta pode ser vista em outro estilo sem gastar pergunta
+   da cota (o servidor reescreve a mesma resposta, com o mesmo veredito; as versões ficam no turno).
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
@@ -46,6 +50,8 @@ let _copiarMenu = null;    // v254: turno com o menu "Copiar para…" aberto
 let _fila = [];            // v264: FDS escolhidas, ainda não enviadas (até 5) { tipo, nome, mime, base64, tam, chave }
 let _avisoFila = '';       // v264: aviso do último arquivo recusado na fila (repetido, passou de 5…)
 let _dono = null;
+let _estilo = null;        // v275: 'simples' | 'tecnico' | 'completo' (da pessoa, não da organização)
+let _menuEstilo = false;   // v275: menu "Resposta: …" aberto
 const donoAtual = () => { const u = sessao.usuario(); return u?.id ? `${u.id}|${u.org_id || ''}` : ''; };
 function conferirDono() {
   const d = donoAtual();
@@ -53,6 +59,7 @@ function conferirDono() {
   _dono = d;
   _status = null; _statusCarregando = false; _conv = []; _txt = ''; _painel = null;
   _anexo = null; _menuAnexo = false; _ctx = null; _copiarMenu = null; _fila = []; _avisoFila = '';
+  _estilo = null; _menuEstilo = false;  // v275
 }
 const mesmoDono = (d) => d === _dono && d === donoAtual();
 
@@ -88,6 +95,44 @@ const SUGESTOES = [
   ['No laudo e no LTCAT', 'Tolueno conta para aposentadoria especial?'],
   ['Nos treinamentos', 'O treinamento de NR-35 pode ser a distância?'],
 ];
+/* v275: estilo da resposta. Na primeira visita a pessoa escolhe; até lá, o Comercial fica no Simples
+   e os demais na Técnica. A escolha fica no aparelho, presa à pessoa logada (não é da organização). */
+const ESTILOS = {
+  simples: ['Simples', 'Sem termos técnicos, para quem não é da área'],
+  tecnico: ['Técnica', 'Com o item da norma, para o técnico de segurança'],
+  completo: ['Para laudo', 'Com itens, exceções e prazos, para laudo e parecer'],
+};
+const REESCREVENDO = { simples: 'Reescrevendo em linguagem simples…', tecnico: 'Reescrevendo na versão técnica…', completo: 'Reescrevendo a versão para laudo…' };
+const chaveLocal = (k) => `grid:lq-${k}:${_dono || ''}`;
+const lerLocal = (k) => { try { return localStorage.getItem(chaveLocal(k)); } catch { return null; } };
+const gravarLocal = (k, v) => { try { localStorage.setItem(chaveLocal(k), v); } catch { /* aparelho sem armazenamento: vale só nesta visita */ } };
+function estiloEscolhido() { return !!ESTILOS[lerLocal('estilo')]; }
+function estilo() {
+  if (!_estilo) {
+    _estilo = lerLocal('estilo');
+    if (!ESTILOS[_estilo]) _estilo = sessao.usuario()?.perfil === 'comercial' ? 'simples' : 'tecnico';
+  }
+  return _estilo;
+}
+function mudarEstilo(e) { if (!ESTILOS[e]) return; _estilo = e; gravarLocal('estilo', e); }
+/* Botão "Resposta: Técnica" junto do campo de digitar, com o menu das 3 opções. */
+function botaoEstilo() {
+  const atual = estilo();
+  return `<span class="lq-est-w">${_menuEstilo ? `<div class="lq-menu-fundo" data-acao="campo:lq-estilo-menu"></div>
+    <div class="lq-menu lq-menu-est" role="menu" aria-label="Como o Laudomiro responde">
+      <div class="lq-menu-h"><b>Como o Laudomiro responde</b><button type="button" class="lq-x" data-acao="campo:lq-estilo-menu" aria-label="Fechar">${I.x}</button></div>
+      ${Object.entries(ESTILOS).map(([k, [nome, dica]]) => `<button type="button" role="menuitemradio" aria-checked="${atual === k}" class="lq-mo lq-mo-est${atual === k ? ' on' : ''}" data-acao="campo:lq-estilo:${k}"><span class="ck">${atual === k ? '✓' : ''}</span><span><b>${nome}</b><small>${dica}</small></span></button>`).join('')}
+      <p class="lq-est-nota">Vale para as próximas perguntas.</p>
+    </div>` : ''}<button type="button" class="lq-est-b${_menuEstilo ? ' on' : ''}" data-acao="campo:lq-estilo-menu" aria-expanded="${_menuEstilo}" aria-haspopup="menu">Resposta: <b>${ESTILOS[atual][0]}</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></span>`;
+}
+/* Primeira visita: o Laudomiro pergunta como a pessoa prefere as respostas. */
+function cartaoEstilo() {
+  if (estiloEscolhido()) return '';
+  const atual = estilo();
+  return `<div class="lq-prim"><b>Como você prefere as respostas?</b><small>Dá para trocar a qualquer momento, embaixo do campo de digitar.</small>
+    <div class="lq-prim-op">${Object.entries(ESTILOS).map(([k, [nome, dica]]) => `<button type="button" class="${atual === k ? 'on' : ''}" aria-pressed="${atual === k}" data-acao="campo:lq-estilo:${k}"><b>${nome}</b><small>${dica}</small></button>`).join('')}</div></div>`;
+}
+
 const VEREDITO = {
   SIM: ['SIM', 'v-sim'], NAO: ['NÃO', 'v-nao'], DEPENDE: ['DEPENDE', 'v-dep'],
   INFO: ['RESPOSTA', 'v-info'], NAO_SEI: ['NÃO ACHEI', 'v-ns'],
@@ -182,7 +227,7 @@ function compositor({ grande = false } = {}) {
       ${nf > 1 ? `<button type="button" class="lq-env lq-env-t" data-acao="campo:lq-enviar" ${off || ocupado ? 'disabled' : ''}>Comparar ${nf}</button>`
         : `<button type="button" class="lq-env" data-acao="campo:lq-enviar" aria-label="Enviar pergunta" ${off || ocupado ? 'disabled' : ''}>${SEND}</button>`}
     </div></div>
-    <div class="lq-priv">${nf > 1 ? `Usa ${nf + (_anexo ? 1 : 0)} perguntas da cota. Os arquivos não ficam guardados no GRID: só as respostas.` : comAnexo ? 'O arquivo não fica guardado no GRID: só a resposta. Não envie foto com rosto ou nome de trabalhador.' : 'Não escreva nome, CPF nem dados de trabalhadores.'}</div>`;
+    <div class="lq-comp-pe">${!off && !comAnexo ? botaoEstilo() : ''}<div class="lq-priv">${nf > 1 ? `Usa ${nf + (_anexo ? 1 : 0)} perguntas da cota. Os arquivos não ficam guardados no GRID: só as respostas.` : comAnexo ? 'O arquivo não fica guardado no GRID: só a resposta. Não envie foto com rosto ou nome de trabalhador.' : 'Não escreva nome, CPF nem dados de trabalhadores.'}</div></div>`;
 }
 
 function inicio() {
@@ -194,6 +239,7 @@ function inicio() {
     <p class="lq-sub">Faça a pergunta como faria a um especialista. Ele responde com o item da norma.</p>
     ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil de acesso não inclui perguntas ao Laudomiro.</b> Peça ao administrador da sua empresa para liberar (Configurações → Laudomiro). As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> Logo você poderá perguntar aqui. Enquanto isso, as <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam funcionando.</div></div>` : ''}
     ${compositor({ grande: true })}
+    ${!off ? cartaoEstilo() : ''}
     ${anexosLigados() && !_anexo && !_fila.length ? `<div class="lq-atalhos"><label><input type="file" hidden accept="application/pdf,.pdf" multiple data-cp-foto="lq.fds">${IC.pdf}<span>Ler FDS (até 5 para comparar)</span></label><label><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" data-cp-foto="lq.galeria">${IC.cam}<span>Analisar uma foto</span></label></div>` : ''}
     <div class="lq-sug">${SUGESTOES.map(([r, p], i) => `<button type="button" class="lq-cd" data-acao="campo:lq-sug:${i}" ${off ? 'disabled' : ''}><small>${r}</small><b>${esc(p)}</b></button>`).join('')}</div>
     ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span>${r.tipo === 'fds' ? `<i class="lq-rt fds">FDS</i>${esc(r.pergunta.replace(/^FDS:\s*/, ''))}` : r.tipo === 'foto' ? `<i class="lq-rt foto">FOTO</i>${esc(r.pergunta.replace(/^Foto:\s*/, ''))}` : r.tipo === 'dados' ? `<i class="lq-rt dados">DADOS</i>${esc(r.pergunta)}` : esc(r.pergunta)}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
@@ -237,16 +283,26 @@ function resposta(turno, tIdx) {
   const r = turno.resposta; if (!r) return '';
   const [vt, vc] = VEREDITO[r.veredito] || VEREDITO.INFO;
   const fontes = (turno.trechos || []).filter(t => (r.fontes || []).includes(t.n));
-  return `<article class="lq-resp">
+  const est = turno.estilo || 'tecnico';
+  const recente = !turno.criado_em || Date.now() - new Date(turno.criado_em).getTime() < 864e5;  // o servidor só reescreve até 24 h
+  const podeVer = !!turno.id && recente;
+  const ultimo = _conv.map((x, i) => (x.resposta && !x.dados ? i : -1)).filter(i => i >= 0).pop();
+  const dica = podeVer && est !== 'simples' && tIdx === ultimo && !lerLocal('dica-estilo');  // só na última resposta
+  const reesc = !podeVer ? (turno.id ? `<div class="lq-reesc"><span class="lq-reesc-t">Para ver em outro estilo, pergunte de novo.</span></div>` : '') : `<div class="lq-reesc"><span class="lq-reesc-t">Ver esta resposta:</span><span class="lq-reesc-op" role="group" aria-label="Ver esta resposta em outro estilo">${Object.entries(ESTILOS).map(([k, [nome]]) =>
+      `<button type="button" aria-pressed="${est === k}" class="${est === k ? 'on' : ''}" data-acao="campo:lq-reescrever:${tIdx}.${k}" ${turno.reescrevendo ? 'disabled' : ''}>${nome}</button>`).join('')}</span>
+    ${turno.reescrevendo ? `<span class="lq-reesc-c">${REESCREVENDO[turno.reescrevendo]}</span>` : ''}
+    ${dica ? `<div class="lq-dica" role="note"><span>Achou difícil? Toque em <b>Simples</b> e o Laudomiro explica de novo, sem gastar pergunta.</span><button type="button" data-acao="campo:lq-dica-ok">Entendi</button></div>` : ''}</div>`;
+  return `<article class="lq-resp${turno.reescrevendo ? ' lq-reesc-on' : ''}" aria-busy="${!!turno.reescrevendo}">${turno.avisoLeitor ? `<span class="sr-only" role="status">${esc(turno.avisoLeitor)}</span>` : ''}
     <header class="lq-ver"><span class="lq-selo ${vc}">${vt}</span><div><h3>${esc(r.titulo)}</h3>${r.subtitulo ? `<p>${esc(r.subtitulo)}</p>` : ''}</div></header>
     <div class="lq-txt">${(r.resposta || []).map(p => `<p>${textoComRefs(p, turno, tIdx)}</p>`).join('')}</div>
     ${r.cuidado ? `<div class="lq-cuid">${IC.erro}<div><b>Cuidado:</b> ${textoComRefs(r.cuidado, turno, tIdx)}</div></div>` : ''}
     ${fontes.length ? `<div class="lq-fontes">${fontes.slice(0, 4).map(t => `<button type="button" class="lq-fo" data-acao="campo:lq-fonte:${tIdx}.${t.n}"><small>${tipoFonte(t)}</small><b>${esc(t.rotulo)}</b></button>`).join('')}</div>` : ''}
+    ${reesc}
     <footer class="lq-acts">
       <button type="button" data-acao="campo:lq-copiar:${tIdx}">${IC.copiar}<span>Copiar</span></button>
       ${turno.id ? `<button type="button" class="${turno.nota === 'util' ? 'on' : ''}" data-acao="campo:lq-util:${tIdx}" aria-pressed="${turno.nota === 'util'}">${IC.util}<span>Útil</span></button>
       <button type="button" class="${turno.nota === 'erro' ? 'on' : ''}" data-acao="campo:lq-erro:${tIdx}">${IC.erro}<span>Tem erro</span></button>` : ''}
-      <small>Indicação para o técnico. Não substitui laudo.</small>
+      <small>${est === 'simples' ? 'Orientação geral. Confirme com o técnico ou engenheiro de segurança da empresa.' : 'Indicação para o técnico. Não substitui laudo.'}</small>
     </footer>
   </article>`;
 }
@@ -522,7 +578,7 @@ async function enviarAnexo(p) {
   repintar(); rolarFim();
   const relogio = setInterval(() => { if (turno.passo < 3) { turno.passo++; repintar(); } }, 6000);
   try {
-    const r = await chamar({ acao: 'anexo', tipo: a.tipo, arquivo: { nome: a.nome, mime: a.mime, base64: a.base64 }, pergunta: p || undefined });
+    const r = await chamar({ acao: 'anexo', tipo: a.tipo, arquivo: { nome: a.nome, mime: a.mime, base64: a.base64 }, pergunta: p || undefined, estilo: estilo() });
     if (!mesmoDono(d)) return;  // v263
     if (r.aviso) Object.assign(turno, { carregando: false, aviso: r.aviso });
     else {
@@ -945,9 +1001,11 @@ async function enviar(texto) {
   try {
     const ult = _conv[_conv.length - 2];  // v266: continuação de uma pergunta sobre os dados ("e no cliente X?")
     const dadosAnterior = !_ctx && ult?.dados ? ult.dados : undefined;
-    const r = await chamar({ acao: 'perguntar', pergunta: p, historico, contexto: _ctx?.contexto || undefined, dadosAnterior, aceitaDados: true });
+    const est = estilo();  // v275
+    const r = await chamar({ acao: 'perguntar', pergunta: p, historico, contexto: _ctx?.contexto || undefined, dadosAnterior, aceitaDados: true, estilo: est });
     if (!mesmoDono(d)) return;  // v263
-    Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '', dados: r.dados || null });
+    Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '', dados: r.dados || null, estilo: r.resposta?.estilo || est, criado_em: new Date().toISOString() });
+    if (!r.dados) turno.versoes = { [est]: { resposta: r.resposta, trechos: r.trechos || [] } };
     if (r.dados) carregarDados(turno);  // v266: o app busca os dados (a IA não vê)
     if (_status && r.restantes != null) _status.restantes = r.restantes;
     if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: p, tipo: r.dados ? 'dados' : '', criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
@@ -959,6 +1017,30 @@ async function enviar(texto) {
   }
   repintar();
   rolarFim();
+}
+
+/* v275: a mesma resposta em outro estilo. Versão já vista volta na hora (sem chamar o servidor). */
+async function reescrever(tIdx, est) {
+  const t = _conv[tIdx];
+  if (!t?.id || !t.resposta || t.dados || !ESTILOS[est] || t.reescrevendo || est === t.estilo) return;
+  t.versoes ||= { [t.estilo || 'tecnico']: { resposta: t.resposta, trechos: t.trechos || [] } };
+  const pronta = t.versoes[est];
+  if (pronta) { Object.assign(t, { resposta: pronta.resposta, trechos: pronta.trechos, estilo: est }); _painel = null; repintar(); return; }
+  const d = _dono;
+  if (est === 'simples') gravarLocal('dica-estilo', '1');  // já achou o caminho: não precisa mais da dica
+  t.reescrevendo = est; repintar();
+  try {
+    const r = await chamar({ acao: 'reescrever', id: t.id, estilo: est });
+    if (!mesmoDono(d)) return;
+    t.versoes[est] = { resposta: r.resposta, trechos: r.trechos || [] };
+    Object.assign(t, { resposta: r.resposta, trechos: r.trechos || [], estilo: est, avisoLeitor: `Resposta reescrita no estilo ${ESTILOS[est][0]}.` });
+    if (_painel?.t === tIdx) _painel = null;
+  } catch (e) {
+    if (!mesmoDono(d)) return;
+    avisar(e.message || 'Não foi possível reescrever agora.', 'erro');
+  }
+  t.reescrevendo = null;
+  repintar();
 }
 
 function rolarFim() {
@@ -982,7 +1064,7 @@ function copiar(i) {
 async function avaliar(i, nota, comentario = '') {
   const t = _conv[i]; if (!t?.id) return;
   t.nota = nota; repintar();
-  try { await chamar({ acao: 'avaliar', id: t.id, nota, comentario }); avisar(nota === 'util' ? 'Obrigado! Isso ajuda o Laudomiro a melhorar.' : 'Obrigado. O erro foi registrado para correção da base.'); }
+  try { await chamar({ acao: 'avaliar', id: t.id, nota, comentario, estilo: t.estilo }); avisar(nota === 'util' ? 'Obrigado! Isso ajuda o Laudomiro a melhorar.' : 'Obrigado. O erro foi registrado para correção da base.'); }
   catch (e) { t.nota = null; repintar(); avisar(e.message, 'erro'); }
 }
 
@@ -1015,7 +1097,10 @@ async function abrirRecente(id) {
       _ctx = null; _painel = null; _anexo = null; repintar(); carregarDados(_conv[0]);
       return;
     } else {
-      _conv = [{ pergunta: r.pergunta, id: r.id, resposta: r.resposta, trechos: r.trechos || [], nota: r.avaliacao || null,
+      const estR = r.resposta?.estilo || 'tecnico';  // v275
+      const versoes = { [estR]: { resposta: r.resposta, trechos: r.trechos || [] } };
+      Object.entries(r.resposta?._versoes || {}).forEach(([k, v]) => { if (ESTILOS[k] && v) versoes[k] = { resposta: { ...r.resposta, ...v, estilo: k }, trechos: r.trechos || [] }; });
+      _conv = [{ pergunta: r.pergunta, id: r.id, resposta: r.resposta, trechos: r.trechos || [], nota: r.avaliacao || null, estilo: estR, versoes, criado_em: r.criado_em,
         resumo: [r.resposta?.titulo, ...(r.resposta?.resposta || [])].join(' ').replace(/\{\{\d+\}\}/g, '') }];
       _ctx = null;
     }
@@ -1028,7 +1113,7 @@ export async function acao(nome, valor, redesenhar) {
   // v254: um clique em qualquer outra coisa fecha os menus abertos
   if (nome !== 'campo:lq-clip' && _menuAnexo) _menuAnexo = false;
   if (nome !== 'campo:lq-copiar-menu' && !/^campo:lq-copiar-como/.test(nome) && _copiarMenu != null) _copiarMenu = null;
-  if (nome === 'campo:lq-clip') { _menuAnexo = !_menuAnexo; redesenhar(); return true; }
+  if (nome === 'campo:lq-clip') { _menuAnexo = !_menuAnexo; _menuEstilo = false; redesenhar(); return true; }
   if (nome === 'campo:lq-anx-tirar') { _anexo = null; redesenhar(); return true; }
   if (nome === 'campo:lq-fila-tirar') { _fila.splice(+valor, 1); _avisoFila = ''; redesenhar(); return true; }  // v264
   if (nome === 'campo:lq-fila-perg') { const q = PERG_LOTE[+valor]; if (q) { _txt = q; document.querySelectorAll('#lqTxt').forEach(el => { el.value = q; }); } redesenhar(); return true; }
@@ -1065,6 +1150,10 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lq-aba') { _aba = valor === 'fichas' ? 'fichas' : 'perguntar'; _painel = null; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (_aba === 'fichas') return Fichas.acao(nome, valor, redesenhar);
   if (nome === 'campo:lq-enviar') { enviar(); return true; }
+  if (nome === 'campo:lq-estilo') { mudarEstilo(valor); _menuEstilo = false; redesenhar(); return true; }  // v275
+  if (nome === 'campo:lq-estilo-menu') { _menuEstilo = !_menuEstilo; _menuAnexo = false; redesenhar(); return true; }
+  if (nome === 'campo:lq-dica-ok') { gravarLocal('dica-estilo', '1'); redesenhar(); return true; }
+  if (nome === 'campo:lq-reescrever') { const [t, est] = String(valor).split('.'); reescrever(+t, est); return true; }
   if (nome === 'campo:lq-sug') { const s = SUGESTOES[+valor]; if (s) enviar(s[1]); return true; }
   if (nome === 'campo:lq-nova') { _conv = []; _painel = null; _txt = ''; _ctx = null; _anexo = null; _fila = []; _avisoFila = ''; redesenhar(); return true; }
   if (nome === 'campo:lq-fonte') { const [t, n] = String(valor).split('.').map(Number); _painel = (_painel && _painel.t === t && _painel.n === n) ? null : { t, n }; redesenhar(); return true; }
