@@ -1697,6 +1697,17 @@ svg.login-logo-icon { width: 56px; height: 65.7px; display: block; flex-shrink: 
 .prov-tarja b { color:var(--navy) }
 .prov-tarja .pt-g { display:flex; align-items:center; gap:6px 14px; flex-wrap:wrap; min-width:0 }
 .prov-tarja .pt-reg { font-size:11px; font-weight:500; color:var(--text-3) }
+.prov-tarja.pt-propria { background:#EEF2F8; color:var(--text-2); border-bottom:2px solid #C9D3E3; font-weight:500; padding-top:calc(5px + env(safe-area-inset-top)); padding-bottom:5px }
+.prov-tarja.pt-propria button { background:var(--navy) }
+.sidebar-trab { margin:0 0 8px; padding:0 2px }
+.sidebar-trab .st-rot { font-size:10.5px; font-weight:600; color:rgba(255,255,255,.55); margin:0 0 5px 4px }
+.sidebar-trab .st-seg { display:grid; grid-template-columns:1fr 1fr; gap:3px; padding:3px; border-radius:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08) }
+.sidebar-trab .st-seg button { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:0; border-radius:7px; padding:7px 6px; font-family:inherit; font-size:11.5px; font-weight:600; line-height:1.2; color:rgba(255,255,255,.75); background:transparent; cursor:pointer }
+.sidebar-trab .st-seg button:hover { color:#fff; background:rgba(255,255,255,.06) }
+.sidebar-trab .st-seg button.on { background:#F59E0B; color:#172541; cursor:default }
+.sidebar-trab .st-seg button:focus-visible { outline:2px solid #F59E0B; outline-offset:1px }
+body.sidebar-mini .sidebar-trab { display:none }
+@media (max-width:767px) { .sidebar-bottom { padding-bottom:calc(78px + env(safe-area-inset-bottom)) } }   /* v283: o rodapé de navegação cobria o fim do menu no celular */
 .prov-tarja button { background:var(--amber-h); color:#fff; border:0; border-radius:7px; padding:5px 12px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; flex-shrink:0 }
 @media (max-width:860px) { .prov-ficha { grid-template-columns:1fr } .prov-tarja .pt-reg { display:none } }
 /* v262 — Sugestões do Laudomiro */
@@ -2922,6 +2933,7 @@ body .cp-col-h{font-size:13px;font-weight:700}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         <span class="sc-label">Recolher menu</span>
       </div>
+      <div class="sidebar-trab" id="sidebarTrabalhar" hidden></div>
       <div class="sidebar-user" onclick="irPara('conta')">
         <div class="su-avatar" id="sidebarAvatar">AL</div>
         <div class="su-info" style="flex:1;min-width:0"><div class="su-name" id="sidebarNome">Carregando...</div><div class="su-role" id="sidebarPerfil"></div></div>
@@ -3980,7 +3992,7 @@ async function _sessaoExpirar() {
   clearTimeout(_sessaoTimerLogout);
   clearTimeout(_sessaoTimerAviso);
   // Se está em modo suporte, encerrar antes de sair
-  if (window._suporteAtivo) await encerrarModoSuporte(true);
+  if (_suporteAtivo) await encerrarModoSuporte(true);   // v283: _suporteAtivo é let, não fica em window
   window._gridSaindo = true;
   try { sessionStorage.setItem('_gridSessaoExpirou', '1'); } catch (e) {}
   try { await sb.auth.signOut(); } catch (e) {}
@@ -4021,21 +4033,61 @@ let _suporteOrgNome   = null;  // nome da org para exibição
 let _suporteLogId     = null;  // id do registro em logs_acesso
 let _suporteAcoes     = [];    // páginas visitadas durante o suporte
 
-async function iniciarModoSuporte(orgId) {
+// v283: "Trabalhar como". O Provedor pode entrar na própria empresa (usuarios.org_propria_id,
+// PASSO-91) sem a confirmação do suporte. O acesso continua registrado em logs_acesso.
+const _trabChave = () => 'tl_trabalhar_como_' + (usuarioAtual?.id || 'x');
+const _trabTemPropria = () => !!usuarioAtual?.org_propria_id && (usuarioAtual.perfil === 'provedor' || !!window._suportePropria);
+async function trabalharComo(alvo) {
+  if (alvo === 'propria') {
+    if (!usuarioAtual?.org_propria_id || _suporteAtivo) return;
+    try { localStorage.setItem(_trabChave(), 'propria'); } catch (e) {}
+    await iniciarModoSuporte(usuarioAtual.org_propria_id, { propria: true });
+    return;
+  }
+  if (!window._suportePropria) return;
+  try { localStorage.setItem(_trabChave(), 'provedor'); } catch (e) {}
+  await encerrarModoSuporte(false);
+}
+function _trabEscolhaPropria() {
+  try { return localStorage.getItem(_trabChave()) === 'propria'; } catch (e) { return false; }
+}
+function _trabRenderSeletor() {
+  const el = document.getElementById('sidebarTrabalhar');
+  if (!el) return;
+  if (!_trabTemPropria()) { el.innerHTML = ''; el.hidden = true; return; }
+  const naPropria = !!window._suportePropria;
+  const nome = (naPropria ? _suporteOrgNome : usuarioAtual.orgPropriaNome) || 'Minha empresa';
+  el.hidden = false;
+  const foco = el.contains(document.activeElement);
+  el.innerHTML = `<div class="st-rot" id="stRot">Trabalhar como</div>
+    <div class="st-seg" role="group" aria-labelledby="stRot">
+      <button type="button" aria-pressed="${!naPropria}" class="${naPropria ? '' : 'on'}" onclick="trabalharComo('provedor')">Provedor</button>
+      <button type="button" aria-pressed="${naPropria}" class="${naPropria ? 'on' : ''}" onclick="trabalharComo('propria')" title="${escapeHtml(nome)}">${escapeHtml(nome)}</button>
+    </div>`;
+  if (foco) el.querySelector('button.on')?.focus();
+}
+
+async function iniciarModoSuporte(orgId, opt = {}) {
+  if (_suporteAtivo || window._suporteEntrando) return;   // v283: nunca empilhar dois acessos (toque duplo)
+  window._suporteEntrando = true;
+  try { await _iniciarModoSuporte(orgId, opt); } finally { window._suporteEntrando = false; }
+}
+async function _iniciarModoSuporte(orgId, opt) {
+  const propria = !!opt.propria && orgId === usuarioAtual?.org_propria_id;
   // Busca os dados da organização antes de qualquer coisa — evita precisar
   // receber o nome como argumento vindo de um atributo onclick (texto
   // livre em onclick é risco de injeção de JS: um nome com aspas quebraria
   // o atributo/string, mesmo com escapeHtml, que só protege contexto HTML,
   // não contexto de string JS dentro de um atributo).
   const { data: orgPrev } = await sb.from('organizacoes').select('nome').eq('id', orgId).single();
-  const ok = await confirmarAcao(
+  const ok = propria || await confirmarAcao(
     `Você está prestes a acessar "${escapeHtml(orgPrev?.nome || 'esta organização')}" em modo suporte. Todas as ações serão registradas em log de auditoria.`,
     'Acessar',
     false
   );
   if (!ok) return;
 
-  showLoading('Iniciando modo suporte...');
+  showLoading(propria ? `Entrando em ${orgPrev?.nome || 'sua empresa'}...` : 'Iniciando modo suporte...');
   try {
     // Registrar início do acesso no log
     const { data: log, error: logErr } = await sb.from('logs_acesso').insert({
@@ -4044,6 +4096,8 @@ async function iniciarModoSuporte(orgId) {
       acoes:        []
     }).select().single();
     if (logErr) throw logErr;
+    // v283: na própria empresa, recarregar ou fechar a aba deixava o acesso anterior "em andamento".
+    if (propria) { try { await sb.from('logs_acesso').update({ encerrado_em: new Date().toISOString() }).eq('provedor_uid', usuarioAtual.id).eq('org_id', orgId).is('encerrado_em', null).neq('id', log.id); } catch (e) {} }
 
     // Salvar estado do Provedor
     window._suporteProvedorState = {
@@ -4084,6 +4138,7 @@ async function iniciarModoSuporte(orgId) {
     _suporteOrgNome = org?.nome || orgPrev?.nome || 'Organização';
     _suporteLogId   = log.id;
     _suporteAcoes   = [];
+    window._suportePropria = propria;   // v283
 
     // v184: carrega os módulos contratados pela organização atendida (CRM).
     // Antes o Provedor entrava sem módulo nenhum, porque os módulos são lidos
@@ -4101,13 +4156,14 @@ async function iniciarModoSuporte(orgId) {
     _lqAtualizarAcesso();   // v252
     _suporteMostrarBanner();
 
-    // Registrar página inicial
-    _suporteRegistrarAcao('home');
-    await irPara('home');
+    // Registrar página inicial (v283: ao recarregar na própria empresa, volta à tela que estava)
+    const _pgIni = opt.pagina || 'home';
+    _suporteRegistrarAcao(_pgIni);
+    await irPara(_pgIni, opt.params || {});
 
-    showToast(`Modo suporte ativo — ${_suporteOrgNome}`, 'info');
+    showToast(propria ? `Trabalhando como ${_suporteOrgNome}` : `Modo suporte ativo — ${_suporteOrgNome}`, propria ? 'success' : 'info');
   } catch(e) {
-    showToast(traduzErroSupabase(e, 'Erro ao iniciar modo suporte'), 'error');
+    showToast(traduzErroSupabase(e, propria ? 'Não foi possível entrar na sua empresa. Tente de novo.' : 'Erro ao iniciar modo suporte'), 'error');
   } finally {
     hideLoading();
   }
@@ -4145,6 +4201,8 @@ async function encerrarModoSuporte(silencioso = false) {
   _suporteLogId   = null;
   _suporteAcoes   = [];
   window._suporteProvedorState = null;
+  const _eraPropria = !!window._suportePropria;
+  window._suportePropria = false;   // v283
 
   // v184: o CRM carregado para a organização atendida guarda dados dela em
   // memória. Sair do suporte recarrega a página, para não sobrar nada.
@@ -4168,7 +4226,7 @@ async function encerrarModoSuporte(silencioso = false) {
 
   // Reconfigurar navegação para Provedor e voltar ao painel
   configurarNavegacao();
-  showToast('Modo suporte encerrado', 'success');
+  showToast(_eraPropria ? 'Trabalhando como Provedor' : 'Modo suporte encerrado', 'success');
   await irPara('home');
 }
 
@@ -4179,7 +4237,10 @@ function _suporteMostrarBanner() {
   const banner = document.createElement('div');
   banner.id = '_suporteBanner';
   banner.className = 'prov-tarja';   // v253: tarja clara com mais informação (proposta aprovada 12/10)
-  banner.innerHTML = `<div class="pt-g"><span><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M15.5 8.5a4.5 4.5 0 0 1-5.9 5.9L4 20l-.7-.7 5.6-5.6a4.5 4.5 0 0 1 5.9-5.9l-2.6 2.6 2.1 2.1z"/></svg> <b>Modo Suporte</b> · ${escapeHtml(_suporteOrgNome || '')}</span><span>Você está como <b>Administrador</b></span><span id="_suporteTempo">há menos de 1 min</span></div><div class="pt-g"><span class="pt-reg">Tudo o que você fizer fica registrado</span><button type="button" onclick="encerrarModoSuporte(false)">Sair do suporte</button></div>`;
+  if (window._suportePropria) {   // v283: a própria empresa, tarja discreta
+    banner.className = 'prov-tarja pt-propria';
+    banner.innerHTML = `<div class="pt-g"><span><b>${escapeHtml(_suporteOrgNome || '')}</b> · sua empresa</span><span>Você está como Administrador</span></div><div class="pt-g"><span class="pt-reg">O acesso fica registrado</span><button type="button" onclick="trabalharComo('provedor')">Voltar a Provedor</button></div>`;
+  } else banner.innerHTML = `<div class="pt-g"><span><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M15.5 8.5a4.5 4.5 0 0 1-5.9 5.9L4 20l-.7-.7 5.6-5.6a4.5 4.5 0 0 1 5.9-5.9l-2.6 2.6 2.1 2.1z"/></svg> <b>Modo Suporte</b> · ${escapeHtml(_suporteOrgNome || '')}</span><span>Você está como <b>Administrador</b></span><span id="_suporteTempo">há menos de 1 min</span></div><div class="pt-g"><span class="pt-reg">Tudo o que você fizer fica registrado</span><button type="button" onclick="encerrarModoSuporte(false)">Sair do suporte</button></div>`;
   document.body.appendChild(banner);
   if (window._suporteTempoTimer) clearInterval(window._suporteTempoTimer);
   window._suporteTempoTimer = setInterval(() => {
@@ -5437,6 +5498,10 @@ async function entrarNoApp() {
     // Edge Function soc-integracao (ver migration-soc-integracao-webservice.sql).
     usuarioAtual.orgSocIntegracaoAtiva = !!org?.soc_integracao_ativa;
   }
+  // v283: Provedor com empresa própria (PASSO-91). Só o nome, para o seletor "Trabalhar como".
+  if (usuarioAtual.perfil === 'provedor' && usuarioAtual.org_propria_id) {
+    try { const { data: op } = await sb.from('organizacoes').select('nome,ativo').eq('id', usuarioAtual.org_propria_id).maybeSingle(); usuarioAtual.orgPropriaNome = op?.nome || null; if (op && !op.ativo) usuarioAtual.org_propria_id = null; } catch (e) {}
+  }
   marcaTempo('organizacao lida');
   showScreen('screenApp');
 
@@ -5496,6 +5561,17 @@ async function entrarNoApp() {
   // ficha daquele lead, e nao a tela generica sem lead selecionado.
   const _qIni = window._hashInicialQuery ? new URLSearchParams(window._hashInicialQuery.slice(1)) : null;
   const _idIni = _qIni ? _qIni.get('id') : null;
+  // v283: o Provedor que escolheu trabalhar na própria empresa volta direto para ela.
+  if (usuarioAtual.perfil === 'provedor' && usuarioAtual.org_propria_id && _trabEscolhaPropria()) {
+    try { await _plataformaCarregando; } catch (e) {}
+    const _pgProp = (paginaHash && paginaHash !== 'home' && (TITULOS[paginaHash] || /^(crm|campo)(-|$)/.test(paginaHash))) ? paginaHash : 'home';
+    // a rota foi lida com o perfil de Provedor. Aqui vale a da empresa: mantém filtros e o id da URL.
+    const _qProp = (_pgProp === paginaHash && location.hash.includes('?')) ? location.hash.slice(location.hash.indexOf('?')) : null;
+    window._hashInicialQuery = _qProp;
+    const _idProp = _qProp ? new URLSearchParams(_qProp.slice(1)).get('id') : null;
+    await iniciarModoSuporte(usuarioAtual.org_propria_id, { propria: true, pagina: _pgProp, params: _idProp ? { id: _idProp } : {} });
+    if (!_suporteAtivo) await irPara('home');   // não entrou (sem internet, por exemplo): fica como Provedor
+  } else
   await irPara(paginaInicial, _idIni ? { id: _idIni } : {});
   marcaTempo('tela util');
   _relatorioCarregamento();
@@ -6622,6 +6698,7 @@ function configurarNavegacao() {
   document.getElementById('sidebarPerfil').textContent = labelPerfil(perfil) + uniSufixoPerfil();
   _configurarSinoVisibilidade();
   _sidebarAplicarEstadoMini();
+  _trabRenderSeletor();   // v283
 }
 
 // ── Menu recolhido (2026-08-15, Solução 1 do menu) — estado por usuário ──
@@ -33754,7 +33831,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '282';
+  var APP_BUILD = '283';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
