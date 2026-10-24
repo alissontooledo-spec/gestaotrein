@@ -1225,6 +1225,19 @@ function comecarAOuvir(V = Voz()) {
   try { _reconhecer = rec; _ouvindo = true; rec.start(); repintar(); }
   catch { _reconhecer = null; _ouvindo = false; avisar('Não foi possível usar o microfone agora.', 'erro'); }
 }
+/* v280: clique fora (ou Esc) fecha o menu do clipe, do estilo e o ⋯. No computador não há fundo escuro para clicar. */
+if (typeof document !== 'undefined' && !window.__lqMenusFora) {
+  window.__lqMenusFora = true;
+  const aberto = () => _menuAnexo || _menuEstilo || _copiarMenu != null;
+  const fechar = () => { _menuAnexo = false; _menuEstilo = false; _copiarMenu = null; repintar(); };
+  document.addEventListener('click', (ev) => {
+    if (!aberto()) return;
+    const t = ev.target;
+    if (t?.closest?.('.lq-menu, .lq-copiar, [data-acao^="campo:lq-clip"], [data-acao^="campo:lq-estilo"], [data-acao^="campo:lq-copiar"]')) return;
+    fechar();
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && aberto()) fechar(); });
+}
 if (typeof window !== 'undefined' && !window.__lqVozLigada) {
   window.__lqVozLigada = true;
   addEventListener('hashchange', () => { if (_ouvindo && !/^#?(laudomiro|campo-agentes)/.test(location.hash)) pararDeOuvir(); });
