@@ -193,9 +193,14 @@ const VEREDITO = {
 
 const sb = () => { const c = clienteBanco(); if (!c) throw new Error('Banco indisponível. Recarregue o sistema.'); return c; };
 
-async function chamar(body) {
+async function chamar(body, renovou = false) {
   /* v249: manda a organização aberta (o Provedor em Modo Suporte não tem organização própria). */
   const { data, error } = await sb().functions.invoke(FUNCAO, { body: { ...body, orgId: sessao.orgId?.() || undefined } });
+  // v279: sessão recusada pelo servidor (aparelho parado muito tempo): renova uma vez e tenta de novo
+  if (error && error.context?.status === 401 && !renovou) {
+    const { error: eR } = await sb().auth.refreshSession().catch((e) => ({ error: e }));
+    if (!eR) return chamar(body, true);
+  }
   if (error) {
     let msg = error.message, codigo = '', status = error.context?.status || 0;
     try { const c = await error.context?.json?.(); if (c?.error) msg = c.error; if (c?.codigo) codigo = c.codigo; } catch { /* ok */ }
@@ -220,8 +225,8 @@ async function carregarStatus() {
   let st;
   try { st = await chamar({ acao: 'status' }); }
   catch (e) {
-    /* Função ainda não publicada (404) ou sem módulo: a tela fica no modo "em configuração". */
-    st = { configurado: false, falha: e.message, restantes: null, recentes: [] };
+    /* v279: sessão vencida e falha de conexão têm aviso próprio (antes tudo virava "em configuração"). */
+    st = { configurado: false, falha: e.status === 401 ? 'sessao' : e.status === 503 || e.codigo === 'NAO_CONFIGURADO' ? '' : 'rede', restantes: null, recentes: [] };
   }
   if (!mesmoDono(d)) return;  // v263: trocou a pessoa enquanto carregava: descarta
   _status = st; _statusCarregando = false; repintar();
@@ -263,7 +268,7 @@ function compositor({ grande = false } = {}) {
   const ocupado = _conv.some(t => t.carregando);
   const anx = !off && anexosLigados();
   const nf = _fila.length;
-  const ph = bloq ? 'Seu perfil não inclui o Laudomiro' : off ? 'O Laudomiro está sendo configurado'
+  const ph = bloq ? 'Seu perfil não inclui o Laudomiro' : off ? (_status?.falha === 'sessao' ? 'Entre de novo no GRID para perguntar' : _status?.falha === 'rede' ? 'Sem conexão com o Laudomiro' : 'O Laudomiro está sendo configurado')
     : nf > 1 ? `Pergunta para as ${nf} FDS (opcional)`
       : nf === 1 ? 'O que você quer saber deste produto? (opcional)'
         : _anexo ? (_anexo.tipo === 'fds' ? 'O que você quer saber deste produto? (opcional)' : 'O que você quer saber desta foto? (opcional)')
@@ -334,7 +339,9 @@ function inicio() {
   const tira = (r) => r.tipo === 'fds' ? r.pergunta.replace(/^FDS:\s*/, '') : r.tipo === 'foto' ? r.pergunta.replace(/^Foto:\s*/, '') : r.pergunta;
   return `<section class="lq-ini">
     <h2 class="lq-h">${saudacao()} O que você precisa resolver?</h2>
-    ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil não inclui o Laudomiro.</b> Peça a liberação ao administrador. As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div><b>O Laudomiro está sendo configurado.</b> As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : ''}
+    ${bloq ? `<div class="lq-conf">${I.info}<div><b>Seu perfil não inclui o Laudomiro.</b> Peça a liberação ao administrador. As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : off ? `<div class="lq-conf">${I.info}<div>${_status?.falha === 'sessao' ? '<b>Sua sessão expirou.</b> Saia do GRID e entre de novo para perguntar.'
+      : _status?.falha === 'rede' ? `<b>Não consegui falar com o Laudomiro agora.</b> <button type="button" class="lq-lnk" data-acao="campo:lq-status-de-novo">Tentar de novo</button>.`
+        : '<b>O Laudomiro está sendo configurado.</b>'} As <button type="button" class="lq-lnk" data-acao="campo:lq-aba:fichas">Fichas dos agentes</button> continuam disponíveis.</div></div>` : ''}
     ${compositor({ grande: true })}
     ${rec.length ? `<div class="lq-rec"><h4>Conversas recentes</h4>${rec.map(r => `<button type="button" data-acao="campo:lq-abrir:${esc(r.id)}"><span><i class="lq-rti" aria-label="${r.tipo === 'fds' ? 'FDS' : r.tipo === 'foto' ? 'Foto' : r.tipo === 'dados' ? 'Dados da empresa' : 'Pergunta'}">${icTipo[r.tipo] || IC.perg}</i>${esc(tira(r))}</span><small>${esc(quando(r.criado_em))}</small></button>`).join('')}</div>` : ''}
     <p class="lq-resp-pro">O Laudomiro orienta com base nas normas. O laudo é do profissional responsável.</p>
@@ -1337,6 +1344,7 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lq-doc-fechar') { const t = _conv[+valor]; if (t) { t.doc = null; redesenhar(); } return true; }
   if (nome === 'campo:lq-doc-copiar') { const t = _conv[+valor]; if (t?.doc?.texto) { copiarTexto(t.doc.texto, 'Texto copiado.'); t.doc.copiado = true; redesenhar(); setTimeout(() => { if (t.doc) { t.doc.copiado = false; repintar(); } }, 2000); } return true; }
   if (nome === 'campo:lq-estilo') { mudarEstilo(valor); _menuEstilo = false; redesenhar(); return true; }  // v275
+  if (nome === 'campo:lq-status-de-novo') { _status = null; carregarStatus(); redesenhar(); return true; }  // v279
   if (nome === 'campo:lq-estilo-menu') { _menuEstilo = !_menuEstilo; _menuAnexo = false; redesenhar(); return true; }
   if (nome === 'campo:lq-dica-ok') { gravarLocal('dica-estilo', '1'); redesenhar(); return true; }
   if (nome === 'campo:lq-reescrever') { const [t, est] = String(valor).split('.'); reescrever(+t, est); return true; }
