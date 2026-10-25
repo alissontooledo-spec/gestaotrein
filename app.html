@@ -12530,10 +12530,16 @@ async function verColab(id) {
   ].join('');
   const temAlgumDado = !!linhasCadastro;
 
-  const { data: treinos } = await sb.from('conformidade_status')
-    .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,catalogo(nome)')
-    .eq('colaborador_id', id)
-    .order('data_vencimento', { ascending: false });
+  const [{ data: treinos }, entregasR] = await Promise.all([
+    sb.from('conformidade_status')
+      .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,catalogo(nome)')
+      .eq('colaborador_id', id)
+      .order('data_vencimento', { ascending: false }),
+    // v284: OS e fichas de EPI com entrega registrada pelo Laudomiro (PASSO-92). Sem a tabela, segue sem.
+    sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(12),
+  ]);
+  const entregas = entregasR?.error ? null : (entregasR?.data || []);
+  const _rotEntrega = { ordem_servico: 'Ordem de Serviço', ficha_epi: 'Ficha de entrega de EPI' };
 
   // Estado da lista de treinamentos (aba/busca/paginação) fica num objeto
   // global, lido pelas funções _colabTreinos* — assim trocar de aba ou virar
@@ -12564,6 +12570,10 @@ async function verColab(id) {
           <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Dados cadastrais</div>
           ${temAlgumDado ? linhasCadastro : '<div style="font-size:13px;color:var(--text-3);padding:4px 0">Nenhum dado adicional cadastrado.</div>'}
         </div>
+        ${entregas ? `<div class="card">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">OS e fichas de EPI entregues</div>
+          ${entregas.length ? entregas.map(e => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text-1)">${escapeHtml(_rotEntrega[e.tipo] || e.tipo)}${e.funcao ? `<span style="display:block;font-size:12px;color:var(--text-3)">${escapeHtml(e.funcao)}</span>` : ''}</span><span style="color:var(--text-2);white-space:nowrap">${escapeHtml(formatarData(e.entregue_em))}</span></div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:4px 0;line-height:1.5">Nenhuma entrega registrada. Peça ao Laudomiro, por exemplo: OS de ' + escapeHtml(String(c.nome || '')) + '.</div>'}
+        </div>` : ''}
         ${podeMgr?`
         <div class="detail-actions">
           <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">Editar dados</button>
@@ -33831,7 +33841,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '283';
+  var APP_BUILD = '284';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
