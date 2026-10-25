@@ -78,6 +78,10 @@ export async function carregar(sb, orgId, clienteId) {
     porLotes(ids, (l) => sb.from('documentos').select('id,turma_id,colaborador_id,arquivo_path,codigo_validacao,gerado_em')
       .eq('org_id', orgId).eq('tipo', 'certificado_individual').is('revogado_em', null).in('colaborador_id', l).order('id')),
   ]);
+  // v284: OS e fichas de EPI com entrega registrada (PASSO-92). Sem a tabela, segue sem.
+  let entregas = [];
+  try { entregas = await porLotes(ids, (l) => sb.from('doc_entregas').select('id,colaborador_id,tipo,entregue_em').in('colaborador_id', l).order('id')); }
+  catch (e) { if (!semTabela(e)) throw new Error('Não foi possível ler as entregas de OS e de ficha de EPI. Confira a internet e tente de novo.'); }
   // Última visita concluída (Avaliação de Campo): riscos por GHE, treinamentos indicados e plano de ação.
   let visita = null, ghes = [], acoes = [], catTrein = new Map(), semCampo = false;
   const av = await campo(sb.from('campo_avaliacoes').select('id,numero,data_visita,situacao,grupo_id')
@@ -95,7 +99,7 @@ export async function carregar(sb, orgId, clienteId) {
     // o item da própria organização vale mais que o global com o mesmo código
     (c || []).filter((t) => t.ativo !== false).sort((x, y) => (x.org_id ? 1 : 0) - (y.org_id ? 1 : 0)).forEach((t) => catTrein.set(String(t.codigo), t));
   }
-  return { cli, colabs, conf, docs, visita, ghes, acoes, catTrein, semCampo };
+  return { cli, colabs, conf, docs, visita, ghes, acoes, catTrein, semCampo, entregas };
 }
 
 /* ── Montagem: situação por trabalhador ────────────────────────────────── */
@@ -142,7 +146,9 @@ export function montar(D, { colaboradorId = null, cargo = '', hoje = new Date() 
       }));
     } else linhas.push({ curso: 'Treinamentos exigidos para a função', nr: null, sit: 'naomapeado', evid: D.visita ? 'Função fora dos GHE da visita' : 'Sem visita técnica concluída', nota: '' });
     linhas.sort((a, b) => ORDEM[a.sit] - ORDEM[b.sit] || String(a.curso).localeCompare(String(b.curso), 'pt-BR'));
-    return { id: c.id, nome: c.nome, cpf: mascararCpf(c.cpf), funcao, ghe: gs.map((g) => g.nome).join(', '), linhas, anexos };
+    // v284: a última entrega de cada tipo
+    const ult = {}; (D.entregas || []).filter((e) => e.colaborador_id === c.id).forEach((e) => { if (!ult[e.tipo] || e.entregue_em > ult[e.tipo]) ult[e.tipo] = e.entregue_em; });
+    return { id: c.id, nome: c.nome, cpf: mascararCpf(c.cpf), funcao, ghe: gs.map((g) => g.nome).join(', '), linhas, anexos, entregas: ult };
   });
 
   const cont = { emdia: 0, vence: 0, vencido: 0, semregistro: 0, conferir: 0, naomapeado: 0, naoaplica: 0, semvalidade: 0 };
@@ -161,7 +167,9 @@ export function montar(D, { colaboradorId = null, cargo = '', hoje = new Date() 
   if (cont.semregistro) lacunas.push(`${cont.semregistro} ${cont.semregistro === 1 ? 'treinamento indicado' : 'treinamentos indicados'} na visita ${D.visita?.numero || ''} sem registro no GRID.`);
   if (cont.conferir) lacunas.push(`${cont.conferir} ${cont.conferir === 1 ? 'treinamento indicado' : 'treinamentos indicados'} na visita sem NR no catálogo. Conferir pelo nome.`);
   if (cont.semvalidade) lacunas.push(`${cont.semvalidade} ${cont.semvalidade === 1 ? 'registro sem validade cadastrada' : 'registros sem validade cadastrada'}.`);
-  lacunas.push('Não fazem parte deste dossiê: ficha de EPI, ASO, PCMSO, PGR e ciência da ordem de serviço.');
+  const comEntrega = pessoas.filter((p) => Object.keys(p.entregas || {}).length).length;
+  if (comEntrega) lacunas.push(`OS e fichas de EPI aparecem só quando a entrega foi registrada no GRID (${comEntrega} de ${pessoas.length} ${pessoas.length === 1 ? 'trabalhador' : 'trabalhadores'}). Não fazem parte deste dossiê: ASO, PCMSO e PGR.`);
+  else lacunas.push('Não fazem parte deste dossiê: ficha de EPI, ASO, PCMSO, PGR e ciência da ordem de serviço.');
   return { pessoas, cont, registros, semGhe, atencao, lacunas, anexos: pessoas.flatMap((p) => p.anexos.map((a) => ({ ...a, nome: p.nome }))) };
 }
 
@@ -248,6 +256,8 @@ export async function gerarPdf(D, R, { jsPDF, safe, usuario, escopo, interno, an
     cabe(30); y += 3;
     fonte(11, true, COR.navy); doc.text(s(p.nome), M, y); y += 5;
     texto([p.cpf, p.funcao, p.ghe ? `GHE ${p.ghe}` : ''].filter(Boolean).join('   '), { tam: 8.5, c: COR.mute, alt: 5.5 });
+    const ent = [['ordem_servico', 'Ordem de Serviço entregue em'], ['ficha_epi', 'Ficha de EPI entregue em']].filter(([k]) => p.entregas?.[k]).map(([k, r]) => `${r} ${dataBr(p.entregas[k])}`);
+    if (ent.length) texto(`${ent.join('. ')}.`, { tam: 8.5, c: COR.txt, alt: 5 });   // v284
     if (!linhas.length) { texto('Nenhum treinamento registrado no GRID.', { tam: 9, c: COR.mute }); return; }
     const cols = interno ? [{ t: 'Treinamento', w: 62 }, { t: 'Conclusão', w: 20 }, { t: 'Vencimento', w: 20 }, { t: 'Situação', w: 34 }, { t: 'Evidência', w: 38 }]
       : [{ t: 'Treinamento', w: 76 }, { t: 'Conclusão', w: 22 }, { t: 'Vencimento', w: 22 }, { t: 'Evidência', w: 54 }];
