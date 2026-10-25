@@ -28,6 +28,9 @@
    v276 (24/10/2026): sem os 3 cartões de sugestão no início (pedido do Alisson).
    v278: "Copiar para…" nas respostas (Ordem de serviço, DDS de 5 minutos, Plano de ação do PGR),
    montado pelo servidor sem gastar cota; e perguntar falando (microfone do aparelho, quando ele permitir).
+   v284: pedir documento no chat ("faz a OS dos soldadores da empresa X", "ficha de EPI do Fulano",
+   "lista de presença", "dossiê"). Reconhecido no aparelho, montado com os dados do GRID
+   (laudomiro-gerar.js). Proposta aprovada: 08-Propostas-visuais/grid-proposta-laudomiro-documentos-v284b.png.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as Fichas from './agentes.js';
@@ -35,6 +38,7 @@ import * as L from './laudomiro.js';
 import * as Dados from './laudomiro-dados.js';
 import * as Calc from './laudomiro-calc.js';   // v281: dose de ruído
 import * as Docs from './laudomiro-docs.js';   // v281: baixar em Word e PDF
+import * as Gerar from './laudomiro-gerar.js'; // v284: documentos pedidos no chat (OS, ficha de EPI, lista, dossiê)
 import { I, esc, ligarTela, avisar, ponte, valorVisivel } from './comum.js';
 import { cliente as clienteBanco } from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
@@ -73,6 +77,7 @@ const mesmoDono = (d) => d === _dono && d === donoAtual();
 const SEAL = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.7 7.5 10 4.4-1.3 7.5-5.4 7.5-10V5.6L12 2.8Z" stroke="#F59E0B" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.6 8v7.2h5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SEND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
 const IC = {
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   copiar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
   util: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 11v9H4v-9h3Zm0 0 4-7a2 2 0 0 1 2 2v3h5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 16.8 20H7"/></svg>',
@@ -504,6 +509,7 @@ function rotuloCurto(t) {
 function tipoFonte(t) { return t.tipo === 'oficial' ? 'Texto oficial' : 'Ficha do Laudomiro'; }
 
 function resposta(turno, tIdx) {
+  if (turno.gerar) return Gerar.render(turno, tIdx);  // v284
   if (turno.lote) return respostaLote(turno, tIdx);  // v264
   if (turno.carregando && turno.anexo) return carregandoAnexo(turno);
   if (turno.aviso) return avisoAnexo(turno);
@@ -699,6 +705,7 @@ function menuAnexo(anx = true) {
     ${op('lq.camera', IC.cam, 'img', 'Tirar foto agora', 'Abre a câmera do celular.', 'image/*', 'capture="environment"', ' so-cel')}
     ${op('lq.galeria', IC.img, 'img', 'Foto do local', 'Ele aponta os riscos que enxerga.', 'image/jpeg,image/png,image/webp,image/*')}` : ''}
     <p class="lq-menu-g">Ferramentas</p>
+    ${fer('campo:lq-g-novo', IC.doc, 'Gerar documento', 'OS, ficha de EPI, lista de presença ou dossiê. Não gasta pergunta.')}
     ${fer('campo:lq-calc-abrir', IC.ruido, 'Calcular dose de ruído', 'NR-15, Anexo 1. Não gasta pergunta.')}
     ${fer('campo:lq-aba:fichas', IC.fichas, 'Consultar ficha de agente', 'Limites, insalubridade e aposentadoria.', ` <i class="lq-mo-n">${L.AGENTES.length}</i>`)}
   </div>`;
@@ -1216,8 +1223,10 @@ export async function render(params = {}) {
     const html = await Fichas.render({ ...params, ...(_fichaAbrir ? { id: _fichaAbrir } : {}), embutido: true }); _fichaAbrir = null;
     return `<div class="lq lq-na-ficha">${abas()}${html}</div>`;
   }
+  Gerar.ligar({ chamar, repintar, aoGastar: (n) => { if (_status) _status.restantes = n; }, turno: (i) => _conv[i] });  // v284
   ligarTela({
     digitar: (chave, valor, el) => {
+      if (chave.startsWith('lq.g.')) { Gerar.digitar(chave, valor); return; }  // v284
       if (chave === 'lq.txt') { _txt = valor; atualizarAviso(); atualizarSugestao(); crescer(el); return; }
       const m = /^lq\.calc\.(\d+)\.(nivel|horas|minutos)$/.exec(chave);  // v281
       if (m && _calc[+m[1]]) { _calc[+m[1]][m[2]] = valor; pintarResultado(); }
@@ -1241,6 +1250,9 @@ async function enviar(texto) {
   if (p.length < 4) { avisar('Escreva a pergunta.', 'erro'); return; }
   if (_conv.some(t => t.carregando)) return;
   if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return; }
+  // v284: pedido de documento. Reconhecido aqui, sem chamar a IA e sem gastar pergunta.
+  const pedidoDoc = !_ctx ? Gerar.detectar(p) : null;
+  if (pedidoDoc) { novoDocumento(p, pedidoDoc); return; }
   if (_status && !_status.configurado) { avisar('O Laudomiro ainda está sendo configurado.', 'erro'); return; }
   const historico = _conv.filter(t => t.resposta).slice(-2).map(t => ({ pergunta: t.pergunta, resposta: t.resumo || '' }));
   const turno = { pergunta: p, carregando: true };
@@ -1267,6 +1279,14 @@ async function enviar(texto) {
   }
   repintar();
   rolarFim();
+}
+
+/* v284: cartão do documento no fio da conversa */
+function novoDocumento(p, det) {
+  const turno = Gerar.novoTurno(p, det);
+  _conv.push(turno); _txt = ''; _painel = null; _menuAnexo = false; limparCampo();
+  repintar(); rolarFim();
+  Gerar.iniciar(turno).then(() => rolarFim());
 }
 
 /* v275: a mesma resposta em outro estilo. Versão já vista volta na hora (sem chamar o servidor). */
@@ -1502,6 +1522,8 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lq-ampliar') { ampliarFoto(+valor); return true; }
   if (nome === 'campo:lq-aba') { _menuAnexo = false; _aba = valor === 'fichas' ? 'fichas' : 'perguntar'; _painel = null; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (_aba === 'fichas') return Fichas.acao(nome, valor, redesenhar);
+  if (nome === 'campo:lq-g-novo') { if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return true; } novoDocumento('Gerar um documento', { tipo: null }); return true; }  // v284
+  if (nome === 'campo:lq-g' || nome === 'campo:lq-g-sel') return Gerar.acao(nome, valor, redesenhar);  // v284
   if (nome === 'campo:lq-enviar') { enviar(); return true; }
   if (nome === 'campo:lq-mic') { ouvir(); return true; }  // v278
   if (nome === 'campo:lq-mic-ok') { gravarLocal('aviso-voz', '1'); comecarAOuvir(); return true; }

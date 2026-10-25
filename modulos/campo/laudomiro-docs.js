@@ -121,3 +121,133 @@ export async function baixar(formato, dados) {
   const blob = formato === 'pdf' ? await pdfBlob(dados) : docxBlob(dados);
   baixarBlob(blob, nomeArquivo(dados.titulo, formato === 'pdf' ? 'pdf' : 'docx'));
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v284: documento em partes (Ordem de Serviço, Ficha de EPI). Um arquivo pode
+   ter vários documentos, um por pessoa, cada um começando em página nova.
+   Partes: { t:'titulo', x, sub } { t:'campos', itens:[[rótulo, valor]] } { t:'h', x }
+   { t:'p', x } { t:'li', x } { t:'tabela', cols:[{ t, w }], linhas:[[...]], vazias }
+   { t:'assin', nomes:[...] } { t:'nota', x } { t:'quebra' }
+   w das colunas: fração da largura (soma 1). [campos] saem marcados em amarelo.
+   ══════════════════════════════════════════════════════════════════════════ */
+export const RODAPE_GRID = () => `Gerado com apoio do GRID em ${hoje()}. Conferência e responsabilidade de quem assina.`;
+const LARG_TW = 9638;   // A4 menos as margens, em twips
+const borda = (cor = 'B8C2D1') => `<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map((b) => `<w:${b} w:val="single" w:sz="4" w:space="0" w:color="${cor}"/>`).join('')}</w:tblBorders>`;
+function celula(texto, w, { negrito = false, fundo = '', tam = 16 } = {}) {
+  return `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${fundo ? `<w:shd w:val="clear" w:color="auto" w:fill="${fundo}"/>` : ''}</w:tcPr>${par(runs(texto || ' ', { negrito, tam }), { depois: 0 })}</w:tc>`;
+}
+function tabelaDocx(cols, linhas, vazias = 0) {
+  const ws = cols.map((c) => Math.round(c.w * LARG_TW));
+  const linha = (cel, cab = false) => `<w:tr>${cab ? '<w:trPr><w:tblHeader/></w:trPr>' : '<w:trPr><w:trHeight w:val="400"/></w:trPr>'}${cel.map((x, i) => celula(x, ws[i], cab ? { negrito: true, fundo: 'EEF2F8', tam: 17 } : {})).join('')}</w:tr>`;
+  const todas = [...linhas, ...Array.from({ length: vazias }, () => cols.map(() => ''))];
+  return `<w:tbl><w:tblPr><w:tblW w:w="${LARG_TW}" w:type="dxa"/>${borda()}<w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${ws.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${linha(cols.map((c) => c.t), true)}${todas.map((l) => linha(l)).join('')}</w:tbl>${par('', { depois: 0 })}`;
+}
+function assinDocx(nomes) {
+  const w = Math.round((LARG_TW - 300 * (nomes.length - 1)) / nomes.length);   // n assinaturas e n-1 espaços de 300
+  const cel = (n) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/><w:tcBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="64748B"/></w:tcBorders></w:tcPr>${par(runs(n, { tam: 17, cor: '475569' }), { depois: 0, alinhar: 'center' })}</w:tc>`;
+  const vazio = `<w:tc><w:tcPr><w:tcW w:w="300" w:type="dxa"/></w:tcPr>${par('', { depois: 0 })}</w:tc>`;
+  return `${par('', { antes: 200, depois: 0 })}<w:tbl><w:tblPr><w:tblW w:w="${LARG_TW}" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>${nomes.map(() => `<w:gridCol w:w="${w}"/>`).join('<w:gridCol w:w="300"/>')}</w:tblGrid><w:tr>${nomes.map(cel).join(vazio)}</w:tr></w:tbl>`;
+}
+export function docxPartes(documentos) {
+  const corpo = documentos.map((partes, di) => partes.map((b) => {
+    if (b.t === 'titulo') return par(runs(b.x, { negrito: true, tam: 30, cor: '172541' }), { depois: 40 }) + (b.sub ? par(runs(b.sub, { tam: 18, cor: '64748B' }), { depois: 200 }) : '');
+    if (b.t === 'campos') return b.itens.map(([r, v]) => par(`<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:b/><w:color w:val="172541"/><w:sz w:val="19"/></w:rPr><w:t xml:space="preserve">${xml(r)}: </w:t></w:r>${runs(v || '[preencher]', { tam: 19 })}`, { depois: 0 })).join('') + par('', { depois: 40 });
+    if (b.t === 'h') return par(runs(b.x, { negrito: true, tam: 19, cor: '172541' }), { antes: 140, depois: 40 });
+    if (b.t === 'li') return par(runs(`• ${b.x}`, { tam: 17 }), { depois: 0, recuo: 360 });
+    if (b.t === 'tabela') return tabelaDocx(b.cols, b.linhas, b.vazias || 0);
+    if (b.t === 'assin') return assinDocx(b.nomes);
+    if (b.t === 'nota') return par(runs(b.x, { tam: 16, cor: '64748B' }), { antes: 240 });
+    return par(runs(b.x || '', { tam: 17 }), { depois: 40 });
+  }).join('') + par(runs(RODAPE_GRID(), { tam: 15, cor: '8A94A6' }), { antes: 240 }) + (di < documentos.length - 1 ? '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' : '')).join('')
+    .replace(/w:line="300"/g, 'w:line="240"');   // entrelinha menor: cada documento cabe numa folha
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${corpo}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  return zip([
+    ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'],
+    ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
+    ['word/document.xml', doc],
+  ]);
+}
+
+export async function pdfPartes(documentos) {
+  const ponte = window.__GRID_PONTE || {};
+  if (ponte.garantirJsPDF) await ponte.garantirJsPDF();
+  const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
+  if (!jsPDF) throw new Error('O gerador de PDF não carregou. Confira a internet e tente de novo.');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+  const M = 18, L = 210 - 2 * M, FIM = 297 - 20;
+  let y = 22, cabecalhoTabela = null;
+  const cor = (hex) => doc.setTextColor(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16));
+  const fonte = (tam, neg = false, hex = '1F2A3D') => { doc.setFont('helvetica', neg ? 'bold' : 'normal'); doc.setFontSize(tam); cor(hex); };
+  const virar = () => { doc.addPage(); y = 20; cabecalhoTabela?.(); };
+  const cabe = (h) => { if (y + h > FIM) virar(); };
+  /* uma linha com [campos] em amarelo */
+  const linhaMarcada = (ln, x, yy) => {
+    let cx = x;
+    String(ln).split(/(\[[^\]]{1,80}\])/).filter(Boolean).forEach((pedaco) => {
+      const w = doc.getTextWidth(pedaco);
+      if (/^\[.*\]$/.test(pedaco)) { doc.setFillColor(253, 230, 138); doc.rect(cx - 0.4, yy - doc.getFontSize() * 0.29, w + 0.8, doc.getFontSize() * 0.4, 'F'); }
+      doc.text(pedaco, cx, yy); cx += w;
+    });
+  };
+  const escrever = (t, { tam = 10, neg = false, hex = '1F2A3D', recuo = 0, alt = 4.9, marcador = '' } = {}) => {
+    fonte(tam, neg, hex);
+    doc.splitTextToSize(pdfSafe(t), L - recuo).forEach((ln, k) => {
+      cabe(alt);
+      if (k === 0 && marcador) doc.text(marcador, M + recuo - 4, y);
+      linhaMarcada(ln, M + recuo, y); y += alt;
+    });
+  };
+  const tabela = (cols, linhas, vazias = 0) => {
+    const ws = cols.map((c) => c.w * L), xs = []; ws.reduce((x, w) => { xs.push(x); return x + w; }, M);
+    const pad = 1.3, alt = 3.5;
+    const cab = () => {
+      fonte(7.6, true, '172541');
+      const ls = cols.map((c, i) => doc.splitTextToSize(pdfSafe(c.t), ws[i] - 2 * pad));
+      const h = Math.max(...ls.map((l) => l.length)) * alt + 2 * pad;
+      cabe(h + 6);
+      doc.setFillColor(238, 242, 248); doc.rect(M, y, L, h, 'F');
+      doc.setDrawColor(184, 194, 209); doc.setLineWidth(0.2);
+      ls.forEach((l, i) => { doc.rect(xs[i], y, ws[i], h, 'S'); l.forEach((t, k) => doc.text(t, xs[i] + pad, y + pad + 2.9 + k * alt)); });
+      y += h;
+    };
+    cab(); cabecalhoTabela = cab;
+    const todas = [...linhas, ...Array.from({ length: vazias }, () => cols.map(() => ''))];
+    todas.forEach((l) => {
+      fonte(8.1);
+      const maxL = Math.floor((FIM - 40) / alt);   // célula maior que uma folha: corta e avisa com reticências
+      const ls = l.map((x, i) => { const q = doc.splitTextToSize(pdfSafe(x || ''), ws[i] - 2 * pad); return q.length > maxL ? [...q.slice(0, maxL - 1), '...'] : q; });
+      const h = Math.max(6.2, Math.max(...ls.map((q) => q.length)) * alt + 2 * pad);
+      if (y + h > FIM) virar();
+      doc.setDrawColor(184, 194, 209); doc.setLineWidth(0.2);
+      ls.forEach((q, i) => { doc.rect(xs[i], y, ws[i], h, 'S'); fonte(8.1); q.forEach((t, k) => linhaMarcada(t, xs[i] + pad, y + pad + 2.6 + k * alt)); });
+      y += h;
+    });
+    cabecalhoTabela = null; y += 4;
+  };
+  documentos.forEach((partes, di) => {
+    if (di > 0) { doc.addPage(); y = 22; }
+    partes.forEach((b) => {
+      if (b.t === 'titulo') { escrever(b.x, { tam: 13.5, neg: true, hex: '172541', alt: 6 }); if (b.sub) escrever(b.sub, { tam: 9, hex: '64748B', alt: 4.4 }); y += 1.5; doc.setDrawColor(245, 158, 11); doc.setLineWidth(0.6); doc.line(M, y, M + 16, y); y += 6; return; }
+      if (b.t === 'campos') { b.itens.forEach(([r, v]) => { fonte(9, true, '172541'); const rw = doc.getTextWidth(pdfSafe(r + ': ')); cabe(5); doc.text(pdfSafe(r + ': '), M, y); fonte(9); const ls = doc.splitTextToSize(pdfSafe(v || '[preencher]'), L - rw); ls.forEach((ln, k) => { if (k) cabe(4.4); linhaMarcada(ln, M + (k ? 0 : rw), y); y += 4.4; }); }); y += 1.5; return; }
+      if (b.t === 'h') { cabe(12); y += 1.6; escrever(b.x, { tam: 9, neg: true, hex: '172541', alt: 4.3 }); y += 0.3; return; }
+      if (b.t === 'li') { escrever(b.x, { recuo: 5, marcador: '-', tam: 8.7, alt: 4 }); y += 0.2; return; }
+      if (b.t === 'tabela') { tabela(b.cols, b.linhas, b.vazias || 0); return; }
+      if (b.t === 'assin') { cabe(20); y += 13; const w = (L - 10 * (b.nomes.length - 1)) / b.nomes.length; doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3); b.nomes.forEach((n, i) => { const x = M + i * (w + 10); doc.line(x, y, x + w, y); fonte(8.5, false, '475569'); doc.text(pdfSafe(n), x + w / 2, y + 4, { align: 'center' }); }); y += 9; return; }
+      if (b.t === 'nota') { y += 2; escrever(b.x, { tam: 8.2, hex: '64748B', alt: 4 }); return; }
+      escrever(b.x || '', { tam: 8.8, alt: 4.1 }); y += 0.5;
+    });
+  });
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i); fonte(7.6, false, '8A94A6');
+    doc.text(pdfSafe(RODAPE_GRID()), M, 297 - 10);
+    doc.text(pdfSafe(`Página ${i} de ${total}`), 210 - M, 297 - 10, { align: 'right' });
+  }
+  return doc.output('blob');
+}
+
+export async function baixarPartes(formato, titulo, documentos) {
+  const blob = formato === 'pdf' ? await pdfPartes(documentos) : docxPartes(documentos);
+  baixarBlob(blob, nomeArquivo(titulo, formato === 'pdf' ? 'pdf' : 'docx'));
+}
