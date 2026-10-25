@@ -135,11 +135,15 @@ async function escolherEmpresa(turno, clienteId, doTexto = false) {
   try {
     const oi = sessao.orgId();
     if (g.tipo === 'lista') {
-      const { data, error } = await sb().from('turmas').select('id,codigo,status,data_inicio,catalogo(nome),sessoes(id,data,hora_inicio,concluida)')
-        .eq('org_id', oi).eq('cliente_id', clienteId).order('data_inicio', { ascending: false }).limit(40);
+      // turmas: protocolo e data vêm dos encontros (a turma não tem data própria)
+      const { data, error } = await sb().from('turmas').select('id,protocolo,status,created_at,catalogo(nome),sessoes(id,data,hora_inicio,concluida,cancelada)')
+        .eq('org_id', oi).eq('cliente_id', clienteId).order('created_at', { ascending: false }).limit(40);
       if (g.req !== req) return;
       if (error) throw error;
-      g.turmas = (data || []).map((t) => ({ ...t, sessoes: (t.sessoes || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))) }));
+      g.turmas = (data || []).filter((t) => t.status !== 'cancelada').map((t) => {
+        const sessoes = (t.sessoes || []).filter((x) => !x.cancelada).sort((a, b) => String(a.data).localeCompare(String(b.data)));
+        return { ...t, sessoes, data_inicio: sessoes[0]?.data || null };
+      }).sort((a, b) => String(b.data_inicio || '').localeCompare(String(a.data_inicio || '')));
       const nr = /\bnr\s*-?\s*0*(\d{1,2})\b/.exec(semAc(g.texto));
       const curso = doTexto && g.turmas.find((t) => (nr && new RegExp(`\\bnr\\s*-?\\s*0*${nr[1]}(?!\\d)`).test(semAc(t.catalogo?.nome))) || nota(t.catalogo?.nome || '', g.texto) === 1);
       if (curso) escolherTurma(g, curso.id);
@@ -407,7 +411,7 @@ function qual(g, t) {
 function corpoLista(g, t, empresaSel) {
   const ts = g.turmas || [];
   if (!ts.length) return `<div class="lq-doc-para">${empresaSel}</div><p class="lq-doc-nota">Esta empresa não tem turma no GRID. A lista de presença sai de uma turma.</p>`;
-  const rot = (x) => [x.codigo, x.catalogo?.nome, dataBr(x.data_inicio)].filter(Boolean).join(' · ');
+  const rot = (x) => [x.catalogo?.nome || 'Turma', x.data_inicio ? dataBr(x.data_inicio) : 'sem encontro', x.protocolo].filter(Boolean).join(' · ');
   const turma = ts.find((x) => x.id === g.turmaId);
   const ses = turma?.sessoes || [];
   return `<div class="lq-doc-para">${empresaSel}${sel(t, 'turma', 'Turma', ts.map((x) => opt(x.id, rot(x), g.turmaId)).join(''), g.turmaId, 'Escolha a turma')}
