@@ -3112,6 +3112,28 @@ body .cp-col-h{font-size:13px;font-weight:700}
 const SUPABASE_URL = 'https://cldbqcpnzitwqvgqbipz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_uuOYchKEtJXdYPI0pKmM_A_mtp-ihMT';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// v289: qualquer gravação nas tabelas que decidem "documentos pendentes" (feita neste aparelho)
+// apaga a lista de turmas "em dia" guardada pelo Início, para a próxima conta reler tudo.
+(function () {
+  const TAB = new Set(['documentos', 'presencas', 'turma_avaliacoes', 'turma_participantes', 'envios_email', 'turmas', 'sessoes']);
+  const orig = sb.from.bind(sb);
+  sb.from = function (tab) {
+    const q = orig(tab);
+    if (TAB.has(tab) && q) ['insert', 'update', 'upsert', 'delete'].forEach((m) => {
+      if (typeof q[m] !== 'function') return;
+      const f = q[m].bind(q);
+      q[m] = (...a) => { _giDocsInvalidar(); return f(...a); };
+    });
+    return q;
+  };
+  const RPC = new Set(['reaproveitar_assinatura_presenca', 'turma_incluir_participante', 'turma_finalizar_encontro']);
+  const origRpc = sb.rpc.bind(sb);
+  sb.rpc = function (nome, ...a) { if (RPC.has(nome)) _giDocsInvalidar(); return origRpc(nome, ...a); };
+})();
+function _giDocsInvalidar() {
+  window._giDocsCache = null;
+  try { Object.keys(localStorage).filter((k) => k.startsWith('gi_docsok_')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* sem acesso ao armazenamento */ }
+}
 
 // ============================================================
 // TRADUÇÃO DE MENSAGENS DE ERRO (Supabase Auth/GoTrue, PostgREST,
@@ -8820,6 +8842,10 @@ async function renderHomeAdmin(opcoes = {}) {
   _giPintarHome(dd, extra, token, oi, _ehComercial, false);
 }
 
+// v289: guarda pequena no aparelho (só números e ids de turma, nada pessoal). Falha em silêncio.
+function _giLerLocal(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+function _giGravarLocal(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* aba anônima ou sem espaço */ } }
+
 function _giPintarHome(dd, extra, token, oi, _ehComercial, doCache) {
   const d = _giCalcular(dd, new Date());
   const onboardingItens = [
@@ -8847,7 +8873,11 @@ function _giPintarHome(dd, extra, token, oi, _ehComercial, doCache) {
     saudacao: hora(), nome: usuarioAtual.nome, mensagem: extra.mensagem || 'O que precisa da sua atenção hoje.', onboarding,
   }));
   document.querySelector('.main-header')?.classList.add('mh-home');
-  const docsC = window._giDocsCache;
+  let docsC = window._giDocsCache;
+  if (!(docsC && docsC.oi === oi)) {   // v289: primeira abertura do dia/sessão: o último número deste aparelho aparece na hora
+    const g = _giLerLocal(`gi_docsn_${oi}`);
+    if (g && typeof g.n === 'number' && Date.now() - g.t < 24 * 3600_000) docsC = { oi, t: Date.now(), docs: { n: g.n, empresa: g.empresa || 0 } };
+  }
   if (docsC && docsC.oi === oi && Date.now() - docsC.t < 10 * 60_000) { _setElBoth('giAvisos', _giAvisosHtml(d.avisos, docsC.docs)); window._giUltimosAvisos = { av: d.avisos, docs: docsC.docs }; }
   else if (avisosAntes && !/gi5-carregando/.test(avisosAntes)) _setElBoth('giAvisos', avisosAntes);
   if (renovAntes) _setElBoth('giRenov', renovAntes);
@@ -8964,12 +8994,30 @@ function _giCriarTurmaSugerida(i) {
 // da primeira pintura para o Início não esperar por presenças e participantes.
 async function _giCarregarDocsPendentes(token, oi, dd, d) {
   let docs;
+  // v289: o aviso de pessoas de outra empresa é lido junto, não depois
+  const avisosEmp = sb.rpc('participante_avisos_abertos').then(r => (r.error ? [] : (r.data || [])), () => []);
   try {
     /* v245: só as turmas CONCLUÍDAS entram na conta (_rxPendenciasDocumentos só olha
        para elas). Antes lia presenças, documentos etc. de TODAS as turmas da organização,
        página por página, e o aviso demorava segundos para aparecer. Agora busca só o
        que é das concluídas, em blocos de turmas lidos em paralelo. Mesma regra, mesmo número. */
-    const conc = dd.turmas.filter(t => t.status === 'concluida').map(t => t.id);
+    const concTodas = dd.turmas.filter(t => t.status === 'concluida').map(t => t.id);
+    // v289: turma concluída que já estava com tudo gerado e enviado não é relida a cada abertura.
+    // A lista das "em dia" fica guardada neste aparelho e é refeita por inteiro uma vez por dia.
+    const hojeISO = dataLocalISO(new Date());
+    // Cada turma "em dia" é guardada com uma marca (encontros e participantes). Se outro aparelho
+    // mudar a turma, a marca muda e ela é relida. Certificado revogado hoje também tira a turma da lista.
+    const nSes = {}; dd.sessoes.forEach(x => { if (!x.cancelada) nSes[x.turma_id] = (nSes[x.turma_id] || 0) + 1; });
+    const marca = (t) => `${t.id}:${nSes[t.id] || 0}:${(t.turma_participantes || []).length}`;
+    const marcaPorId = Object.fromEntries(dd.turmas.filter(t => t.status === 'concluida').map(t => [t.id, marca(t)]));
+    const okGuard = _giLerLocal(`gi_docsok_${oi}`);
+    const okSet = new Set(okGuard && okGuard.dia === hojeISO && Array.isArray(okGuard.ids) ? okGuard.ids : []);
+    if (okSet.size) {
+      const inicioDia = new Date(); inicioDia.setHours(0, 0, 0, 0);
+      const rev = await sb.from('documentos').select('turma_id').eq('org_id', oi).gte('revogado_em', inicioDia.toISOString()).limit(1000);
+      if (rev.error) okSet.clear(); else (rev.data || []).forEach(x => okSet.delete(marcaPorId[x.turma_id]));
+    }
+    const conc = concTodas.filter(id => !okSet.has(marcaPorId[id]));
     const blocos = []; for (let i = 0; i < conc.length; i += 80) blocos.push(conc.slice(i, i + 80));
     const tudo = async (tab, cols) => {
       if (!blocos.length) return { data: [], error: null };
@@ -8984,15 +9032,19 @@ async function _giCarregarDocsPendentes(token, oi, dd, d) {
       tudo('turma_participantes', 'id,turma_id,colaborador_id'),
       tudo('turma_avaliacoes', 'id,turma_id,colaborador_id,resultado'),
     ]);
-    if ([docR, envR, presR, partR, avR].some(r => !r || r.error)) throw new Error('leitura incompleta');
-    const ids = new Set(dd.turmas.map(t => t.id));
+    if ([docR, envR, presR, partR, avR].some(r => !r || r.error)) { window._giAvisosEmpresa = await avisosEmp; throw new Error('leitura incompleta'); }
+    const ids = new Set(conc);
     const doOrg = arr => (arr || []).filter(x => ids.has(x.turma_id));
-    const pend = _rxPendenciasDocumentos(dd.turmas, docR.data || [], envR.data || [], doOrg(dd.sessoes), doOrg(presR.data), doOrg(partR.data), doOrg(avR.data));
+    const pend = _rxPendenciasDocumentos(dd.turmas.filter(t => ids.has(t.id)), docR.data || [], envR.data || [], doOrg(dd.sessoes), doOrg(presR.data), doOrg(partR.data), doOrg(avR.data));
     docs = { n: pend.length };
-  } catch (e) { console.warn('Documentos pendentes indisponível:', e?.message || e); docs = { n: 0, erro: true }; }
-  // v227 (PASSO-76): pessoas de outra empresa incluídas pelo instrutor. Sem o PASSO-76, fica vazio.
-  try { const rAv = await sb.rpc('participante_avisos_abertos'); window._giAvisosEmpresa = rAv.error ? [] : (rAv.data || []); }
-  catch (e) { window._giAvisosEmpresa = []; }
+    const pendIds = new Set(pend.map(x => x.turma?.id));
+    _giGravarLocal(`gi_docsok_${oi}`, { dia: hojeISO, ids: concTodas.filter(id => !pendIds.has(id)).map(id => marcaPorId[id]) });
+    window._giAvisosEmpresa = await avisosEmp;
+    _giGravarLocal(`gi_docsn_${oi}`, { n: docs.n, empresa: window._giAvisosEmpresa.length, t: Date.now() });
+  } catch (e) {
+    console.warn('Documentos pendentes indisponível:', e?.message || e); docs = { n: 0, erro: true };
+    window._giAvisosEmpresa = await avisosEmp;
+  }
   docs.empresa = window._giAvisosEmpresa.length;
   if (token !== window._giToken || typeof paginaAtual === 'undefined' || paginaAtual !== 'home') return;
   window._giUltimosAvisos = { av: d.avisos, docs };
@@ -33907,6 +33959,7 @@ async function enviarDocumentosPorEmail(turmaId, opts = {}) {
       treinamento: `${payload.treinamento} (parte ${_p+1} de ${_partes.length})`,
     };
     if (_p > 0) await new Promise(r => setTimeout(r, 1500));
+    _giDocsInvalidar();   // v289: o envio grava em envios_email no servidor
     const resp = await sb.functions.invoke('enviar-documentos', {body: _payloadParte});
     if (resp.error) {
       // O supabase-js só traz uma mensagem genérica em resp.error.message quando a
@@ -34181,7 +34234,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '288';
+  var APP_BUILD = '289';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
