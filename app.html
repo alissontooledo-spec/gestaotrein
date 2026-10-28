@@ -213,6 +213,7 @@ body.modo-suporte-ativo .main-content{min-height:calc(100vh - var(--suporte-h,34
 .main-header-title{font-size:16px;font-weight:600;color:var(--text-1);flex:1;letter-spacing:-.2px}
 .main-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
 .hamburger{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--navy)}
+@media(min-width:768px){.main-header.mh-home{display:none}}   /* v288: no Início a saudação já diz onde a pessoa está */
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
 .sidebar-overlay.show{display:block}
 
@@ -4109,6 +4110,7 @@ function _sessaoIniciar() {
 }
 
 function _sessaoEncerrar() {
+  window._giHomeCache = null; window._giDocsCache = null; window._giConfCache = null;   // v288: o Início guardado não passa para outro login
   clearTimeout(_sessaoTimerLogout);
   clearTimeout(_sessaoTimerAviso);
   _sessaoAvisoAtivo = false;
@@ -5110,6 +5112,7 @@ function setBtnModalLoading(loading) {
 // RENDER HELPERS
 // ============================================================
 function setConteudo(html) {
+  document.querySelector('.main-header')?.classList.remove('mh-home');   // v288: só o Início do admin esconde (ver _giPintarHome)
   if (typeof _cfgEmMoldura === 'function' && _cfgEmMoldura()) html = _cfgMoldura(html);   // v250
   document.getElementById('mainBody').innerHTML = html;
   document.getElementById('mobileBody').innerHTML = html;
@@ -6912,6 +6915,7 @@ async function irPara(pagina, params={}) {
   fecharSidebar();
   fabOcultar();
   document.getElementById('headerTitle').textContent = TITULOS[pagina] || pagina;
+  document.querySelector('.main-header')?.classList.remove('mh-home');   // v288: só o Início do admin esconde (ver renderHomeAdmin)
   if (_suporteAtivo) _suporteRegistrarAcao(pagina); // log de auditoria
   // Atualiza URL com hash sem recarregar a página.
   // ── CORRIGIDO EM 05/09 (h20) ──────────────────────────────────────────
@@ -8761,7 +8765,10 @@ function _giView218(d, extras) {
     d.lanes.length ? _rxDuo(_giEquipe(d.lanes, d.dias14, d.livres), _giEquipe(d.lanes, d.dias14.slice(0, 7), d.livres)) : `<div class="rx-vazio">Nenhuma aula ou compromisso nos próximos 14 dias.</div>`,
     _podeRota('agendaequipe') ? _rxLink('Abrir agenda', "irPara('agendaequipe')") : '') : '';
   // v265: renovações (vencimentos da Conformidade) e turmas sugeridas, lidos depois da 1ª pintura
-  return `${topo}${extras.onboarding || ''}${linha1}<div id="giRenov"></div>${linha2}${avisos}${equipe}`;
+  // v288: "Precisa de você" sobe para logo depois do dia de hoje. Os indicadores (certificados, horas,
+  // empresas atendidas, turmas criadas, compromissos) saíram do Início: estão em Relatórios.
+  void linha2;
+  return `${topo}${extras.onboarding || ''}${linha1}${avisos}<div id="giRenov"></div>${equipe}`;
 }
 
 // ── Tela ──────────────────────────────────────────────────────────────────
@@ -8769,37 +8776,57 @@ async function renderHomeAdmin(opcoes = {}) {
   const _ehComercial = !!opcoes.comercial;   // v211: o Comercial vê este mesmo Início
   const oi = usuarioAtual.org_id;
   const token = (window._giToken = (window._giToken || 0) + 1);
+  const saiu = () => token !== window._giToken || (typeof paginaAtual !== 'undefined' && paginaAtual !== 'home');
+  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${escapeHtml(usuarioAtual.nome)}</div><div class="mh-badge">${_ehComercial ? 'Comercial' : 'Administrador'}${escapeHtml(uniSufixoPerfil())}</div>`);
+  // v288: o último Início desta organização aparece na hora e é atualizado em seguida (sem tela vazia ao voltar)
+  const cache = window._giHomeCache;
+  const temCache = cache && cache.oi === oi && cache.com === _ehComercial && Date.now() - cache.t < 10 * 60_000;
+  if (temCache) _giPintarHome(cache.dd, cache.extra, token, oi, _ehComercial, true);
   const tudo = (tab, cols, extra) => _lerTudo(() => { let q = sb.from(tab).select(cols).eq('org_id', oi); if (extra) q = extra(q); return q.order('id'); });
-  const [tR, sR, cR, compR, uR, catC, colC, usrC] = await Promise.all([
+  // v288: a lista de todos os certificados saiu daqui (era a leitura mais pesada e só servia aos
+  // indicadores, que estão em Relatórios). A mensagem do dia vem junto, sem esperar a mais.
+  const [tR, sR, compR, uR, catC, colC, usrC, mensagem] = await Promise.all([
     tudo('turmas', 'id,status,created_at,cliente_id,catalogo_id,local,carga_horaria_real,clientes(nome),catalogo(nome,carga_horaria,exige_avaliacao),turma_participantes(id)'),
     tudo('sessoes', 'id,turma_id,data,hora_inicio,hora_fim,instrutor_id,concluida,cancelada,local,horario_a_confirmar,usuarios!instrutor_id(nome)'),
-    tudo('documentos', 'id,turma_id,tipo,colaborador_id,emitido_em,revogado_em', q => q.eq('tipo', 'certificado_individual')),
     tudo('compromissos', 'id,tipo,titulo,data,hora_inicio,hora_fim,instrutor_id,empresa_id,clientes(nome),concluido,cancelado', q => q.eq('cancelado', false)).then(r => r, e => ({ data: null, error: e || { message: 'falha' } })),
     sb.from('usuarios').select('id,nome,perfil,ativo').eq('org_id', oi),
     // Primeiros passos (organização nova): contagens leves, sem baixar linhas
     sb.from('catalogo').select('id', { count: 'exact', head: true }).eq('org_id', oi),
     sb.from('colaboradores').select('id', { count: 'exact', head: true }).eq('org_id', oi),
     sb.from('usuarios').select('id', { count: 'exact', head: true }).eq('org_id', oi).eq('ativo', true),
+    _buscarMensagemDoDia(),
   ]);
-  const saiu = () => token !== window._giToken || (typeof paginaAtual !== 'undefined' && paginaAtual !== 'home');
   if (saiu()) return;
-  setMobileHeader(`<div class="mh-greeting">${hora()},</div><div class="mh-name">${escapeHtml(usuarioAtual.nome)}</div><div class="mh-badge">${_ehComercial ? 'Comercial' : 'Administrador'}${escapeHtml(uniSufixoPerfil())}</div>`);
-  const falha = [tR, sR, cR, compR, uR].find(r => !r || r.error);
+  const falha = [tR, sR, compR, uR].find(r => !r || r.error);
   if (falha) {
+    if (temCache) {   // fica o que já está na tela, com as leituras de baixo e um aviso discreto
+      const min = Math.max(1, Math.round((Date.now() - cache.t) / 60000));
+      _setElBoth('giAvisos', `<div class="gi5-carregando">Sem conexão agora: mostrando os dados de ${min} min atrás.</div>`);
+      _giCarregarDocsPendentes(token, oi, cache.dd, _giCalcular(cache.dd, new Date()));
+      _giCarregarRenovacoes(token, oi);
+      return;
+    }
     // Mesmo princípio dos Relatórios: nunca mostrar número calculado com dado incompleto.
     setConteudo(`<div class="rx-erro"><b>Não foi possível carregar os dados do Início.</b>
       <span>Nenhum número foi exibido para não mostrar informação incompleta. Verifique a conexão e tente de novo.</span>
       <button class="btn btn-outline btn-sm" onclick="renderHomeAdmin(${_ehComercial ? '{comercial:true}' : ''})">Tentar de novo</button></div>`);
     return;
   }
-  const dd = { turmas: tR.data || [], sessoes: sR.data || [], certificados: cR.data || [], compromissos: compR.data || [], usuarios: uR.data || [] };
-  const d = _giCalcular(dd, new Date());
+  const dd = { turmas: tR.data || [], sessoes: sR.data || [], certificados: [], compromissos: compR.data || [], usuarios: uR.data || [] };
+  const extra = { cat: catC.count || 0, col: colC.count || 0, usr: usrC.count || 0, mensagem: mensagem || '' };
+  const igual = temCache && JSON.stringify([dd, extra]) === JSON.stringify([cache.dd, cache.extra]);
+  window._giHomeCache = { oi, com: _ehComercial, t: Date.now(), dd, extra };
+  if (igual) { _giCarregarDocsPendentes(token, oi, dd, _giCalcular(dd, new Date())); _giCarregarRenovacoes(token, oi); return; }   // nada mudou: não repinta
+  _giPintarHome(dd, extra, token, oi, _ehComercial, false);
+}
 
+function _giPintarHome(dd, extra, token, oi, _ehComercial, doCache) {
+  const d = _giCalcular(dd, new Date());
   const onboardingItens = [
-    { done: (catC.count || 0) > 0, label: 'Configurar seu catálogo de treinamentos', acao: "irPara('catalogo')", cta: 'Configurar' },
-    { done: (colC.count || 0) > 0, label: 'Cadastrar seus primeiros colaboradores', acao: "irPara('colaboradores')", cta: 'Cadastrar' },
+    { done: extra.cat > 0, label: 'Configurar seu catálogo de treinamentos', acao: "irPara('catalogo')", cta: 'Configurar' },
+    { done: extra.col > 0, label: 'Cadastrar seus primeiros colaboradores', acao: "irPara('colaboradores')", cta: 'Cadastrar' },
     { done: dd.turmas.length > 0, label: 'Criar sua primeira turma', acao: "irPara('turmas')", cta: 'Criar turma' },
-    { done: (usrC.count || 0) > 1, label: 'Convidar alguém da sua equipe', acao: "irPara('equipe')", cta: 'Convidar' },
+    { done: extra.usr > 1, label: 'Convidar alguém da sua equipe', acao: "irPara('equipe')", cta: 'Convidar' },
   ];
   const feitos = onboardingItens.filter(i => i.done).length;
   const onboarding = (feitos === onboardingItens.length || _ehComercial) ? '' : `
@@ -8811,15 +8838,22 @@ async function renderHomeAdmin(opcoes = {}) {
       </div>
       <button class="gi-link" onclick="${onboardingItens.find(i => !i.done).acao}">${escapeHtml(onboardingItens.find(i => !i.done).cta)}</button>
     </div>`;
-  const mensagem = await _buscarMensagemDoDia();
-  if (saiu()) return;
   const hojeD = new Date();
+  // ao repintar com os dados novos, o que já tinha chegado (avisos e renovações) fica na tela
+  const avisosAntes = !doCache ? (_getElVisible('giAvisos')?.innerHTML || null) : null;
+  const renovAntes = !doCache ? (_getElVisible('giRenov')?.innerHTML || null) : null;
   setConteudo(_giView218(d, {
     dataLonga: hojeD.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }),
-    saudacao: hora(), nome: usuarioAtual.nome, mensagem: mensagem || 'O que precisa da sua atenção hoje.', onboarding,
+    saudacao: hora(), nome: usuarioAtual.nome, mensagem: extra.mensagem || 'O que precisa da sua atenção hoje.', onboarding,
   }));
+  document.querySelector('.main-header')?.classList.add('mh-home');
+  const docsC = window._giDocsCache;
+  if (docsC && docsC.oi === oi && Date.now() - docsC.t < 10 * 60_000) { _setElBoth('giAvisos', _giAvisosHtml(d.avisos, docsC.docs)); window._giUltimosAvisos = { av: d.avisos, docs: docsC.docs }; }
+  else if (avisosAntes && !/gi5-carregando/.test(avisosAntes)) _setElBoth('giAvisos', avisosAntes);
+  if (renovAntes) _setElBoth('giRenov', renovAntes);
   // Selo do menu Turmas: turmas com pendência de cadastro (mesmo dado do aviso)
   _setSidebarBadge('turmas', d.comPendenciaCadastro);
+  if (doCache) return;   // as leituras de baixo esperam os dados novos
   _giCarregarDocsPendentes(token, oi, dd, d);
   _giCarregarRenovacoes(token, oi);
 }
@@ -8962,6 +8996,7 @@ async function _giCarregarDocsPendentes(token, oi, dd, d) {
   docs.empresa = window._giAvisosEmpresa.length;
   if (token !== window._giToken || typeof paginaAtual === 'undefined' || paginaAtual !== 'home') return;
   window._giUltimosAvisos = { av: d.avisos, docs };
+  if (!docs.erro) window._giDocsCache = { oi, t: Date.now(), docs };
   _setElBoth('giAvisos', _giAvisosHtml(d.avisos, docs));
 }
 
@@ -16941,7 +16976,7 @@ async function salvarTurma() {
     }
     // v265: turma sugerida no Início — inclui as pessoas do grupo e marca as pendências como agendadas
     if (!_modalCurrentId && Array.isArray(origemConfIds) && origemConfIds.length) {
-      window._giConfCache = null; window._lqConfCache = null;
+      window._giConfCache = null; window._lqConfCache = null; window._giHomeCache = null;
       try {
         const rv = await _giVincularGrupoTurma(salva[0].id, cli, origemConfIds);
         if (rv.etapa) showToast(rv.etapa === 'pessoas' ? 'Turma criada, mas não consegui incluir as pessoas sugeridas. Inclua pela tela da turma.' : 'Turma criada e pessoas incluídas, mas as pendências não foram marcadas como agendadas. Marque pela Conformidade.', 'error');
@@ -34146,7 +34181,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '287';
+  var APP_BUILD = '288';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
