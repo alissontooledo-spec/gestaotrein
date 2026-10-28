@@ -16,7 +16,7 @@
 
 import * as Dossie from '../dossie/dossie.js';
 import * as Docs from './laudomiro-docs.js';
-import { esc, avisar } from './comum.js';
+import { esc, avisar, docClienteTxt } from './comum.js';
 import { cliente as clienteBanco } from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
 
@@ -133,7 +133,7 @@ export async function iniciar(turno) {
   try {
     const oi = sessao.orgId();
     if (!oi) throw new Error('Abra uma empresa para gerar documentos.');
-    const { data, error } = await sb().from('clientes').select('id,nome,cnpj').eq('org_id', oi).eq('ativo', true).order('nome').limit(3000);
+    const { data, error } = await sb().from('clientes').select('*').eq('org_id', oi).eq('ativo', true).order('nome').limit(3000);
     if (error) throw error;
     g.clientes = data || [];
     const c = melhor(g.clientes, g.texto, 'nome');
@@ -352,7 +352,8 @@ const comCa = (epi) => { const es = episDe(epi); return es.length ? es.map((e) =
 export function montarPartes(g) {
   if (g.tipo && TIPOS[g.tipo]?.livre) return partesLivre(g);
   const cli = g.fora ? { nome: String(g.fora.empresa || '').trim() || '[preencher]', cnpj: '[preencher]' } : (g.D?.cli || {});
-  const empresa = `${cli.nome || ''}${cli.cnpj ? `, CNPJ ${cli.cnpj}` : ''}`;
+  const _doc = g.fora ? (cli.cnpj ? `CNPJ ${cli.cnpj}` : '') : docClienteTxt(cli, true);   // v287: pessoa física com CPF escondido
+  const empresa = `${cli.nome || ''}${_doc ? `, ${_doc}` : ''}`;
   const pessoas = pessoasDe(g);
   const riscos = g.riscos.filter((r) => String(r.risco || '').trim());
   const emerg = String(g.emerg || '').trim();
@@ -759,7 +760,7 @@ function iniciarLivre(turno, cli) {
   const tira = [ex.empresa, cli?.nome].filter(Boolean);
   (g.clientes || []).forEach((c) => { if (c.nome && nota(c.nome, atividade) === 1) tira.push(c.nome); });
   tira.forEach((nome) => { atividade = atividade.replace(new RegExp(`\\s*(?:\\b(?:da|do|na|no|para a|para o|pra|pro|em)\\s+)?(?:empresa\\s+)?${nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'), ''); });
-  g.dl = { atividade: atividade.trim().replace(/[,\s]+$/, ''), empresa: cli?.nome || ex.empresa || '', cnpj: cli?.cnpj || '', res: null, carregando: false, erro: '', ajuste: '', ajusteAberto: false };
+  g.dl = { atividade: atividade.trim().replace(/[,\s]+$/, ''), empresa: cli?.nome || ex.empresa || '', cnpj: (cli?.tipo_pessoa === 'fisica' ? '' : cli?.cnpj) || '', res: null, carregando: false, erro: '', ajuste: '', ajusteAberto: false };
   _ctx.repintar();
 }
 const ESPACO_CONFINADO = /espacos? confinados?|\bsilos?\b|\bgalerias?\b|(dentro|interior|entrar|limpeza) d[eo]s? tanques?|\bcisternas?\b|\bpocos? de visita\b/;
@@ -837,7 +838,7 @@ export function partesLivre(g) {
   const P = '[preencher]';
   const emp = String(d.empresa || '').trim();
   const cli = (g.clientes || []).find((c) => norm(c.nome) === norm(emp));
-  const empresa = emp || P, cnpj = cli?.cnpj || P;
+  const empresa = emp || P, cnpj = (cli?.tipo_pessoa === 'fisica' ? docClienteTxt(cli, true).replace(/^CPF /, '') : cli?.cnpj) || P;
   const atividade = r.titulo_atividade || d.atividade || P;
   const sub = SUBTIPO[semAc(r.subtipo || '')] || '';
   const titulo = g.tipo === 'pt' && r.subtipo === 'eletricidade' ? 'PERMISSÃO DE TRABALHO / ORDEM DE SERVIÇO' : T.titulo;

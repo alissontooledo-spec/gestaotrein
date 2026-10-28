@@ -297,15 +297,19 @@ export async function clientesPorId(ids, { fresco = false } = {}) {
   const guard = (await idbGet('cache', 'clientes')) || {};
   /* v228: o enquadramento (SESMT/CIPA) usa o CNAE do cadastro. Cópia sem CNAE (_v < 2)
      ou com mais de 6 horas é buscada de novo quando há internet. */
-  const velho = (c) => !c || c._v !== 2 || !(Date.now() - (c._em || 0) < 6 * 3600e3);
+  const velho = (c) => !c || c._v !== 3 || !(Date.now() - (c._em || 0) < 6 * 3600e3);
   const faltam = uniq.filter(i => fresco || velho(guard[i]));
   if (faltam.length && online()) {
     const BASE = 'id,nome,cnpj,logradouro,numero,bairro,cidade,uf,endereco,soc_codigo_empresa';
     for (let i = 0; i < faltam.length; i += 200) {
       const ids = faltam.slice(i, i + 200);
-      let { data, error } = await sb().from('clientes').select(BASE + ',cnae,cnae_descricao,cnaes_secundarios,porte,opcao_mei').in('id', ids);
-      if (error) ({ data } = await sb().from('clientes').select(BASE).in('id', ids));
-      for (const c of data || []) guard[c.id] = { ...c, _v: 2, _em: Date.now() };
+      const EXT = BASE + ',cnae,cnae_descricao,cnaes_secundarios,porte,opcao_mei';
+      // v287 (_v 3): pessoa física (PASSO-93). Sem as colunas novas, tenta sem elas antes de cair no BASE (não perde o CNAE).
+      let { data, error } = await sb().from('clientes').select(EXT + ',tipo_pessoa,cpf,cno').in('id', ids);
+      if (error) ({ data, error } = await sb().from('clientes').select(EXT).in('id', ids));
+      let v = 3;
+      if (error) { ({ data } = await sb().from('clientes').select(BASE).in('id', ids)); v = 2; }   // sem CNAE: busca de novo na próxima vez
+      for (const c of data || []) guard[c.id] = { ...c, _v: v, _em: Date.now() };
     }
     await idbPut('cache', guard, 'clientes');
   }

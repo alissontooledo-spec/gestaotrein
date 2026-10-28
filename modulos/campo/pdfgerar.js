@@ -6,6 +6,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 import * as D from './dados.js';
+import { docCliente } from '../../nucleo/ui.js';
 import * as sessao from '../../nucleo/sessao.js';
 import { gerarPdfAvaliacao } from './pdf.js';
 import * as P from './plano.js';
@@ -52,7 +53,7 @@ export async function montarDados(d) {
     org: { nome: sessao.usuario()?.org || '' },
     avaliacao: d.av,
     cliente: {
-      nome: cli.nome, cnpj: fmtCnpj(cli.cnpj),
+      nome: cli.nome, cnpj: cli.tipo_pessoa === 'fisica' ? docCliente(cli, true)?.val || '' : fmtCnpj(cli.cnpj), docRot: cli.tipo_pessoa === 'fisica' ? 'CPF' : 'CNPJ',
       endereco: [cli.logradouro || cli.endereco, cli.numero, cli.bairro].filter(Boolean).join(', '),
       cidade: cli.cidade, uf: cli.uf
     },

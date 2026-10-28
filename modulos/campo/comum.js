@@ -7,7 +7,8 @@
    • a assinatura na tela (modal com área de desenho).
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { esc } from '../../nucleo/ui.js';
+import { esc, docCliente, docClienteTxt } from '../../nucleo/ui.js';
+export { docCliente, docClienteTxt };
 import * as D from './dados.js';
 import { I } from './icones.js';
 export { I, esc };
@@ -77,7 +78,7 @@ export function pintarSync(id) {
 export function topo(d, cli, { rotulo = 'Avaliação de riscos ambientais', sub } = {}) {
   const end = cli ? [cli.logradouro || cli.endereco, cli.numero, cli.bairro].filter(Boolean).join(', ') : '';
   const cid = cli ? [cli.cidade, cli.uf].filter(Boolean).join('/') : '';
-  const linha = sub ?? [cli?.cnpj ? 'CNPJ ' + fmtCnpj(cli.cnpj) : '', end, cid].filter(Boolean).join(' · ');
+  const linha = sub ?? [docClienteTxt(cli), end, cid].filter(Boolean).join(' · ');
   return `<div class="cp-topo${temCabecalhoCelular() ? ' cp-topo-desk' : ''}"><div class="cp-topo-txt"><div class="cp-topo-emp">${esc(rotulo)}</div>
     <div class="cp-topo-tit">${esc(cli?.nome || 'Empresa')}</div>${linha ? `<div class="cp-topo-sub">${esc(linha)}</div>` : ''}</div>${syncHtml(d)}</div>`;
 }

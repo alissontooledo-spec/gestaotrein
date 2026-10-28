@@ -562,7 +562,7 @@ export async function gerarPdfAvaliacao(dados, { jsPDF, pdfSafe, aoProgresso } =
     const end = [cli.endereco, [cli.cidade, cli.uf].filter(Boolean).join('/')].filter(x => !vazio(x)).join(SEP);
     const visita = [dataBR(av.data_visita), av.hora_inicio ? `às ${hora(av.hora_inicio)}` : ''].filter(Boolean).join(', ');
     tabelaId([
-      ['Empresa avaliada', cli.nome || '-', 'CNPJ', cli.cnpj || '-'],
+      ['Empresa avaliada', cli.nome || '-', cli.docRot || 'CNPJ', cli.cnpj || '-'],
       ['Endereço', end || '-'],
       ['Data da visita', visita || '-', 'Acompanhante', acompTxt],
       ['GHEs avaliados', `${ghes.length}${ghes.length ? ' (' + ghes.map(g => g.nome).join(', ') + ')' : ''}`, 'Trabalhadores', nTrab ? `${nTrab}${conf.length ? ' (conferido na visita)' : ''}` : 'Não informado'],

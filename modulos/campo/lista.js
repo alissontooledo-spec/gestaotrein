@@ -21,7 +21,7 @@
 
 import * as sessao from '../../nucleo/sessao.js';
 import * as D from './dados.js';
-import { I, esc, ico, nota, fmtCnpj, selo, ligarTela, avisar } from './comum.js';
+import { I, esc, ico, nota, fmtCnpj, selo, ligarTela, avisar, docClienteTxt } from './comum.js';
 import { modalPendEmpresa } from './pendencias.js';
 
 const CHAVE_MODO = 'grid:campo:modo';
@@ -186,7 +186,7 @@ function linhaLista(a, cli, tec) {
   const quando = atrasada(a) ? `<span class="cp-atr">Era para ${esc(quandoVisita(a.data_visita, a.hora_inicio))}</span>` : esc(quandoVisita(a.data_visita, a.hora_inicio));
   return `<tr class="cp-tr ${esc(a.situacao)}" data-acao="ir:campo-avaliacao:${a.id}">
     <td class="cp-tn">${esc(a.numero || 'Sem número')}${etiquetaRevisao(a)}</td>
-    <td><div class="cp-temp">${esc(cli?.nome || 'Empresa')}</div>${cli?.cnpj ? `<div class="cp-tsub">CNPJ ${esc(fmtCnpj(cli.cnpj))}</div>` : ''}</td>
+    <td><div class="cp-temp">${esc(cli?.nome || 'Empresa')}</div>${docClienteTxt(cli) ? `<div class="cp-tsub">${esc(docClienteTxt(cli))}</div>` : ''}</td>
     <td class="cp-tq">${quando}</td>
     <td>${esc(tec?.nome || '')}</td>
     <td>${selo(a.situacao)}</td>
