@@ -46,7 +46,7 @@ export async function render(params = {}) {
   ${ui.topo({
     voltar:{ rotulo:'Contas', acao:'ir:crm-empresa' },
     titulo: cliente.nome,
-    sub: [cliente.naoCadastrada ? 'Ainda não cadastrada em Clientes' : (cliente.cnpj ? 'CNPJ ' + ui.esc(ui.fmt.cnpj(cliente.cnpj)) : 'sem CNPJ'),
+    sub: [cliente.naoCadastrada ? 'Ainda não cadastrada em Clientes' : (ui.docClienteTxt(cliente) ? ui.esc(ui.docClienteTxt(cliente)) : 'sem CNPJ'),
           cliente.cidade || null,
           resumo.primeiroContato ? 'primeiro negócio em ' + ui.fmt.data(resumo.primeiroContato) : null]
          .filter(Boolean).join(' · '),
@@ -75,7 +75,7 @@ export async function render(params = {}) {
     <div style="display:flex;flex-direction:column;gap:12px">
       ${ui.cartao(`<div class="ds-card-titulo" style="margin-bottom:12px">Dados da empresa${cliente.naoCadastrada ? '' : ' <span style="font-weight:500;color:var(--text-3);font-size:12px">· do cadastro de Clientes</span>'}</div>
         ${dado('Razão social', cliente.nome)}
-        ${dado('CNPJ', ui.fmt.cnpj(cliente.cnpj))}
+        ${cliente.tipo_pessoa === 'fisica' ? dado('CPF', ui.docCliente(cliente)?.val || '') : dado('CNPJ', ui.fmt.cnpj(cliente.cnpj))}
         ${dado('Cidade', cliente.cidade)}
         ${dado('Telefone', cliente.telefone ? ui.fmt.telefone(cliente.telefone) : null)}
         ${dado('E-mail', cliente.email)}`)}
@@ -120,7 +120,7 @@ async function listaDeEmpresas() {
   let lista = todas;
   if (_situacao === 'abertos')  lista = lista.filter(e => e.abertos > 0);
   if (_situacao === 'clientes') lista = lista.filter(e => e.ganhos > 0);
-  if (_situacao === 'sem-cnpj') lista = lista.filter(e => !e.cnpj && !e.naoCadastrada);
+  if (_situacao === 'sem-cnpj') lista = lista.filter(e => !e.cnpj && !e.cpf && !e.naoCadastrada);
   if (_situacao === 'nao-cadastradas') lista = lista.filter(e => e.naoCadastrada);
   if (_situacao === 'sem-negocio') lista = lista.filter(e => !e.negocios);
   /* Faltava aplicar: o filtro de cidade tinha estado, tinha select e tinha
@@ -129,7 +129,7 @@ async function listaDeEmpresas() {
   if (_cidade) lista = lista.filter(e => e.cidade === _cidade);
   if (_busca) {
     const t = chaveBusca(_busca);
-    lista = lista.filter(e => chaveBusca(e.nome).includes(t) || chaveBusca(e.cnpj).includes(t)
+    lista = lista.filter(e => chaveBusca(e.nome).includes(t) || chaveBusca(e.cnpj).includes(t) || chaveBusca(e.cpf).includes(t)
                            || chaveBusca(e.cidade).includes(t));
   }
 
@@ -192,7 +192,7 @@ async function listaDeEmpresas() {
         render:(e) => `<div class="prim">${ui.esc(e.nome)}</div>
           <div class="sub">${e.naoCadastrada
             ? '<span style="color:var(--text-3)">ainda não cadastrada em Clientes</span>'
-            : (e.cnpj ? 'CNPJ ' + ui.esc(ui.fmt.cnpj(e.cnpj)) : 'sem CNPJ') + (e.cidade ? ' · ' + ui.esc(e.cidade) : '')}</div>` },
+            : (ui.docClienteTxt(e) ? ui.esc(ui.docClienteTxt(e)) : 'sem CNPJ') + (e.cidade ? ' · ' + ui.esc(e.cidade) : '')}</div>` },
       { campo:'abertos', rotulo:'Em aberto', dir:true,
         render:(e) => e.abertos ? `<span class="prim">${e.abertos}</span>` : `<span style="color:var(--text-3)">—</span>` },
       { campo:'ganhos', rotulo:'Fechados', dir:true,

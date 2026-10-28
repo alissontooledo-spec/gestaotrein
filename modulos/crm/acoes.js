@@ -78,7 +78,7 @@ async function formLead(ponte, redesenhar, lead = null, pre = null) {
      texto — prospecção começa antes do cadastro — e vira cliente depois, em
      Contas, conferindo o CNPJ. O rótulo leva o CNPJ porque matriz e filial
      têm o mesmo nome (ex.: BELA TEXTIL, WILLRICH). */
-  const rotuloCliente = (c) => c.cnpj ? `${c.nome} — ${ui.fmt.cnpj(c.cnpj)}` : c.nome;
+  const rotuloCliente = (c) => ui.docClienteTxt(c) ? `${c.nome} — ${ui.docCliente(c).val}` : c.nome;
   const porRotulo = new Map();
   for (const c of clientes) porRotulo.set(rotuloCliente(c), c);
   const idOriginal = lead?.cliente_id || pre?.cliente_id || null;
@@ -601,7 +601,7 @@ export default async function acoes(acao, { redesenhar }) {
     const clientes = await dados.clientes().catch(() => []);
     const alvo = chave(f.cliente.nome);
     const parecidos = clientes.filter(c => alvo && (chave(c.nome).includes(alvo) || alvo.includes(chave(c.nome))));
-    const opc = (lista) => lista.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}${c.cnpj ? ' — ' + esc(ui.fmt.cnpj(c.cnpj)) : ''}${c.ativo === false ? ' (inativo)' : ''}</option>`).join('');
+    const opc = (lista) => lista.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}${ui.docClienteTxt(c) ? ' — ' + esc(ui.docCliente(c).val) : ''}${c.ativo === false ? ' (inativo)' : ''}</option>`).join('');
     ponte.abrirModal('Ligar a um cliente que já existe', `
       ${linha('Cliente', `<select id="crmCL_cliente" style="${CAMPO}"><option value="">Escolha…</option>
         ${parecidos.length ? `<optgroup label="Parecidos com &quot;${esc(f.cliente.nome)}&quot;">${opc(parecidos)}</optgroup>` : ''}
