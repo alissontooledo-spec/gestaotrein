@@ -301,3 +301,16 @@ export const soComputador = ({ titulo, texto, alternativa }) =>
    módulo novo usa isto: falha de rede nunca é silenciosa.                  */
 export const erro = (msg, acao) =>
   aviso({ tipo: 'erro', icone: 'alert', titulo: 'Não foi possível carregar', texto: msg, acao });
+
+/** v287: documento do cliente. Pessoa física (tipo_pessoa 'fisica') usa o CPF; mascarar esconde o CPF (papel que vai para o trabalhador). */
+export function docCliente(c, mascarar = false) {
+  if (c && c.tipo_pessoa === 'fisica') {
+    const d = String(c.cpf || '').replace(/\D/g, '');
+    if (d.length !== 11) return null;
+    return { rot: 'CPF', val: mascarar ? `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**` : `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` };
+  }
+  if (!c || !c.cnpj) return null;
+  const d = String(c.cnpj).replace(/\D/g, '');
+  return { rot: 'CNPJ', val: d.length === 14 ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}` : c.cnpj };
+}
+export const docClienteTxt = (c, mascarar = false) => { const d = docCliente(c, mascarar); return d ? `${d.rot} ${d.val}` : ''; };
