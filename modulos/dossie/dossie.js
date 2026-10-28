@@ -66,7 +66,7 @@ async function campo(p) {
 }
 
 export async function carregar(sb, orgId, clienteId) {
-  const { data: cli, error: e1 } = await sb.from('clientes').select('id,nome,cnpj,cnae,cnae_descricao').eq('id', clienteId).eq('org_id', orgId).maybeSingle();
+  const { data: cli, error: e1 } = await sb.from('clientes').select('*').eq('id', clienteId).eq('org_id', orgId).maybeSingle();
   if (e1) throw e1;
   if (!cli) throw new Error('Empresa não encontrada.');
   const colabs = await lerTudo(() => sb.from('colaboradores').select('id,nome,cpf,cargo,cliente_id').eq('org_id', orgId).eq('cliente_id', clienteId).order('nome').order('id'));
@@ -221,7 +221,7 @@ export async function gerarPdf(D, R, { jsPDF, safe, usuario, escopo, interno, an
   fonte(9, false, COR.mute); doc.text(s(interno ? 'Dossiê para fiscalização, conferência interna' : 'Dossiê para fiscalização'), M, y); y += 9;
   fonte(20, true, COR.navy); doc.splitTextToSize(s(D.cli.nome), L).forEach((ln) => { doc.text(ln, M, y); y += 8; });
   y += 1;
-  [D.cli.cnpj ? `CNPJ ${D.cli.cnpj}` : '', D.cli.cnae ? `CNAE ${D.cli.cnae}${D.cli.cnae_descricao ? ', ' + D.cli.cnae_descricao : ''}` : '',
+  [D.cli.tipo_pessoa === 'fisica' ? [D.cli.cpf ? `CPF ${D.cli.cpf}` : '', D.cli.caepf ? `CAEPF ${D.cli.caepf}` : '', D.cli.cno ? `CNO da obra ${D.cli.cno}` : ''].filter(Boolean).join(' · ') : (D.cli.cnpj ? `CNPJ ${D.cli.cnpj}` : ''), D.cli.cnae ? `CNAE ${D.cli.cnae}${D.cli.cnae_descricao ? ', ' + D.cli.cnae_descricao : ''}` : '',
     `Abrangência: ${escopo}`, `Emitido em ${quando} por ${usuario?.nome || 'usuário do GRID'}`].filter(Boolean).forEach((l) => texto(l, { tam: 10, c: COR.mute, alt: 5 }));
   if (interno) { y += 2; texto('Documento de conferência interna. Aponta pendências. Para entregar ao fiscal, gere o modo "Para entregar ao fiscal".', { tam: 9, neg: true, c: COR.verm, alt: 4.6 }); }
 
