@@ -94,6 +94,9 @@ const IC = {
   baixar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   tab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>',
   turma: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>',
+  lupa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M10.5 7.8v5.4M7.8 10.5h5.4"/></svg>',
+  olho: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  seta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   img: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>',
 };
 const GHS = {
@@ -378,11 +381,11 @@ function compositor({ grande = false } = {}) {
   const ph = bloq ? 'Seu perfil não inclui o Laudomiro' : off ? (_status?.falha === 'sessao' ? 'Entre de novo no GRID para perguntar' : _status?.falha === 'rede' ? 'Sem conexão com o Laudomiro' : 'O Laudomiro está sendo configurado')
     : nf > 1 ? `Pergunta para as ${nf} FDS (opcional)`
       : nf === 1 ? 'O que você quer saber deste produto? (opcional)'
-        : _anexo ? (_anexo.tipo === 'fds' ? 'O que você quer saber deste produto? (opcional)' : 'O que você quer saber desta foto? (opcional)')
+        : _anexo ? (_anexo.tipo === 'fds' ? 'O que você quer saber deste produto? (opcional)' : 'Conte o que está sendo feito ou o que quer saber (opcional)')
           : _ctx ? (_ctx.varios ? 'Pergunte mais sobre estes produtos' : 'Pergunte mais sobre este produto') : _conv.length ? 'Pergunte mais' : 'Pergunte sobre NR, FDS ou foto';
   const comAnexo = nf > 0 || !!_anexo;
   const fixo = nf > 1 ? `Usa ${nf + (_anexo ? 1 : 0)} perguntas da cota. Os arquivos não ficam guardados.`
-    : _anexo?.tipo === 'foto' ? 'Evite foto com rosto ou crachá. O arquivo não fica guardado.'
+    : _anexo?.tipo === 'foto' ? `${(_anexo.fotos || []).length > 1 ? `${_anexo.fotos.length} fotos, 1 pergunta da cota. ` : ''}Evite rosto ou crachá. As fotos ficam só nesta conversa e não vão para o banco.`
       : comAnexo ? 'O arquivo não fica guardado. Só a resposta.' : '';
   const alerta = avisoDados(_txt);
   return `<div class="lq-comp-w">${_menuAnexo ? menuAnexo(anx) : ''}
@@ -627,7 +630,7 @@ function conversa() {
   const balao = (t) => t.lote
     ? `<div class="lq-eu"><span><em class="anx">${IC.pdf}${t.lote.length} FDS</em>${esc(t.pergunta || 'Comparar estas FDS')}</span></div>`
     : t.anexo
-    ? `<div class="lq-eu"><span><em class="anx">${t.anexo.tipo === 'fds' ? IC.pdf : IC.cam}${esc(t.anexo.nome || '')}</em>${esc(t.pergunta || (t.anexo.tipo === 'fds' ? 'Ler esta FDS' : 'Quais pontos de atenção você vê aqui?'))}</span></div>`
+    ? `<div class="lq-eu"><span><em class="anx">${t.anexo.tipo === 'fds' ? IC.pdf : IC.cam}${esc((t.anexo.thumbs || []).length > 1 ? `${t.anexo.thumbs.length} fotos${nomeAtividade(t.anexo.atividade) ? ' · ' + nomeAtividade(t.anexo.atividade) : ''}` : (t.anexo.nome || '') + (nomeAtividade(t.anexo.atividade) ? ' · ' + nomeAtividade(t.anexo.atividade) : ''))}</em>${esc(t.pergunta || (t.anexo.tipo === 'fds' ? 'Ler esta FDS' : 'Quais pontos de atenção você vê aqui?'))}</span></div>`
     : `<div class="lq-eu"><span>${esc(t.pergunta)}</span></div>`;
   return `<div class="lq-fio">${_conv.map((t, i) => `${balao(t)}${resposta(t, i)}`).join('')}</div>
     <div class="lq-comp-fixo">${compositor()}</div>`;
@@ -672,10 +675,17 @@ function fichaAgente(json) {
    O arquivo vai para a função do servidor, é lido e descartado: no GRID fica
    só a resposta. A miniatura da foto existe só na memória desta tela.
    Liberado pelo servidor (status.anexos): hoje só o Provedor, até o teste. */
-const TAM_PDF = 8 * 1024 * 1024, TAM_FOTO = 4 * 1024 * 1024, LADO_FOTO = 1600;
+const TAM_PDF = 8 * 1024 * 1024, TAM_FOTO = 4 * 1024 * 1024, LADO_FOTO = 1288;   // v290: 1288 px na visão geral (o detalhe vem do zoom)
+/* v290: inspeção por fotos. Até 4 fotos do mesmo local; o Laudomiro entende sozinho o lugar e as
+   atividades (o técnico só corrige se quiser). As fotos e os recortes do zoom só existem na memória desta tela. */
+const MAX_FOTOS = 4;
+const ATIVIDADES = [['altura', 'Trabalho em altura'], ['andaime', 'Andaime'], ['obra', 'Obra de construção'], ['eletricidade', 'Eletricidade'], ['maquinas', 'Máquinas e equipamentos'],
+  ['quente', 'Solda e trabalho a quente'], ['quimicos', 'Produtos químicos'], ['carga', 'Carga, empilhadeira e armazém'], ['escritorio', 'Escritório e ergonomia'], ['confinado', 'Possível espaço confinado'], ['geral', 'Outro ambiente']];
+const ZOOM_LADO = 672;   // lado maior do recorte enviado (a IA lê 672 px a ~576 tokens)
+const nomeAtividade = (k) => [].concat(k || []).map(x => (ATIVIDADES.find(a => a[0] === x) || [])[1]).filter(Boolean).join(' e ');
 const PASSOS = {
   fds: ['Abrindo o PDF', 'Procurando a composição', 'Conferindo na base do GRID', 'Montando a resposta'],
-  foto: ['Olhando a foto', 'Procurando os pontos de atenção', 'Conferindo nas NRs', 'Montando a resposta'],
+  foto: ['Entendendo o que aparece', 'Inspecionando com a lista de verificação', 'Conferindo os detalhes no zoom', 'Montando a resposta'],
 };
 const NOME_GHS = { GHS01: 'Explosivo', GHS02: 'Inflamável', GHS03: 'Oxidante', GHS04: 'Gás sob pressão', GHS05: 'Corrosivo', GHS06: 'Tóxico', GHS07: 'Irritante', GHS08: 'Perigo à saúde', GHS09: 'Meio ambiente' };
 /* v256: por que o componente não tem dados da base (a base tem o Anexo 11 da NR-15 completo). */
@@ -703,7 +713,7 @@ function menuAnexo(anx = true) {
     ${anx ? `<p class="lq-menu-g">Anexar</p>
     ${op('lq.fds', IC.pdf, 'pdf', 'Ficha de segurança (FDS)', 'PDF do fornecedor, até 8 MB. Até 5 para comparar.', 'application/pdf,.pdf', 'multiple')}
     ${op('lq.camera', IC.cam, 'img', 'Tirar foto agora', 'Abre a câmera do celular.', 'image/*', 'capture="environment"', ' so-cel')}
-    ${op('lq.galeria', IC.img, 'img', 'Foto do local', 'Ele aponta os riscos que enxerga.', 'image/jpeg,image/png,image/webp,image/*')}` : ''}
+    ${op('lq.galeria', IC.img, 'img', 'Fotos do local ou da atividade', 'Até 4 do mesmo lugar. Ele entende sozinho o que está acontecendo.', 'image/jpeg,image/png,image/webp,image/*', 'multiple')}` : ''}
     <p class="lq-menu-g">Ferramentas</p>
     ${fer('campo:lq-g-novo', IC.doc, 'Gerar documento', 'OS, ficha de EPI, lista de presença ou dossiê. Não gasta pergunta.')}
     ${fer('campo:lq-calc-abrir', IC.ruido, 'Calcular dose de ruído', 'NR-15, Anexo 1. Não gasta pergunta.')}
@@ -711,8 +721,21 @@ function menuAnexo(anx = true) {
   </div>`;
 }
 
+function chipFotos() {
+  const a = _anexo, n = a.fotos.length;
+  const mini = a.fotos.map((f, i) => `<div class="lq-fx"><img src="${f.thumb}" alt="Foto ${i + 1}"><i>${i + 1}</i>
+    <button type="button" class="lq-x" data-acao="campo:lq-foto-tirar:${i}" aria-label="Tirar a foto ${i + 1}">${I.x}</button></div>`).join('');
+  const mais = n < MAX_FOTOS ? `<label class="lq-fx lq-fx-mais"><input type="file" hidden accept="image/jpeg,image/png,image/webp,image/*" multiple data-cp-foto="lq.galeria"><span>+</span><small>Outra foto</small></label>` : '';
+  return `<div class="lq-fotos-env">
+    <div class="lq-fx-l">${mini}${mais}</div>
+    ${a.fotos.some(f => f.qual) ? `<p class="lq-fx-q">${a.fotos.map((f, i) => f.qual ? `A foto ${i + 1} parece ${f.qual}.` : '').filter(Boolean).join(' ')} Se puder, tire outra com mais luz e firme.</p>` : ''}
+    <p class="lq-fx-t2">${IC.olho}<span><b>Ele entende sozinho</b> o lugar, a atividade e quem aparece. Não precisa escolher nada. Se quiser, escreva uma pergunta.<small>Não envie ASO, atestado nem documento pessoal.</small></span></p>
+  </div>`;
+}
+
 function chipAnexo() {
   if (!_anexo) return '';
+  if (_anexo.tipo === 'foto' && _anexo.fotos) return chipFotos();
   const fds = _anexo.tipo === 'fds';
   return `<div class="lq-anx">${fds ? `<span class="ic pdf">${IC.pdf}</span>` : `<img class="lq-anx-img" src="${_anexo.thumb}" alt="">`}
     <div><b>${esc(_anexo.nome)}</b><small>${fds ? 'FDS em PDF' : 'Foto'} · ${tamanho(_anexo.tam)} · pronto para enviar</small></div>
@@ -762,9 +785,53 @@ async function reduzirFoto(arquivo) {
     return c.toDataURL('image/jpeg', q);
   };
   const grande = desenhar(LADO_FOTO, 0.85), mini = desenhar(480, 0.8);
+  const qual = qualidadeFoto(img);
   img.close?.();
   const base64 = grande.split(',')[1];
-  return { base64, thumb: mini, tam: Math.floor(base64.length * 3 / 4) };
+  return { base64, thumb: mini, tam: Math.floor(base64.length * 3 / 4), qual, chave: await digital(base64) };
+}
+
+/* v290: foto escura ou tremida é avisada antes de gastar (não bloqueia: o técnico decide). */
+function qualidadeFoto(img) {
+  try {
+    const L = 160, k = L / Math.max(img.width, img.height), w = Math.max(8, Math.round(img.width * k)), h = Math.max(8, Math.round(img.height * k));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data, y = new Float32Array(w * h);
+    let soma = 0;
+    for (let i = 0; i < w * h; i++) { y[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; soma += y[i]; }
+    const media = soma / (w * h);
+    let n = 0, m = 0, m2 = 0;
+    for (let yy = 1; yy < h - 1; yy++) for (let x = 1; x < w - 1; x++) {
+      const i = yy * w + x, l = 4 * y[i] - y[i - 1] - y[i + 1] - y[i - w] - y[i + w];
+      n++; m += l; m2 += l * l;
+    }
+    const varL = n ? m2 / n - (m / n) ** 2 : 999;
+    return media < 38 ? 'escura' : varL < 12 ? 'tremida' : '';
+  } catch { return ''; }
+}
+
+/* v290: recorte do zoom feito NO APARELHO, da foto original (resolução cheia), com folga em volta. */
+async function abrirOriginal(foto) {
+  const bruta = foto.arquivo ? await createImageBitmap(foto.arquivo, { imageOrientation: 'from-image' }).catch(() => null) : null;
+  if (bruta && bruta.width * bruta.height <= 24e6) return bruta;   // até 24 MP: usa a original
+  bruta?.close?.();
+  return createImageBitmap(await (await fetch('data:image/jpeg;base64,' + foto.base64)).blob());
+}
+function recortar(img, caixa) {
+  {
+    const [a, b, c2, d2] = caixa.map(v => Math.max(0, Math.min(1000, +v || 0)) / 1000);
+    const fx = (c2 - a) * 0.12, fy = (d2 - b) * 0.12;
+    let x1 = Math.max(0, a - fx) * img.width, y1 = Math.max(0, b - fy) * img.height;
+    let x2 = Math.min(1, c2 + fx) * img.width, y2 = Math.min(1, d2 + fy) * img.height;
+    const min = Math.min(img.width, img.height) * 0.12;   // nunca um recorte minúsculo
+    if (x2 - x1 < min) { const cx = (x1 + x2) / 2; x1 = Math.max(0, cx - min / 2); x2 = Math.min(img.width, x1 + min); }
+    if (y2 - y1 < min) { const cy = (y1 + y2) / 2; y1 = Math.max(0, cy - min / 2); y2 = Math.min(img.height, y1 + min); }
+    const w = x2 - x1, h = y2 - y1, k = Math.min(1, ZOOM_LADO / Math.max(w, h));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext('2d').drawImage(img, x1, y1, w, h, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.85);
+  }
 }
 
 /* v264: impressão digital do arquivo, para não mandar a mesma FDS duas vezes. */
@@ -798,16 +865,43 @@ async function prepararArquivo(chave, arquivos) {
   pararDeOuvir();  // v278
   const f = arquivos?.[0]; if (!f) return;
   _menuAnexo = false;
+  const mais = /^lq\.mais:(\d+)$/.exec(chave);   // v290: "Adicionar esta foto" numa resposta de foto
+  if (mais) {
+    const t = _conv[+mais[1]];
+    if (!t?._fotos || _conv.some(x => x.carregando)) return;
+    try {
+      if (f.type && !/^image\//.test(f.type)) throw new Error('Escolha uma foto.');
+      const r = await reduzirFoto(f);
+      if (r.tam > TAM_FOTO) throw new Error('A foto ficou grande demais. Tente outra.');
+      if (t._fotos.some(x => x.chave === r.chave)) throw new Error('Esta foto já está na análise.');
+      const fotos = [...t._fotos, { nome: (f.name || 'foto').replace(/\.\w+$/, '') + '.jpg', ...r, arquivo: f }].slice(0, MAX_FOTOS);
+      _anexo = { tipo: 'foto', fotos, mime: 'image/jpeg', nome: fotos[0].nome, thumb: fotos[0].thumb, base64: fotos[0].base64, tam: fotos.reduce((s2, x) => s2 + x.tam, 0) };
+    } catch (e) { avisar(e.message || 'Não consegui abrir a foto.', 'erro'); repintar(); return; }
+    await enviarAnexo('');
+    return;
+  }
   try {
     if (chave === 'lq.fds') {
       await prepararFds([...arquivos]);  // v264: várias de uma vez
     } else {
-      if (f.type && !/^image\//.test(f.type)) throw new Error('Escolha uma foto.');
-      const r = await reduzirFoto(f);
-      if (r.tam > TAM_FOTO) throw new Error('A foto ficou grande demais. Tente outra.');
-      _anexo = { tipo: 'foto', nome: (f.name || 'foto').replace(/\.\w+$/, '') + '.jpg', mime: 'image/jpeg', ...r };
+      // v290: até 4 fotos do mesmo local; escolher de novo acrescenta
+      if (!(_anexo?.tipo === 'foto' && _anexo.fotos)) _anexo = { tipo: 'foto', fotos: [], mime: 'image/jpeg' };
+      let sobra = 0, repetida = 0;
+      for (const fx of [...arquivos]) {
+        if (fx.type && !/^image\//.test(fx.type)) throw new Error('Escolha uma foto.');
+        if (_anexo.fotos.length >= MAX_FOTOS) { sobra++; continue; }
+        const r = await reduzirFoto(fx);
+        if (r.tam > TAM_FOTO) throw new Error('A foto ficou grande demais. Tente outra.');
+        if (_anexo.fotos.some(x => x.chave === r.chave)) { repetida++; continue; }
+        _anexo.fotos.push({ nome: (fx.name || 'foto').replace(/\.\w+$/, '') + '.jpg', ...r, arquivo: fx });
+      }
+      Object.assign(_anexo, { nome: _anexo.fotos[0].nome, thumb: _anexo.fotos[0].thumb, base64: _anexo.fotos[0].base64, tam: _anexo.fotos.reduce((t, x) => t + x.tam, 0) });
+      if (sobra) avisar(`No máximo ${MAX_FOTOS} fotos por análise. ${sobra === 1 ? '1 ficou' : sobra + ' ficaram'} de fora.`, 'erro');
+      else if (repetida) avisar('Esta foto já estava na lista.', 'erro');
+      if (!_anexo.fotos.length) _anexo = null;
     }
   } catch (e) { avisar(e.message || 'Não consegui abrir o arquivo.', 'erro'); }
+  if (_anexo?.tipo === 'foto' && _anexo.fotos && !_anexo.fotos.length) _anexo = null;   // v290
   repintar();
   setTimeout(() => { const el = [...document.querySelectorAll('#lqTxt')].find(x => x.getBoundingClientRect().width > 0); el?.focus?.(); }, 80);
 }
@@ -816,11 +910,13 @@ async function enviarAnexo(p) {
   if (_conv.some(t => t.carregando)) return;
   if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return; }
   const a = _anexo; _anexo = null;
-  const turno = { pergunta: p, anexo: { tipo: a.tipo, nome: a.nome, thumb: a.thumb || '' }, carregando: true, passo: 0, _arquivo: a };
+  const fotos = a.tipo === 'foto' && a.fotos ? a.fotos : null;
+  const turno = { pergunta: p, anexo: { tipo: a.tipo, nome: a.nome, thumb: a.thumb || '', thumbs: fotos ? fotos.map(f => f.thumb) : [] }, carregando: true, passo: 0, _arquivo: a };
   const d = _dono;
   _ctx = null;  // a FDS nova (ou a foto) muda o assunto da conversa
   _conv.push(turno); _txt = ''; _painel = null; _copiarMenu = null; limparCampo();
   repintar(); rolarFim();
+  if (fotos) { await rodarFotos(turno, fotos, { pergunta: p }); return; }   // v290
   const relogio = setInterval(() => { if (turno.passo < 3) { turno.passo++; repintar(); } }, 6000);
   try {
     const r = await chamar({ acao: 'anexo', tipo: a.tipo, arquivo: { nome: a.nome, mime: a.mime, base64: a.base64 }, pergunta: p || undefined, estilo: estilo() });
@@ -838,6 +934,71 @@ async function enviarAnexo(p) {
     if (e.codigo === 'ANEXO_BLOQUEADO' && _status) _status.anexos = false;
   } finally { clearInterval(relogio); }
   repintar(); rolarFim();
+}
+
+/* v290: fotos em 3 passos curtos: entender (miniaturas) → inspecionar → zoom (recortes feitos aqui).
+   "Corrigir" usa o mesmo caminho com as atividades certas e o id da análise (não gasta cota). */
+async function rodarFotos(turno, fotos, { pergunta = '', corrigirId = '', atividades = null } = {}) {
+  const d = _dono;
+  const arquivos = fotos.map(f => ({ nome: f.nome, mime: 'image/jpeg', base64: f.base64 }));
+  const relogio = setInterval(() => { if (turno.passo < 1) { turno.passo++; repintar(); } }, 5000);
+  try {
+    if (!corrigirId) {
+      try {
+        const e = await chamar({ acao: 'entender', arquivos: fotos.map(f => ({ mime: 'image/jpeg', base64: String(f.thumb || '').replace(/^data:[^,]+,/, '') })) });
+        if (!mesmoDono(d)) return;
+        if (e?.recusa) { Object.assign(turno, { carregando: false, aviso: e.recusa }); return; }
+        if (e?.entendi) { turno.entendi = e.entendi; turno.passo = Math.max(turno.passo, 1); repintar(); }
+      } catch (e) { if (e.codigo === 'COTA' || e.codigo === 'SEM_PERMISSAO' || e.codigo === 'ANEXO_BLOQUEADO') throw e; /* sem o passo rápido, segue */ }
+    }
+    turno.passo = Math.max(turno.passo, 1); repintar();
+    const r = await chamar({ acao: 'anexo', tipo: 'foto', arquivos, zoom: true, pergunta: pergunta || undefined, estilo: estilo(),
+      ...(turno.entendi ? { entendi: { lugar: turno.entendi.lugar, chaves: turno.entendi.chaves } } : {}),
+      ...(corrigirId ? { corrigir_id: corrigirId, atividades } : {}) });
+    if (!mesmoDono(d)) return;
+    if (r.aviso) { Object.assign(turno, { carregando: false, aviso: r.aviso }); return; }
+    if (_status && r.restantes != null) _status.restantes = r.restantes;
+    let final = r;
+    if (Array.isArray(r.zoom) && r.zoom.length && r.id) {
+      turno.passo = 2; repintar();
+      const recortes = [], abertas = {};
+      turno._recortes = {};
+      try {
+        for (const z of r.zoom) {
+          const k = (z.f || 1) - 1, f = fotos[k]; if (!f) continue;
+          try {
+            if (!abertas[k]) abertas[k] = await abrirOriginal(f);
+            const url = recortar(abertas[k], z.caixa); turno._recortes[z.ref] = url; recortes.push({ ref: z.ref, base64: url.split(',')[1] });
+          } catch { /* um recorte que falhou não para os outros */ }
+        }
+      } finally { Object.values(abertas).forEach(b => b?.close?.()); }
+      try { final = await chamar({ acao: 'anexo_zoom', id: r.id, arquivos, recortes, estilo: estilo() }); }
+      catch { final = { ...r, resposta: { ...r.resposta, zoom_falhou: true } }; }
+      if (!mesmoDono(d)) return;
+    }
+    turno.passo = 3;
+    Object.assign(turno, { carregando: false, id: final.id || r.id, resposta: final.resposta, trechos: final.trechos || [], resumo: final.resumo || '', _arquivo: null, _fotos: fotos,
+      _corrigir: false, entendi: final.resposta?.entendi || turno.entendi });
+    if (_status && !corrigirId && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: `Foto: ${fotos[0].nome}${fotos.length > 1 ? ` (+${fotos.length - 1})` : ''}${pergunta ? ' — ' + pergunta : ''}`, tipo: 'foto', criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
+  } catch (e) {
+    if (!mesmoDono(d)) return;
+    Object.assign(turno, { carregando: false, erro: e.message || 'O Laudomiro não conseguiu olhar as fotos.', podeRepetir: !['NAO_CONFIGURADO', 'COTA', 'SEM_PERMISSAO', 'ANEXO_BLOQUEADO'].includes(e.codigo) && e.status !== 400 && e.status !== 413 });
+    if (e.codigo === 'ANEXO_BLOQUEADO' && _status) _status.anexos = false;
+  } finally { clearInterval(relogio); repintar(); rolarFim(); }
+}
+
+/* v290: "Refazer com a correção": mesmas fotos (ainda na memória), atividades marcadas pelo técnico. */
+async function refazerCorrigido(tIdx) {
+  const t = _conv[tIdx];
+  if (!t || _conv.some(x => x.carregando)) return;
+  const at = (t._corAtiv || []).filter(k => ATIVIDADES.some(a => a[0] === k));
+  if (!at.length) { avisar('Marque pelo menos uma atividade.', 'erro'); return; }
+  if (!t._fotos?.length || !t.id) { avisar('As fotos desta análise não estão mais nesta tela. Envie de novo.', 'erro'); return; }
+  const antes = { resposta: t.resposta, trechos: t.trechos, resumo: t.resumo };
+  Object.assign(t, { carregando: true, passo: 1, _corrigir: false, entendi: { ...(t.resposta?.entendi || {}), atividades: at.map(k => (ATIVIDADES.find(a => a[0] === k) || [])[1]), chaves: at, incerto: '' }, anexo: { ...t.anexo, thumbs: t._fotos.map(f => f.thumb) } });
+  repintar();
+  await rodarFotos(t, t._fotos, { pergunta: t.pergunta, corrigirId: t.id, atividades: at });
+  if ((t.erro || t.aviso) && antes.resposta) { avisar(t.erro || t.aviso?.titulo || 'Não deu para refazer.', 'erro'); Object.assign(t, { erro: null, aviso: null, ...antes }); repintar(); }
 }
 
 /* ══ v264 · várias FDS de uma vez ═════════════════════════════════════════
@@ -1053,7 +1214,8 @@ function rolarPara(i) {
 function carregandoAnexo(turno) {
   const ps = PASSOS[turno.anexo.tipo] || PASSOS.fds;
   return `<article class="lq-resp lq-carr" aria-live="polite"><span class="lq-seal p">${SEAL}</span><div>
-    <b>${turno.anexo.tipo === 'fds' ? 'Lendo a FDS…' : 'Analisando a foto…'}</b>
+    <b>${turno.anexo.tipo === 'fds' ? 'Lendo o documento…' : (turno.anexo.thumbs || []).length > 1 ? 'Analisando as fotos…' : 'Analisando a foto…'}</b>
+    ${turno.entendi ? cartaoEntendi(turno.entendi, -1) : ''}
     <div class="lq-passos">${ps.map((t, i) => `<div class="${i < turno.passo ? 'f' : i === turno.passo ? 'a' : ''}"><i>${i < turno.passo ? '✓' : i === turno.passo ? '…' : ''}</i>${t}</div>`).join('')}</div>
     <small>Pode levar até um minuto.</small></div></article>`;
 }
@@ -1106,21 +1268,78 @@ function respostaFds(turno, tIdx) {
   </article>`;
 }
 
+const SIT = { nao_conforme: ['Não conforme', 'nc'], a_conferir: ['A conferir', 'ac'], conforme: ['Conforme', 'ok'], nao_visivel: ['Não aparece', 'nv'] };
+/* v290: foto não prova conformidade (engenheiro): na foto os rótulos são do que foi visto. */
+const SIT_FOTO = { nao_conforme: ['Problema visto', 'nc'], a_conferir: ['A conferir', 'ac'], conforme: ['Sem problema visto', 'ok'], nao_visivel: ['Sem foto', 'nv'] };
+
+/* v290: o que o Laudomiro entendeu sozinho (lugar, atividades, pessoas). Nunca trava: "Corrigir" é opcional. */
+function cartaoEntendi(e, tIdx, turno) {
+  if (!e) return '';
+  const aberto = turno && turno._corrigir;
+  const marc = (turno && turno._corAtiv) || e.chaves || [];
+  const chips = [...(e.atividades || [])].map(a => esc(a)).join(' · ');
+  return `<div class="lq-ent${e.incerto ? ' inc' : ''}">
+    <span class="lq-ent-i">${IC.olho}</span>
+    <div class="lq-ent-b"><small>${e.incerto ? 'Acho que entendi' : 'Entendi'}</small><b>${esc(e.lugar || '')}</b>
+      ${chips ? `<div class="lq-ent-c">${chips}</div>` : ''}
+      ${e.extra ? `<p>${esc(e.extra)}</p>` : ''}
+      ${e.incerto ? `<p class="lq-ent-q">${esc(e.incerto)}</p>` : ''}
+      ${aberto ? `<div class="lq-ent-cor"><p>O que está acontecendo? Marque o certo e eu refaço só o que muda.</p>
+        <div class="lq-psug lq-ativ">${ATIVIDADES.map(([k, t]) => `<button type="button" class="${marc.includes(k) ? 'on' : ''}" aria-pressed="${marc.includes(k)}" data-acao="campo:lq-cor-ativ:${tIdx}.${k}">${esc(t)}</button>`).join('')}</div>
+        <div class="lq-ent-cor-a"><button type="button" class="btn btn-primary btn-sm" data-acao="campo:lq-cor-refazer:${tIdx}">Refazer com a correção</button><small>Não gasta pergunta da cota.</small></div></div>` : ''}
+    </div>
+    ${tIdx >= 0 && !aberto && turno?._fotos?.length && !turno.resposta?.corrigido && !turno.carregando ? `<button type="button" class="lq-ent-x" data-acao="campo:lq-corrigir:${tIdx}">Corrigir</button>` : ''}
+  </div>`;
+}
+
+/* v290: próximos passos. O servidor só manda o que a organização contratou: sem o módulo, o passo não existe. */
+const MOD_NOME = { campo: 'Avaliação de Campo', treinamentos: 'Treinamentos', crm: 'CRM' };
+function proximosPassos(r, tIdx) {
+  const l = r.ligacoes || [], c = r.cliente;
+  if (!l.length && !c) return '';
+  const cab = c ? `<div class="lq-prox-cl"><span>Cliente</span><b>${esc(c.nome)}</b>${c.origem ? `<small>${esc(c.origem)}</small>` : ''}</div>` : '';
+  const forte = l.findIndex(x => x.alerta && x.botao);
+  const um = (x, i) => `<div class="lq-prox-i${x.alerta ? ' al' : ''}"${x.modulo ? ` title="${esc(MOD_NOME[x.modulo] || x.modulo)}"` : ''}><div class="t">${x.alerta ? '<i class="lq-prox-d"></i>' : ''}<b>${esc(x.titulo)}</b>${x.texto ? `<p>${esc(x.texto)}</p>` : ''}</div>
+      ${x.botao ? `<button type="button" class="btn ${i === forte ? 'btn-primary' : 'btn-outline'} btn-sm" data-acao="campo:lq-ligar:${tIdx}.${esc(x.acao || '')}">${esc(x.botao)}</button>` : ''}</div>`;
+  const vis = l.slice(0, 3).map(um).join(''), resto = l.slice(3);
+  return `<div class="lq-prox"><h5>Próximos passos</h5>${cab}${vis}${resto.length ? `<details class="lq-prox-mais"><summary>Mais ${resto.length} ${resto.length === 1 ? 'passo' : 'passos'}</summary>${resto.map((x, k) => um(x, k + 3)).join('')}</details>` : ''}</div>`;
+}
 function respostaFoto(turno, tIdx) {
-  const r = turno.resposta, thumb = turno.anexo?.thumb;
+  const r = turno.resposta, thumbs = (turno.anexo?.thumbs || []).length ? turno.anexo.thumbs : (turno.anexo?.thumb ? [turno.anexo.thumb] : []);
   const marc = turno.marcados || new Set();
-  const pontos = (r.pontos || []).map((p, i) => `<div class="lq-pt2"><span class="n">${i + 1}</span><div>
-      <span class="gv ${p.gravidade === 'ALTA' ? 'alta' : 'med'}">${p.gravidade === 'ALTA' ? 'ALTA' : 'MÉDIA'}</span><b>${esc(p.titulo)}</b>
+  const nf = thumbs.length || r.nfotos || 1;
+  const tagFoto = (f) => (nf > 1 && f && thumbs[f - 1] ? `<button type="button" class="lq-ft" data-acao="campo:lq-ampliar:${tIdx}.${f - 1}" title="Ampliar a foto ${f}">Foto ${f}</button>` : '');
+  const nrs = (p) => [p.nr, p.nr2, p.nr3].filter(Boolean).map((x, k) => (k === 0 && p.n) ? `<button type="button" class="lq-it" data-acao="campo:lq-fonte:${tIdx}.${p.n}" title="Ver o texto da ${esc(x)}">${esc(x)}</button>` : `<span class="lq-it so">${esc(x)}</span>`).join(' ');
+  const rec = (x) => x.lupa || (x.zoom_ref != null ? (turno._recortes || {})[x.zoom_ref] : '') || '';
+  const lupa = (p, i) => rec(p) && p.visto_zoom !== false ? `<button type="button" class="lq-lupa" data-acao="campo:lq-lupa:${tIdx}.${i}" aria-label="Ver o recorte ampliado do ponto ${i + 1}"><img src="${rec(p)}" alt="Recorte ampliado"><i>${IC.lupa}</i></button>` : '';
+  const pontos = (r.pontos || []).map((p, i) => `<div class="lq-pt2${lupa(p, i) ? ' com-lupa' : ''}"><span class="n">${i + 1}</span><div>
+      <span class="gv ${p.gravidade === 'ALTA' ? 'alta' : 'med'}">${p.gravidade === 'ALTA' ? 'ALTA' : 'MÉDIA'}</span>${tagFoto(p.foto)}${p.visto_zoom || p.lupa ? '<span class="lq-conf-l">Visto no zoom</span>' : ''}<b>${esc(p.titulo)}</b>
       ${p.agora ? `<p class="agora"><b>Agora:</b> ${esc(p.agora)}</p>` : ''}
-      ${p.detalhe || p.nr ? `<p>${esc(p.detalhe || '')}${p.nr ? (p.n ? ` <button type="button" class="lq-it" data-acao="campo:lq-fonte:${tIdx}.${p.n}" title="Ver o texto da ${esc(p.nr)}">${esc(p.nr)}</button>` : ` <span class="lq-it so">${esc(p.nr)}</span>`) : ''}</p>` : ''}</div></div>`).join('');
+      ${p.detalhe || p.nr ? `<p>${esc(p.detalhe || '')} ${nrs(p)}</p>` : ''}</div>${lupa(p, i)}</div>`).join('');
+  const ac = (r.a_conferir || []).length ? `<div class="lq-acf"><h5>${IC.lupa}A conferir no local</h5>${r.a_conferir.map(x => `<div class="lq-acf-i">${rec(x) ? `<img src="${rec(x)}" alt="">` : ''}<div><b>${esc(x.titulo)}</b><p>${esc(x.motivo || '')}</p></div></div>`).join('')}<small>Apareceu na foto, mas o zoom não confirmou. Não entrou na lista de pontos.</small></div>` : '';
+  const tira = thumbs.length ? `<div class="lq-fx-l lq-fx-r">${thumbs.map((t, i) => `<button type="button" class="lq-fx" data-acao="campo:lq-ampliar:${tIdx}.${i}" aria-label="Ampliar a foto ${i + 1}"><img src="${t}" alt="Foto ${i + 1}">${nf > 1 ? `<i>${i + 1}</i>` : ''}</button>`).join('')}</div>`
+    : '<div class="lq-thumb vazio">As fotos não ficam guardadas no GRID</div>';
+  const ver = (r.verificacao || []);
+  const nNc = ver.filter(v => v.situacao === 'nao_conforme').length;
+  const verif = ver.length ? `<details class="lq-dt"><summary>Lista de verificação <span>${nNc ? `${nNc} de ${ver.length} com problema visto` : `${ver.length} itens`} · ${esc((r.roteiros || []).join(', ') || r.atividade || 'inspeção geral')}</span></summary><div class="lq-verif">
+      ${ver.map(v => { const [rot, cls] = SIT_FOTO[v.situacao] || SIT_FOTO.nao_visivel; const pt = v.situacao === 'nao_conforme' && v.ponto ? `<span class="lq-vp">ponto ${+v.ponto}</span>` : ''; return `<div class="lq-vi"><span class="lq-vs ${cls}">${rot}</span><span class="t">${esc(v.item)}</span><span class="lq-vr">${pt}${tagFoto(v.foto)}</span></div>`; }).join('')}</div></details>` : '';
+  const pode = anexosLigados() && (turno._fotos || []).length && (turno._fotos.length < MAX_FOTOS);
+  const sug = (r.fotos_sugeridas || []).length ? `<details class="lq-dt"><summary>Uma foto a mais ajudaria <span>${r.fotos_sugeridas.length}</span></summary><div class="lq-fsug">${r.fotos_sugeridas.map(f => `<div class="lq-fsug-i"><span>${esc(f)}</span>${pode ? `<label class="btn btn-outline btn-sm"><input type="file" hidden accept="image/*" capture="environment" data-cp-foto="lq.mais:${tIdx}">Adicionar esta foto</label>` : ''}</div>`).join('')}
+      ${pode ? '<small>A análise é refeita com as fotos desta conversa mais a nova. Usa 1 pergunta.</small>' : ''}</div></details>` : '';
   return `<article class="lq-resp lq-foto-r">
-    <header class="lq-ver"><span class="lq-selo v-foto">FOTO</span><div><h3>${esc(r.titulo)}</h3>${r.subtitulo ? `<p>${esc(r.subtitulo)}</p>` : ''}</div></header>
+    <header class="lq-ver"><span class="lq-selo v-foto">${nf > 1 ? 'FOTOS' : 'FOTO'}</span><div><h3>${esc(r.titulo)}</h3>${r.subtitulo ? `<p>${esc(r.subtitulo)}</p>` : ''}</div></header>
+    ${cartaoEntendi(r.entendi, tIdx, turno)}
     ${r.curta ? `<p class="lq-curta">${negritoInicio(r.curta)}</p>` : ''}
-    <div class="lq-foto${pontos ? '' : ' so'}">${thumb ? `<button type="button" class="lq-thumb" data-acao="campo:lq-ampliar:${tIdx}" aria-label="Ampliar a foto"><img src="${thumb}" alt="Foto enviada"></button>` : '<div class="lq-thumb vazio">A foto não fica guardada no GRID</div>'}
-      ${pontos ? `<div class="lq-pts">${pontos}</div>` : ''}</div>
-    ${(r.pessoas || []).length ? `<div class="lq-pess"><h5>Quem aparece na foto</h5>${r.pessoas.map((p, i) => `<div><b>${i + 1}.</b> ${esc(p.onde || '')}${p.atividade ? ' · ' + esc(p.atividade) : ''}${(p.epi_faltando || []).length ? `<span class="falta">Sem: ${esc(p.epi_faltando.join(', '))}</span>` : ''}${(p.epi_visto || []).length ? `<span class="tem">Com: ${esc(p.epi_visto.join(', '))}</span>` : ''}</div>`).join('')}</div>` : ''}
-    ${(r.conferir || []).length ? `<div class="lq-conf3"><h5>A foto não responde: confira no local</h5>${r.conferir.map((c, i) => `<button type="button" class="lq-ck${marc.has(i) ? ' on' : ''}" data-acao="campo:lq-conf:${tIdx}.${i}" aria-pressed="${marc.has(i)}"><i>${marc.has(i) ? '✓' : ''}</i>${esc(c)}</button>`).join('')}</div>` : ''}
-    <div class="lq-limite">${I.info}<div><b>Só vale para o que aparece na foto.</b> ${esc(String(r.limite || '').replace(/^Só vale para o que aparece na foto\.\s*/, ''))}</div></div>
+    ${tira}
+    ${pontos ? `<div class="lq-pts lq-pts-l">${pontos}</div>` : ''}
+    ${r.zoom_falhou ? '<p class="lq-zf">Não consegui conferir os detalhes no zoom desta vez. Os pontos são da primeira leitura.</p>' : ''}
+    ${ac}
+    ${proximosPassos(r, tIdx)}
+    ${(r.conferir || []).length ? `<div class="lq-conf3"><h5>As fotos não respondem: confira no local</h5>${r.conferir.map((c, i) => `<button type="button" class="lq-ck${marc.has(i) ? ' on' : ''}" data-acao="campo:lq-conf:${tIdx}.${i}" aria-pressed="${marc.has(i)}"><i>${marc.has(i) ? '✓' : ''}</i>${esc(c)}</button>`).join('')}</div>` : ''}
+    ${verif}
+    ${(r.pessoas || []).length ? `<details class="lq-dt"><summary>Quem aparece nas fotos <span>${r.pessoas.length}</span></summary><div class="lq-pess">${r.pessoas.map((p, i) => `<div><b>${i + 1}.</b> ${esc(p.onde || '')}${p.atividade ? ' · ' + esc(p.atividade) : ''}${(p.epi_faltando || []).length ? `<span class="falta">Sem: ${esc(p.epi_faltando.join(', '))}</span>` : ''}${(p.epi_visto || []).length ? `<span class="tem">Com: ${esc(p.epi_visto.join(', '))}</span>` : ''}</div>`).join('')}</div></details>` : ''}
+    ${sug}
+    <div class="lq-limite">${I.info}<div><b>Só vale para o que aparece nas fotos.</b> ${esc(String(r.limite || '').replace(/^Só vale para o que aparece nas? fotos?\.\s*/, ''))}</div></div>
     ${rodape(turno, tIdx, 'inspeção')}
   </article>`;
 }
@@ -1144,9 +1363,12 @@ function rodape(turno, tIdx, oQue) {
 function textoCopiar(turno, como) {
   const r = turno.resposta || {};
   if (r.tipo === 'foto') {
-    const pts = (r.pontos || []).map((p, i) => `${i + 1}. [${p.gravidade === 'ALTA' ? 'ALTA' : 'MÉDIA'}] ${p.titulo}${p.agora ? ' — Agora: ' + p.agora : ''}${p.nr ? ' (' + p.nr + ')' : ''}`);
+    const pts = (r.pontos || []).map((p, i) => `${i + 1}. [${p.gravidade === 'ALTA' ? 'ALTA' : 'MÉDIA'}] ${p.titulo}${p.agora ? ' — Agora: ' + p.agora : ''}${p.nr ? ' (' + [p.nr, p.nr2, p.nr3].filter(Boolean).join(', ') + (p.foto ? `, foto ${p.foto}` : '') + ')' : ''}`);
     if (como === 'resp') return [r.titulo, ...pts].join('\n');
-    return [`Inspeção por foto${r.subtitulo ? ' — ' + r.subtitulo : ''}`, '', ...pts, '', (r.conferir || []).length ? 'Conferir no local:\n' + r.conferir.map(c => '• ' + c).join('\n') : '',
+    const ver = (r.verificacao || []).map(v => `• ${(SIT_FOTO[v.situacao] || SIT_FOTO.nao_visivel)[0]}: ${v.item}${v.foto ? ` (foto ${v.foto})` : ''}`);
+    const acf = (r.a_conferir || []).map(x => `• ${x.titulo}${x.motivo ? ' — ' + x.motivo : ''}`);
+    return [`Inspeção por foto${r.subtitulo ? ' — ' + r.subtitulo : ''}`, r.curta || '', '', ...pts, '', ...(acf.length ? ['A conferir no local:', ...acf, ''] : []),
+      ...(ver.length ? [`Lista de verificação: ${(r.roteiros || []).join(', ') || r.atividade || 'inspeção geral'}`, ...ver, ''] : []), (r.conferir || []).length ? 'As fotos não respondem (confira no local):\n' + r.conferir.map(c => '• ' + c).join('\n') : '',
       '', 'Observação: ' + (r.limite || ''), 'Indicação do GRID (Laudomiro); não substitui inspeção no local.'].filter(x => x !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   const q = r.quadros || [], partes = Object.fromEntries((r.partes || []).map(p => [p.chave, p.texto]));
@@ -1181,9 +1403,10 @@ function copiarComo(tIdx, como) {
   navigator.clipboard?.writeText(textoCopiar(t, como)).then(() => avisar('Texto copiado.'), () => avisar('Não foi possível copiar neste aparelho.', 'erro'));
 }
 
-function ampliarFoto(tIdx) {
-  const src = _conv[tIdx]?.anexo?.thumb; if (!src) return;
-  ponte().abrirModal?.('Foto enviada', `<img src="${src}" alt="Foto enviada" style="width:100%;border-radius:10px;display:block">
+function ampliarFoto(ref) {
+  const [tIdx, i] = String(ref).split('.').map(Number);
+  const an = _conv[tIdx]?.anexo, src = (an?.thumbs || [])[i || 0] || an?.thumb; if (!src) return;
+  ponte().abrirModal?.((an?.thumbs || []).length > 1 ? `Foto ${(i || 0) + 1}` : 'Foto enviada', `<img src="${src}" alt="Foto enviada" style="width:100%;border-radius:10px;display:block">
     <p style="margin:10px 0 0;font-size:12.5px;color:var(--text-3)">A foto não fica guardada no GRID: some ao sair desta conversa.</p>`, '<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
 }
 
@@ -1205,7 +1428,7 @@ function ligarArrastar() {
     const fotos = fs.filter(f => /^image\//.test(f.type));
     if (!pdfs.length && !fotos.length) { avisar('Arraste FDS em PDF ou uma foto.', 'erro'); return; }
     if (pdfs.length) await prepararArquivo('lq.fds', pdfs);
-    if (fotos.length) await prepararArquivo('lq.galeria', fotos.slice(0, 1));
+    if (fotos.length) await prepararArquivo('lq.galeria', fotos.slice(0, MAX_FOTOS));   // v290: até 4
   });
 }
 
@@ -1488,6 +1711,18 @@ export async function acao(nome, valor, redesenhar) {
   if (nome !== 'campo:lq-copiar-menu' && !/^campo:lq-copiar-como/.test(nome) && _copiarMenu != null) _copiarMenu = null;
   if (nome === 'campo:lq-clip') { pararDeOuvir(); _menuAnexo = !_menuAnexo; _menuEstilo = false; redesenhar(); return true; }
   if (nome === 'campo:lq-anx-tirar') { _anexo = null; redesenhar(); return true; }
+  if (nome === 'campo:lq-foto-tirar') {   // v290
+    if (_anexo?.fotos) { _anexo.fotos.splice(+valor, 1); if (!_anexo.fotos.length) _anexo = null; else Object.assign(_anexo, { nome: _anexo.fotos[0].nome, thumb: _anexo.fotos[0].thumb, base64: _anexo.fotos[0].base64 }); }
+    redesenhar(); return true;
+  }
+  if (nome === 'campo:lq-corrigir') { const t = _conv[+valor]; if (t) { t._corrigir = !t._corrigir; t._corAtiv = t._corAtiv || [...(t.resposta?.entendi?.chaves || [])]; } redesenhar(); return true; }
+  if (nome === 'campo:lq-cor-ativ') { const [ti, k] = String(valor).split('.'); const t = _conv[+ti]; if (t) { const at = t._corAtiv || []; if (!at.includes(k) && at.length >= 3) { avisar('No máximo 3 atividades. Desmarque uma antes.', 'erro'); return true; } t._corAtiv = at.includes(k) ? at.filter(x => x !== k) : [...at, k]; } redesenhar(); return true; }
+  if (nome === 'campo:lq-cor-refazer') { refazerCorrigido(+valor); return true; }
+  if (nome === 'campo:lq-lupa') { const [ti, i] = String(valor).split('.').map(Number); const t0 = _conv[ti], p = t0?.resposta?.pontos?.[i], src = p?.lupa || (p && p.zoom_ref != null ? (t0._recortes || {})[p.zoom_ref] : ''); if (src) ponte().abrirModal?.('Visto no zoom', `<img src="${src}" alt="Recorte" style="width:100%;border-radius:10px;display:block"><p style="margin:10px 0 0;font-size:12.5px;color:var(--text-3)">Recorte feito no seu aparelho, da foto original. Não fica guardado.</p>`, '<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>'); return true; }
+  if (nome === 'campo:lq-ativ') {   // até 2 atividades (ex.: obra e trabalho em altura)
+    if (_anexo?.fotos) { const at = _anexo.atividade || []; _anexo.atividade = at.includes(valor) ? at.filter(x => x !== valor) : [...at, valor].slice(-2); }
+    redesenhar(); return true;
+  }
   if (nome === 'campo:lq-fila-tirar') { _fila.splice(+valor, 1); _avisoFila = ''; redesenhar(); return true; }  // v264
   if (nome === 'campo:lq-fila-perg') { const q = PERG_LOTE[+valor]; if (q) { _txt = q; document.querySelectorAll('#lqTxt').forEach(el => { el.value = q; }); } redesenhar(); return true; }
   if (nome === 'campo:lq-lote-abrir') { const [t, k] = String(valor).split('.').map(Number); abrirDoLote(t, k); return true; }
@@ -1519,7 +1754,7 @@ export async function acao(nome, valor, redesenhar) {
     const [t, i] = String(valor).split('.').map(Number); const tu = _conv[t]; if (!tu) return true;
     tu.marcados ||= new Set(); tu.marcados.has(i) ? tu.marcados.delete(i) : tu.marcados.add(i); redesenhar(); return true;
   }
-  if (nome === 'campo:lq-ampliar') { ampliarFoto(+valor); return true; }
+  if (nome === 'campo:lq-ampliar') { ampliarFoto(valor); return true; }
   if (nome === 'campo:lq-aba') { _menuAnexo = false; _aba = valor === 'fichas' ? 'fichas' : 'perguntar'; _painel = null; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (_aba === 'fichas') return Fichas.acao(nome, valor, redesenhar);
   if (nome === 'campo:lq-g-novo') { if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return true; } novoDocumento('Gerar um documento', { tipo: null }); return true; }  // v284
