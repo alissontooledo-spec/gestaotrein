@@ -37,7 +37,7 @@ function zip(arquivos) {
   let pos = 0;
   const u16 = (v) => [v & 255, (v >>> 8) & 255], u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
   for (const [nome, conteudo] of arquivos) {
-    const n = enc.encode(nome), d = enc.encode(conteudo), c = crc32(d);
+    const n = enc.encode(nome), d = conteudo instanceof Uint8Array ? conteudo : enc.encode(conteudo), c = crc32(d);
     const cab = [...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(c), ...u32(d.length), ...u32(d.length), ...u16(n.length), ...u16(0)];
     partes.push(new Uint8Array(cab), n, d);
     central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(c), ...u32(d.length), ...u32(d.length), ...u16(n.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(pos)]), n);
@@ -178,7 +178,21 @@ const tblW = (ws, linhas, { bordas = bordasW() } = {}) => `<w:tbl><w:tblPr><w:tb
 const LARG = 10204;   // A4 com margens de 850 twips (1,5 cm)
 
 let _totalW = 'SECTIONPAGES';   // um documento só: NUMPAGES (o LibreOffice não conta SECTIONPAGES)
+const _qrW = [];   // imagens do QR deste arquivo: { rid, bytes }
+const bytesDeDataUrl = (u) => { const b = atob(String(u).split(',')[1] || ''); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; };
+function imagemW(rid, n, mm) {
+  const e = Math.round(mm * 36000);
+  return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${e}" cy="${e}"/><wp:docPr id="${n}" name="QR ${n}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${n}" name="qr${n}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${e}" cy="${e}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+}
 function cabW(b) {
+  if (b.qr?.png) {   // v296: 4ª coluna com o QR de autenticidade
+    const n = _qrW.length + 1, rid = `rIdQ${n}`;
+    _qrW.push({ rid, bytes: bytesDeDataUrl(b.qr.png) });
+    const ws = [1900, LARG - 1900 - 2100 - 1300, 2100, 1300];
+    const ctl = (b.ctl || []).slice(0, 3).map((x) => parF(runsF(emLinha(x), { tam: 16 }), { depois: 20 })).join('')
+      + parF(`${runsF('Pág. 1 de ', { tam: 16 })}${campoW(_totalW)}`, { depois: 0 });
+    return tblW(ws, [`<w:tr>${tcW(ws[0], parF(runsF(b.esq || '', { neg: true, tam: 20 }), { alinhar: 'center', depois: 0 }), { vAlign: 'center' })}${tcW(ws[1], parF(runsF(b.titulo, { neg: true, tam: 24 }), { alinhar: 'center', depois: 20 }) + (b.norma ? parF(runsF(b.norma, { tam: 16 }), { alinhar: 'center', depois: 0 }) : ''), { vAlign: 'center' })}${tcW(ws[2], ctl)}${tcW(ws[3], parF(imagemW(rid, n, 17), { alinhar: 'center', depois: 0 }) + parF(runsF(`Validar: ${b.qr.codigo}`, { tam: 12 }), { alinhar: 'center', depois: 0 }), { vAlign: 'center' })}</w:tr>`]);
+  }
   const ws = [2100, LARG - 2100 - 2300, 2300];
   const ctl = (b.ctl || []).slice(0, 3).map((x) => parF(runsF(emLinha(x), { tam: 16 }), { depois: 20 })).join('')
     + parF(`${runsF('Pág. 1 de ', { tam: 16 })}${campoW(_totalW)}`, { depois: 0 });
@@ -220,6 +234,7 @@ function footerW(rod) {
 }
 export function docxPartes(documentos) {
   const footers = [];
+  _qrW.length = 0;
   _totalW = documentos.length > 1 ? 'SECTIONPAGES' : 'NUMPAGES';
   const corpo = documentos.map((partes, di) => {
     const rod = partes.find((b) => b.t === 'rod')?.x || '';
@@ -242,13 +257,14 @@ export function docxPartes(documentos) {
     return di < documentos.length - 1 ? `${miolo}<w:p><w:pPr>${sect}</w:pPr></w:p>` : `${miolo}${sect}`;
   }).join('');
   const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${corpo}</w:body></w:document>`;
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${corpo}</w:body></w:document>`;
   return zip([
-    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${footers.map((_, i) => `<Override PartName="/word/footer${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>`).join('')}</Types>`],
+    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${footers.map((_, i) => `<Override PartName="/word/footer${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>`).join('')}</Types>`],
     ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
-    ['word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${footers.map((_, i) => `<Relationship Id="rIdF${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer${i + 1}.xml"/>`).join('')}</Relationships>`],
+    ['word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${footers.map((_, i) => `<Relationship Id="rIdF${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer${i + 1}.xml"/>`).join('')}${_qrW.map((q, i) => `<Relationship Id="${q.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/qr${i + 1}.png"/>`).join('')}</Relationships>`],
     ['word/document.xml', doc],
     ...footers.map((f, i) => [`word/footer${i + 1}.xml`, f]),
+    ..._qrW.map((q, i) => [`word/media/qr${i + 1}.png`, q.bytes]),
   ]);
 }
 
@@ -293,8 +309,14 @@ export async function pdfPartes(documentos) {
   const caixa = (x, yy, w, h, fundo) => { PRETO(); if (fundo) { doc.setFillColor(fundo, fundo, fundo); doc.rect(x, yy, w, h, 'FD'); } else doc.rect(x, yy, w, h, 'S'); };
   const pagsCab = [];   // onde escrever "Pág. 1 de N" quando o documento terminar
   const cab = (b) => {
-    const w1 = 40, w3 = 44, w2 = L - w1 - w3, h = 23, x2 = M + w1, x3 = x2 + w2;
+    const wq = b.qr?.png ? 24 : 0;   // v296: 4ª coluna com o QR de autenticidade
+    const w1 = 40, w3 = 44, w2 = L - w1 - w3 - wq, h = 23, x2 = M + w1, x3 = x2 + w2;
     caixa(M, y, w1, h); caixa(x2, y, w2, h); caixa(x3, y, w3, h);
+    if (wq) {
+      const x4 = x3 + w3; caixa(x4, y, wq, h);
+      try { doc.addImage(b.qr.png, 'PNG', x4 + (wq - 16.5) / 2, y + 1.6, 16.5, 16.5); } catch { /* sem a imagem, fica o código */ }
+      fonte(6.2); doc.text(S(`Validar: ${b.qr.codigo}`), x4 + wq / 2, y + h - 1.8, { align: 'center' });
+    }
     fonte(9.5, true); const le = doc.splitTextToSize(S(b.esq || ''), w1 - 4).slice(0, 4);
     le.forEach((l, i) => doc.text(l, M + w1 / 2, y + h / 2 - (le.length - 1) * 2 + i * 4 + 1, { align: 'center' }));
     fonte(11.5, true); const lt = doc.splitTextToSize(S(b.titulo), w2 - 6).slice(0, 3);

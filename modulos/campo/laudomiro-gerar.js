@@ -564,12 +564,13 @@ function emergItem(g, t) {
 }
 
 function acoesDoc(g, t, n) {
-  const ocupado = g.sug?.carregando || g.editando >= 0 || conferencia(g, null).bloqueia;
+  const ocupado = g.sug?.carregando || g.editando >= 0 || conferencia(g, null).bloqueia || (g.prev?.doc && g.prev.escolha === 'rev' && String(g.prev.motivo || '').trim().length < 3);
   const qtd = n > 1 ? ` com ${n} ${g.tipo === 'epi' ? 'fichas' : 'OS'}, uma por pessoa` : '';
   const botoes = `<div class="lq-doc-acts"><button type="button" class="btn btn-amber" data-acao="campo:lq-g:${t}.baixar.pdf"${ocupado ? ' disabled' : ''}>Baixar PDF${qtd}</button><button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.baixar.docx"${ocupado ? ' disabled' : ''}>Baixar Word</button></div>`;
-  if (!g.baixado || g.fora) return botoes;
-  if (g.registro?.feito) return `${botoes}<div class="lq-reg ok" role="status"><div><b>Entrega registrada em ${dataBr(g.registro.data)}</b> para ${plural(g.registro.n, 'pessoa', 'pessoas')}. Aparece na ficha de cada pessoa e no dossiê.</div></div>`;
-  return `${botoes}<div class="lq-reg"><div><b>${esc(g.baixado)} baixado.</b> Depois de entregar e colher as assinaturas, registre a entrega. Fica na ficha de cada pessoa e entra no dossiê.</div>
+  const antes = blocoRevisao(g, t);
+  if (!g.baixado || g.fora) return `${antes}${botoes}${blocoEmitidos(g, t)}`;
+  if (g.registro?.feito) return `${antes}${botoes}${blocoEmitidos(g, t)}<div class="lq-reg ok" role="status"><div><b>Entrega registrada em ${dataBr(g.registro.data)}</b> para ${plural(g.registro.n, 'pessoa', 'pessoas')}. Aparece na ficha de cada pessoa e no dossiê.</div></div>`;
+  return `${antes}${botoes}${blocoEmitidos(g, t)}<div class="lq-reg"><div><b>${esc(g.baixado)} baixado.</b> Depois de entregar e colher as assinaturas, registre a entrega. Fica na ficha de cada pessoa e entra no dossiê.</div>
     <label class="lq-reg-d">Data da entrega<input type="date" class="cp-inp" data-cp="lq.g.${t}.regdata" value="${esc(g.regData || hojeIso())}" max="${hojeIso()}"></label>
     <button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.registrar"${g.registro?.salvando ? ' disabled' : ''}>${g.registro?.salvando ? 'Registrando...' : 'Registrar entrega'}</button></div>`;
 }
@@ -596,6 +597,113 @@ function papel(partes, n, t) {
   const rod = partes.find((b) => b.t === 'rod')?.x || '';
   return `<div class="lq-papel-w"><div class="lq-papel lq-papel2" aria-hidden="true">${html}<div class="rod"><span>${esc(rod)}</span><span>Pág. 1</span></div></div>
     <button type="button" class="lq-papel-ver" data-acao="campo:lq-g:${t}.ver">${n > 1 ? `Ver as ${n} pessoas em PDF` : 'Ver em PDF'}</button></div>`;
+}
+
+/* ── v296: número, revisão e QR de autenticidade (proposta aprovada em 04/11/2026, parte 3) ──────
+   O documento é registrado em doc_emitidos (PASSO-94) quando é BAIXADO. Ver em PDF não gasta número.
+   Baixar de novo o mesmo conteúdo (PDF e depois Word) usa os mesmos números. Sem o PASSO-94 no banco,
+   o documento sai como antes (Nº em branco), sem travar. */
+const SIGLA = { os: 'OS', epi: 'FEPI', pt: 'PT', apr: 'APR', checklist: 'CK', procedimento: 'PO' };
+export const numTxt = (tipo, n) => `${SIGLA[tipo] || 'DOC'}-${String(n).padStart(4, '0')}`;
+const revTxt = (r) => String(r || 0).padStart(2, '0');
+const urlValidar = (c) => `https://www.toledolabs.com.br/validar.html?doc=${c}`;
+const semFuncao = (e) => /PGRST202|42883|could not find the function|does not exist|schema cache/i.test(`${e?.code || ''} ${e?.message || ''}`);
+function chaveEmissao(g) {
+  if (g.dl) return `dl:${g.dl.id || ''}:${g.dl.empresa || ''}`;
+  return [g.tipo, g.clienteId || 'fora', g.fora ? `${g.fora.empresa}|${g.fora.funcao}` : g.para, JSON.stringify(g.riscos), g.emerg, g.prev?.escolha || '', g.prev?.motivo || ''].join('|');
+}
+function clienteDoLivre(g) { return (g.clientes || []).find((c) => norm(c.nome) === norm(g.dl?.empresa || '')) || null; }
+async function registrarEmissao(g, docs) {
+  const chave = chaveEmissao(g);
+  if (g.emit?.chave === chave) return g.emit.regs;
+  const cliL = g.dl ? clienteDoLivre(g) : null;
+  const clienteId = g.dl ? (cliL?.id || null) : g.fora ? null : (g.clienteId || null);
+  const clienteNome = g.dl ? (g.dl.empresa || '') : g.fora ? (g.fora.empresa || '') : (g.D?.cli?.nome || '');
+  const pessoas = g.dl ? [{ id: null, nome: '' }] : pessoasDe(g);
+  const titulo = g.dl ? (g.dl.res?.titulo_atividade || g.dl.atividade || '') : `${TIPOS[g.tipo].nome}${funcaoDe(g) ? `, ${funcaoDe(g)}` : ''}`;
+  let regs;
+  try {
+    if (g.prev?.doc && g.prev.escolha === 'rev' && docs.length === 1) {
+      const { data, error } = await sb().rpc('doc_revisar', { p_anterior: g.prev.doc.id, p_motivo: String(g.prev.motivo || '').trim(), p_titulo: titulo });
+      if (error) throw error;
+      regs = data || [];
+    } else {
+      const itens = pessoas.slice(0, docs.length).map((p) => ({ colaborador_id: p.fora ? null : p.id, pessoa_nome: p.fora ? '' : (p.nome || ''), titulo }));
+      const { data, error } = await sb().rpc('doc_emitir', { p_tipo: g.tipo, p_cliente_id: clienteId, p_cliente_nome: clienteNome, p_itens: itens });
+      if (error) throw error;
+      regs = (data || []).sort((a, b) => a.numero - b.numero);
+    }
+  } catch (e) {
+    if (semFuncao(e)) { g.emit = { chave, regs: null, semBanco: true }; return null; }
+    throw new Error(/42501|permiss/i.test(`${e?.code || ''} ${e?.message || ''}`) ? 'Seu perfil de acesso não permite registrar documentos. Peça ao administrador.' : 'Não foi possível registrar o número do documento. Confira a internet e tente de novo.');
+  }
+  if (regs.length !== docs.length) throw new Error('Não foi possível registrar o número do documento. Tente de novo.');
+  const qr = typeof window.gerarQRCodeDataURL === 'function' ? await Promise.all(regs.map((r) => window.gerarQRCodeDataURL(urlValidar(r.codigo)).catch(() => ''))) : [];
+  regs = regs.map((r, i) => ({ ...r, png: qr[i] || '' }));
+  g.emit = { chave, regs };
+  if (g.prev?.doc && g.prev.escolha === 'rev') g.prev = { ...g.prev, feita: true };
+  return regs;
+}
+function aplicarRegistro(docs, regs, g) {
+  docs.forEach((partes, i) => {
+    const r = regs[i]; if (!r) return;
+    const c = partes.find((b) => b.t === 'cab');
+    if (c) {
+      c.ctl = [...(c.ctl || [])];
+      c.ctl[0] = `Nº ${numTxt(g.tipo, r.numero)}`;
+      if (/^Revis/.test(c.ctl[1] || '')) c.ctl[1] = `Revisão ${revTxt(r.revisao)}`;
+      c.qr = { codigo: r.codigo, png: r.png };
+    }
+    const rod = partes.find((b) => b.t === 'rod');
+    if (rod) rod.x = `${numTxt(g.tipo, r.numero)} · Rev. ${revTxt(r.revisao)} · ${rod.x}`;
+  });
+}
+/** OS ou ficha de UMA pessoa que já tem documento válido do mesmo tipo: pergunta se é revisão. */
+function verAnterior(g) {
+  const k = g.para?.startsWith('p:') && !g.fora && (g.tipo === 'os' || g.tipo === 'epi') ? `${g.tipo}|${g.para}` : '';
+  if (!k) { g.prev = null; return; }
+  if (g.prev?.k === k) return;
+  g.prev = { k, carregando: true };
+  let cli; try { cli = sb(); } catch { g.prev = { k, doc: null }; return; }
+  cli.from('doc_emitidos').select('id,numero,revisao,emitido_em').eq('org_id', sessao.orgId()).eq('tipo', g.tipo).eq('colaborador_id', g.para.slice(2)).eq('situacao', 'valido').order('emitido_em', { ascending: false }).limit(1)
+    .then(({ data, error }) => { if (g.prev?.k !== k) return; g.prev = { k, doc: !error && data?.[0] ? data[0] : null, escolha: 'rev', motivo: '' }; _ctx.repintar(); })
+    .catch(() => { if (g.prev?.k === k) g.prev = { k, doc: null }; });
+}
+function blocoRevisao(g, t) {
+  verAnterior(g);
+  const p = g.prev;
+  if (!p?.doc || p.feita) return '';
+  const nome = `${numTxt(g.tipo, p.doc.numero)} · Rev. ${revTxt(p.doc.revisao)}`;
+  const prox = revTxt(p.doc.revisao + 1);
+  return `<div class="lq-rev"><p><b>Esta pessoa já tem ${esc(nome)}</b>, emitida em ${dataBr(String(p.doc.emitido_em).slice(0, 10))}.</p>
+    <div class="lq-rev-op"><button type="button" class="${p.escolha === 'rev' ? 'on' : ''}" aria-pressed="${p.escolha === 'rev'}" data-acao="campo:lq-g:${t}.rev-sim"><b>Fazer a revisão ${prox}</b><small>A Rev. ${revTxt(p.doc.revisao)} passa a aparecer como substituída no QR</small></button>
+    <button type="button" class="${p.escolha === 'novo' ? 'on' : ''}" aria-pressed="${p.escolha === 'novo'}" data-acao="campo:lq-g:${t}.rev-nao"><b>Emitir como documento novo</b><small>Ganha outro número</small></button></div>
+    ${p.escolha === 'rev' ? `<label class="lq-doc-sel"><small>Motivo da revisão</small><input class="cp-inp lq-doc-inp" data-cp="lq.g.${t}.rev.motivo" value="${esc(p.motivo || '')}" placeholder="Ex.: ruído incluído no GHE 03" aria-label="Motivo da revisão"></label>` : ''}</div>`;
+}
+function blocoEmitidos(g, t) {
+  const e = g.emit;
+  if (!e) return '';
+  if (e.semBanco) return '<p class="lq-doc-nota">O número e o QR ainda não estão ligados neste GRID (falta um passo no banco). O documento saiu com o Nº em branco.</p>';
+  if (!e.regs?.length) return '';
+  const nums = e.regs.map((r) => `${numTxt(g.tipo, r.numero)}${r.revisao ? ` Rev. ${revTxt(r.revisao)}` : ''}`);
+  const lista = nums.length > 4 ? `${nums.slice(0, 3).join(', ')} e mais ${nums.length - 3}` : nums.join(', ');
+  if (e.cancelado) return `<div class="lq-reg"><div><b>${esc(lista)} cancelado.</b> O QR passa a mostrar "documento cancelado".</div></div>`;
+  const canc = e.regs.length === 1 ? (e.cancAberto
+    ? `<label class="lq-doc-sel"><small>Motivo do cancelamento</small><input class="cp-inp lq-doc-inp" data-cp="lq.g.${t}.canc.motivo" value="${esc(e.motivoCanc || '')}" placeholder="Ex.: emitido com dado errado" aria-label="Motivo do cancelamento"></label>
+      <span class="lq-doc-acts mini"><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.canc-enviar"${e.cancelando ? ' disabled' : ''}>Cancelar o documento</button><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.canc-fechar">Voltar</button></span>`
+    : ` <button type="button" class="lq-lnk" data-acao="campo:lq-g:${t}.canc-abrir">Cancelar este documento</button>`) : '';
+  return `<div class="lq-reg lq-emit"><div><b>Registrado: ${esc(lista)}.</b> ${e.regs.length > 1 ? 'Cada um tem QR próprio' : 'O QR está no cabeçalho'}: qualquer pessoa confere em toledolabs.com.br/validar.html.${canc}</div></div>`;
+}
+async function cancelarEmitido(g) {
+  const e = g.emit, motivo = String(e.motivoCanc || '').trim();
+  if (motivo.length < 3) { avisar('Escreva o motivo do cancelamento.', 'erro'); return; }
+  e.cancelando = true;
+  try {
+    const { error } = await sb().rpc('doc_cancelar', { p_id: e.regs[0].id, p_motivo: motivo });
+    if (error) throw error;
+    e.cancelado = true; e.cancAberto = false; avisar('Documento cancelado.');
+  } catch (er) { avisar(/42501|admin/i.test(`${er?.code || ''} ${er?.message || ''}`) ? 'Só o administrador ou quem emitiu pode cancelar.' : 'Não foi possível cancelar agora.', 'erro'); }
+  e.cancelando = false;
 }
 
 /* ── v295: conferência antes do PDF (proposta aprovada em 04/11/2026, seção 8) ───────────
@@ -637,6 +745,8 @@ export function digitar(chave, valor) {
   if (r && g.riscos[+r[1]]) { g.riscos[+r[1]][r[2]] = String(valor).slice(0, 200); g.riscos[+r[1]].origem = g.riscos[+r[1]].origem === 'manual' ? 'manual' : 'editado'; }
   else if (m[2] === 'emerg') g.emerg = String(valor).slice(0, 1500);
   else if (m[2] === 'regdata') g.regData = valor;
+  else if (m[2] === 'rev.motivo' && g.prev) g.prev.motivo = String(valor).slice(0, 300);
+  else if (m[2] === 'canc.motivo' && g.emit) g.emit.motivoCanc = String(valor).slice(0, 300);
   else if (m[2] === 'fora.empresa' && g.fora) g.fora.empresa = String(valor).slice(0, 120);
   else if (m[2] === 'fora.funcao' && g.fora) g.fora.funcaoDigitada = String(valor).slice(0, 80);
   else if (m[2] === 'dl.atividade' && g.dl) g.dl.atividade = String(valor).slice(0, 200);
@@ -703,6 +813,11 @@ export async function acao(nome, valor, redesenhar) {
     redesenhar(); return true;
   }
   if (op === 'registrar') { await registrar(g); redesenhar(); return true; }
+  if (op === 'rev-sim' && g.prev) { g.prev.escolha = 'rev'; redesenhar(); return true; }
+  if (op === 'rev-nao' && g.prev) { g.prev.escolha = 'novo'; redesenhar(); return true; }
+  if (op === 'canc-abrir' && g.emit) { g.emit.cancAberto = true; redesenhar(); return true; }
+  if (op === 'canc-fechar' && g.emit) { g.emit.cancAberto = false; redesenhar(); return true; }
+  if (op === 'canc-enviar' && g.emit?.regs?.length === 1) { await cancelarEmitido(g); redesenhar(); return true; }
   return acaoResto(g, op, arg, ti, redesenhar);
 }
 async function baixarOuVer(g, op, arg) {
@@ -721,6 +836,9 @@ async function baixarOuVer(g, op, arg) {
         setTimeout(() => URL.revokeObjectURL(url), 120000);
         return true;
       }
+      // v296: número, revisão e QR (só ao baixar; ver em PDF não gasta número)
+      try { const regs = await registrarEmissao(g, docs); if (regs) aplicarRegistro(docs, regs, g); }
+      catch (e) { avisar(e?.message || 'Não foi possível registrar o documento.', 'erro'); return true; }
       await Docs.baixarPartes(arg === 'pdf' ? 'pdf' : 'docx', T.livre ? `${T.nome.split(',')[0]} ${g.dl?.res?.titulo_atividade || g.dl?.atividade || ''}` : `${T.nome} ${funcaoDe(g) || ''} ${cli}`, docs);
       g.baixado = `${arg === 'pdf' ? 'PDF' : 'Word'}${docs.length > 1 ? ` com ${docs.length} ${g.tipo === 'epi' ? 'fichas' : 'OS'}` : ''}`;
       g.registro = null;
@@ -889,6 +1007,7 @@ function renderLivre(g, t) {
         <span class="lq-doc-acts mini"><button type="button" class="btn btn-navy btn-sm" data-acao="campo:lq-g:${t}.ajuste-enviar"${d.carregando ? ' disabled' : ''}>${d.carregando === 'ajuste' ? 'Refazendo...' : 'Refazer com o ajuste (usa 1 pergunta)'}</button><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.ajuste-fechar">Cancelar</button></span></div>` : ''}
       ${cf.html}
       <div class="lq-doc-acts"><button type="button" class="btn btn-amber" data-acao="campo:lq-g:${t}.baixar.pdf"${d.carregando || cf.bloqueia ? ' disabled' : ''}>Baixar PDF</button><button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.baixar.docx"${d.carregando || cf.bloqueia ? ' disabled' : ''}>Baixar Word</button>${d.ajusteAberto ? '' : `<button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.ajuste-abrir">Mudar alguma coisa</button>`}</div>
+      ${blocoEmitidos(g, t)}
     </div>${papel(partes[0], 1, t)}</div>`;
   }
   return `<article class="lq-resp lq-r2 lq-gerar">${cabT}${topo}${botaoMontar}${corpo}</article>`;
