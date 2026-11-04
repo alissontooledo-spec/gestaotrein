@@ -610,6 +610,8 @@ function conferencia(g, partes) {
     const ret = c.retiradas || [], atu = c.atualizadas || [];
     if (ret.length) liC('r', `${plural(ret.length, 'citação retirada', 'citações retiradas')}`, ret.slice(0, 4).map((m) => `${esc(m.de)}: ${esc(m.motivo)}`).join('<br>'));
     if (atu.length) liC('r', `${plural(atu.length, 'citação atualizada', 'citações atualizadas')}`, atu.slice(0, 4).map((m) => `${esc(m.de)} virou ${esc(m.para)} (${esc(m.motivo)})`).join('<br>'));
+    const val = c.valores || [];
+    if (val.length) liC('y', `${plural(val.length, 'valor veio', 'valores vieram')} de NR de outro setor`, val.slice(0, 4).map((m) => `${esc(m.de)}: ${esc(m.motivo)}`).join('<br>'));
     if (r.conferir?.length) liC('y', 'Confira estes números', `${esc(r.conferir.join(', '))}. Não estão nos trechos da norma que o Laudomiro consultou`);
     if (r.sem_medida?.length) { bloqueia = true; motivo = 'Há risco sem medida de prevenção. Toque em "Mudar alguma coisa" e peça a medida.'; liC('r', `${plural(r.sem_medida.length, 'risco sem medida', 'riscos sem medida')}: o PDF não é gerado`, `${esc(r.sem_medida.join(', '))}. Toque em "Mudar alguma coisa" e peça a medida.`); }
     else if (g.tipo === 'apr' || g.tipo === 'pt') liC('g', 'Todos os riscos têm medida', '');
@@ -618,6 +620,7 @@ function conferencia(g, partes) {
     const sem = g.riscos.filter((r) => String(r.risco || '').trim() && semMedidaOS(r));
     if (sem.length) { bloqueia = true; motivo = `Risco sem medida: ${sem.map((r) => r.risco).join(', ')}. Escreva a proteção coletiva, a medida administrativa ou o EPI.`; liC('r', `${plural(sem.length, 'risco sem medida', 'riscos sem medida')}: o PDF não é gerado`, `${esc(sem.map((r) => r.risco).join(', '))}. Toque no lápis e escreva a medida.`); }
     else if (g.riscos.length) liC('g', 'Todos os riscos têm medida', '');
+    else if (!g.sug?.carregando) liC('y', 'Nenhum risco na lista', g.tipo === 'epi' ? 'A tabela de entregas sai em branco para escrever os EPI' : 'A tabela de riscos sai em branco. Peça a sugestão do Laudomiro ou escreva os riscos acima');
   }
   if (!partes) return { bloqueia, motivo };
   const n = Docs.camposAMao(partes);

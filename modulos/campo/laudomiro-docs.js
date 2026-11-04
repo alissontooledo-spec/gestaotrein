@@ -256,6 +256,7 @@ export function docxPartes(documentos) {
 export async function pdfPartes(documentos) {
   const ponte = window.__GRID_PONTE || {};
   if (ponte.garantirJsPDF) await ponte.garantirJsPDF();
+  if (!documentos?.length) throw new Error('Não há documento para gerar. Escolha a função ou a pessoa.');
   const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
   if (!jsPDF) throw new Error('O gerador de PDF não carregou. Confira a internet e tente de novo.');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
