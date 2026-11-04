@@ -717,6 +717,7 @@ function menuAnexo(anx = true) {
     ${op('lq.galeria', IC.img, 'img', 'Fotos do local ou da atividade', 'Até 4 do mesmo lugar. Ele entende sozinho o que está acontecendo.', 'image/jpeg,image/png,image/webp,image/*', 'multiple')}` : ''}
     <p class="lq-menu-g">Ferramentas</p>
     ${fer('campo:lq-g-novo', IC.doc, 'Gerar documento', 'OS, ficha de EPI, lista de presença ou dossiê. Não gasta pergunta.')}
+    ${fer('campo:lq-g-emitidos', IC.doc, 'Documentos emitidos', 'Número, QR, assinatura e o PDF de novo.')}
     ${fer('campo:lq-calc-abrir', IC.ruido, 'Calcular dose de ruído', 'NR-15, Anexo 1. Não gasta pergunta.')}
     ${fer('campo:lq-aba:fichas', IC.fichas, 'Consultar ficha de agente', 'Limites, insalubridade e aposentadoria.', ` <i class="lq-mo-n">${L.AGENTES.length}</i>`)}
   </div>`;
@@ -1887,6 +1888,7 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lq-ampliar') { ampliarFoto(valor); return true; }
   if (nome === 'campo:lq-aba') { _menuAnexo = false; _aba = valor === 'fichas' ? 'fichas' : 'perguntar'; _painel = null; redesenhar(); window.scrollTo?.(0, 0); return true; }
   if (_aba === 'fichas') return Fichas.acao(nome, valor, redesenhar);
+  if (nome === 'campo:lq-g-emitidos') { if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return true; } novoDocumento('Documentos emitidos', { tipo: 'emitidos' }); return true; }  // v298
   if (nome === 'campo:lq-g-novo') { if (semPermissao()) { avisar('Seu perfil de acesso não inclui o Laudomiro. Peça ao administrador.', 'erro'); return true; } novoDocumento('Gerar um documento', { tipo: null }); return true; }  // v284
   if (nome === 'campo:lq-g' || nome === 'campo:lq-g-sel') return Gerar.acao(nome, valor, redesenhar);  // v284
   if (nome === 'campo:lq-enviar') { enviar(); return true; }

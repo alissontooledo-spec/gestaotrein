@@ -43,12 +43,15 @@ export const TIPOS = {
   pt: { nome: 'Permissão de Trabalho', ref: 'Altura, eletricidade ou trabalho a quente', sub: 'Altura, eletricidade ou trabalho a quente', livre: true, titulo: 'PERMISSÃO DE TRABALHO', curto: 'a Permissão de Trabalho' },
   checklist: { nome: 'Checklist de inspeção', ref: 'Itens com a NR de cada um', sub: 'Máquina, andaime, escada, extintor, EPI', livre: true, titulo: 'CHECKLIST DE INSPEÇÃO', curto: 'o checklist' },
   procedimento: { nome: 'Procedimento de trabalho', ref: 'Passo a passo seguro', sub: 'Passo a passo seguro de uma atividade', livre: true, titulo: 'PROCEDIMENTO DE TRABALHO SEGURO', curto: 'o procedimento' },
+  // v298: lista dos documentos já baixados (número, QR, assinatura, PDF de novo)
+  emitidos: { nome: 'Documentos emitidos', ref: 'Número, QR, assinatura e PDF', sub: 'OS, ficha de EPI, PT, APR, checklist e procedimento já baixados' },
 };
 const LIVRES = ['apr', 'pt', 'checklist', 'procedimento'];
 const IC = {
   os: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
   epi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a8 8 0 0 1 16 0v2H4z"/><path d="M12 6V4M3 18h18"/></svg>',
   lista: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l2 2 4-4"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg>',
+  emitidos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6M15 16l1.5 1.5L19 15"/></svg>',
   dossie: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   apr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/></svg>',
   pt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/><path d="m15 16 1.5 1.5L19 15"/></svg>',
@@ -91,6 +94,7 @@ export function detectar(texto) {
   if (/\borde(m|ns) de servico\b/.test(t) || /(^|[^a-z])o\.?s\.?($|[^a-z])/.test(m ? m[0] : t.slice(0, 8))) return { tipo: 'os' };
   if (/\b(lista|ficha|folha) de (presenca|chamada)\b/.test(t)) return { tipo: 'lista' };
   if (/\bdossie\b/.test(t)) return { tipo: 'dossie' };
+  if (/\bdocumentos? (ja )?emitidos?\b/.test(t)) return { tipo: 'emitidos' };
   if (m && /^documentos?$/.test(m[2])) return { tipo: null };   // "preciso de um documento para…"
   return null;
 }
@@ -143,6 +147,7 @@ export async function iniciar(turno) {
     const c = melhor(g.clientes, g.texto, 'nome');
     g.etapa = 'pronto';
     if (g.tipo && TIPOS[g.tipo]?.livre) { iniciarLivre(turno, c); return; }
+    if (g.tipo === 'emitidos') { g.ls = { cli: c?.id || '', tipo: '', sit: '', busca: '' }; await carregarEmitidos(g); _ctx.repintar(); return; }
     if (c && g.tipo) await escolherEmpresa(turno, c.id, true);
     else if (g.tipo === 'os' || g.tipo === 'epi') {
       // v286: empresa que não está no GRID: o cartão sugere "Outra empresa" (não entra sozinho, para não confundir pessoa com empresa)
@@ -429,6 +434,7 @@ export function render(turno, t) {
   if (!g.tipo) return qual(g, t);
   const T = TIPOS[g.tipo];
   if (T.livre) return renderLivre(g, t);
+  if (g.tipo === 'emitidos') return renderEmitidos(g, t);
   const cli = (g.clientes || []).find((c) => c.id === g.clienteId);
   const foraOk = g.tipo === 'os' || g.tipo === 'epi';
   const empresaSel = sel(t, 'empresa', 'Empresa', (g.clientes || []).map((c) => opt(c.id, c.nome, g.clienteId)).join('') + (foraOk ? `<option value="__fora"${g.fora ? ' selected' : ''}>Outra empresa (fora do GRID)</option>` : ''), g.fora ? '__fora' : g.clienteId, 'Escolha a empresa');
@@ -455,7 +461,7 @@ function qual(g, t) {
   const op = (k) => `<button type="button" data-acao="campo:lq-g:${t}.tipo.${k}"><span class="ic">${IC[k]}</span><span><b>${TIPOS[k].nome}</b><small>${TIPOS[k].sub}</small></span>${IC.ch}</button>`;
   const cli = melhor(g.clientes || [], g.texto, 'nome');
   return `<article class="lq-resp lq-r2 lq-gerar">${cab('Qual documento você quer?', `${cli ? cli.nome + ' · ' : ''}com os dados do GRID quando houver`)}
-    <div class="lq-qual lq-qual2">${['os', 'epi', 'apr', 'pt', 'checklist', 'procedimento', 'lista', 'dossie'].map(op).join('')}</div>
+    <div class="lq-qual lq-qual2">${['os', 'epi', 'apr', 'pt', 'checklist', 'procedimento', 'lista', 'dossie', 'emitidos'].map(op).join('')}</div>
     <p class="lq-doc-nota">Para empresa do GRID ou qualquer outra. Você também pode pedir direto, por exemplo "APR para troca de telhas", "checklist da NR-12 para prensa" ou "OS do soldador da empresa X".</p></article>`;
 }
 
@@ -726,16 +732,17 @@ function blocoAssinatura(g, t) {
   }).join('');
   return `<div class="lq-ass"><p><b>Colher assinatura no celular</b> <small>Opcional. Passe o celular ou o tablet para o trabalhador assinar com o dedo. O papel continua valendo.</small></p><ul>${linhas}</ul>${e.regs.length > 8 ? `<p class="lq-doc-nota">Aparecem as 8 primeiras pessoas. Para as outras, gere a ${g.tipo === 'epi' ? 'ficha' : 'OS'} por pessoa.</p>` : ''}</div>`;
 }
-function abrirAssinaturaDoc(g, ti, i, redesenhar) {
+/** Abre a assinatura de um documento. ctx: { tipo, partes, reg: { id, numero, codigo }, nome, aoAssinar(ass) } */
+function abrirAssinatura(ctx) {
   if (typeof window.abrirModal !== 'function' || typeof window._initCanvas !== 'function') { avisar('Não foi possível abrir a assinatura neste aparelho.', 'erro'); return; }
-  const r = g.emit.regs[i], nome = g.emit.nomes?.[i] || 'Colaborador', num = numTxt(g.tipo, r.numero);
-  const itens = g.tipo === 'epi' ? episDoDoc(g.emit.docs[i]) : [];
-  const decl = g.tipo === 'epi'
+  const num = numTxt(ctx.tipo, ctx.reg.numero);
+  const itens = ctx.tipo === 'epi' ? episDoDoc(ctx.partes) : [];
+  const decl = ctx.tipo === 'epi'
     ? 'Recebi gratuitamente os EPI acima, em perfeito estado, e fui orientado sobre o uso, o ajuste, a guarda, a higienização e a troca (NR-06, itens 6.5.1 e 6.7.2).'
     : `Recebi uma cópia da Ordem de Serviço ${num}, li e entendi as orientações e tirei minhas dúvidas (NR-01, item 1.4.1, alínea c).`;
-  window.__lqAssCtx = { g, i, redesenhar };
+  window.__lqAssCtx = ctx;
   window.abrirModal(`Assinatura · ${num}`, `
-    <div class="lq-ass-m"><p><b>${esc(nome)}</b></p>
+    <div class="lq-ass-m"><p><b>${esc(ctx.nome || 'Colaborador')}</b></p>
     ${itens.length ? `<ul>${itens.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
     <p>${esc(decl)}</p>
     <label class="lq-ass-ok"><input type="checkbox" id="lqAceite"> Aceito assinar este documento eletronicamente, neste aparelho.</label>
@@ -744,9 +751,12 @@ function abrirAssinaturaDoc(g, ti, i, redesenhar) {
     `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-navy" id="btnSalvarModal" onclick="window.__lqAssinar()">Confirmar assinatura</button>`);
   setTimeout(() => window._initCanvas(), 100);
 }
+function abrirAssinaturaDoc(g, ti, i, redesenhar) {
+  abrirAssinatura({ tipo: g.tipo, partes: g.emit.docs[i], reg: g.emit.regs[i], nome: g.emit.nomes?.[i] || 'Colaborador',
+    aoAssinar: (ass) => { g.emit.ass ||= {}; g.emit.ass[i] = ass; redesenhar?.(); } });
+}
 window.__lqAssinar = async () => {
   const ctx = window.__lqAssCtx; if (!ctx) return;
-  const { g, i, redesenhar } = ctx;
   if (!document.getElementById('lqAceite')?.checked) { avisar('Marque o aceite antes de assinar.', 'erro'); return; }
   const cv = document.getElementById('canvasAssinatura');
   const px = cv?.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
@@ -754,36 +764,146 @@ window.__lqAssinar = async () => {
   const png = cv.toDataURL('image/png');
   if (typeof window.setBtnModalLoading === 'function') window.setBtnModalLoading(true);
   try {
-    const hash = await sha256(JSON.stringify(g.emit.docs[i]));
+    const hash = await sha256(JSON.stringify(conteudoDe(ctx.partes)));
     const aparelho = `${navigator.userAgentData?.platform || navigator.platform || ''} · ${String(navigator.userAgent || '').slice(0, 200)}`;
-    const { data, error } = await sb().rpc('doc_assinar', { p_id: g.emit.regs[i].id, p_png: png, p_hash: hash, p_aparelho: aparelho, p_org_id: sessao.orgId() });
+    const { data, error } = await sb().rpc('doc_assinar', { p_id: ctx.reg.id, p_png: png, p_hash: hash, p_aparelho: aparelho, p_org_id: sessao.orgId() });
     if (error) throw error;
     const q = data ? new Date(data) : new Date();
-    g.emit.ass ||= {};
-    g.emit.ass[i] = { png, hash, data: q.toLocaleDateString('pt-BR'), hora: q.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
     window.fecharModal?.();
     avisar('Assinatura registrada.');
-    redesenhar?.();
+    ctx.aoAssinar?.({ png, hash, data: q.toLocaleDateString('pt-BR'), hora: q.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) });
   } catch (e) {
     const m = `${e?.code || ''} ${e?.message || ''}`;
     avisar(semFuncao(e) ? 'A assinatura no celular ainda não está ligada neste GRID (falta um passo no banco).' : /já assinado/.test(m) ? 'Este documento já foi assinado.' : /substitu|cancel/.test(m) ? 'Este documento foi substituído ou cancelado.' : 'Não foi possível registrar a assinatura. Confira a internet e tente de novo.', 'erro');
   }
   if (typeof window.setBtnModalLoading === 'function') window.setBtnModalLoading(false);
 };
-async function baixarAssinado(g, i) {
-  const e = g.emit, a = e.ass[i], r = e.regs[i], nome = e.nomes?.[i] || 'Colaborador', num = numTxt(g.tipo, r.numero);
-  const partes = JSON.parse(JSON.stringify(e.docs[i]));
-  if (g.tipo === 'epi') {
+/** Partes com a assinatura colhida: nas linhas da ficha ou no bloco da OS, e a trilha no fim. */
+function partesAssinadas(tipo, partesOrig, a, reg, nome) {
+  const partes = JSON.parse(JSON.stringify(partesOrig)), num = numTxt(tipo, reg.numero);
+  if (tipo === 'epi') {
     const tb = partes.find((b) => b.t === 'tabela' && b.cols?.[1]?.t === 'EPI');
     if (tb) tb.linhas = tb.linhas.map((l) => (String(l[1] || '').trim() ? [a.data, ...l.slice(1, 8), { x: '', img: a.png }] : l));
   } else {
     const as = partes.find((b) => b.t === 'assin');
     if (as?.blocos?.[0]) { as.blocos[0].img = a.png; as.blocos[0].linhas = [`Matrícula: [preencher] · Data: ${a.data}`]; }
   }
-  const trilha = { t: 'nota', x: `Assinado eletronicamente por ${nome} em ${a.data} às ${a.hora}, no aparelho do técnico, com aceite do trabalhador. ${num} · código ${r.codigo} · conferir em toledolabs.com.br/validar.html · resumo do documento ${a.hash.slice(0, 16)}.` };
+  const trilha = { t: 'nota', x: `Assinado eletronicamente por ${nome || 'Colaborador'} em ${a.data} às ${a.hora}, no aparelho do técnico, com aceite do trabalhador. ${num} · código ${reg.codigo} · conferir em toledolabs.com.br/validar.html · resumo do documento ${String(a.hash || '').slice(0, 16)}.` };
   const k = partes.findIndex((b) => b.t === 'rod');
   partes.splice(k < 0 ? partes.length : k, 0, trilha);
-  await Docs.baixarPartes('pdf', `${TIPOS[g.tipo].nome} ${num} assinado`, [partes]);
+  return partes;
+}
+async function baixarAssinado(g, i) {
+  const e = g.emit, r = e.regs[i];
+  await Docs.baixarPartes('pdf', `${TIPOS[g.tipo].nome} ${numTxt(g.tipo, r.numero)} assinado`, [partesAssinadas(g.tipo, e.docs[i], e.ass[i], r, e.nomes?.[i])]);
+}
+/** v298: o conteúdo guardado não leva a imagem do QR (o QR sai de novo a partir do código). */
+function conteudoDe(partes) {
+  return (partes || []).map((b) => (b.t === 'cab' && b.qr ? { ...b, qr: { codigo: b.qr.codigo } } : b));
+}
+async function guardarConteudo(g) {
+  const e = g.emit;
+  if (!e?.regs?.length || !e.docs || e.guardado) return;
+  e.guardado = true;
+  await Promise.all(e.regs.map((r, i) => sb().rpc('doc_guardar_conteudo', { p_id: r.id, p_conteudo: conteudoDe(e.docs[i]), p_org_id: sessao.orgId() })
+    .then(({ error }) => { if (error && !semFuncao(error)) console.warn('GRID: conteúdo do documento não guardado', error.message); })));
+}
+
+/* ── v298: Documentos emitidos (etapa 1 da proposta aprovada em 04/11/2026) ────────────────────
+   Lista os documentos baixados (doc_emitidos) da empresa escolhida. O PDF sai de novo do conteúdo
+   guardado (PASSO-96), com o QR refeito pelo código e, se assinado, com a assinatura e a trilha. */
+const SIT_LS = { valido: ['Válido', 'b'], substituido: ['Substituído', 'b'], cancelado: ['Cancelado', 'r'] };
+async function carregarEmitidos(g) {
+  const f = g.ls; f.carregando = true; f.erro = '';
+  try {
+    let q = sb().from('doc_emitidos').select('id,cliente_id,cliente_nome,pessoa_nome,tipo,numero,revisao,titulo,codigo,situacao,emitido_em,assinado_em,motivo_cancelamento,tem:conteudo->0')
+      .eq('org_id', sessao.orgId()).order('emitido_em', { ascending: false }).limit(f.limite || 60);
+    if (f.cli === '__fora') q = q.is('cliente_id', null); else if (f.cli) q = q.eq('cliente_id', f.cli);
+    if (f.tipo) q = q.eq('tipo', f.tipo);
+    if (f.sit === 'aguardando') q = q.eq('situacao', 'valido').in('tipo', ['os', 'epi']).is('assinado_em', null);
+    else if (f.sit === 'assinado') q = q.not('assinado_em', 'is', null);
+    else if (f.sit) q = q.eq('situacao', f.sit);
+    const { data, error } = await q;
+    if (error) throw error;
+    f.linhas = data || [];
+  } catch (e) { f.linhas = []; f.erro = semFuncao(e) || semTabela(e) ? 'A lista de documentos ainda não está ligada neste GRID (falta um passo no banco).' : 'Não foi possível ler os documentos agora.'; }
+  f.carregando = false;
+}
+function renderEmitidos(g, t) {
+  const f = g.ls || {};
+  const cliOps = `<option value=""${!f.cli ? ' selected' : ''}>Todas as empresas</option>${(g.clientes || []).map((c) => opt(c.id, c.nome, f.cli)).join('')}<option value="__fora"${f.cli === '__fora' ? ' selected' : ''}>Empresa fora do GRID</option>`;
+  const tipoOps = `<option value="">Todos</option>${Object.keys(SIGLA).map((k) => opt(k, `${SIGLA[k]} · ${TIPOS[k].nome.split(',')[0]}`, f.tipo)).join('')}`;
+  const sitOps = [['', 'Todas'], ['aguardando', 'Aguardando assinatura'], ['assinado', 'Assinados'], ['valido', 'Válidos'], ['substituido', 'Substituídos'], ['cancelado', 'Cancelados']].map(([v, l]) => opt(v, l, f.sit || '')).join('');
+  const filtros = `<div class="lq-doc-para">${sel(t, 'lcli', 'Empresa', cliOps, f.cli)}${sel(t, 'ltipo', 'Tipo', tipoOps, f.tipo)}${sel(t, 'lsit', 'Situação', sitOps, f.sit)}
+    <label class="lq-doc-sel"><small>Buscar</small><input class="cp-inp lq-doc-inp" data-cp="lq.g.${t}.ls.busca" value="${esc(f.busca || '')}" placeholder="Nome, atividade ou número" aria-label="Buscar documento"></label></div>`;
+  let corpo;
+  if (f.carregando) corpo = '<p class="lq-doc-nota" aria-live="polite">Lendo os documentos...</p>';
+  else if (f.erro) corpo = `<p class="lq-doc-nota" role="alert">${esc(f.erro)}</p>`;
+  else {
+    const ls = f.linhas || [];
+    if (!ls.length) corpo = '<p class="lq-doc-nota">Nenhum documento emitido com esses filtros. Os documentos aparecem aqui depois de baixados.</p>';
+    else corpo = `<div class="lq-ls" data-lst="${t}"><table><thead><tr><th>Número</th><th>Pessoa ou atividade</th><th>Emitido</th><th>Situação</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${ls.map((r) => linhaEmitido(g, t, r)).join('')}</tbody></table></div>
+      ${(f.linhas || []).length >= (f.limite || 60) ? `<button type="button" class="lq-rs-add" data-acao="campo:lq-g:${t}.ls-mais">Mostrar mais</button>` : ''}`;
+  }
+  return `<article class="lq-resp lq-r2 lq-gerar">${cab('Documentos emitidos', 'Número, QR, assinatura e PDF de novo, a qualquer momento')}${filtros}${corpo}
+    <p class="lq-doc-nota">Para uma nova revisão, gere o documento de novo para a pessoa: o GRID pergunta se é revisão.</p></article>`;
+}
+function linhaEmitido(g, t, r) {
+  const num = `${numTxt(r.tipo, r.numero)}${r.revisao ? ` Rev. ${revTxt(r.revisao)}` : ''}`;
+  const assinavel = (r.tipo === 'os' || r.tipo === 'epi') && r.situacao === 'valido';
+  let sit;
+  if (r.assinado_em) sit = `<span class="lq-tag v">Assinado ${dataBr(String(r.assinado_em).slice(0, 10))}</span>`;
+  else if (assinavel) sit = '<span class="lq-tag y">Aguardando assinatura</span>';
+  else { const [l, k] = SIT_LS[r.situacao] || ['', 'b']; sit = `<span class="lq-tag ${k}">${l}</span>`; }
+  if (r.assinado_em && r.situacao !== 'valido') { const [l, k] = SIT_LS[r.situacao]; sit += ` <span class="lq-tag ${k}">${l}</span>`; }
+  const tem = r.tem != null;
+  const acts = [];
+  if (tem) acts.push(`<button type="button" class="lq-lnk" data-acao="campo:lq-g:${t}.ls-pdf.${r.id}">${r.assinado_em ? 'PDF assinado' : 'Baixar PDF'}</button>`);
+  if (tem && assinavel && !r.assinado_em) acts.push(`<button type="button" class="lq-lnk" data-acao="campo:lq-g:${t}.ls-ass.${r.id}">Colher assinatura</button>`);
+  if (r.situacao === 'valido') acts.push(`<button type="button" class="lq-lnk" data-acao="campo:lq-g:${t}.ls-canc.${r.id}">Cancelar</button>`);
+  if (!tem) acts.push('<small>Emitido antes de guardar o conteúdo</small>');
+  if (r.situacao === 'cancelado' && r.motivo_cancelamento) acts.push(`<small>Motivo: ${esc(r.motivo_cancelamento)}</small>`);
+  const canc = g.ls.cancId === r.id ? `<tr class="ed"><td colspan="5"><div class="lq-rs-ed"><label class="lg">Motivo do cancelamento de ${esc(num)}<input class="cp-inp" data-cp="lq.g.${t}.ls.motivo" value="${esc(g.ls.motivo || '')}" placeholder="Ex.: emitido com dado errado"></label>
+    <button type="button" class="btn btn-navy btn-sm" data-acao="campo:lq-g:${t}.ls-canc-ok">Cancelar o documento</button><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.ls-canc-fechar">Voltar</button></div></td></tr>` : '';
+  const b = norm(g.ls.busca || ''), chave = norm(`${r.pessoa_nome} ${r.titulo} ${numTxt(r.tipo, r.numero)} ${r.cliente_nome}`);
+  return `<tr data-lsb="${esc(chave)}"${b && !chave.includes(b) ? ' hidden' : ''}><td><b>${esc(num)}</b></td><td>${esc(r.pessoa_nome || r.titulo || '—')}${!g.ls.cli && r.cliente_nome ? `<small>${esc(r.cliente_nome)}</small>` : ''}</td><td>${dataBr(String(r.emitido_em).slice(0, 10))}</td><td>${sit}</td><td class="acts">${acts.join(' ')}</td></tr>${canc}`;
+}
+async function lerConteudo(id) {
+  const { data, error } = await sb().from('doc_emitidos').select('id,tipo,numero,revisao,codigo,pessoa_nome,conteudo,assinado_em').eq('id', id).maybeSingle();
+  if (error || !data?.conteudo) throw new Error('Não foi possível ler o documento guardado.');
+  const partes = JSON.parse(JSON.stringify(data.conteudo));
+  const c = partes.find((b) => b.t === 'cab');
+  if (c?.qr?.codigo && typeof window.gerarQRCodeDataURL === 'function') c.qr.png = await window.gerarQRCodeDataURL(urlValidar(c.qr.codigo)).catch(() => '');
+  return { d: data, partes };
+}
+async function baixarDaLista(g, id) {
+  try {
+    const { d, partes } = await lerConteudo(id);
+    let saida = partes;
+    if (d.assinado_em) {
+      const { data: a, error } = await sb().from('doc_assinaturas').select('png,hash,assinado_em').eq('doc_id', id).maybeSingle();
+      if (error || !a) throw new Error('Não foi possível ler a assinatura.');
+      const q = new Date(a.assinado_em);
+      saida = partesAssinadas(d.tipo, partes, { png: a.png, hash: a.hash, data: q.toLocaleDateString('pt-BR'), hora: q.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }, d, d.pessoa_nome);
+    }
+    await Docs.baixarPartes('pdf', `${TIPOS[d.tipo].nome.split(',')[0]} ${numTxt(d.tipo, d.numero)}${d.assinado_em ? ' assinado' : ''}`, [saida]);
+  } catch (e) { avisar(e?.message || 'Não foi possível montar o PDF.', 'erro'); }
+}
+async function assinarDaLista(g, id, redesenhar) {
+  try {
+    const { d, partes } = await lerConteudo(id);
+    abrirAssinatura({ tipo: d.tipo, partes, reg: d, nome: d.pessoa_nome, aoAssinar: async () => { await carregarEmitidos(g); redesenhar(); } });
+  } catch (e) { avisar(e?.message || 'Não foi possível abrir o documento.', 'erro'); }
+}
+async function cancelarDaLista(g) {
+  const motivo = String(g.ls.motivo || '').trim();
+  if (motivo.length < 3) { avisar('Escreva o motivo do cancelamento.', 'erro'); return; }
+  try {
+    const { error } = await sb().rpc('doc_cancelar', { p_id: g.ls.cancId, p_motivo: motivo, p_org_id: sessao.orgId() });
+    if (error) throw error;
+    g.ls.cancId = ''; avisar('Documento cancelado.');
+    await carregarEmitidos(g);
+  } catch (er) { avisar(/42501|admin/i.test(`${er?.code || ''} ${er?.message || ''}`) ? 'Só o administrador ou quem emitiu pode cancelar.' : 'Não foi possível cancelar agora.', 'erro'); }
 }
 
 /* ── v295: conferência antes do PDF (proposta aprovada em 04/11/2026, seção 8) ───────────
@@ -825,6 +945,11 @@ export function digitar(chave, valor) {
   if (r && g.riscos[+r[1]]) { g.riscos[+r[1]][r[2]] = String(valor).slice(0, 200); g.riscos[+r[1]].origem = g.riscos[+r[1]].origem === 'manual' ? 'manual' : 'editado'; }
   else if (m[2] === 'emerg') g.emerg = String(valor).slice(0, 1500);
   else if (m[2] === 'regdata') g.regData = valor;
+  else if (m[2] === 'ls.busca' && g.ls) {   // filtra na tela, sem redesenhar (o campo não perde o foco)
+    g.ls.busca = String(valor).slice(0, 80); const b = norm(g.ls.busca);
+    document.querySelectorAll(`[data-lst="${m[1]}"] tr[data-lsb]`).forEach((tr) => { tr.hidden = !!b && !tr.dataset.lsb.includes(b); });
+  }
+  else if (m[2] === 'ls.motivo' && g.ls) g.ls.motivo = String(valor).slice(0, 300);
   else if (m[2] === 'rev.motivo' && g.prev) g.prev.motivo = String(valor).slice(0, 300);
   else if (m[2] === 'canc.motivo' && g.emit) g.emit.motivoCanc = String(valor).slice(0, 300);
   else if (m[2] === 'fora.empresa' && g.fora) g.fora.empresa = String(valor).slice(0, 120);
@@ -846,6 +971,7 @@ export async function acao(nome, valor, redesenhar) {
     if (campo === 'para') { g.para = val; g.paraManual = true; g.baixado = null; g.registro = null; if (g.tipo !== 'dossie') { redesenhar(); await prepararRiscos(turno); } redesenhar(); return true; }
     if (campo === 'turma') { escolherTurma(g, val); redesenhar(); return true; }
     if (campo === 'sessao') { g.sessaoId = val; redesenhar(); return true; }
+    if (['lcli', 'ltipo', 'lsit'].includes(campo) && g.ls) { g.ls[{ lcli: 'cli', ltipo: 'tipo', lsit: 'sit' }[campo]] = val; await carregarEmitidos(g); redesenhar(); return true; }
     return true;
   }
   if (nome !== 'campo:lq-g') return false;
@@ -856,6 +982,7 @@ export async function acao(nome, valor, redesenhar) {
     g.tipo = arg; redesenhar();
     const c = melhor(g.clientes || [], g.texto, 'nome');
     if (TIPOS[arg].livre) { iniciarLivre(turno, c); return true; }
+    if (arg === 'emitidos') { g.ls = { cli: c?.id || '', tipo: '', sit: '', busca: '' }; await carregarEmitidos(g); redesenhar(); return true; }
     if (c) { await escolherEmpresa(turno, c.id, true); redesenhar(); }
     return true;
   }
@@ -895,6 +1022,12 @@ export async function acao(nome, valor, redesenhar) {
   if (op === 'registrar') { await registrar(g); redesenhar(); return true; }
   if (op === 'ass-abrir' && g.emit?.regs?.[+arg]) { abrirAssinaturaDoc(g, +ti, +arg, redesenhar); return true; }
   if (op === 'ass-pdf' && g.emit?.ass?.[+arg]) { try { await baixarAssinado(g, +arg); } catch (e) { avisar(e?.message || 'Não foi possível montar o PDF assinado.', 'erro'); } return true; }
+  if (op === 'ls-pdf' && g.ls) { await baixarDaLista(g, arg); return true; }
+  if (op === 'ls-ass' && g.ls) { await assinarDaLista(g, arg, redesenhar); return true; }
+  if (op === 'ls-canc' && g.ls) { g.ls.cancId = arg; g.ls.motivo = ''; redesenhar(); return true; }
+  if (op === 'ls-canc-fechar' && g.ls) { g.ls.cancId = ''; redesenhar(); return true; }
+  if (op === 'ls-canc-ok' && g.ls) { await cancelarDaLista(g); redesenhar(); return true; }
+  if (op === 'ls-mais' && g.ls) { g.ls.limite = (g.ls.limite || 60) + 60; await carregarEmitidos(g); redesenhar(); return true; }
   if (op === 'rev-sim' && g.prev) { g.prev.escolha = 'rev'; redesenhar(); return true; }
   if (op === 'rev-nao' && g.prev) { g.prev.escolha = 'novo'; redesenhar(); return true; }
   if (op === 'canc-abrir' && g.emit) { g.emit.cancAberto = true; redesenhar(); return true; }
@@ -919,7 +1052,7 @@ async function baixarOuVer(g, op, arg) {
         return true;
       }
       // v296: número, revisão e QR (só ao baixar; ver em PDF não gasta número)
-      try { const regs = await registrarEmissao(g, docs); if (regs) { aplicarRegistro(docs, regs, g); g.emit.docs = docs; g.emit.nomes = g.dl ? [''] : pessoasDe(g).map((p) => (p.fora ? '' : p.nome)); } }
+      try { const regs = await registrarEmissao(g, docs); if (regs) { aplicarRegistro(docs, regs, g); g.emit.docs = docs; g.emit.nomes = g.dl ? [''] : pessoasDe(g).map((p) => (p.fora ? '' : p.nome)); await guardarConteudo(g); } }
       catch (e) { avisar(e?.message || 'Não foi possível registrar o documento.', 'erro'); return true; }
       await Docs.baixarPartes(arg === 'pdf' ? 'pdf' : 'docx', T.livre ? `${T.nome.split(',')[0]} ${g.dl?.res?.titulo_atividade || g.dl?.atividade || ''}` : `${T.nome} ${funcaoDe(g) || ''} ${cli}`, docs);
       g.baixado = `${arg === 'pdf' ? 'PDF' : 'Word'}${docs.length > 1 ? ` com ${docs.length} ${g.tipo === 'epi' ? 'fichas' : 'OS'}` : ''}`;
