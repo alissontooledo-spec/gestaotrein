@@ -30,7 +30,7 @@ export async function render() {
   const lista = todos.filter(x => x.tipo === _tipo && (!q || x.codigo.toLowerCase().includes(q) || x.nome.toLowerCase().includes(q) || String(x.categoria || '').toLowerCase().includes(q)));
   const cat = (x) => _tipo === 'risco' ? (D.NOME_CATEGORIA[x.categoria] || x.categoria) : (x.categoria || '');
   return `
-    <div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Avaliação de Campo</div><div class="cp-topo-tit">Catálogo da ficha</div>
+    <div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Gestão de SST</div><div class="cp-topo-tit">Catálogo da ficha</div>
       <div class="cp-topo-sub">Vale para todas as organizações. Documentos já concluídos não mudam.</div></div></div>
     <div class="turmas-filtros">
       <div class="turmas-busca"><input type="search" id="cpBuscaCat" data-acao="campo:cat-busca" value="${esc(_busca)}" placeholder="Buscar código ou nome..."></div>

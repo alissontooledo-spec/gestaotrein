@@ -61,7 +61,7 @@ export async function render() {
         ${t.personalizado ? btn('Voltar ao padrão', `campo:tp-padrao:${t.codigo}`, { cls: 'btn-ghost btn-sm' }) : ''}
       </div>` : ''}</div>`;
   return `
-    <div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Avaliação de Campo</div><div class="cp-topo-tit">Tipos de documento</div>
+    <div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Gestão de SST</div><div class="cp-topo-tit">Tipos de documento</div>
       <div class="cp-topo-sub">O que aparece em "O que falta a empresa enviar?". Avaliações já feitas não mudam.</div></div>
       ${ed ? btn('Novo tipo', 'campo:tp-novo', { cls: 'btn-amber' }) : ''}</div>
     ${ed ? '' : nota('Só o administrador altera esta lista.')}

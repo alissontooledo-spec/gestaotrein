@@ -71,7 +71,7 @@ export async function render() {
         <div><label class="cp-lbl">Prazo (dias depois da visita)</label>${n.prioridade ? inp(`nv.${k}.prazo_dias`, n.prazo_dias ?? '', { travado: !ed, modo: 'numeric', ph: 'Ex.: 60' }) : '<div class="cp-ajuda">Sem ação: o risco deste nível só entra no plano se a medição passar do limite ou o EPI não for eficaz.</div>'}</div></div>
     </div>`).join('');
   return `
-    <div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Avaliação de Campo</div><div class="cp-topo-tit">Matriz de risco</div>
+    <div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Gestão de SST</div><div class="cp-topo-tit">Matriz de risco</div>
       <div class="cp-topo-sub">${_linhaOrg ? 'Matriz da sua empresa' : 'Padrão do GRID (igual à matriz 5x5 do SOC)'} · o nível sai de Probabilidade × Severidade e define a classificação.</div></div>
       ${ed ? btn(_mudou ? 'Salvar alterações' : 'Salvo', 'campo:mz-salvar', { cls: 'btn-amber' }) : ''}</div>
     ${ed ? '' : nota('Só o administrador altera a matriz.')}

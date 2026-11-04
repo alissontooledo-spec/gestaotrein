@@ -51,7 +51,7 @@ export async function render() {
       <span class="st">${pill(a.prioridade)}<span class="cp-sit ${c}">${esc(t)}</span></span>
       <span class="pz${vencida(a) ? ' venc' : ''}">${a.situacao === 'concluida' ? 'concluída ' + esc(P.dataBr(a.data_conclusao)) : 'até ' + esc(P.dataBr(a.prazo))}</span></button>`; };
 
-  return `<div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Avaliação de Campo</div><div class="cp-topo-tit">Planos de ação</div>
+  return `<div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">Gestão de SST</div><div class="cp-topo-tit">Planos de ação</div>
       <div class="cp-topo-sub">O que lançar no SOC e o que acompanhar, de todas as empresas.</div></div>${btn('Voltar para as avaliações', 'ir:campo', { cls: 'btn-ghost' })}</div>
     <div class="cp-ac-filtros">${FILTROS.map(([k, t]) => `<button type="button" class="${k === _filtro ? 'on' : ''}${(k === 'vencidas' || k === 'atualizar') && n[k] ? ' al' : ''}" data-acao="campo:ac-filtro:${k}">${esc(t)} <b>${n[k]}</b></button>`).join('')}</div>
     <div class="turmas-busca" style="margin:0 0 12px"><span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-3)">${I.busca}</span>

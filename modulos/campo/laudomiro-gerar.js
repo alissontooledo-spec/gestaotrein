@@ -574,7 +574,7 @@ function acoesDoc(g, t, n) {
   const qtd = n > 1 ? ` com ${n} ${g.tipo === 'epi' ? 'fichas' : 'OS'}, uma por pessoa` : '';
   const botoes = `<div class="lq-doc-acts"><button type="button" class="btn btn-amber" data-acao="campo:lq-g:${t}.baixar.pdf"${ocupado ? ' disabled' : ''}>Baixar PDF${qtd}</button><button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.baixar.docx"${ocupado ? ' disabled' : ''}>Baixar Word</button></div>`;
   const antes = blocoRevisao(g, t);
-  if (!g.baixado || g.fora) return `${antes}${botoes}${blocoEmitidos(g, t)}`;
+  if (!g.baixado || g.fora || g.tipo === 'epi') return `${antes}${botoes}${blocoEmitidos(g, t)}`;  // v299: entrega de EPI é em Entregas de EPI
   if (g.registro?.feito) return `${antes}${botoes}${blocoEmitidos(g, t)}<div class="lq-reg ok" role="status"><div><b>Entrega registrada em ${dataBr(g.registro.data)}</b> para ${plural(g.registro.n, 'pessoa', 'pessoas')}. Aparece na ficha de cada pessoa e no dossiê.</div></div>`;
   return `${antes}${botoes}${blocoEmitidos(g, t)}<div class="lq-reg"><div><b>${esc(g.baixado)} baixado.</b> Depois de entregar e colher as assinaturas, registre a entrega. Fica na ficha de cada pessoa e entra no dossiê.</div>
     <label class="lq-reg-d">Data da entrega<input type="date" class="cp-inp" data-cp="lq.g.${t}.regdata" value="${esc(g.regData || hojeIso())}" max="${hojeIso()}"></label>
@@ -628,6 +628,27 @@ async function registrarEmissao(g, docs) {
   const pessoas = g.dl ? [{ id: null, nome: '' }] : pessoasDe(g);
   const titulo = g.dl ? (g.dl.res?.titulo_atividade || g.dl.atividade || '') : `${TIPOS[g.tipo].nome}${funcaoDe(g) ? `, ${funcaoDe(g)}` : ''}`;
   let regs;
+  /* v299: ficha de EPI é UMA por pessoa (PASSO-97): o número vem de epi_ficha; empresa fora do GRID sai sem número. */
+  if (g.tipo === 'epi' && !g.dl) {
+    if (g.fora || !clienteId) { g.emit = { chave, regs: null }; return null; }
+    try {
+      regs = [];
+      for (const p of pessoas.slice(0, docs.length)) {
+        if (p.fora || !p.id) { regs.push(null); continue; }
+        const { data, error } = await sb().rpc('epi_ficha', { p_colaborador_id: p.id, p_org_id: sessao.orgId() });
+        if (error) throw error;
+        regs.push(data?.[0] ? { ...data[0], revisao: 0 } : null);
+      }
+    } catch (e) {
+      if (semFuncao(e)) { g.emit = { chave, regs: null, semBanco: true }; return null; }
+      throw new Error(/42501|permiss/i.test(`${e?.code || ''} ${e?.message || ''}`) ? 'Seu perfil de acesso não permite registrar documentos. Peça ao administrador.' : 'Não foi possível ler o número da ficha. Confira a internet e tente de novo.');
+    }
+    const qrE = typeof window.gerarQRCodeDataURL === 'function' ? await Promise.all(regs.map((r) => (r ? window.gerarQRCodeDataURL(urlValidar(r.codigo)).catch(() => '') : ''))) : [];
+    regs = regs.map((r, i) => (r ? { ...r, png: qrE[i] || '' } : null));
+    if (!regs.some(Boolean)) { g.emit = { chave, regs: null }; return null; }
+    g.emit = { chave, regs, ficha: true };
+    return regs;
+  }
   try {
     if (g.prev?.doc && g.prev.escolha === 'rev' && docs.length === 1) {
       const { data, error } = await sb().rpc('doc_revisar', { p_anterior: g.prev.doc.id, p_motivo: String(g.prev.motivo || '').trim(), p_titulo: titulo, p_org_id: sessao.orgId() });
@@ -661,12 +682,12 @@ function aplicarRegistro(docs, regs, g) {
       c.qr = { codigo: r.codigo, png: r.png };
     }
     const rod = partes.find((b) => b.t === 'rod');
-    if (rod) rod.x = `${numTxt(g.tipo, r.numero)} · Rev. ${revTxt(r.revisao)} · ${rod.x}`;
+    if (rod) rod.x = g.tipo === 'epi' ? `${numTxt(g.tipo, r.numero)} · ${rod.x}` : `${numTxt(g.tipo, r.numero)} · Rev. ${revTxt(r.revisao)} · ${rod.x}`;
   });
 }
 /** OS ou ficha de UMA pessoa que já tem documento válido do mesmo tipo: pergunta se é revisão. */
 function verAnterior(g) {
-  const k = g.para?.startsWith('p:') && !g.fora && (g.tipo === 'os' || g.tipo === 'epi') ? `${g.tipo}|${g.para}` : '';
+  const k = g.para?.startsWith('p:') && !g.fora && g.tipo === 'os' ? `${g.tipo}|${g.para}` : '';  // v299: ficha de EPI não tem revisão
   if (!k) { g.prev = null; return; }
   if (g.prev?.k === k) return;
   g.prev = { k, carregando: true };
@@ -691,6 +712,11 @@ function blocoEmitidos(g, t) {
   if (!e) return '';
   if (e.semBanco) return '<p class="lq-doc-nota">O número e o QR ainda não estão ligados neste GRID (falta um passo no banco). O documento saiu com o Nº em branco.</p>';
   if (!e.regs?.length) return '';
+  if (e.ficha) {
+    const nums = e.regs.filter(Boolean).map((r) => numTxt('epi', r.numero));
+    const lista = nums.length > 4 ? `${nums.slice(0, 3).join(', ')} e mais ${nums.length - 3}` : nums.join(', ');
+    return `<div class="lq-reg lq-emit"><div><b>Ficha ${esc(lista)}.</b> Esta é a ficha em branco para papel. Para registrar a entrega com assinatura no celular, use <button type="button" class="lq-lnk" data-acao="ir:campo-epi">Entregas de EPI</button>: cada entrega entra na ficha da pessoa, com o QR.</div></div>`;
+  }
   const nums = e.regs.map((r) => `${numTxt(g.tipo, r.numero)}${r.revisao ? ` Rev. ${revTxt(r.revisao)}` : ''}`);
   const lista = nums.length > 4 ? `${nums.slice(0, 3).join(', ')} e mais ${nums.length - 3}` : nums.join(', ');
   if (e.cancelado) return `<div class="lq-reg"><div><b>${esc(lista)} cancelado.</b> O QR passa a mostrar "documento cancelado".</div></div>`;
@@ -724,7 +750,7 @@ function episDoDoc(partes) {
 }
 function blocoAssinatura(g, t) {
   const e = g.emit;
-  if (!e?.regs?.length || !e.docs || e.cancelado || !(g.tipo === 'os' || g.tipo === 'epi')) return '';
+  if (!e?.regs?.length || !e.docs || e.cancelado || e.ficha || g.tipo !== 'os') return '';  // v299: EPI assina em Entregas de EPI
   const linhas = e.regs.slice(0, 8).map((r, i) => {
     const a = e.ass?.[i], nome = e.nomes?.[i] || 'Colaborador';
     return `<li><div><b>${esc(nome)}</b><small>${esc(numTxt(g.tipo, r.numero))}${a ? ` · assinado em ${esc(a.data)} às ${esc(a.hora)}` : ''}</small></div>
@@ -803,7 +829,7 @@ function conteudoDe(partes) {
 }
 async function guardarConteudo(g) {
   const e = g.emit;
-  if (!e?.regs?.length || !e.docs || e.guardado) return;
+  if (!e?.regs?.length || !e.docs || e.guardado || e.ficha) return;
   e.guardado = true;
   await Promise.all(e.regs.map((r, i) => sb().rpc('doc_guardar_conteudo', { p_id: r.id, p_conteudo: conteudoDe(e.docs[i]), p_org_id: sessao.orgId() })
     .then(({ error }) => { if (error && !semFuncao(error)) console.warn('GRID: conteúdo do documento não guardado', error.message); })));
@@ -816,11 +842,11 @@ const SIT_LS = { valido: ['Válido', 'b'], substituido: ['Substituído', 'b'], c
 async function carregarEmitidos(g) {
   const f = g.ls; f.carregando = true; f.erro = '';
   try {
-    let q = sb().from('doc_emitidos').select('id,cliente_id,cliente_nome,pessoa_nome,tipo,numero,revisao,titulo,codigo,situacao,emitido_em,assinado_em,motivo_cancelamento,tem:conteudo->0')
+    let q = sb().from('doc_emitidos').select('id,cliente_id,colaborador_id,cliente_nome,pessoa_nome,tipo,numero,revisao,titulo,codigo,situacao,emitido_em,assinado_em,motivo_cancelamento,tem:conteudo->0')
       .eq('org_id', sessao.orgId()).order('emitido_em', { ascending: false }).limit(f.limite || 60);
     if (f.cli === '__fora') q = q.is('cliente_id', null); else if (f.cli) q = q.eq('cliente_id', f.cli);
     if (f.tipo) q = q.eq('tipo', f.tipo);
-    if (f.sit === 'aguardando') q = q.eq('situacao', 'valido').in('tipo', ['os', 'epi']).is('assinado_em', null);
+    if (f.sit === 'aguardando') q = q.eq('situacao', 'valido').eq('tipo', 'os').is('assinado_em', null);
     else if (f.sit === 'assinado') q = q.not('assinado_em', 'is', null);
     else if (f.sit) q = q.eq('situacao', f.sit);
     const { data, error } = await q;
@@ -850,7 +876,12 @@ function renderEmitidos(g, t) {
 }
 function linhaEmitido(g, t, r) {
   const num = `${numTxt(r.tipo, r.numero)}${r.revisao ? ` Rev. ${revTxt(r.revisao)}` : ''}`;
-  const assinavel = (r.tipo === 'os' || r.tipo === 'epi') && r.situacao === 'valido';
+  const assinavel = r.tipo === 'os' && r.situacao === 'valido';
+  if (r.tipo === 'epi' && r.colaborador_id) {   // v299: a ficha cresce com as entregas; abre na tela da pessoa
+    const sitE = r.situacao === 'valido' ? '<span class="lq-tag v">Ficha da pessoa</span>' : `<span class="lq-tag ${(SIT_LS[r.situacao] || ['', 'b'])[1]}">${(SIT_LS[r.situacao] || [''])[0]}</span>`;
+    const bE = norm(g.ls.busca || ''), chE = norm(`${r.pessoa_nome} ${r.titulo} ${numTxt(r.tipo, r.numero)} ${r.cliente_nome}`);
+    return `<tr data-lsb="${esc(chE)}"${bE && !chE.includes(bE) ? ' hidden' : ''}><td><b>${esc(num)}</b></td><td>${esc(r.pessoa_nome || '—')}${!g.ls.cli && r.cliente_nome ? `<small>${esc(r.cliente_nome)}</small>` : ''}</td><td>${dataBr(String(r.emitido_em).slice(0, 10))}</td><td>${sitE}</td><td class="acts"><button type="button" class="lq-lnk" data-acao="ir:campo-epi-pessoa:${r.colaborador_id}">Abrir ficha</button></td></tr>`;
+  }
   let sit;
   if (r.assinado_em) sit = `<span class="lq-tag v">Assinado ${dataBr(String(r.assinado_em).slice(0, 10))}</span>`;
   else if (assinavel) sit = '<span class="lq-tag y">Aguardando assinatura</span>';

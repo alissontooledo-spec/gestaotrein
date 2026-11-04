@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   GRID · modulos/campo/modulo.js — Avaliação de Campo (v198, 26/09/2026)
+   GRID · modulos/campo/modulo.js — Gestão de SST (v198; nome novo e Entregas de EPI na v299)
    Digitaliza a "Ficha de Análise de Riscos Ambientais". Uma avaliação por
    empresa e visita, com N GHEs dentro. A visita é marcada na Agenda da Equipe
    (compromisso "Visita técnica"); o banco cria a avaliação sozinho.
@@ -13,7 +13,7 @@ const TODOS = ['administrador', 'comercial', 'instrutor'];
 
 export default {
   id: 'campo',
-  nome: 'Avaliação de Campo',
+  nome: 'Gestão de SST',
   icone: 'clipboard',
   css: './modulos/campo/campo.css',
 
@@ -52,6 +52,13 @@ export default {
       rota: () => import('./laudomiro-tela.js') },
     { id: 'campo-agentes', rotulo: 'Laudomiro', icone: 'shield', oculto: true, perfis: TODOS, mobile: true,
       rota: () => import('./laudomiro-tela.js').then(m => m.comoFichas) },
+    /* v299: Entregas de EPI (PASSO-97) — funciona sem avaliação de campo e sem Laudomiro. */
+    { id: 'campo-epi', rotulo: 'Entregas de EPI', icone: 'shield', perfis: TODOS, mobile: true,
+      rota: () => import('./epi.js') },
+    { id: 'campo-epi-pessoa', rotulo: 'Ficha de EPI', icone: 'shield', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./epi.js').then(m => m.pessoa) },
+    { id: 'campo-emitidos', rotulo: 'Documentos emitidos', icone: 'doc', perfis: TODOS, mobile: true,
+      rota: () => import('./laudomiro-tela.js').then(m => m.comoEmitidos) },
     /* Catálogo da ficha: só abre de verdade em Modo Suporte (Provedor). */
     { id: 'campo-catalogo', rotulo: 'Catálogo da ficha', icone: 'book', oculto: true, perfis: ['administrador'], mobile: false,
       textoDesktop: 'Editar o catálogo da ficha é trabalho de mesa. No computador esta tela abre direto.',

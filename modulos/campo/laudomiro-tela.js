@@ -1299,7 +1299,7 @@ function cartaoEntendi(e, tIdx, turno) {
 }
 
 /* v290: próximos passos. O servidor só manda o que a organização contratou: sem o módulo, o passo não existe. */
-const MOD_NOME = { campo: 'Avaliação de Campo', treinamentos: 'Treinamentos', crm: 'CRM' };
+const MOD_NOME = { campo: 'Gestão de SST', treinamentos: 'Treinamentos', crm: 'CRM' };
 function proximosPassos(r, tIdx, turno = {}) {
   const l = [...(turno.lig || []), ...(r.ligacoes || [])], c = turno.cliente || r.cliente;
   const podeLigar = !!turno._fotos || !!turno.id;
@@ -1559,7 +1559,7 @@ export async function render(params = {}) {
     const p = String(params.pergunta);
     setTimeout(() => enviar(p), 30);
   }
-  ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">Laudomiro</div>`);
+  ponte().cabecalhoMobile?.(`<div class="mh-greeting">Gestão de SST</div><div class="mh-name">Laudomiro</div>`);
   if (_aba === 'fichas') {
     const html = await Fichas.render({ ...params, ...(_fichaAbrir ? { id: _fichaAbrir } : {}), embutido: true }); _fichaAbrir = null;
     return `<div class="lq lq-na-ficha">${abas()}${html}</div>`;
@@ -1944,5 +1944,16 @@ export async function acao(nome, valor, redesenhar) {
 /* A rota antiga "Consultar agente" (campo-agentes) abre esta mesma tela na aba Fichas. */
 export const comoFichas = {
   render: (params = {}) => { if (!params.__lq) { params.__lq = 1; _aba = 'fichas'; } return render(params); },
+  acao,
+};
+/* v299: "Documentos emitidos" no menu da Gestão de SST abre o Laudomiro já na lista (continua também no "+"). */
+export const comoEmitidos = {
+  render: async (params = {}) => {
+    const novo = !params.__lq;
+    if (novo) { params.__lq = 1; _aba = 'perguntar'; }
+    const html = await render(params);
+    if (novo && !semPermissao()) setTimeout(() => novoDocumento('Documentos emitidos', { tipo: 'emitidos' }), 0);
+    return html;
+  },
   acao,
 };

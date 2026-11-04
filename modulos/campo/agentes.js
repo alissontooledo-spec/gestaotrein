@@ -74,7 +74,7 @@ export async function render(params = {}) {
     }
   } });
   const a = L.porId(_sel);
-  if (!params.embutido) ponte().cabecalhoMobile?.(`<div class="mh-greeting">Avaliação de Campo</div><div class="mh-name">${a && _verFicha ? esc(L.curtoNome(a.nome)) : 'Consultar agente'}</div>`);
+  if (!params.embutido) ponte().cabecalhoMobile?.(`<div class="mh-greeting">Gestão de SST</div><div class="mh-name">${a && _verFicha ? esc(L.curtoNome(a.nome)) : 'Consultar agente'}</div>`);
   /* v248: dentro da tela Laudomiro (aba Fichas) o título e o "voltar" vêm da própria tela. */
   const emb = !!params.embutido;
   return `<div class="lmx-topo${a && _verFicha ? ' na-ficha' : ''}${emb ? ' emb' : ''}">

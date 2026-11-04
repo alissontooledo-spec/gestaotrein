@@ -355,7 +355,7 @@ function vazioTurmas(todas, jan) {
 
 /* ── avaliações de campo sem concluir ───────────────────────────────────── */
 async function campo(c, oi) {
-  if (!pode('campo')) return recusa('Seu perfil de acesso não inclui a Avaliação de Campo. Peça ao administrador da sua empresa.');
+  if (!pode('campo')) return recusa('Seu perfil de acesso não inclui a Gestão de SST. Peça ao administrador da sua empresa.');
   const data = await lerTudo(() => sb().from('campo_avaliacoes').select('id,numero,cliente_id,situacao,data_visita')
     .eq('org_id', oi).not('situacao', 'in', '(concluida,cancelada)').order('id'));
   const ids = [...new Set((data || []).map((x) => x.cliente_id).filter(Boolean))];
