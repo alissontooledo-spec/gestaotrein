@@ -821,10 +821,10 @@ async function abrirOriginal(foto) {
 function recortar(img, caixa) {
   {
     const [a, b, c2, d2] = caixa.map(v => Math.max(0, Math.min(1000, +v || 0)) / 1000);
-    const fx = (c2 - a) * 0.12, fy = (d2 - b) * 0.12;
+    const fx = (c2 - a) * 0.3, fy = (d2 - b) * 0.3;   // v291: folga maior (a IA erra um pouco o lugar)
     let x1 = Math.max(0, a - fx) * img.width, y1 = Math.max(0, b - fy) * img.height;
     let x2 = Math.min(1, c2 + fx) * img.width, y2 = Math.min(1, d2 + fy) * img.height;
-    const min = Math.min(img.width, img.height) * 0.12;   // nunca um recorte minúsculo
+    const min = Math.min(img.width, img.height) * 0.18;   // nunca um recorte minúsculo
     if (x2 - x1 < min) { const cx = (x1 + x2) / 2; x1 = Math.max(0, cx - min / 2); x2 = Math.min(img.width, x1 + min); }
     if (y2 - y1 < min) { const cy = (y1 + y2) / 2; y1 = Math.max(0, cy - min / 2); y2 = Math.min(img.height, y1 + min); }
     const w = x2 - x1, h = y2 - y1, k = Math.min(1, ZOOM_LADO / Math.max(w, h));
