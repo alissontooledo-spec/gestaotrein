@@ -518,6 +518,7 @@ function resposta(turno, tIdx) {
   if (turno.aviso) return avisoAnexo(turno);
   if (turno.resposta?.tipo === 'fds' && !turno.erro) return respostaFds(turno, tIdx);
   if (turno.resposta?.tipo === 'foto' && !turno.erro) return respostaFoto(turno, tIdx);
+  if (turno.resposta?.tipo === 'documento' && !turno.erro) return respostaDoc(turno, tIdx);  // v294
   if (turno.dados && !turno.erro) return respostaDados(turno, tIdx);  // v266
   if (turno.carregando) return `<article class="lq-resp lq-carr" aria-live="polite"><span class="lq-seal p">${SEAL}</span><div><b>Consultando as normas</b><small>Buscando os itens que respondem.</small></div></article>`;
   if (turno.erro) return `<article class="lq-resp lq-falha">${IC.erro}<div><b>${esc(turno.erro)}</b>${turno.podeRepetir ? `<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-repetir:${tIdx}">Tentar de novo</button>` : ''}</div></article>`;
@@ -684,7 +685,7 @@ const ATIVIDADES = [['altura', 'Trabalho em altura'], ['andaime', 'Andaime'], ['
 const ZOOM_LADO = 672;   // lado maior do recorte enviado (a IA lê 672 px a ~576 tokens)
 const nomeAtividade = (k) => [].concat(k || []).map(x => (ATIVIDADES.find(a => a[0] === x) || [])[1]).filter(Boolean).join(' e ');
 const PASSOS = {
-  fds: ['Abrindo o PDF', 'Procurando a composição', 'Conferindo na base do GRID', 'Montando a resposta'],
+  fds: ['Abrindo o PDF', 'Reconhecendo o documento', 'Conferindo os itens', 'Montando a resposta'],
   foto: ['Entendendo o que aparece', 'Inspecionando com a lista de verificação', 'Conferindo os detalhes no zoom', 'Montando a resposta'],
 };
 const NOME_GHS = { GHS01: 'Explosivo', GHS02: 'Inflamável', GHS03: 'Oxidante', GHS04: 'Gás sob pressão', GHS05: 'Corrosivo', GHS06: 'Tóxico', GHS07: 'Irritante', GHS08: 'Perigo à saúde', GHS09: 'Meio ambiente' };
@@ -711,7 +712,7 @@ function menuAnexo(anx = true) {
   <div class="lq-menu lq-menu-mais" role="menu" aria-label="Anexar ou usar ferramenta">
     <div class="lq-menu-h"><b>Anexar ou usar ferramenta</b><button type="button" class="lq-x" data-acao="campo:lq-clip" aria-label="Fechar">${I.x}</button></div>
     ${anx ? `<p class="lq-menu-g">Anexar</p>
-    ${op('lq.fds', IC.pdf, 'pdf', 'Ficha de segurança (FDS)', 'PDF do fornecedor, até 8 MB. Até 5 para comparar.', 'application/pdf,.pdf', 'multiple')}
+    ${op('lq.fds', IC.pdf, 'pdf', 'Documento (PDF)', 'FDS, PT, APR, ordem de serviço, ficha de EPI ou certificado. Ele reconhece qual é. Até 5 FDS para comparar.', 'application/pdf,.pdf', 'multiple')}
     ${op('lq.camera', IC.cam, 'img', 'Tirar foto agora', 'Abre a câmera do celular.', 'image/*', 'capture="environment"', ' so-cel')}
     ${op('lq.galeria', IC.img, 'img', 'Fotos do local ou da atividade', 'Até 4 do mesmo lugar. Ele entende sozinho o que está acontecendo.', 'image/jpeg,image/png,image/webp,image/*', 'multiple')}` : ''}
     <p class="lq-menu-g">Ferramentas</p>
@@ -920,14 +921,17 @@ async function enviarAnexo(p) {
   if (fotos) { await rodarFotos(turno, fotos, { pergunta: p }); return; }   // v290
   const relogio = setInterval(() => { if (turno.passo < 3) { turno.passo++; repintar(); } }, 6000);
   try {
-    const r = await chamar({ acao: 'anexo', tipo: a.tipo, arquivo: { nome: a.nome, mime: a.mime, base64: a.base64 }, pergunta: p || undefined, estilo: estilo() });
+    // v294: um PDF sozinho vai como "documento": o servidor reconhece (FDS continua a leitura de FDS)
+    const r = await chamar({ acao: 'anexo', tipo: a.tipo === 'fds' ? 'documento' : a.tipo, arquivo: { nome: a.nome, mime: a.mime, base64: a.base64 }, pergunta: p || undefined, estilo: estilo() });
     if (!mesmoDono(d)) return;  // v263
     if (r.aviso) Object.assign(turno, { carregando: false, aviso: r.aviso });
     else {
       Object.assign(turno, { carregando: false, id: r.id, resposta: r.resposta, trechos: r.trechos || [], resumo: r.resumo || '', _arquivo: null });
       if (r.resposta?.tipo === 'fds') _ctx = { produto: r.resposta.titulo, contexto: r.resposta.contexto || r.resumo || '' };
+      if (r.resposta?.tipo === 'documento' && r.resposta.cnpj) clientePeloCnpj(turno, r.resposta.cnpj);   // v294
       if (_status && r.restantes != null) _status.restantes = r.restantes;
-      if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: `${a.tipo === 'fds' ? 'FDS' : 'Foto'}: ${a.nome}${p ? ' — ' + p : ''}`, tipo: a.tipo, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
+      const rot = r.resposta?.tipo === 'documento' ? 'Documento' : a.tipo === 'fds' ? 'FDS' : 'Foto';
+      if (_status && r.id && r.gravado !== false) _status.recentes = [{ id: r.id, pergunta: `${rot}: ${a.nome}${p ? ' — ' + p : ''}`, tipo: r.resposta?.tipo || a.tipo, criado_em: new Date().toISOString() }, ...(_status.recentes || [])].slice(0, 6);
     }
   } catch (e) {
     if (!mesmoDono(d)) return;  // v263
@@ -1299,12 +1303,12 @@ function proximosPassos(r, tIdx, turno = {}) {
   const l = [...(turno.lig || []), ...(r.ligacoes || [])], c = turno.cliente || r.cliente;
   const podeLigar = !!turno._fotos || !!turno.id;
   if (!l.length && !c && !podeLigar) return '';
-  const cab = c ? `<div class="lq-prox-cl"><span>Cliente</span><b>${esc(c.nome)}</b>${turno.ligCarregando ? '<small>conferindo o cadastro…</small>' : ''}<button type="button" class="lq-lnk" data-acao="campo:lq-cliente:${tIdx}">Trocar</button></div>`
+  const cab = c ? `<div class="lq-prox-cl"><span>Cliente</span><b>${esc(c.nome)}</b>${turno.ligCarregando ? '<small>conferindo o cadastro…</small>' : c.origem ? `<small>${esc(c.origem)}</small>` : ''}<button type="button" class="lq-lnk" data-acao="campo:lq-cliente:${tIdx}">Trocar</button></div>`
     : podeLigar ? `<div class="lq-prox-cl sem"><span>Sem cliente ligado.</span><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-cliente:${tIdx}">Ligar a um cliente</button><small>Opcional. Ligado, ele confere o GHE e os treinamentos do cliente.</small></div>` : '';
   const forte = l.findIndex(x => x.alerta && x.botao);
   const um = (x, i) => `<div class="lq-prox-i${x.alerta ? ' al' : ''}"><div class="t">${x.alerta ? '<i class="lq-prox-d"></i>' : ''}<b>${esc(x.titulo)}</b>${x.texto ? `<p>${esc(x.texto)}</p>` : ''}</div>
       ${x.botao ? `<button type="button" class="btn ${i === forte ? 'btn-primary' : 'btn-outline'} btn-sm" data-acao="${esc(x.dacao || `campo:lq-ligar:${tIdx}.${x.acao || ''}`)}">${esc(x.botao)}</button>` : ''}</div>`;
-  const vis = l.slice(0, 3).map(um).join(''), resto = l.slice(3);
+  const vis = l.slice(0, 3).map(um).join('') || (c && !turno.ligCarregando ? '<p class="lq-prox-nada">Nada pendente no cadastro deste cliente para esta atividade.</p>' : ''), resto = l.slice(3);
   return `<div class="lq-prox"><h5>Próximos passos</h5>${cab}${vis}${resto.length ? `<details class="lq-prox-mais"><summary>Mais ${resto.length} ${resto.length === 1 ? 'passo' : 'passos'}</summary>${resto.map((x, k) => um(x, k + 3)).join('')}</details>` : ''}</div>`;
 }
 
@@ -1426,10 +1430,37 @@ function respostaFoto(turno, tIdx) {
   </article>`;
 }
 
+/* v294: documento reconhecido sozinho (PT, APR, OS, ficha de EPI, certificado): conferência pelos itens da NR. */
+function respostaDoc(turno, tIdx) {
+  const r = turno.resposta, ver = r.verificacao || [];
+  const nNc = ver.filter(v => v.situacao === 'nao_conforme').length;
+  return `<article class="lq-resp lq-foto-r lq-doc-r">
+    <header class="lq-ver"><span class="lq-selo v-foto">DOCUMENTO</span><div><h3>${esc(r.titulo)}</h3>${r.subtitulo ? `<p>${esc(r.subtitulo)}</p>` : ''}</div></header>
+    ${cartaoEntendi(r.entendi, -1)}
+    ${r.curta ? `<p class="lq-curta">${negritoInicio(r.curta)}</p>` : ''}
+    <div class="lq-verif"><h5>Conferência: ${esc(r.roteiro || 'itens da NR')}<span>${nNc ? `${nNc} de ${ver.length} com problema` : `${ver.length} itens conferidos`}</span></h5>
+      ${ver.map(v => { const [rot, cls] = SIT[v.situacao] || SIT.nao_visivel; return `<div class="lq-vi"><span class="lq-vs ${cls}">${rot}</span><span class="t">${esc(v.item)}${v.obs ? `<small>${esc(v.obs)}</small>` : ''}</span>${v.onde ? `<span class="lq-vr"><span class="lq-vp">${esc(v.onde)}</span></span>` : ''}</div>`; }).join('')}</div>
+    ${proximosPassos(r, tIdx, turno)}
+    ${(r.conferir || []).length ? `<div class="lq-conf3"><h5>O papel não responde: confira no local</h5>${r.conferir.map(c => `<div class="lq-ck"><i></i>${esc(c)}</div>`).join('')}</div>` : ''}
+    <div class="lq-limite">${I.info}<div><b>Confere o que está escrito no documento.</b> Não confirma se o que está escrito foi feito no local.</div></div>
+    ${rodape(turno, tIdx, 'a análise do responsável')}
+  </article>`;
+}
+
+/* v294: o CNPJ escrito no documento acha o cliente sozinho (busca com a permissão de quem usa). */
+async function clientePeloCnpj(turno, cnpj) {
+  try {
+    const { data } = await sb().from('clientes').select('id,nome,cnpj').eq('org_id', sessao.orgId()).limit(1000);
+    const c = (data || []).find(x => String(x.cnpj || '').replace(/\D/g, '') === cnpj);
+    if (c && !turno.cliente) { turno.cliente = { id: c.id, nome: c.nome, origem: 'pelo CNPJ do documento' }; ligarCliente(turno); }
+  } catch { /* sem acesso aos clientes: segue sem ligar */ }
+}
+
 function rodape(turno, tIdx, oQue) {
   const tipo = turno.resposta?.tipo;
   const ops = tipo === 'fds'
     ? [['pgr', 'Para o PGR (inventário)', 'Perigos, agentes e EPI'], ['os', 'Para a ordem de serviço', 'Riscos e cuidados para o trabalhador'], ['dds', 'Para o DDS', '5 minutos sobre o produto'], ['resp', 'Só a resposta', '']]
+    : tipo === 'documento' ? [['resp', 'A conferência', '']]
     : [['rel', 'Para o relatório de inspeção', 'Pontos, medidas e o que conferir'], ['resp', 'Só a lista', '']];
   const aberto = _copiarMenu === tIdx;
   return `<footer class="lq-acts">
@@ -1444,6 +1475,10 @@ function rodape(turno, tIdx, oQue) {
 /* Textos do "Copiar para…": montados só com o que está na tela. */
 function textoCopiar(turno, como) {
   const r = turno.resposta || {};
+  if (r.tipo === 'documento') {
+    return [r.titulo, r.subtitulo || '', r.curta || '', '', `Conferência: ${r.roteiro || ''}`, ...(r.verificacao || []).map(v => `• ${(SIT[v.situacao] || SIT.nao_visivel)[0]}: ${v.item}${v.obs ? ' — ' + v.obs : ''}${v.onde ? ` (${v.onde})` : ''}`),
+      '', (r.conferir || []).length ? 'Confira no local:\n' + r.conferir.map(c => '• ' + c).join('\n') : '', 'Indicação do GRID (Laudomiro); confere o que está escrito, não substitui a análise do responsável.'].filter(x => x !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
   if (r.tipo === 'foto') {
     const pts = (r.pontos || []).map((p, i) => `${i + 1}. [${p.gravidade === 'ALTA' ? 'ALTA' : 'MÉDIA'}] ${p.titulo}${p.agora ? ' — Agora: ' + p.agora : ''}${p.nr ? ' (' + [p.nr, p.nr2, p.nr3].filter(Boolean).join(', ') + (p.foto ? `, foto ${p.foto}` : '') + ')' : ''}`);
     if (como === 'resp') return [r.titulo, ...pts].join('\n');
@@ -1475,7 +1510,7 @@ function textoCopiar(turno, como) {
 function copiarComo(tIdx, como) {
   const t = _conv[tIdx]; if (!t?.resposta) return;
   const tipo = t.resposta.tipo;
-  if (tipo !== 'fds' && tipo !== 'foto') {  // v278: resposta de texto
+  if (tipo !== 'fds' && tipo !== 'foto' && tipo !== 'documento') {  // v278: resposta de texto
     _copiarMenu = null;
     if (como === 'resp') { repintar(); copiar(tIdx); return; }
     if (DOCS[como]) { montarDocumento(tIdx, como); return; }
