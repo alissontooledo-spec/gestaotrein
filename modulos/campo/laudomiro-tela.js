@@ -679,7 +679,7 @@ const TAM_PDF = 8 * 1024 * 1024, TAM_FOTO = 4 * 1024 * 1024, LADO_FOTO = 1288;  
 /* v290: inspeção por fotos. Até 4 fotos do mesmo local; o Laudomiro entende sozinho o lugar e as
    atividades (o técnico só corrige se quiser). As fotos e os recortes do zoom só existem na memória desta tela. */
 const MAX_FOTOS = 4;
-const ATIVIDADES = [['altura', 'Trabalho em altura'], ['andaime', 'Andaime'], ['obra', 'Obra de construção'], ['eletricidade', 'Eletricidade'], ['maquinas', 'Máquinas e equipamentos'],
+const ATIVIDADES = [['altura', 'Trabalho em altura'], ['andaime', 'Andaime'], ['suspenso', 'Trabalho suspenso (cadeira, balancim, corda)'], ['obra', 'Obra de construção'], ['eletricidade', 'Eletricidade'], ['maquinas', 'Máquinas e equipamentos'],
   ['quente', 'Solda e trabalho a quente'], ['quimicos', 'Produtos químicos'], ['carga', 'Carga, empilhadeira e armazém'], ['escritorio', 'Escritório e ergonomia'], ['confinado', 'Possível espaço confinado'], ['geral', 'Outro ambiente']];
 const ZOOM_LADO = 672;   // lado maior do recorte enviado (a IA lê 672 px a ~576 tokens)
 const nomeAtividade = (k) => [].concat(k || []).map(x => (ATIVIDADES.find(a => a[0] === x) || [])[1]).filter(Boolean).join(' e ');
@@ -729,6 +729,7 @@ function chipFotos() {
   return `<div class="lq-fotos-env">
     <div class="lq-fx-l">${mini}${mais}</div>
     ${a.fotos.some(f => f.qual) ? `<p class="lq-fx-q">${a.fotos.map((f, i) => f.qual ? `A foto ${i + 1} parece ${f.qual}.` : '').filter(Boolean).join(' ')} Se puder, tire outra com mais luz e firme.</p>` : ''}
+    ${a.fotos.some(f => f.w && Math.max(f.w, f.h) < 900) ? `<p class="lq-fx-q">${a.fotos.map((f, i) => f.w && Math.max(f.w, f.h) < 900 ? `A foto ${i + 1} é pequena (${f.w}×${f.h} px).` : '').filter(Boolean).join(' ')} Capacete, corda e trava-quedas podem não aparecer. Se puder, use a foto original da câmera.</p>` : ''}
     <p class="lq-fx-t2">${IC.olho}<span><b>Ele entende sozinho</b> o lugar, a atividade e quem aparece. Não precisa escolher nada. Se quiser, escreva uma pergunta.<small>Não envie ASO, atestado nem documento pessoal.</small></span></p>
   </div>`;
 }
@@ -785,10 +786,10 @@ async function reduzirFoto(arquivo) {
     return c.toDataURL('image/jpeg', q);
   };
   const grande = desenhar(LADO_FOTO, 0.85), mini = desenhar(480, 0.8);
-  const qual = qualidadeFoto(img);
+  const qual = qualidadeFoto(img), w = img.width, h = img.height;
   img.close?.();
   const base64 = grande.split(',')[1];
-  return { base64, thumb: mini, tam: Math.floor(base64.length * 3 / 4), qual, chave: await digital(base64) };
+  return { base64, thumb: mini, tam: Math.floor(base64.length * 3 / 4), qual, w, h, chave: await digital(base64) };
 }
 
 /* v290: foto escura ou tremida é avisada antes de gastar (não bloqueia: o técnico decide). */
@@ -952,7 +953,7 @@ async function rodarFotos(turno, fotos, { pergunta = '', corrigirId = '', ativid
       } catch (e) { if (e.codigo === 'COTA' || e.codigo === 'SEM_PERMISSAO' || e.codigo === 'ANEXO_BLOQUEADO') throw e; /* sem o passo rápido, segue */ }
     }
     turno.passo = Math.max(turno.passo, 1); repintar();
-    const r = await chamar({ acao: 'anexo', tipo: 'foto', arquivos, zoom: true, pergunta: pergunta || undefined, estilo: estilo(),
+    const r = await chamar({ acao: 'anexo', tipo: 'foto', arquivos, zoom: true, dims: fotos.map(f => ({ w: f.w || 0, h: f.h || 0 })), pergunta: pergunta || undefined, estilo: estilo(),
       ...(turno.entendi ? { entendi: { lugar: turno.entendi.lugar, chaves: turno.entendi.chaves } } : {}),
       ...(corrigirId ? { corrigir_id: corrigirId, atividades } : {}) });
     if (!mesmoDono(d)) return;
@@ -1311,7 +1312,7 @@ function proximosPassos(r, tIdx, turno = {}) {
    Tudo é buscado AQUI, com a permissão de quem está usando (RLS): nada do cadastro vai para a IA.
    Cada ligação só existe se a empresa tem o módulo e o perfil enxerga a tela; sem isso, não aparece nada. */
 const FAMILIAS = [
-  { re: /^(ALT_|AND_|ESC_MAO|OBR_QUEDAMAT)/, risco: /queda|altura/i, nome: 'Risco de queda', ativ: 'trabalho em altura' },
+  { re: /^(ALT_|AND_|SUS_|ESC_MAO|OBR_QUEDAMAT)/, risco: /queda|altura/i, nome: 'Risco de queda', ativ: 'trabalho em altura' },
   { re: /^ELE_/, risco: /el[eé]tric|choque/i, nome: 'Risco elétrico', ativ: 'risco elétrico' },
   { re: /^MAQ_/, risco: /m[aá]quina|prensa|corte|esmag|aprision|partes m[oó]veis/i, nome: 'Risco de máquinas', ativ: 'máquina sem proteção' },
   { re: /^QUE_FUMOS$/, risco: /fumo|gases|solda/i, nome: 'Fumos de solda', ativ: 'fumos de solda' },
@@ -1397,7 +1398,7 @@ function respostaFoto(turno, tIdx) {
       <span class="gv ${p.gravidade === 'ALTA' ? 'alta' : 'med'}">${p.gravidade === 'ALTA' ? 'ALTA' : 'MÉDIA'}</span>${tagFoto(p.foto)}${p.visto_zoom || p.lupa ? '<span class="lq-conf-l">Visto no zoom</span>' : ''}<b>${esc(p.titulo)}</b>
       ${p.agora ? `<p class="agora"><b>Agora:</b> ${esc(p.agora)}</p>` : ''}
       ${p.detalhe || p.nr ? `<p>${esc(p.detalhe || '')} ${nrs(p)}</p>` : ''}</div>${lupa(p, i)}</div>`).join('');
-  const ac = (r.a_conferir || []).length ? `<div class="lq-acf"><h5>${IC.lupa}A conferir no local</h5>${r.a_conferir.map(x => `<div class="lq-acf-i">${rec(x) ? `<img src="${rec(x)}" alt="">` : ''}<div><b>${esc(x.titulo)}</b><p>${esc(x.motivo || '')}</p></div></div>`).join('')}<small>Apareceu na foto, mas o zoom não confirmou. Não entrou na lista de pontos.</small></div>` : '';
+  const ac = (r.a_conferir || []).length ? `<div class="lq-acf"><h5>${IC.lupa}A conferir no local</h5>${r.a_conferir.map(x => `<div class="lq-acf-i">${rec(x) ? `<img src="${rec(x)}" alt="">` : ''}<div>${x.gravidade === 'ALTA' ? '<span class="gv alta">ALTA</span> ' : ''}<b>${esc(x.titulo)}</b><p>${esc(x.motivo || '')}</p></div></div>`).join('')}<small>Apareceu na foto, mas o zoom não confirmou. Não entrou na lista de pontos.</small></div>` : '';
   const tira = thumbs.length ? `<div class="lq-fx-l lq-fx-r">${thumbs.map((t, i) => `<button type="button" class="lq-fx" data-acao="campo:lq-ampliar:${tIdx}.${i}" aria-label="Ampliar a foto ${i + 1}"><img src="${t}" alt="Foto ${i + 1}">${nf > 1 ? `<i>${i + 1}</i>` : ''}</button>`).join('')}</div>`
     : '<div class="lq-thumb vazio">As fotos não ficam guardadas no GRID</div>';
   const ver = (r.verificacao || []);
