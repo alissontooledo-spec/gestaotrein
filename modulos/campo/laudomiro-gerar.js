@@ -624,12 +624,12 @@ async function registrarEmissao(g, docs) {
   let regs;
   try {
     if (g.prev?.doc && g.prev.escolha === 'rev' && docs.length === 1) {
-      const { data, error } = await sb().rpc('doc_revisar', { p_anterior: g.prev.doc.id, p_motivo: String(g.prev.motivo || '').trim(), p_titulo: titulo });
+      const { data, error } = await sb().rpc('doc_revisar', { p_anterior: g.prev.doc.id, p_motivo: String(g.prev.motivo || '').trim(), p_titulo: titulo, p_org_id: sessao.orgId() });
       if (error) throw error;
       regs = data || [];
     } else {
       const itens = pessoas.slice(0, docs.length).map((p) => ({ colaborador_id: p.fora ? null : p.id, pessoa_nome: p.fora ? '' : (p.nome || ''), titulo }));
-      const { data, error } = await sb().rpc('doc_emitir', { p_tipo: g.tipo, p_cliente_id: clienteId, p_cliente_nome: clienteNome, p_itens: itens });
+      const { data, error } = await sb().rpc('doc_emitir', { p_tipo: g.tipo, p_cliente_id: clienteId, p_cliente_nome: clienteNome, p_itens: itens, p_org_id: sessao.orgId() });
       if (error) throw error;
       regs = (data || []).sort((a, b) => a.numero - b.numero);
     }
@@ -699,7 +699,7 @@ async function cancelarEmitido(g) {
   if (motivo.length < 3) { avisar('Escreva o motivo do cancelamento.', 'erro'); return; }
   e.cancelando = true;
   try {
-    const { error } = await sb().rpc('doc_cancelar', { p_id: e.regs[0].id, p_motivo: motivo });
+    const { error } = await sb().rpc('doc_cancelar', { p_id: e.regs[0].id, p_motivo: motivo, p_org_id: sessao.orgId() });
     if (error) throw error;
     e.cancelado = true; e.cancAberto = false; avisar('Documento cancelado.');
   } catch (er) { avisar(/42501|admin/i.test(`${er?.code || ''} ${er?.message || ''}`) ? 'Só o administrador ou quem emitiu pode cancelar.' : 'Não foi possível cancelar agora.', 'erro'); }
