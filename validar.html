@@ -879,7 +879,7 @@
     document.getElementById('resultCpf').textContent = d.titulo || '';
     const infos = [
       { l: 'Documento', v: `${DOC_NOME[d.tipo] || 'Documento'} ${numDoc(d.tipo, d.numero)}` },
-      { l: 'Revisão', v: rev2(d.revisao) },
+      ...(d.tipo === 'epi' ? [{ l: 'Entregas na ficha', v: d.entregas ? `${d.entregas}${d.ultima_entrega ? ' · a última em ' + fmtDataExtenso(String(d.ultima_entrega).slice(0, 10)) : ''}` : 'Nenhuma ainda' }] : [{ l: 'Revisão', v: rev2(d.revisao) }]),   // v299: a ficha de EPI cresce com as entregas
       { l: 'Empresa', v: d.cliente_nome || '—' },
       { l: 'Emitido em', v: emitido ? fmtDataExtenso(emitido) : '—' },
       ...(sit === 'antigo' ? [{ l: 'Revisão mais recente', v: `${rev2(d.ultima_revisao)}${d.ultima_emitida_em ? ' · ' + fmtDataExtenso(String(d.ultima_emitida_em).slice(0, 10)) : ''}` }, ...(d.ultima_motivo ? [{ l: 'Motivo da revisão', v: d.ultima_motivo }] : [])] : []),

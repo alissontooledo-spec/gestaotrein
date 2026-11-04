@@ -6054,6 +6054,8 @@ function _ligarAcoesDeModulo() {
 const MENU_MODULO_PREVIO = {
   campo: [
     { id:'campo', rotulo:'Avaliações de campo', icone:'clipboard', perfis:['administrador','comercial','instrutor'] },
+    { id:'campo-epi', rotulo:'Entregas de EPI', icone:'shield', perfis:['administrador','comercial','instrutor'] },
+    { id:'campo-emitidos', rotulo:'Documentos emitidos', icone:'doc', perfis:['administrador','comercial','instrutor'] },
   ],
   crm: [
     { id:'crm',            rotulo:'Painel comercial', icone:'trend',    perfis:['administrador','comercial'] },
@@ -6123,7 +6125,7 @@ const _PERFIS_CATALOGO = {
     { id:'crm', nome:'CRM', icone:'funnel', telas:[
       ['crm','Painel comercial'],['crm-funil','Funil de vendas'],['crm-contatos','Contatos'],['crm-atividades','Atividades'],
       ['crm-empresa','Contas'],['crm-conversas','Conversas (WhatsApp)'],['crm-numeros','Números de WhatsApp']] },
-    { id:'campo', nome:'Avaliação de Campo', icone:'clipboard', telas:[['campo','Avaliações de campo']] },
+    { id:'campo', nome:'Gestão de SST', icone:'clipboard', telas:[['campo','Avaliações de campo']] },
   ],
   limites: {
     administrador: {turmas:3,agendaequipe:3,clientes:3,colaboradores:3,catalogo:3,conformidade:2,relatorios:1,equipe:3,configuracoes:2,
@@ -6569,7 +6571,7 @@ function _blocoAberto(id, padrao) {
 
 // Nome de exibicao do bloco antes do modulo carregar. Depois que ele chega,
 // o nome vem do proprio manifesto.
-const NOME_MODULO_PREVIO = { crm: 'CRM', campo: 'Avaliação de Campo' };
+const NOME_MODULO_PREVIO = { crm: 'CRM', campo: 'Gestão de SST' };
 
 // ── Barra lateral v2 — seletor de módulo ────────────────────────────────
 // ANTES: blocos recolhíveis com Treinamentos e CRM abertos ao mesmo tempo —
@@ -6780,7 +6782,7 @@ function _htmlMenuLateral(itens) {
 const _MODULO_SELETOR = {
   base:  { icone: 'cap',       sub: 'Turmas, certificados, agenda' },
   crm:   { icone: 'funnel',    sub: 'Funil, contatos, WhatsApp' },
-  campo: { icone: 'clipboard', sub: 'Visitas, GHEs, riscos' },
+  campo: { icone: 'clipboard', sub: 'Visitas, EPI, documentos' },
 };
 const _SETA_SELETOR = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 const _CHECK_SELETOR = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -7859,8 +7861,8 @@ const _MODULOS_DO_PRODUTO = [
       { id:'whatsapp', nome:'WhatsApp',
         desc:'Conversas e configuração de números. O gateway ainda não existe — ligado, as telas abrem vazias.' }
     ] },
-  { id:'campo', nome:'Avaliação de Campo',
-    desc:'Ficha de análise de riscos ambientais no celular: visita marcada na Agenda da Equipe, GHEs, riscos, fotos, assinaturas e PDF. Técnico = perfil Instrutor.' }
+  { id:'campo', nome:'Gestão de SST',
+    desc:'Avaliações de campo (visita, GHEs, riscos, fotos, assinaturas e PDF), Entregas de EPI com ficha e QR, Laudomiro e documentos emitidos. Técnico = perfil Instrutor.' }
 ];
 
 /* `leitura_ate` e uma DATA, nao um instante. `new Date('2026-12-07')` e lido
@@ -8138,7 +8140,7 @@ function _htmlIntegracaoSocOrg() {
     const prontas = _conta.filter(x => r[x.id]?.codigo && r[x.id]?.temChave && r[x.id]?.ativo !== false).length;
     const selo = prontas === _conta.length ? ['badge-green', `${prontas} de ${_conta.length} rotinas`] : prontas ? ['badge-warn', `${prontas} de ${_conta.length} rotinas`] : ['badge-gray','Não configurada'];
     const quando = Object.values(r).map(x => x.atualizado_em).filter(Boolean).sort().pop();
-    blocos.push(_socBloco('campo', 'Avaliação de Campo', 'Hierarquia completa e GHEs ativos da empresa visitada', selo, () => `
+    blocos.push(_socBloco('campo', 'Gestão de SST', 'Hierarquia completa e GHEs ativos da empresa visitada', selo, () => `
       <div style="display:flex;gap:8px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 11px;font-size:12px;color:var(--text-2);line-height:1.45;margin:0 0 12px">
         <span style="color:var(--text-3);display:flex;margin-top:1px">${_SOC_ICO.info}</span>
         <span>No SOC, tela <b>733</b>, use <b>Copia Exporta Dados Disponíveis</b> em cada rotina abaixo, com saída <b>json</b> e <b>Acesso Post = Sim</b>, e cole aqui o código e a chave da cópia. Usa também a empresa principal e a rotina de Funcionários da <b>Busca no SOC</b>.</span></div>
@@ -8210,7 +8212,7 @@ async function salvarSocRotinasCampoOrg(orgId) {
   const { data: org } = await sb.from('organizacoes').select('soc_integracao_ativa').eq('id', orgId).maybeSingle();
   window._orgSocAtual = await _carregarSocOrg(orgId, org);
   _setElBoth('integracaoSocOrg', _htmlIntegracaoSocOrg());
-  showToast('Rotinas da Avaliação de Campo salvas.', 'success');
+  showToast('Rotinas da Gestão de SST salvas.', 'success');
 }
 
 async function salvarIntegracaoSocOrg(orgId) {
@@ -9863,7 +9865,7 @@ async function renderLaudomiroProvedor() {
       </div>
       <span class="gi-badge ${l.pct >= 100 ? 'gi-red' : (l.pct >= 80 ? 'gi-warn' : '')}" style="width:92px;justify-content:center">${l.pct >= 100 ? 'Cota esgotada' : l.pct + '% usado'}</span>
       <span style="width:84px;display:inline-flex;justify-content:flex-end;flex:none">${l.erros ? `<span class="gi-badge gi-red" title="Respostas que os usuários marcaram como Tem erro">${l.erros} com erro</span>` : ''}</span>
-    </div>`).join('') : `<div class="gi-vazio">Nenhuma organização ativa com o módulo Avaliação de Campo (o Laudomiro faz parte dele).</div>`;
+    </div>`).join('') : `<div class="gi-vazio">Nenhuma organização ativa com o módulo Gestão de SST (o Laudomiro faz parte dele).</div>`;
 
   setConteudo(`
     <div class="gi-page">
@@ -9896,7 +9898,7 @@ function _provAbrirOrg(id) {
 window._provLqStatus = {};
 async function _provLaudomiroCarregar(orgId) {
   const temCampo = !!(window._orgModulosAtual?.modulos || []).find(m => m.modulo === 'campo' && m.ativo);
-  if (!temCampo) { _setElBoth('laudomiroOrg', `<div class="gi-vazio" style="padding:6px 0">O Laudomiro faz parte do módulo Avaliação de Campo, que não está ativo nesta organização.</div>`); return; }
+  if (!temCampo) { _setElBoth('laudomiroOrg', `<div class="gi-vazio" style="padding:6px 0">O Laudomiro faz parte do módulo Gestão de SST, que não está ativo nesta organização.</div>`); return; }
   let st = null;
   try {
     const { data, error } = await sb.functions.invoke('laudomiro-perguntar', { body: { acao: 'status', orgId } });
@@ -12915,16 +12917,19 @@ async function verColab(id) {
   ].join('');
   const temAlgumDado = !!linhasCadastro;
 
-  const [{ data: treinos }, entregasR] = await Promise.all([
+  // v299: EPI e documentos de SST — só com o módulo Gestão de SST ligado e liberado no perfil.
+  const comCampo = Array.isArray(_modulosAtivos) && _modulosAtivos.includes('campo') && _podeRota('campo');
+  const [{ data: treinos }, entregasR, epiR] = await Promise.all([
     sb.from('conformidade_status')
       .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,catalogo(nome)')
       .eq('colaborador_id', id)
       .order('data_vencimento', { ascending: false }),
     // v284: OS e fichas de EPI com entrega registrada pelo Laudomiro (PASSO-92). Sem a tabela, segue sem.
-    sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(12),
+    comCampo ? sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(6) : Promise.resolve({ data: null, error: 1 }),
+    comCampo ? sb.from('epi_entregas').select('nome,ca,entregue_em').eq('colaborador_id', id).is('cancelada_em', null).order('entregue_em', { ascending: false }).limit(4) : Promise.resolve({ data: null, error: 1 }),
   ]);
   const entregas = entregasR?.error ? null : (entregasR?.data || []);
-  const _rotEntrega = { ordem_servico: 'Ordem de Serviço', ficha_epi: 'Ficha de entrega de EPI' };
+  const episEnt = epiR?.error ? null : (epiR?.data || []);
 
   // Estado da lista de treinamentos (aba/busca/paginação) fica num objeto
   // global, lido pelas funções _colabTreinos* — assim trocar de aba ou virar
@@ -12955,9 +12960,11 @@ async function verColab(id) {
           <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Dados cadastrais</div>
           ${temAlgumDado ? linhasCadastro : '<div style="font-size:13px;color:var(--text-3);padding:4px 0">Nenhum dado adicional cadastrado.</div>'}
         </div>
-        ${entregas ? `<div class="card">
-          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">OS e fichas de EPI entregues</div>
-          ${entregas.length ? entregas.map(e => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text-1)">${escapeHtml(_rotEntrega[e.tipo] || e.tipo)}${e.funcao ? `<span style="display:block;font-size:12px;color:var(--text-3)">${escapeHtml(e.funcao)}</span>` : ''}</span><span style="color:var(--text-2);white-space:nowrap">${escapeHtml(formatarData(e.entregue_em))}</span></div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:4px 0;line-height:1.5">Nenhuma entrega registrada. Peça ao Laudomiro, por exemplo: OS de ' + escapeHtml(String(c.nome || '')) + '.</div>'}
+        ${comCampo && (entregas || episEnt) ? `<div class="card">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">EPI e documentos de SST</div>
+          ${episEnt ? (episEnt.length ? episEnt.map(e => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text-1)">${escapeHtml(e.nome)}${e.ca ? `<span style="display:block;font-size:12px;color:var(--text-3)">CA ${escapeHtml(e.ca)}</span>` : ''}</span><span style="color:var(--text-2);white-space:nowrap">${escapeHtml(formatarData(e.entregue_em))}</span></div>`).join('') : '<div style="font-size:13px;color:var(--text-3);padding:4px 0">Nenhuma entrega de EPI registrada.</div>') : ''}
+          ${(entregas || []).map(e => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text-1)">${e.tipo === 'ficha_epi' ? 'Ficha de EPI (registro antigo)' : 'Ordem de Serviço'}${e.funcao ? `<span style="display:block;font-size:12px;color:var(--text-3)">${escapeHtml(e.funcao)}</span>` : ''}</span><span style="color:var(--text-2);white-space:nowrap">${escapeHtml(formatarData(e.entregue_em))}</span></div>`).join('')}
+          ${episEnt ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="window.GRID&&window.GRID.tratarAcao&&window.GRID.tratarAcao('ir:campo-epi-pessoa:${c.id}')">Ficha de EPI e entregar</button>` : ''}
         </div>` : ''}
         ${podeMgr?`
         <div class="detail-actions">
@@ -17998,7 +18005,7 @@ async function renderCfgEmpresa() {
   const cnpjFmt = cnpj.length === 14 ? cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : (org?.cnpj || '—');
   const data = (d) => { if (!d) return null; const x = new Date(d); return isNaN(x) ? null : x.toLocaleDateString('pt-BR'); };
   const validade = data(org?.assinatura_vencimento) || (org?.trial_fim ? 'Teste até ' + data(org.trial_fim) : null);
-  const NOMES = { treinamentos: 'Treinamentos', crm: 'CRM', campo: 'Avaliação de Campo' };
+  const NOMES = { treinamentos: 'Treinamentos', crm: 'CRM', campo: 'Gestão de SST' };
   const mods = ['treinamentos', ...(_modulosAtivos || []).filter(m => m !== 'treinamentos')];
   const limite = Number.isFinite(limiteDaOrg(orgLim, 'maxUsuarios')) ? limiteDaOrg(orgLim, 'maxUsuarios') : null;
   const limEmp = Number.isFinite(limiteDaOrg(orgLim, 'maxEmpresas')) ? limiteDaOrg(orgLim, 'maxEmpresas') : null;
@@ -18072,7 +18079,7 @@ function _lqCfgRender() {
     const on = !semCampo && !!(p.permissoes?.acoes || {}).usar_laudomiro;
     const nomeBase = (_PERFIS_CATALOGO.bases.find(b => b[0] === p.perfil_base) || [, ''])[1];
     return `<div class="cx-row"><div class="l"><b>${escapeHtml(p.nome)} <span class="cx-pill cx-p-gray" style="display:inline-flex;margin-left:6px;font-size:10.5px">personalizado</span>${p.ativo ? '' : ' <span class="cx-pill cx-p-gray" style="display:inline-flex;font-size:10.5px">desativado</span>'}</b>
-        <span>${pessoas(conta(u => u.perfil_acesso_id === p.id))} · parte de ${nomeBase}${semCampo ? ' · sem acesso à Avaliação de Campo' : ''}</span></div>
+        <span>${pessoas(conta(u => u.perfil_acesso_id === p.id))} · parte de ${nomeBase}${semCampo ? ' · sem acesso à Gestão de SST' : ''}</span></div>
       <div class="r">${on ? '<span class="cx-ok" style="font-size:12.5px">Pode usar</span>' : '<span class="cx-muted" style="font-size:12.5px">Não pode</span>'}<button type="button" class="cx-sw" aria-pressed="${on}" ${pode && !semCampo ? `onclick="_lqCfgAlternar('${p.id}')"` : 'disabled'} aria-label="${escapeHtml(p.nome)}: ${on ? 'tirar' : 'dar'} acesso ao Laudomiro"></button></div></div>`;
   }).join('');
   setConteudo(`<div class="cx-h"><div><h1>Laudomiro</h1><p>O assistente de IA do GRID para dúvidas de normas de SST. Responde com base nas NRs, no Decreto 3.048, na IN 128, no eSocial e nas instruções do CBMSC, sempre mostrando o item da norma.</p></div></div>
@@ -20493,7 +20500,7 @@ async function _abrirAvaliacaoDoCompromisso(compromissoId) {
     const { data, error } = await sb.from('campo_avaliacoes').select('id')
       .eq('compromisso_id', compromissoId).order('revisao', { ascending: false }).limit(1);
     if (error) throw error;
-    if (!data || !data.length) { showToast('A avaliação desta visita não foi encontrada. Confira se o módulo Avaliação de Campo está ligado.', 'error'); return; }
+    if (!data || !data.length) { showToast('A avaliação desta visita não foi encontrada. Confira se o módulo Gestão de SST está ligado.', 'error'); return; }
     fecharModal();
     irPara('campo-avaliacao', { id: data[0].id });
   } catch (e) { showToast(traduzErroSupabase(e, 'Não foi possível abrir a avaliação'), 'error'); }
@@ -34234,7 +34241,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '298';
+  var APP_BUILD = '299';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
