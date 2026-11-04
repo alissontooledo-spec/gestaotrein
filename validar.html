@@ -786,7 +786,7 @@
   // ── Ler parâmetro da URL ───────────────────────────────────────
   function getCodigoFromURL() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('codigo') || params.get('c') || '';
+    return params.get('codigo') || params.get('c') || params.get('doc') || '';
   }
   // ── Estados da UI ─────────────────────────────────────────────
   function showState(state) {
@@ -824,10 +824,14 @@
     setBtnLoading(true);
     try {
       const codigoNorm = rawInput.trim().replace(/\s/g, '').toLowerCase();
+      // v296: documentos de campo (OS, ficha de EPI, PT, APR, checklist, procedimento) têm código de 8 letras
+      const ehDocCampo = /^[a-z0-9]{8}$/.test(codigoNorm);
+      if (ehDocCampo && new URLSearchParams(window.location.search).get('doc')) { if (await validarDocCampo(codigoNorm)) return; }
       const { data: doc, error: rpcErr } = await sb.rpc(
         'buscar_documento_por_codigo', { p_codigo: codigoNorm }
       );
       if (rpcErr || !doc || !doc.codigo_validacao) {
+        if (ehDocCampo && await validarDocCampo(codigoNorm)) return;
         mostrarErro(
           'Certificado não localizado',
           'Não foi possível encontrar um certificado com o código informado. Verifique o código e tente novamente. Caso o problema persista, entre em contato com a empresa emissora.'
@@ -844,6 +848,56 @@
     } finally {
       setBtnLoading(false);
     }
+  }
+  // ── v296: documento de campo emitido pelo GRID (função validar_doc_emitido, PASSO-94) ──
+  const DOC_NOME = { os: 'Ordem de Serviço', epi: 'Ficha de entrega de EPI', pt: 'Permissão de Trabalho', apr: 'Análise de Risco da Tarefa (APR)', checklist: 'Checklist de inspeção', procedimento: 'Procedimento de trabalho' };
+  const DOC_SIGLA = { os: 'OS', epi: 'FEPI', pt: 'PT', apr: 'APR', checklist: 'CK', procedimento: 'PO' };
+  const numDoc = (t, n) => `${DOC_SIGLA[t] || 'DOC'}-${String(n).padStart(4, '0')}`;
+  const rev2 = (r) => String(r || 0).padStart(2, '0');
+  async function validarDocCampo(codigo) {
+    try {
+      const { data: d, error } = await sb.rpc('validar_doc_emitido', { p_codigo: codigo.toUpperCase() });
+      if (error || !d || !d.tipo) return false;
+      renderDocCampo(d, codigo.toUpperCase());
+      return true;
+    } catch (e) { return false; }
+  }
+  function renderDocCampo(d, codigo) {
+    const sit = d.situacao === 'cancelado' ? 'cancelado' : (d.ultima_revisao > d.revisao || d.situacao === 'substituido') ? 'antigo' : 'valido';
+    const banner = document.querySelector('#stateResult .valid-banner');
+    const tit = document.querySelector('#stateResult .valid-banner-title');
+    if (banner) banner.style.background = sit === 'valido' ? '' : sit === 'antigo' ? '#B54708' : '#B42318';
+    if (tit) tit.textContent = sit === 'valido' ? 'Documento válido' : sit === 'antigo' ? 'Existe revisão mais nova' : 'Documento cancelado';
+    const emitido = d.emitido_em ? String(d.emitido_em).slice(0, 10) : '';
+    document.getElementById('resultCodigo').textContent = codigo;
+    document.getElementById('resultEmissao').textContent = sit === 'valido' ? 'É a revisão mais recente'
+      : sit === 'antigo' ? `Este papel é a Rev. ${rev2(d.revisao)}. A mais recente é a Rev. ${rev2(d.ultima_revisao)}`
+      : `Cancelado pela empresa${d.cancelado_em ? ' em ' + fmtDataExtenso(String(d.cancelado_em).slice(0, 10)) : ''}`;
+    const pessoa = d.pessoa || '';
+    document.getElementById('resultAvatar').textContent = pessoa ? iniciais(pessoa) : (DOC_SIGLA[d.tipo] || 'D').slice(0, 2);
+    document.getElementById('resultNome').textContent = pessoa || (DOC_NOME[d.tipo] || 'Documento');
+    document.getElementById('resultCpf').textContent = d.titulo || '';
+    const infos = [
+      { l: 'Documento', v: `${DOC_NOME[d.tipo] || 'Documento'} ${numDoc(d.tipo, d.numero)}` },
+      { l: 'Revisão', v: rev2(d.revisao) },
+      { l: 'Empresa', v: d.cliente_nome || '—' },
+      { l: 'Emitido em', v: emitido ? fmtDataExtenso(emitido) : '—' },
+      ...(sit === 'antigo' ? [{ l: 'Revisão mais recente', v: `${rev2(d.ultima_revisao)}${d.ultima_emitida_em ? ' · ' + fmtDataExtenso(String(d.ultima_emitida_em).slice(0, 10)) : ''}` }, ...(d.ultima_motivo ? [{ l: 'Motivo da revisão', v: d.ultima_motivo }] : [])] : []),
+      ...(sit === 'cancelado' && d.motivo_cancelamento ? [{ l: 'Motivo do cancelamento', v: d.motivo_cancelamento }] : []),
+      ...(d.assinado_em ? [{ l: 'Assinado em', v: new Date(d.assinado_em).toLocaleString('pt-BR') }] : []),
+      { l: 'Código de autenticidade', v: codigo, amber: true },
+      { l: 'Situação', v: sit === 'valido' ? '✓ Válido e autêntico' : sit === 'antigo' ? 'Autêntico, mas substituído' : 'Cancelado' },
+    ];
+    document.getElementById('infoGrid').innerHTML = infos.map((item) => `<div class="info-item"><div class="info-lbl">${escapeHtml(item.l)}</div><div class="info-val${item.amber ? ' amber' : ''}">${escapeHtml(item.v)}</div></div>`).join('');
+    const emissorCnpjTxt = d.emissor_cnpj ? ` — CNPJ ${escapeHtml(d.emissor_cnpj)}` : '';
+    document.getElementById('resultFooterText').innerHTML = `Documento emitido com o GRID por <strong>${escapeHtml(d.emissor_nome || 'Toledo Labs')}</strong>${emissorCnpjTxt}. O conteúdo completo fica com a empresa.`;
+    const urlBase = `https://www.toledolabs.com.br/validar.html?doc=${codigo}`;
+    document.getElementById('resultValidMeta').textContent = `Código: ${codigo}  ·  Verificado em ${new Date().toLocaleDateString('pt-BR')}`;
+    document.getElementById('resultUrl').textContent = urlBase;
+    const qrWrap = document.getElementById('qrWrap');
+    qrWrap.innerHTML = '<div id="qrCanvas"></div>';
+    try { new QRCode(document.getElementById('qrCanvas'), { text: urlBase, width: 68, height: 68, colorDark: '#1E2A4A', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); } catch (e) { qrWrap.innerHTML = ''; }
+    showState('result');
   }
   function mostrarErro(titulo, desc) {
     document.getElementById('errorTitle').textContent = titulo;
@@ -865,6 +919,7 @@
     const codigoCerto    = doc.codigo_validacao || codigoDisplay;
     const codigoShort    = codigoCerto.slice(0, 8).toUpperCase();
     // Banner
+    { const bn = document.querySelector('#stateResult .valid-banner'), tt = document.querySelector('#stateResult .valid-banner-title'); if (bn) bn.style.background = ''; if (tt) tt.textContent = 'Certificado Válido'; }
     document.getElementById('resultCodigo').textContent = codigoShort;
     document.getElementById('resultEmissao').textContent =
       dataEmissao ? `Emitido em ${fmtDataExtenso(dataEmissao)}` : 'Documento verificado com sucesso';
