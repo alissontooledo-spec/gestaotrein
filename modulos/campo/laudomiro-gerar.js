@@ -692,7 +692,7 @@ function blocoEmitidos(g, t) {
     ? `<label class="lq-doc-sel"><small>Motivo do cancelamento</small><input class="cp-inp lq-doc-inp" data-cp="lq.g.${t}.canc.motivo" value="${esc(e.motivoCanc || '')}" placeholder="Ex.: emitido com dado errado" aria-label="Motivo do cancelamento"></label>
       <span class="lq-doc-acts mini"><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.canc-enviar"${e.cancelando ? ' disabled' : ''}>Cancelar o documento</button><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.canc-fechar">Voltar</button></span>`
     : ` <button type="button" class="lq-lnk" data-acao="campo:lq-g:${t}.canc-abrir">Cancelar este documento</button>`) : '';
-  return `<div class="lq-reg lq-emit"><div><b>Registrado: ${esc(lista)}.</b> ${e.regs.length > 1 ? 'Cada um tem QR próprio' : 'O QR está no cabeçalho'}: qualquer pessoa confere em toledolabs.com.br/validar.html.${canc}</div></div>`;
+  return `<div class="lq-reg lq-emit"><div><b>Registrado: ${esc(lista)}.</b> ${e.regs.length > 1 ? 'Cada um tem QR próprio' : 'O QR está no cabeçalho'}: qualquer pessoa confere em toledolabs.com.br/validar.html.${canc}</div></div>${blocoAssinatura(g, t)}`;
 }
 async function cancelarEmitido(g) {
   const e = g.emit, motivo = String(e.motivoCanc || '').trim();
@@ -704,6 +704,86 @@ async function cancelarEmitido(g) {
     e.cancelado = true; e.cancAberto = false; avisar('Documento cancelado.');
   } catch (er) { avisar(/42501|admin/i.test(`${er?.code || ''} ${er?.message || ''}`) ? 'Só o administrador ou quem emitiu pode cancelar.' : 'Não foi possível cancelar agora.', 'erro'); }
   e.cancelando = false;
+}
+
+/* ── v297: assinatura no celular, "neste aparelho" (parte 4 da proposta aprovada em 04/11/2026) ──────
+   Ficha de EPI e ciência da OS. O trabalhador marca o aceite e assina com o dedo no aparelho do técnico.
+   O banco guarda a imagem, o resumo (SHA-256) do documento, data e hora, aparelho e IP (PASSO-95).
+   Depois sai o "PDF assinado": a assinatura entra nas linhas da ficha ou no bloco da OS, com a trilha. */
+const hojeHora = () => { const d = new Date(); return { data: d.toLocaleDateString('pt-BR'), hora: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }; };
+async function sha256(txt) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+function episDoDoc(partes) {
+  const tb = (partes || []).find((b) => b.t === 'tabela' && b.cols?.[1]?.t === 'EPI');
+  return tb ? tb.linhas.map((l) => String(l[1] || '').replace(/\s*·\s*nº de série.*$/, '')).filter(Boolean) : [];
+}
+function blocoAssinatura(g, t) {
+  const e = g.emit;
+  if (!e?.regs?.length || !e.docs || e.cancelado || !(g.tipo === 'os' || g.tipo === 'epi')) return '';
+  const linhas = e.regs.slice(0, 8).map((r, i) => {
+    const a = e.ass?.[i], nome = e.nomes?.[i] || 'Colaborador';
+    return `<li><div><b>${esc(nome)}</b><small>${esc(numTxt(g.tipo, r.numero))}${a ? ` · assinado em ${esc(a.data)} às ${esc(a.hora)}` : ''}</small></div>
+      ${a ? `<button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.ass-pdf.${i}">Baixar PDF assinado</button>` : `<button type="button" class="btn btn-navy btn-sm" data-acao="campo:lq-g:${t}.ass-abrir.${i}">Assinar neste aparelho</button>`}</li>`;
+  }).join('');
+  return `<div class="lq-ass"><p><b>Colher assinatura no celular</b> <small>Opcional. Passe o celular ou o tablet para o trabalhador assinar com o dedo. O papel continua valendo.</small></p><ul>${linhas}</ul>${e.regs.length > 8 ? `<p class="lq-doc-nota">Aparecem as 8 primeiras pessoas. Para as outras, gere a ${g.tipo === 'epi' ? 'ficha' : 'OS'} por pessoa.</p>` : ''}</div>`;
+}
+function abrirAssinaturaDoc(g, ti, i, redesenhar) {
+  if (typeof window.abrirModal !== 'function' || typeof window._initCanvas !== 'function') { avisar('Não foi possível abrir a assinatura neste aparelho.', 'erro'); return; }
+  const r = g.emit.regs[i], nome = g.emit.nomes?.[i] || 'Colaborador', num = numTxt(g.tipo, r.numero);
+  const itens = g.tipo === 'epi' ? episDoDoc(g.emit.docs[i]) : [];
+  const decl = g.tipo === 'epi'
+    ? 'Recebi gratuitamente os EPI acima, em perfeito estado, e fui orientado sobre o uso, o ajuste, a guarda, a higienização e a troca (NR-06, itens 6.5.1 e 6.7.2).'
+    : `Recebi uma cópia da Ordem de Serviço ${num}, li e entendi as orientações e tirei minhas dúvidas (NR-01, item 1.4.1, alínea c).`;
+  window.__lqAssCtx = { g, i, redesenhar };
+  window.abrirModal(`Assinatura · ${num}`, `
+    <div class="lq-ass-m"><p><b>${esc(nome)}</b></p>
+    ${itens.length ? `<ul>${itens.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <p>${esc(decl)}</p>
+    <label class="lq-ass-ok"><input type="checkbox" id="lqAceite"> Aceito assinar este documento eletronicamente, neste aparelho.</label>
+    <canvas id="canvasAssinatura" width="440" height="180" aria-label="Espaço para assinar com o dedo" style="border:2px solid var(--border);border-radius:var(--r-md);touch-action:none;width:100%;height:180px;display:block;background:#fff;cursor:crosshair"></canvas>
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="limparAssinatura()">Limpar</button></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button><button class="btn btn-navy" id="btnSalvarModal" onclick="window.__lqAssinar()">Confirmar assinatura</button>`);
+  setTimeout(() => window._initCanvas(), 100);
+}
+window.__lqAssinar = async () => {
+  const ctx = window.__lqAssCtx; if (!ctx) return;
+  const { g, i, redesenhar } = ctx;
+  if (!document.getElementById('lqAceite')?.checked) { avisar('Marque o aceite antes de assinar.', 'erro'); return; }
+  const cv = document.getElementById('canvasAssinatura');
+  const px = cv?.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+  if (!px || !px.some((v, k) => k % 4 === 3 && v > 0)) { avisar('Assine no espaço antes de confirmar.', 'erro'); return; }
+  const png = cv.toDataURL('image/png');
+  if (typeof window.setBtnModalLoading === 'function') window.setBtnModalLoading(true);
+  try {
+    const hash = await sha256(JSON.stringify(g.emit.docs[i]));
+    const aparelho = `${navigator.userAgentData?.platform || navigator.platform || ''} · ${String(navigator.userAgent || '').slice(0, 200)}`;
+    const { data, error } = await sb().rpc('doc_assinar', { p_id: g.emit.regs[i].id, p_png: png, p_hash: hash, p_aparelho: aparelho, p_org_id: sessao.orgId() });
+    if (error) throw error;
+    const q = data ? new Date(data) : new Date();
+    g.emit.ass ||= {};
+    g.emit.ass[i] = { png, hash, data: q.toLocaleDateString('pt-BR'), hora: q.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) };
+    window.fecharModal?.();
+    avisar('Assinatura registrada.');
+    redesenhar?.();
+  } catch (e) {
+    const m = `${e?.code || ''} ${e?.message || ''}`;
+    avisar(semFuncao(e) ? 'A assinatura no celular ainda não está ligada neste GRID (falta um passo no banco).' : /já assinado/.test(m) ? 'Este documento já foi assinado.' : /substitu|cancel/.test(m) ? 'Este documento foi substituído ou cancelado.' : 'Não foi possível registrar a assinatura. Confira a internet e tente de novo.', 'erro');
+  }
+  if (typeof window.setBtnModalLoading === 'function') window.setBtnModalLoading(false);
+};
+async function baixarAssinado(g, i) {
+  const e = g.emit, a = e.ass[i], r = e.regs[i], nome = e.nomes?.[i] || 'Colaborador', num = numTxt(g.tipo, r.numero);
+  const partes = JSON.parse(JSON.stringify(e.docs[i]));
+  if (g.tipo === 'epi') {
+    const tb = partes.find((b) => b.t === 'tabela' && b.cols?.[1]?.t === 'EPI');
+    if (tb) tb.linhas = tb.linhas.map((l) => (String(l[1] || '').trim() ? [a.data, ...l.slice(1, 8), { x: '', img: a.png }] : l));
+  } else {
+    const as = partes.find((b) => b.t === 'assin');
+    if (as?.blocos?.[0]) { as.blocos[0].img = a.png; as.blocos[0].linhas = [`Matrícula: [preencher] · Data: ${a.data}`]; }
+  }
+  const trilha = { t: 'nota', x: `Assinado eletronicamente por ${nome} em ${a.data} às ${a.hora}, no aparelho do técnico, com aceite do trabalhador. ${num} · código ${r.codigo} · conferir em toledolabs.com.br/validar.html · resumo do documento ${a.hash.slice(0, 16)}.` };
+  const k = partes.findIndex((b) => b.t === 'rod');
+  partes.splice(k < 0 ? partes.length : k, 0, trilha);
+  await Docs.baixarPartes('pdf', `${TIPOS[g.tipo].nome} ${num} assinado`, [partes]);
 }
 
 /* ── v295: conferência antes do PDF (proposta aprovada em 04/11/2026, seção 8) ───────────
@@ -813,6 +893,8 @@ export async function acao(nome, valor, redesenhar) {
     redesenhar(); return true;
   }
   if (op === 'registrar') { await registrar(g); redesenhar(); return true; }
+  if (op === 'ass-abrir' && g.emit?.regs?.[+arg]) { abrirAssinaturaDoc(g, +ti, +arg, redesenhar); return true; }
+  if (op === 'ass-pdf' && g.emit?.ass?.[+arg]) { try { await baixarAssinado(g, +arg); } catch (e) { avisar(e?.message || 'Não foi possível montar o PDF assinado.', 'erro'); } return true; }
   if (op === 'rev-sim' && g.prev) { g.prev.escolha = 'rev'; redesenhar(); return true; }
   if (op === 'rev-nao' && g.prev) { g.prev.escolha = 'novo'; redesenhar(); return true; }
   if (op === 'canc-abrir' && g.emit) { g.emit.cancAberto = true; redesenhar(); return true; }
@@ -837,7 +919,7 @@ async function baixarOuVer(g, op, arg) {
         return true;
       }
       // v296: número, revisão e QR (só ao baixar; ver em PDF não gasta número)
-      try { const regs = await registrarEmissao(g, docs); if (regs) aplicarRegistro(docs, regs, g); }
+      try { const regs = await registrarEmissao(g, docs); if (regs) { aplicarRegistro(docs, regs, g); g.emit.docs = docs; g.emit.nomes = g.dl ? [''] : pessoasDe(g).map((p) => (p.fora ? '' : p.nome)); } }
       catch (e) { avisar(e?.message || 'Não foi possível registrar o documento.', 'erro'); return true; }
       await Docs.baixarPartes(arg === 'pdf' ? 'pdf' : 'docx', T.livre ? `${T.nome.split(',')[0]} ${g.dl?.res?.titulo_atividade || g.dl?.atividade || ''}` : `${T.nome} ${funcaoDe(g) || ''} ${cli}`, docs);
       g.baixado = `${arg === 'pdf' ? 'PDF' : 'Word'}${docs.length > 1 ? ` com ${docs.length} ${g.tipo === 'epi' ? 'fichas' : 'OS'}` : ''}`;

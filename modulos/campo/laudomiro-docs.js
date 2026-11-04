@@ -386,6 +386,10 @@ export async function pdfPartes(documentos) {
       if (y + hh > FIM) continua();
       ls.forEach((q, i) => {
         caixa(xs[i], y, ws[i], hh);
+        if (l[i] && typeof l[i] === 'object' && l[i].img) {   // v297: assinatura colhida no celular
+          const ih = Math.min(hh - 1.2, 7), iw = Math.min(ws[i] - 2, ih * 3);
+          try { doc.addImage(l[i].img, 'PNG', xs[i] + (ws[i] - iw) / 2, y + (hh - ih) / 2, iw, ih); } catch { /* segue sem a imagem */ }
+        }
         fonte(7.9, celNeg(l[i]));
         q.forEach((t, k) => {
           const yy = y + pad + 2.5 + k * alt;
@@ -408,7 +412,9 @@ export async function pdfPartes(documentos) {
     const hh = 12 + 8 + Math.max(...b.blocos.map((bl) => (bl.linhas || []).length)) * 4 + 6;
     cabe(hh); y += 12;
     b.blocos.forEach((bl, i) => {
-      const x = M + i * (w + gap); PRETO(); doc.line(x, y, x + w, y);
+      const x = M + i * (w + gap);
+      if (bl.img) { try { doc.addImage(bl.img, 'PNG', x + 2, y - 11, 30, 10); } catch { /* segue sem a imagem */ } }   // v297
+      PRETO(); doc.line(x, y, x + w, y);
       fonte(8.4, true); doc.splitTextToSize(S(bl.titulo), w).slice(0, 2).forEach((l, k) => doc.text(l, x, y + 4 + k * 3.8));
       const y0 = y + 4 + Math.min(2, doc.splitTextToSize(S(bl.titulo), w).length) * 3.8;
       fonte(7.8); (bl.linhas || []).forEach((l, k) => doc.text(S(emLinha(l)), x, y0 + k * 4));
