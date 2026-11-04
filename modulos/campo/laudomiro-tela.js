@@ -1294,15 +1294,96 @@ function cartaoEntendi(e, tIdx, turno) {
 
 /* v290: próximos passos. O servidor só manda o que a organização contratou: sem o módulo, o passo não existe. */
 const MOD_NOME = { campo: 'Avaliação de Campo', treinamentos: 'Treinamentos', crm: 'CRM' };
-function proximosPassos(r, tIdx) {
-  const l = r.ligacoes || [], c = r.cliente;
-  if (!l.length && !c) return '';
-  const cab = c ? `<div class="lq-prox-cl"><span>Cliente</span><b>${esc(c.nome)}</b>${c.origem ? `<small>${esc(c.origem)}</small>` : ''}</div>` : '';
+function proximosPassos(r, tIdx, turno = {}) {
+  const l = [...(turno.lig || []), ...(r.ligacoes || [])], c = turno.cliente || r.cliente;
+  const podeLigar = !!turno._fotos || !!turno.id;
+  if (!l.length && !c && !podeLigar) return '';
+  const cab = c ? `<div class="lq-prox-cl"><span>Cliente</span><b>${esc(c.nome)}</b>${turno.ligCarregando ? '<small>conferindo o cadastro…</small>' : ''}<button type="button" class="lq-lnk" data-acao="campo:lq-cliente:${tIdx}">Trocar</button></div>`
+    : podeLigar ? `<div class="lq-prox-cl sem"><span>Sem cliente ligado.</span><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-cliente:${tIdx}">Ligar a um cliente</button><small>Opcional. Ligado, ele confere o GHE e os treinamentos do cliente.</small></div>` : '';
   const forte = l.findIndex(x => x.alerta && x.botao);
-  const um = (x, i) => `<div class="lq-prox-i${x.alerta ? ' al' : ''}"${x.modulo ? ` title="${esc(MOD_NOME[x.modulo] || x.modulo)}"` : ''}><div class="t">${x.alerta ? '<i class="lq-prox-d"></i>' : ''}<b>${esc(x.titulo)}</b>${x.texto ? `<p>${esc(x.texto)}</p>` : ''}</div>
-      ${x.botao ? `<button type="button" class="btn ${i === forte ? 'btn-primary' : 'btn-outline'} btn-sm" data-acao="campo:lq-ligar:${tIdx}.${esc(x.acao || '')}">${esc(x.botao)}</button>` : ''}</div>`;
+  const um = (x, i) => `<div class="lq-prox-i${x.alerta ? ' al' : ''}"><div class="t">${x.alerta ? '<i class="lq-prox-d"></i>' : ''}<b>${esc(x.titulo)}</b>${x.texto ? `<p>${esc(x.texto)}</p>` : ''}</div>
+      ${x.botao ? `<button type="button" class="btn ${i === forte ? 'btn-primary' : 'btn-outline'} btn-sm" data-acao="${esc(x.dacao || `campo:lq-ligar:${tIdx}.${x.acao || ''}`)}">${esc(x.botao)}</button>` : ''}</div>`;
   const vis = l.slice(0, 3).map(um).join(''), resto = l.slice(3);
   return `<div class="lq-prox"><h5>Próximos passos</h5>${cab}${vis}${resto.length ? `<details class="lq-prox-mais"><summary>Mais ${resto.length} ${resto.length === 1 ? 'passo' : 'passos'}</summary>${resto.map((x, k) => um(x, k + 3)).join('')}</details>` : ''}</div>`;
+}
+
+/* ══ v292 · ligar a análise a um cliente ══════════════════════════════════
+   Tudo é buscado AQUI, com a permissão de quem está usando (RLS): nada do cadastro vai para a IA.
+   Cada ligação só existe se a empresa tem o módulo e o perfil enxerga a tela; sem isso, não aparece nada. */
+const FAMILIAS = [
+  { re: /^(ALT_|AND_|ESC_MAO|OBR_QUEDAMAT)/, risco: /queda|altura/i, nome: 'Risco de queda', ativ: 'trabalho em altura' },
+  { re: /^ELE_/, risco: /el[eé]tric|choque/i, nome: 'Risco elétrico', ativ: 'risco elétrico' },
+  { re: /^MAQ_/, risco: /m[aá]quina|prensa|corte|esmag|aprision|partes m[oó]veis/i, nome: 'Risco de máquinas', ativ: 'máquina sem proteção' },
+  { re: /^QUE_FUMOS$/, risco: /fumo|gases|solda/i, nome: 'Fumos de solda', ativ: 'fumos de solda' },
+  { re: /^(QUE_FAGULHA|INC_)/, risco: /inc[eê]ndio|explos/i, nome: 'Risco de incêndio', ativ: 'risco de incêndio' },
+  { re: /^QUI_/, risco: /qu[ií]mic|poeira|vapor|n[eé]voa/i, nome: 'Risco químico', ativ: 'produto químico' },
+  { re: /^ERG_/, risco: /ergon|postura|levantamento|repetit/i, nome: 'Risco ergonômico', ativ: 'postura ou esforço' },
+];
+const dmaCurto = (iso) => { const d = String(iso || '').slice(0, 10).split('-'); return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : ''; };
+
+async function escolherCliente(tIdx) {
+  const p = ponte(); if (typeof p.abrirModal !== 'function') return;
+  let lista = [];
+  try {
+    const { data, error } = await sb().from('clientes').select('id,nome').eq('org_id', sessao.orgId()).order('nome').limit(1000);
+    if (error) throw error; lista = data || [];
+  } catch { avisar('Não consegui abrir a lista de clientes agora.', 'erro'); return; }
+  if (!lista.length) { avisar('Nenhum cliente cadastrado.', 'erro'); return; }
+  _clientesModal = lista;
+  p.abrirModal('Ligar a um cliente', `<input type="search" class="form-input" id="lqCliBusca" placeholder="Buscar pelo nome" autocomplete="off"
+      oninput="(function(v){v=v.toLowerCase();document.querySelectorAll('.lq-cli-op').forEach(function(b){b.style.display=b.dataset.n.indexOf(v)>=0?'':'none';});})(this.value)" style="width:100%;margin-bottom:10px">
+    <div class="lq-cli-l">${lista.map((c, i) => `<button type="button" class="lq-cli-op" data-n="${esc(String(c.nome || '').toLowerCase())}" onclick="window.__lqCliente&&window.__lqCliente(${tIdx},${i})">${esc(c.nome || 'Sem nome')}</button>`).join('')}</div>
+    <p style="margin:10px 0 0;font-size:12.5px;color:var(--text-3)">Ele confere o GHE da última avaliação de campo e os treinamentos deste cliente. Nada disso vai para a IA.</p>`,
+    '<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>');
+  setTimeout(() => document.getElementById('lqCliBusca')?.focus?.(), 60);
+}
+let _clientesModal = [];
+/* o modal fica fora da tela do módulo (os data-acao de lá não chegam aqui) */
+if (typeof window !== 'undefined') window.__lqCliente = (ti, i) => {
+  const t = _conv[+ti], c = _clientesModal[+i];
+  try { window.fecharModal?.(); } catch { /* nada */ }
+  if (t && c) { t.cliente = { id: c.id, nome: c.nome }; ligarCliente(t); }
+};
+
+async function ligarCliente(turno) {
+  const d = _dono, r = turno.resposta || {}, c = turno.cliente; if (!c) return;
+  turno.lig = []; turno.ligCarregando = true; repintar();
+  const lig = [], cats = (r.ligar?.cats || (r.pontos || []).map(p => p.cat)).filter(Boolean);
+  const fams = FAMILIAS.filter(f => cats.some(k => f.re.test(k)));
+  // 1) Avaliação de Campo: o risco visto está no inventário (GHE) da última avaliação do cliente?
+  if (sessao.temModulo('campo')) {
+    try {
+      const { data: avs } = await sb().from('campo_avaliacoes').select('id,numero,data_visita').eq('cliente_id', c.id).order('data_visita', { ascending: false }).limit(1);
+      const av = (avs || [])[0];
+      if (!av) lig.push({ titulo: 'Este cliente ainda não tem avaliação de campo', texto: 'Com uma avaliação, o Laudomiro confere se o risco das fotos está no inventário (GHE).' });
+      else {
+        const { data: ghes } = await sb().from('campo_ghes').select('nome,riscos').eq('avaliacao_id', av.id);
+        const nomes = (ghes || []).flatMap(g => (g.riscos || []).map(x => String(x?.nome || '')));
+        const ref = `${av.numero ? 'avaliação ' + av.numero : 'última avaliação'}${av.data_visita ? ' (' + dmaCurto(av.data_visita) + ')' : ''}`;
+        for (const f of fams) if ((ghes || []).length && !nomes.some(n => f.risco.test(n))) {
+          lig.push({ alerta: true, titulo: `${f.nome} não está no inventário do cliente`, texto: `Há ${f.ativ} nas fotos e nenhum GHE da ${ref} traz esse risco. Sugestão: revisar o inventário do PGR (NR-01).`, botao: 'Ver a avaliação', dacao: `ir:campo-avaliacao:${av.id}` });
+        }
+        if ((r.pontos || []).length) lig.push({ titulo: `Levar os pontos para o plano de ação`, texto: `Abre o plano de ação da ${ref}.`, botao: 'Abrir o plano', dacao: `ir:campo-plano:${av.id}` });
+      }
+    } catch { /* sem acesso à avaliação: a ligação não aparece */ }
+  }
+  // 2) Treinamentos: quem do cliente está com o treinamento vencido no cadastro (mesma conta da Conformidade)
+  turno.ligGrupos = [];
+  for (const nr of (r.ligar?.nrs || [])) {
+    try {
+      const res = await Dados.executar({ tipo: 'vencimentos', curso: nr, cliente: c.nome, situacao: 'vencidos', dias: null, periodo: null, formato: 'lista' });
+      if (!res?.ok) continue;   // sem a Conformidade (módulo ou perfil): não aparece nada
+      if (res.pessoas > 0) {
+        const g = (res.grupos || [])[0];
+        if (g) turno.ligGrupos.push(g);
+        lig.push({ alerta: true, titulo: `${nr} vencida no cadastro: ${res.pessoas} ${res.pessoas === 1 ? 'pessoa' : 'pessoas'}`,
+          texto: `No cadastro do GRID, ${res.pessoas} ${res.pessoas === 1 ? 'pessoa' : 'pessoas'} da ${c.nome} ${res.pessoas === 1 ? 'está' : 'estão'} com a ${nr} vencida. A foto não mostra quem são.`,
+          ...(g ? { botao: 'Criar turma', acao: `turma.${turno.ligGrupos.length - 1}` } : {}) });
+      } else lig.push({ titulo: `${nr}: ninguém vencido no cadastro deste cliente`, texto: '' });
+    } catch { /* consulta indisponível: segue sem ela */ }
+  }
+  if (!mesmoDono(d) || turno.cliente !== c) return;
+  turno.lig = lig; turno.ligCarregando = false; repintar();
 }
 function respostaFoto(turno, tIdx) {
   const r = turno.resposta, thumbs = (turno.anexo?.thumbs || []).length ? turno.anexo.thumbs : (turno.anexo?.thumb ? [turno.anexo.thumb] : []);
@@ -1334,7 +1415,7 @@ function respostaFoto(turno, tIdx) {
     ${pontos ? `<div class="lq-pts lq-pts-l">${pontos}</div>` : ''}
     ${r.zoom_falhou ? '<p class="lq-zf">Não consegui conferir os detalhes no zoom desta vez. Os pontos são da primeira leitura.</p>' : ''}
     ${ac}
-    ${proximosPassos(r, tIdx)}
+    ${proximosPassos(r, tIdx, turno)}
     ${(r.conferir || []).length ? `<div class="lq-conf3"><h5>As fotos não respondem: confira no local</h5>${r.conferir.map((c, i) => `<button type="button" class="lq-ck${marc.has(i) ? ' on' : ''}" data-acao="campo:lq-conf:${tIdx}.${i}" aria-pressed="${marc.has(i)}"><i>${marc.has(i) ? '✓' : ''}</i>${esc(c)}</button>`).join('')}</div>` : ''}
     ${verif}
     ${(r.pessoas || []).length ? `<details class="lq-dt"><summary>Quem aparece nas fotos <span>${r.pessoas.length}</span></summary><div class="lq-pess">${r.pessoas.map((p, i) => `<div><b>${i + 1}.</b> ${esc(p.onde || '')}${p.atividade ? ' · ' + esc(p.atividade) : ''}${(p.epi_faltando || []).length ? `<span class="falta">Sem: ${esc(p.epi_faltando.join(', '))}</span>` : ''}${(p.epi_visto || []).length ? `<span class="tem">Com: ${esc(p.epi_visto.join(', '))}</span>` : ''}</div>`).join('')}</div></details>` : ''}
@@ -1719,6 +1800,19 @@ export async function acao(nome, valor, redesenhar) {
   if (nome === 'campo:lq-cor-ativ') { const [ti, k] = String(valor).split('.'); const t = _conv[+ti]; if (t) { const at = t._corAtiv || []; if (!at.includes(k) && at.length >= 3) { avisar('No máximo 3 atividades. Desmarque uma antes.', 'erro'); return true; } t._corAtiv = at.includes(k) ? at.filter(x => x !== k) : [...at, k]; } redesenhar(); return true; }
   if (nome === 'campo:lq-cor-refazer') { refazerCorrigido(+valor); return true; }
   if (nome === 'campo:lq-lupa') { const [ti, i] = String(valor).split('.').map(Number); const t0 = _conv[ti], p = t0?.resposta?.pontos?.[i], src = p?.lupa || (p && p.zoom_ref != null ? (t0._recortes || {})[p.zoom_ref] : ''); if (src) ponte().abrirModal?.('Visto no zoom', `<img src="${src}" alt="Recorte" style="width:100%;border-radius:10px;display:block"><p style="margin:10px 0 0;font-size:12.5px;color:var(--text-3)">Recorte feito no seu aparelho, da foto original. Não fica guardado.</p>`, '<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>'); return true; }
+  if (nome === 'campo:lq-cliente') { escolherCliente(+valor); return true; }   // v292
+  if (nome === 'campo:lq-cli-esc') {
+    const [ti, i] = String(valor).split('.').map(Number); const t = _conv[ti], c = _clientesModal[i];
+    try { window.fecharModal?.(); } catch { /* nada */ }
+    if (t && c) { t.cliente = { id: c.id, nome: c.nome }; ligarCliente(t); }
+    return true;
+  }
+  if (nome === 'campo:lq-ligar') {
+    const [ti, ...resto] = String(valor).split('.'); const t = _conv[+ti], qual = resto.join('.');
+    const m = /^turma\.(\d+)$/.exec(qual), g = m ? t?.ligGrupos?.[+m[1]] : null, p = ponte();
+    if (g && typeof p.montarTurma === 'function') { p.montarTurma({ clienteId: g.clienteId, catalogoId: g.cursoId, travar: true, origemConfIds: g.ids.slice() }); }
+    return true;
+  }
   if (nome === 'campo:lq-ativ') {   // até 2 atividades (ex.: obra e trabalho em altura)
     if (_anexo?.fotos) { const at = _anexo.atividade || []; _anexo.atividade = at.includes(valor) ? at.filter(x => x !== valor) : [...at, valor].slice(-2); }
     redesenhar(); return true;
