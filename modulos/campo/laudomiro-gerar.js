@@ -1,5 +1,8 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   GRID · modulos/campo/laudomiro-gerar.js — documentos pedidos no chat (app 284)
+   GRID · modulos/campo/laudomiro-gerar.js — documentos pedidos no chat (app 284, formulários v295)
+   v295: OS, ficha de EPI, PT, APR, checklist e procedimento no formulário novo (cabeçalho padrão,
+   linhas em branco, caixas de marcar, assinatura por linha na ficha, P/S/Nível na APR), OS com os
+   treinamentos EXIGIDOS pela função e conferência antes do PDF (proposta de 04/11/2026).
    Ordem de Serviço (NR-01, item 1.4.1, alínea c), Ficha de entrega de EPI
    (NR-06, item 6.5.1, alínea d), Lista de presença e Dossiê para fiscalização.
    Proposta aprovada em 24/10/2026: 08-Propostas-visuais/grid-proposta-laudomiro-documentos-v284b.png.
@@ -19,6 +22,7 @@ import * as Docs from './laudomiro-docs.js';
 import { esc, avisar, docClienteTxt } from './comum.js';
 import { cliente as clienteBanco } from '../../nucleo/dados.js';
 import * as sessao from '../../nucleo/sessao.js';
+import { danosDe } from './plano.js';
 
 const sb = () => { const c = clienteBanco(); if (!c) throw new Error('Banco indisponível. Recarregue o sistema.'); return c; };
 const semAc = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -259,7 +263,7 @@ function prepararRiscos(turno) {
     const vistos = new Set();
     gs.forEach((ghe) => (ghe.riscos || []).forEach((r) => {
       const k = norm(r.nome); if (!k || vistos.has(k)) return; vistos.add(k);
-      g.riscos.push({ risco: r.nome || '', fonte: r.fonte || '', epc: r.epc || '', adm: r.medidas_adm || '', epi: vazioEpi(r.epi) ? '' : r.epi, origem: 'ghe' });
+      g.riscos.push({ risco: r.nome || '', fonte: r.fonte || '', danos: danosDe(r, null) || '', epc: r.epc || '', adm: r.medidas_adm || '', epi: vazioEpi(r.epi) ? '' : r.epi, origem: 'ghe' });
     }));
     g.origem = { tipo: 'ghe', ghes: gs.map((x) => x.nome).join(', '), visita: g.D.visita };
     return;
@@ -279,7 +283,7 @@ async function sugerir(turno, funcao) {
   try {
     const r = await _ctx.chamar({ acao: 'riscos_funcao', funcao });
     if (r.restantes != null) _ctx.aoGastar(r.restantes);
-    const lista = (r.riscos || []).slice(0, MAX_RISCOS).map((x) => ({ risco: x.risco || '', fonte: x.fonte || '', epc: x.epc || '', adm: x.adm || '', epi: x.epi || '', origem: 'sug' }));
+    const lista = (r.riscos || []).slice(0, MAX_RISCOS).map((x) => ({ risco: x.risco || '', fonte: x.fonte || '', danos: x.danos || '', epc: x.epc || '', adm: x.adm || '', epi: x.epi || '', origem: 'sug' }));
     g.sugCache ||= {}; g.sugCache[norm(funcao)] = lista;
     if (norm(funcaoDe(g)) !== norm(funcao)) { if (g.sug?.funcao === funcao) g.sug = null; _ctx.repintar(); return; }   // mudou de função enquanto esperava
     // o que o técnico já escreveu fica, e a sugestão entra depois (sem repetir o mesmo risco)
@@ -316,18 +320,21 @@ async function guardarEmergencia(g) {
   }
 }
 
-/* ── Textos fixos (conferidos na NR-01 e na NR-06) ──────────────────────── */
-const OS_OBJETIVO = 'Esta Ordem de Serviço informa ao trabalhador os riscos da sua função, as medidas de prevenção adotadas pela empresa e as precauções para evitar acidentes e doenças do trabalho, conforme a NR-01 (item 1.4.1, alínea c, e item 1.4.4).';
-const OS_DEVERES = ['Cumprir as normas de segurança e saúde no trabalho e esta Ordem de Serviço.', 'Fazer os exames médicos previstos nas Normas Regulamentadoras.', 'Colaborar com a empresa na aplicação das Normas Regulamentadoras.', 'Usar o EPI fornecido pela empresa.'];
-const OS_FALTA = 'A recusa sem justificativa em cumprir estes deveres constitui ato faltoso (NR-01, item 1.4.2.1).';
-const OS_INTERROMPER = 'O trabalhador pode interromper a atividade quando constatar, por motivos razoáveis, risco grave e iminente para sua vida ou saúde. Deve avisar imediatamente o seu superior. A empresa não pode exigir o retorno antes da correção da situação. O trabalhador não pode sofrer consequências injustas por essa interrupção (NR-01, itens 1.4.3, 1.4.3.1 e 1.4.3.2).';
-const OS_ACIDENTE = 'Em caso de acidente, mal-estar ou risco grave para você ou para outras pessoas, pare a atividade e avise imediatamente o superior.';
-const OS_CIENCIA = 'Declaro que recebi, li e entendi esta Ordem de Serviço e as orientações nela contidas.';
-const EPI_TERMO = 'Recebi gratuitamente os EPI listados, em perfeito estado de conservação e funcionamento. Fui orientado sobre o risco contra o qual cada EPI protege, os limites de proteção, o uso e o ajuste corretos, a manutenção e a substituição, a limpeza, a higienização, a guarda e a conservação (NR-06, item 6.5.1, alíneas b e c, e item 6.7.2). Comprometo-me a (NR-06, item 6.6.1):';
-const EPI_DEVERES = ['Usar o EPI fornecido pela empresa.', 'Usar o EPI apenas para a finalidade a que se destina.', 'Cuidar da limpeza, da guarda e da conservação.', 'Avisar a empresa quando o EPI for extraviado, danificado ou ficar impróprio para uso.', 'Cumprir as orientações da empresa sobre o uso adequado.'];
-const EPI_FALTA = 'Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (NR-01, itens 1.4.2, alínea d, e 1.4.2.1).';
+/* ── Textos fixos (conferidos no texto oficial da NR-01 e da NR-06 em 04/11/2026) ── */
+const OS_DEVERES = ['Cumprir as normas de segurança e saúde no trabalho, inclusive esta Ordem de Serviço.', 'Fazer os exames médicos previstos nas Normas Regulamentadoras.', 'Colaborar com a empresa na aplicação das Normas Regulamentadoras.', 'Usar o EPI fornecido pela empresa.'];
+const OS_FALTA = 'A recusa injustificada em cumprir estes deveres constitui ato faltoso (NR-01, item 1.4.2.1).';
+const OS_PROIBICOES = ['Executar a tarefa sem o EPI indicado nesta Ordem de Serviço ou com EPI danificado.', 'Retirar, desligar ou burlar proteções de máquinas e equipamentos.', 'Executar atividade para a qual não foi treinado e autorizado.', '[preencher]'];
+const OS_INTERROMPER = 'Você pode interromper a atividade quando constatar uma situação de trabalho em que, a seu ver, por motivos razoáveis, haja risco grave e iminente para a sua vida ou saúde, avisando imediatamente o seu superior. A empresa não pode exigir o retorno enquanto a situação não for corrigida, e você não pode sofrer consequências injustificadas por isso (NR-01, itens 1.4.3, 1.4.3.1 e 1.4.3.2).';
+const OS_EMERG_PADRAO = 'Em acidente ou mal-estar: pare a atividade e avise o superior. Emergência interna: [preencher] · SAMU 192 · Bombeiros 193 · Ponto de encontro: [preencher]';
+const OS_EXAMES = 'Os resultados dos seus exames médicos e das avaliações ambientais do seu local de trabalho ficam disponíveis com: [preencher] (NR-01, item 1.4.1, alínea b).';
+const OS_CIENCIA = 'Declaro que recebi uma cópia desta Ordem de Serviço, que li e entendi as orientações e que tirei minhas dúvidas.';
+const EPI_TERMO = 'Ao assinar cada linha, declaro que recebi gratuitamente o EPI daquela linha, em perfeito estado de conservação e funcionamento, e que fui orientado sobre o risco contra o qual ele protege, os limites de proteção, o uso e o ajuste corretos, a guarda, a higienização e a substituição (NR-06, itens 6.5.1 e 6.7.2). Comprometo-me a (NR-06, item 6.6.1):';
+const EPI_DEVERES = ['Usar o EPI fornecido e apenas para a finalidade a que se destina.', 'Cuidar da guarda e da conservação.', 'Avisar a empresa quando o EPI for extraviado, danificado ou ficar impróprio para uso.', 'Cumprir as orientações da empresa sobre o uso adequado.'];
+const EPI_FALTA = 'A recusa injustificada ao uso do EPI fornecido constitui ato faltoso (NR-01, itens 1.4.2, alínea d, e 1.4.2.1).';
+const DATA_MAO = '___/___/______';
+const hojeBr = () => new Date().toLocaleDateString('pt-BR');
 
-const SIT_TXT = { emdia: (l) => `válido até ${dataBr(l.vencimento)}`, vence: (l) => `válido até ${dataBr(l.vencimento)}`, vencido: (l) => `VENCIDO em ${dataBr(l.vencimento)}. Providenciar a reciclagem`, semregistro: () => 'indicado para a função, sem registro no GRID', semvalidade: (l) => `concluído${l.conclusao ? ` em ${dataBr(l.conclusao)}` : ''}, sem validade cadastrada` };
+const SIT_TXT = { emdia: (l) => `Válido até ${dataBr(l.vencimento)}`, vence: (l) => `Válido até ${dataBr(l.vencimento)}`, vencido: (l) => `VENCIDO em ${dataBr(l.vencimento)} · providenciar`, semregistro: () => 'Não registrado no GRID', semvalidade: (l) => `Concluído${l.conclusao ? ` em ${dataBr(l.conclusao)}` : ''}, sem validade cadastrada` };
 const nrDe = (t) => { const m = String(t || '').match(/\bNR[\s-]?0?(\d{1,2})\b/i); return m ? `NR-${m[1].padStart(2, '0')}` : null; };
 /** NRs dos treinamentos indicados nos GHE da função (avaliação de campo). Vazio: sem GHE. */
 function nrsExigidas(g) {
@@ -335,9 +342,11 @@ function nrsExigidas(g) {
   ghesDaFuncao(g).forEach((ghe) => (ghe.treinamentos || []).forEach((cod) => { const t = g.D?.catTrein?.get(String(cod)); const nr = nrDe(t?.categoria) || nrDe(t?.nome) || nrDe(cod); if (nr) out.add(nr); }));
   return out;
 }
-/** Com GHE: só os treinamentos exigidos para a função. Sem GHE: os registrados no GRID. */
-function treinosTexto(p, exigidas) {
-  return (p.linhas || []).filter((l) => SIT_TXT[l.sit] && (!exigidas.size || l.sit === 'semregistro' || exigidas.has(l.nr))).map((l) => `${l.curso}: ${SIT_TXT[l.sit](l)}`);
+/** v295: só os treinamentos EXIGIDOS pela função (GHE). Sem GHE, a tabela sai em branco "conforme o PGR". */
+function treinosExigidos(p, exigidas) {
+  if (!exigidas.size) return [];
+  return (p.linhas || []).filter((l) => SIT_TXT[l.sit] && (l.sit === 'semregistro' || exigidas.has(l.nr)))
+    .map((l) => [l.curso, l.nr || 'Conforme PGR', { x: SIT_TXT[l.sit](l), neg: l.sit === 'vencido' }]);
 }
 /** "Protetor auricular · CA 12345" → [{ nome, ca }]. Vírgulas ficam (nome composto). */
 export function episDe(texto) {
@@ -348,49 +357,59 @@ export function episDe(texto) {
   });
 }
 const comCa = (epi) => { const es = episDe(epi); return es.length ? es.map((e) => `${e.nome}, CA ${e.ca || '[preencher]'}`).join('. ') : ''; };
+/** Na célula da OS: "Respirador PFF2 · CA ______" (o CA em branco é para escrever à mão). */
+const comCaCel = (epi) => episDe(epi).map((e) => `${e.nome} · CA ${e.ca || '______'}`).join('. ');
+const medidasCel = (r) => [r.epc, r.adm].map((x) => String(x || '').trim()).filter(Boolean).join('. ');
 
 export function montarPartes(g) {
   if (g.tipo && TIPOS[g.tipo]?.livre) return partesLivre(g);
-  const cli = g.fora ? { nome: String(g.fora.empresa || '').trim() || '[preencher]', cnpj: '[preencher]' } : (g.D?.cli || {});
-  const _doc = g.fora ? (cli.cnpj ? `CNPJ ${cli.cnpj}` : '') : docClienteTxt(cli, true);   // v287: pessoa física com CPF escondido
-  const empresa = `${cli.nome || ''}${_doc ? `, ${_doc}` : ''}`;
+  const cli = g.fora ? { nome: String(g.fora.empresa || '').trim(), cnpj: '' } : (g.D?.cli || {});
+  const docCli = g.fora ? '' : docClienteTxt(cli, true);   // v287: pessoa física com CPF escondido
+  const [rotDoc, valDoc] = docCli ? [docCli.replace(/\s.*$/, ''), docCli.replace(/^\S+\s/, '')] : ['CNPJ', '[preencher]'];
   const pessoas = pessoasDe(g);
   const riscos = g.riscos.filter((r) => String(r.risco || '').trim());
   const emerg = String(g.emerg || '').trim();
   const exigidas = nrsExigidas(g);
   return pessoas.map((p) => {
-    const setor = p.ghe || '[preencher]';
+    const setor = p.ghe || '';
+    const nome = p.fora ? '' : p.nome;
+    const quem = p.fora ? 'Colaborador' : p.nome;
     if (g.tipo === 'epi') {
       const vistos = new Set();
       const epis = riscos.flatMap((r) => episDe(r.epi)).filter((e) => { const k = norm(e.nome); if (vistos.has(k)) return false; vistos.add(k); return true; });
+      const treinoUso = epis.filter((e) => /isolante|paraquedista|talabarte|trava.?quedas|respirador|m[aá]scara (semi|facial)|autônomo|autonomo/i.test(e.nome)).map((e) => e.nome);
       return [
-        { t: 'titulo', x: 'FICHA DE ENTREGA DE EPI', sub: 'NR-06, item 6.5.1, alínea d' },
-        { t: 'campos', itens: [['Empresa', empresa], ['Colaborador', p.nome], ['Função', p.funcao || '[preencher]'], ['Setor ou GHE', setor], ['Matrícula', '[preencher]'], ['Admissão', '[preencher]']] },
-        { t: 'tabela', cols: [{ t: 'Data', w: 0.11 }, { t: 'EPI', w: 0.25 }, { t: 'Nº do CA', w: 0.11 }, { t: 'Qtde', w: 0.07 }, { t: 'Motivo', w: 0.14 }, { t: 'Devolução ou troca', w: 0.13 }, { t: 'Assinatura', w: 0.19 }],
-          linhas: epis.map((e) => ['', e.nome, e.ca || '[preencher]', '', '', '', '']), vazias: Math.max(3, 10 - epis.length) },
-        { t: 'p', x: 'Motivo: primeira entrega, troca por dano, extravio, desgaste ou validade.' },
-        { t: 'h', x: 'TERMO DE RESPONSABILIDADE' },
-        { t: 'p', x: EPI_TERMO }, ...EPI_DEVERES.map((x) => ({ t: 'li', x })), { t: 'p', x: EPI_FALTA },
-        { t: 'campos', itens: [['Local e data', '[preencher]']] },
-        { t: 'assin', nomes: [p.fora ? 'Colaborador' : p.nome, 'Responsável pela entrega'] },
+        { t: 'cab', esq: cli.nome || '', titulo: 'FICHA DE ENTREGA DE EPI', norma: 'NR-06, item 6.5.1, alínea d', ctl: ['Nº [preencher]', 'Matrícula [preencher]', `Admissão ${DATA_MAO}`] },
+        { t: 'faixa', itens: [['Empresa', cli.nome || '[preencher]'], [rotDoc, valDoc]] },
+        { t: 'grade', cols: 4, itens: [{ r: 'Colaborador', v: nome, span: 2 }, { r: 'Função', v: p.funcao || '' }, { r: 'Setor ou GHE', v: setor }] },
+        { t: 'h', x: 'Entregas · cada linha vale com a assinatura do trabalhador' },
+        { t: 'tabela', alt: 8, cols: [{ t: 'Data', w: 0.1 }, { t: 'EPI', w: 0.25 }, { t: 'Tam.', w: 0.06, centro: true }, { t: 'Nº do CA', w: 0.1 }, { t: 'CA válido na entrega', w: 0.09, centro: true }, { t: 'Qtde', w: 0.06, centro: true }, { t: 'Motivo', w: 0.07, centro: true }, { t: 'Entregue por', w: 0.11 }, { t: 'Assinatura', w: 0.16 }],
+          linhas: epis.map((e) => ['', /isolante/i.test(e.nome) ? `${e.nome} · nº de série ______` : e.nome, '', e.ca || '', '[ ]', '', '', '', '']), vazias: Math.max(4, 12 - epis.length) },
+        { t: 'nota', x: 'Motivo: 1 primeira entrega · 2 troca por dano · 3 desgaste · 4 extravio · 5 vencimento. Na troca, anote a devolução do EPI anterior na mesma linha. Confira a validade do CA no dia da entrega.' },
+        { t: 'decl', x: EPI_TERMO }, ...EPI_DEVERES.map((x) => ({ t: 'li', x })), { t: 'p', x: EPI_FALTA },
+        ...(treinoUso.length ? [{ t: 'h', x: 'Orientação e treinamento de uso' }, { t: 'tabela', cols: [{ t: 'EPI que exige treinamento de uso', w: 0.5 }, { t: 'Data', w: 0.18 }, { t: 'Instrutor', w: 0.32 }], linhas: treinoUso.map((x) => [x, '', '']) }] : []),
+        { t: 'rod', x: `Ficha de EPI · ${quem}` },
       ];
     }
-    const treinos = treinosTexto(p, exigidas);
+    const treinos = treinosExigidos(p, exigidas);
     return [
-      { t: 'titulo', x: 'ORDEM DE SERVIÇO DE SEGURANÇA E SAÚDE NO TRABALHO', sub: 'NR-01, item 1.4.1, alínea c' },
-      { t: 'campos', itens: [['Empresa', empresa], ['Colaborador', p.nome], ['Função', p.funcao || '[preencher]'], ['Setor ou GHE', setor]] },
-      { t: 'h', x: 'OBJETIVO' }, { t: 'p', x: OS_OBJETIVO },
-      { t: 'h', x: 'RISCOS DA FUNÇÃO E MEDIDAS DE PREVENÇÃO' },
-      riscos.length
-        ? { t: 'tabela', cols: [{ t: 'Risco', w: 0.2 }, { t: 'Fonte', w: 0.18 }, { t: 'Proteção coletiva', w: 0.2 }, { t: 'Medidas administrativas', w: 0.21 }, { t: 'EPI', w: 0.21 }], linhas: riscos.map((r) => [r.risco, r.fonte, r.epc, r.adm, comCa(r.epi)]) }
-        : { t: 'p', x: '[preencher com os riscos da função e as medidas de prevenção]' },
-      { t: 'h', x: exigidas.size ? 'TREINAMENTOS EXIGIDOS PARA A FUNÇÃO' : p.fora ? 'TREINAMENTOS' : 'TREINAMENTOS REGISTRADOS NO GRID' },
-      ...(treinos.length ? treinos.map((x) => ({ t: 'li', x })) : [{ t: 'p', x: p.fora ? '[preencher com os treinamentos exigidos para a função e as datas]' : exigidas.size ? 'Nenhum registro no GRID dos treinamentos exigidos. [preencher]' : 'Nenhum treinamento registrado no GRID para esta pessoa. [preencher]' }]),
-      { t: 'h', x: 'DEVERES DO EMPREGADO (NR-01, ITEM 1.4.2)' }, ...OS_DEVERES.map((x) => ({ t: 'li', x })), { t: 'p', x: OS_FALTA },
-      { t: 'h', x: 'DIREITO DE INTERROMPER A ATIVIDADE' }, { t: 'p', x: OS_INTERROMPER },
-      { t: 'h', x: 'EM CASO DE EMERGÊNCIA OU ACIDENTE' }, { t: 'p', x: OS_ACIDENTE }, { t: 'p', x: emerg || 'Procedimento de emergência da empresa: [preencher]' },
-      { t: 'h', x: 'CIÊNCIA DO TRABALHADOR' }, { t: 'p', x: OS_CIENCIA }, { t: 'campos', itens: [['Local e data', '[preencher]']] },
-      { t: 'assin', nomes: [p.fora ? 'Colaborador' : p.nome, 'Responsável pela empresa'] },
+      { t: 'cab', esq: cli.nome || '', titulo: 'ORDEM DE SERVIÇO DE SEGURANÇA E SAÚDE NO TRABALHO', norma: 'NR-01, itens 1.4.1, alínea c, e 1.4.4 · CLT, art. 157', ctl: ['Nº [preencher]', 'Revisão 00', `Emissão ${hojeBr()}`] },
+      { t: 'faixa', itens: [['Empresa', cli.nome || '[preencher]'], [rotDoc, valDoc]] },
+      { t: 'grade', cols: 4, itens: [{ r: 'Colaborador', v: nome, span: 2 }, { r: 'Matrícula', v: '' }, { r: 'Admissão', v: '' }, { r: 'Função', v: p.funcao || '', span: 2 }, { r: 'Setor ou GHE', v: setor, span: 2 }, { r: 'Atividades da função', v: '', span: 4 }] },
+      { t: 'h', x: 'Riscos da função, danos possíveis e medidas de prevenção' },
+      { t: 'tabela', cols: [{ t: 'Risco', w: 0.15 }, { t: 'Fonte', w: 0.14 }, { t: 'Possíveis danos à saúde', w: 0.17 }, { t: 'Medidas coletivas e administrativas', w: 0.27 }, { t: 'EPI (com CA)', w: 0.27 }],
+        linhas: riscos.map((r) => [r.risco, r.fonte, r.danos || '', medidasCel(r), comCaCel(r.epi)]), vazias: riscos.length ? 0 : 4 },
+      { t: 'h', x: 'Treinamentos exigidos para a função' },
+      treinos.length
+        ? { t: 'tabela', cols: [{ t: 'Treinamento', w: 0.46 }, { t: 'Base', w: 0.18 }, { t: 'Situação no GRID', w: 0.36 }], linhas: treinos }
+        : { t: 'tabela', cols: [{ t: 'Treinamento', w: 0.46 }, { t: 'Base', w: 0.18 }, { t: 'Válido até', w: 0.36 }], linhas: [], vazias: 3 },
+      { t: 'nota', x: treinos.length ? 'Lista vinda do GHE da função na avaliação de campo.' : 'Preencher com os treinamentos que o PGR exige para a função.' },
+      { t: 'h', x: 'Proibições' }, ...OS_PROIBICOES.map((x) => ({ t: 'li', x })),
+      { t: 'h', x: 'Deveres do empregado (NR-01, item 1.4.2)' }, ...OS_DEVERES.map((x) => ({ t: 'li', x })), { t: 'p', x: OS_FALTA },
+      { t: 'h', x: 'Direito de interromper a atividade · emergência' }, { t: 'p', x: OS_INTERROMPER }, { t: 'p', x: emerg || OS_EMERG_PADRAO }, { t: 'p', x: OS_EXAMES },
+      { t: 'decl', x: OS_CIENCIA },
+      { t: 'assin', blocos: [{ titulo: quem, linhas: [`Matrícula: [preencher] · Data: ${DATA_MAO}`] }, { titulo: 'Responsável pela empresa', linhas: ['Nome e cargo: [preencher]', `Data: ${DATA_MAO}`] }] },
+      { t: 'rod', x: `Ordem de Serviço · ${quem}` },
     ];
   });
 }
@@ -484,6 +503,7 @@ function corpoDoc(g, t, empresaSel) {
     <p class="lq-doc-h">${g.tipo === 'epi' ? 'Também entra' : 'Também entra'}</p><ul class="lq-doc-l">${itensExtras(g, t, pessoas)}</ul>
     ${nMais ? `<p class="lq-doc-nota">Vão as primeiras ${MAX_PESSOAS} pessoas desta função. Para as outras, escolha a pessoa.</p>` : ''}
     <p class="lq-doc-nota">${g.origem?.tipo === 'sem' && g.sug?.feita ? 'A sugestão de riscos usou 1 pergunta e só levou o nome da função. ' : ''}Montado no seu aparelho com os dados do GRID. O CPF não sai no documento.</p>
+    ${conferencia(g, partes[0]).html}
     ${acoesDoc(g, t, pessoas.length)}
   </div>${papel(partes[0], pessoas.length, t)}</div>`;
 }
@@ -500,6 +520,7 @@ function blocoRiscos(g, t) {
     ? `<tr class="ed"><td colspan="3"><div class="lq-rs-ed">
         <label>Risco<input class="cp-inp" data-cp="lq.g.${t}.r.${i}.risco" value="${esc(r.risco)}" placeholder="Ex.: Ruído"></label>
         <label>Fonte<input class="cp-inp" data-cp="lq.g.${t}.r.${i}.fonte" value="${esc(r.fonte)}" placeholder="O que gera o risco"></label>
+        <label>Possíveis danos à saúde<input class="cp-inp" data-cp="lq.g.${t}.r.${i}.danos" value="${esc(r.danos || '')}" placeholder="Ex.: Perda auditiva"></label>
         <label>Proteção coletiva<input class="cp-inp" data-cp="lq.g.${t}.r.${i}.epc" value="${esc(r.epc)}"></label>
         <label>Medidas administrativas<input class="cp-inp" data-cp="lq.g.${t}.r.${i}.adm" value="${esc(r.adm)}"></label>
         <label class="lg">EPI e CA<input class="cp-inp" data-cp="lq.g.${t}.r.${i}.epi" value="${esc(r.epi)}" placeholder="Ex.: Protetor auricular, CA 12345"></label>
@@ -523,14 +544,14 @@ function itensExtras(g, t, pessoas) {
     const sub = venc.length
       ? `${emdia ? `${plural(emdia, 'pessoa em dia', 'pessoas em dia')}. ` : ''}${venc.slice(0, 3).map(({ p, l }) => `<span class="lq-vencm">${esc(p.nome)}: ${esc(l.nr || l.curso)} ${l.sit === 'vencido' ? `vencido em ${dataBr(l.vencimento)}` : 'sem registro'}</span>`).join(' ')}${venc.length > 3 ? ` e mais ${venc.length - 3}` : ''}. Sai marcado no documento de cada um`
       : 'Todos em dia no GRID';
-    out.push(li('ok', 'Treinamentos de cada pessoa, com a validade', sub));
-    out.push(li('ok', 'Deveres do empregado, direito de interromper a atividade e ciência', 'Texto da NR-01, itens 1.4.2 a 1.4.4'));
+    out.push(nrsExigidas(g).size ? li('ok', 'Treinamentos exigidos para a função (GHE), com a situação de cada pessoa', sub) : li('pr', 'Treinamentos exigidos para a função', 'A função não tem GHE na avaliação de campo: a tabela sai em branco para preencher conforme o PGR'));
+    out.push(li('ok', 'Proibições, deveres, direito de interromper a atividade, exames e ciência', 'Texto da NR-01, itens 1.4.1 a 1.4.4, conferido no texto oficial'));
     out.push(emergItem(g, t));
   } else {
     out.push(li('ok', 'Empresa, função e GHE de cada pessoa', g.origem?.tipo === 'ghe' ? `GHE ${esc(g.origem.ghes)}` : 'Setor ou GHE sai como [preencher] quando não há avaliação'));
-    out.push(li('ok', 'Tabela com data, EPI, CA, quantidade, motivo, devolução e assinatura', 'Os EPI acima já entram nas primeiras linhas. O resto fica em branco'));
-    out.push(li('ok', 'Termo de responsabilidade do trabalhador', 'Texto da NR-06, item 6.6.1'));
-    out.push(li('pr', 'Matrícula e admissão', 'Saem como [preencher]'));
+    out.push(li('ok', 'Tabela com data, EPI, tamanho, CA, CA válido na entrega, motivo, quem entregou e assinatura', 'Os EPI acima já entram nas primeiras linhas. A declaração vale para cada linha assinada'));
+    out.push(li('ok', 'Termo do trabalhador', 'NR-06, itens 6.5.1, 6.6.1 e 6.7.2'));
+    out.push(li('pr', 'Matrícula e admissão', 'Saem em branco para escrever à mão'));
   }
   return out.join('');
 }
@@ -543,7 +564,7 @@ function emergItem(g, t) {
 }
 
 function acoesDoc(g, t, n) {
-  const ocupado = g.sug?.carregando || g.editando >= 0;
+  const ocupado = g.sug?.carregando || g.editando >= 0 || conferencia(g, null).bloqueia;
   const qtd = n > 1 ? ` com ${n} ${g.tipo === 'epi' ? 'fichas' : 'OS'}, uma por pessoa` : '';
   const botoes = `<div class="lq-doc-acts"><button type="button" class="btn btn-amber" data-acao="campo:lq-g:${t}.baixar.pdf"${ocupado ? ' disabled' : ''}>Baixar PDF${qtd}</button><button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.baixar.docx"${ocupado ? ' disabled' : ''}>Baixar Word</button></div>`;
   if (!g.baixado || g.fora) return botoes;
@@ -553,28 +574,63 @@ function acoesDoc(g, t, n) {
     <button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.registrar"${g.registro?.salvando ? ' disabled' : ''}>${g.registro?.salvando ? 'Registrando...' : 'Registrar entrega'}</button></div>`;
 }
 
-/* miniatura da 1ª página, feita com as mesmas partes do arquivo */
+/* miniatura da 1ª página, feita com as mesmas partes do arquivo (v295: formulário novo) */
 function papel(partes, n, t) {
   if (!partes) return '';
-  const y = (x) => esc(x).replace(/\[([^\]]{1,80})\]/g, '<span class="y">[$1]</span>');
-  const html = partes.slice(0, 9).map((b) => {
-    if (b.t === 'titulo') return `<div class="t">${esc(b.x)}</div><div class="a"></div>`;
-    if (b.t === 'campos') return b.itens.map(([r, v]) => `<b>${esc(r)}:</b> ${y(v)}<br>`).join('') + '<br>';
-    if (b.t === 'h') return `<b>${esc(b.x)}</b><br>`;
-    if (b.t === 'tabela') return `<table><tr>${b.cols.map((c) => `<th>${esc(c.t)}</th>`).join('')}</tr>${[...b.linhas, ...Array.from({ length: Math.min(3, b.vazias || 0) }, () => b.cols.map(() => ''))].slice(0, 4).map((l) => `<tr>${l.map((x) => `<td>${y(x)}</td>`).join('')}</tr>`).join('')}</table>`;
-    if (b.t === 'li') return `- ${y(b.x)}<br>`;
-    if (b.t === 'assin') return `<div class="ass">${b.nomes.map((x) => `<div>${esc(x)}</div>`).join('')}</div>`;
-    return `<div class="ln"></div><div class="ln" style="width:72%"></div>`;
+  const y = (x) => esc(x).replace(/\[ \]/g, '<i class="cx"></i>').replace(/\[([^\]]{1,80})\]/g, '<span class="bl"></span>');
+  const cel = (c) => (c && typeof c === 'object' ? c.x : c) ?? '';
+  let linhas = 0;
+  const html = partes.filter((b) => b.t !== 'rod').map((b) => {
+    if (linhas > 26) return '';
+    if (b.t === 'cab') { linhas += 3; return `<div class="cab"><div class="e">${esc(b.esq || '')}</div><div class="t">${esc(b.titulo)}<small>${esc(b.norma || '')}</small></div><div class="c">${(b.ctl || []).map((x) => `<span>${y(x)}</span>`).join('')}</div></div>`; }
+    if (b.t === 'faixa') { linhas += 1; return `<div class="fx">${b.itens.map(([r, v]) => `<b>${esc(r)}:</b> ${y(v)}`).join(' &nbsp; ')}</div>`; }
+    if (b.t === 'grade') { linhas += 2; return `<div class="gd">${b.itens.map((i) => `<div style="grid-column:span ${i.span || 1}"><small>${esc(i.r)}</small>${y(i.v || '')}</div>`).join('')}</div>`; }
+    if (b.t === 'h') { linhas += 1; return `<div class="h">${esc(b.x)}</div>`; }
+    if (b.t === 'tabela') { const ls = [...b.linhas, ...Array.from({ length: Math.min(2, b.vazias || 0) }, () => b.cols.map(() => ''))].slice(0, 4); linhas += ls.length + 1; return `<table><tr>${b.cols.map((c) => `<th>${esc(c.t)}</th>`).join('')}</tr>${ls.map((l) => `<tr>${l.map((x) => `<td>${y(cel(x))}</td>`).join('')}</tr>`).join('')}</table>`; }
+    if (b.t === 'li') { linhas += 1; return `- ${y(b.x)}<br>`; }
+    if (b.t === 'decl') { linhas += 2; return `<div class="dc">${y(b.x)}</div>`; }
+    if (b.t === 'assin') { linhas += 2; return `<div class="ass">${b.blocos.map((x) => `<div>${esc(x.titulo)}</div>`).join('')}</div>`; }
+    if (b.t === 'nota') return '';
+    linhas += 1; return `<div class="ln"></div>`;
   }).join('');
-  return `<div class="lq-papel-w"><div class="lq-papel" aria-hidden="true">${html}<div class="rod">${esc(Docs.RODAPE_GRID())}</div></div>
-    <button type="button" class="lq-papel-ver" data-acao="campo:lq-g:${t}.ver">${n > 1 ? `Ver as ${n} páginas em PDF` : 'Ver a página em PDF'}</button></div>`;
+  const rod = partes.find((b) => b.t === 'rod')?.x || '';
+  return `<div class="lq-papel-w"><div class="lq-papel lq-papel2" aria-hidden="true">${html}<div class="rod"><span>${esc(rod)}</span><span>Pág. 1</span></div></div>
+    <button type="button" class="lq-papel-ver" data-acao="campo:lq-g:${t}.ver">${n > 1 ? `Ver as ${n} pessoas em PDF` : 'Ver em PDF'}</button></div>`;
+}
+
+/* ── v295: conferência antes do PDF (proposta aprovada em 04/11/2026, seção 8) ───────────
+   Mostra o que o GRID mudou ou o que falta: citações tiradas ou atualizadas pelo servidor,
+   campos para escrever à mão, risco sem medida (bloqueia o PDF) e treinamento vencido na OS. */
+const semMedidaOS = (r) => !String(r.epc || '').trim() && !String(r.adm || '').trim() && !String(r.epi || '').trim();
+function conferencia(g, partes) {
+  const it = [], liC = (k, tt, ss) => it.push(`<li><i class="${k}" aria-hidden="true">${k === 'g' ? '✓' : k === 'r' ? '!' : '?'}</i><div><b>${tt}</b>${ss ? `<small>${ss}</small>` : ''}</div></li>`);
+  let bloqueia = false, motivo = '';
+  if (g.dl?.res) {
+    const r = g.dl.res, c = r.citacoes || {};
+    const ret = c.retiradas || [], atu = c.atualizadas || [];
+    if (ret.length) liC('r', `${plural(ret.length, 'citação retirada', 'citações retiradas')}`, ret.slice(0, 4).map((m) => `${esc(m.de)}: ${esc(m.motivo)}`).join('<br>'));
+    if (atu.length) liC('r', `${plural(atu.length, 'citação atualizada', 'citações atualizadas')}`, atu.slice(0, 4).map((m) => `${esc(m.de)} virou ${esc(m.para)} (${esc(m.motivo)})`).join('<br>'));
+    if (r.conferir?.length) liC('y', 'Confira estes números', `${esc(r.conferir.join(', '))}. Não estão nos trechos da norma que o Laudomiro consultou`);
+    if (r.sem_medida?.length) { bloqueia = true; motivo = 'Há risco sem medida de prevenção. Toque em "Mudar alguma coisa" e peça a medida.'; liC('r', `${plural(r.sem_medida.length, 'risco sem medida', 'riscos sem medida')}: o PDF não é gerado`, `${esc(r.sem_medida.join(', '))}. Toque em "Mudar alguma coisa" e peça a medida.`); }
+    else if (g.tipo === 'apr' || g.tipo === 'pt') liC('g', 'Todos os riscos têm medida', '');
+    if (!ret.length && !atu.length && r.citacoes) liC('g', 'Citações conferidas no texto vigente', 'Nenhuma precisou mudar');
+  } else if (g.tipo === 'os' || g.tipo === 'epi') {
+    const sem = g.riscos.filter((r) => String(r.risco || '').trim() && semMedidaOS(r));
+    if (sem.length) { bloqueia = true; motivo = `Risco sem medida: ${sem.map((r) => r.risco).join(', ')}. Escreva a proteção coletiva, a medida administrativa ou o EPI.`; liC('r', `${plural(sem.length, 'risco sem medida', 'riscos sem medida')}: o PDF não é gerado`, `${esc(sem.map((r) => r.risco).join(', '))}. Toque no lápis e escreva a medida.`); }
+    else if (g.riscos.length) liC('g', 'Todos os riscos têm medida', '');
+  }
+  if (!partes) return { bloqueia, motivo };
+  const n = Docs.camposAMao(partes);
+  if (n) liC('y', `${plural(n, 'campo para preencher à mão', 'campos para preencher à mão')}`, 'Saem como linha em branco no papel');
+  if (!it.length) return { html: '', bloqueia, motivo };
+  return { html: `<div class="lq-conf" role="status"><p>Conferência antes do PDF</p><ul>${it.join('')}</ul></div>`, bloqueia, motivo };
 }
 
 /* ── Ações ──────────────────────────────────────────────────────────────── */
 export function digitar(chave, valor) {
   const m = /^lq\.g\.(\d+)\.(.+)$/.exec(chave); if (!m) return false;
   const turno = _ctx.turno(+m[1]); const g = turno?.gerar; if (!g) return true;
-  const r = /^r\.(\d+)\.(risco|fonte|epc|adm|epi)$/.exec(m[2]);
+  const r = /^r\.(\d+)\.(risco|fonte|danos|epc|adm|epi)$/.exec(m[2]);
   if (r && g.riscos[+r[1]]) { g.riscos[+r[1]][r[2]] = String(valor).slice(0, 200); g.riscos[+r[1]].origem = g.riscos[+r[1]].origem === 'manual' ? 'manual' : 'editado'; }
   else if (m[2] === 'emerg') g.emerg = String(valor).slice(0, 1500);
   else if (m[2] === 'regdata') g.regData = valor;
@@ -633,7 +689,7 @@ export async function acao(nome, valor, redesenhar) {
     return true;
   }
   if (op === 'tirar') { g.riscos.splice(+arg, 1); g.editando = -1; g.baixado = null; redesenhar(); return true; }
-  if (op === 'mais') { if (g.riscos.length < MAX_RISCOS) { g.riscos.push({ risco: '', fonte: '', epc: '', adm: '', epi: '', origem: 'manual' }); g.editando = g.riscos.length - 1; } redesenhar(); focar(ti, g.editando); return true; }
+  if (op === 'mais') { if (g.riscos.length < MAX_RISCOS) { g.riscos.push({ risco: '', fonte: '', danos: '', epc: '', adm: '', epi: '', origem: 'manual' }); g.editando = g.riscos.length - 1; } redesenhar(); focar(ti, g.editando); return true; }
   if (op === 'emerg-abrir') { g.emergAberta = true; redesenhar(); setTimeout(() => [...document.querySelectorAll(`[data-cp="lq.g.${ti}.emerg"]`)].find((x) => x.getBoundingClientRect().width > 0)?.focus(), 60); return true; }
   if (op === 'emerg-fechar') { g.emergAberta = false; redesenhar(); return true; }
   if (op === 'emerg-guardar') { await guardarEmergencia(g); redesenhar(); return true; }
@@ -650,6 +706,8 @@ async function baixarOuVer(g, op, arg) {
   {
     const docs = montarPartes(g);
     if (!docs.length) { avisar('Escolha a função ou a pessoa.', 'erro'); return true; }
+    const cf = conferencia(g, docs[0]);
+    if (cf.bloqueia) { avisar(cf.motivo, 'erro'); return true; }
     const T = TIPOS[g.tipo], cli = g.dl ? (g.dl.empresa || '') : g.fora ? (g.fora.empresa || '') : (g.D?.cli?.nome || '');
     try {
       if (op === 'ver') {
@@ -740,6 +798,7 @@ function corpoFora(g, t, empresaSel) {
     <p class="lq-doc-h">${g.tipo === 'epi' ? 'EPI e de onde vêm' : 'Riscos e medidas'}</p>${blocoRiscos(g, t)}
     <p class="lq-doc-h">Também entra</p><ul class="lq-doc-l">${itens.join('')}</ul>
     <p class="lq-doc-nota">${g.sug?.feita ? 'A sugestão de riscos usou 1 pergunta e só levou o nome da função. ' : ''}Confira antes de assinar.</p>
+    ${conferencia(g, partes[0]).html}
     ${acoesDoc(g, t, 1)}
   </div>${papel(partes[0], 1, t)}</div>`;
 }
@@ -783,7 +842,7 @@ async function montarLivre(turno, comAjuste) {
     const r = await _ctx.chamar(body);
     if (r.restantes != null) _ctx.aoGastar(r.restantes);
     d.id = r.id;
-    d.res = { titulo_atividade: r.titulo_atividade || '', subtipo: r.subtipo || '', secoes: r.secoes || [], referencias: r.referencias || [], avisos: r.avisos || [], conferir: r.conferir || [] };
+    d.res = { titulo_atividade: r.titulo_atividade || '', subtipo: r.subtipo || '', secoes: r.secoes || [], referencias: r.referencias || [], avisos: r.avisos || [], conferir: r.conferir || [], citacoes: r.citacoes || null, sem_medida: Array.isArray(r.sem_medida) ? r.sem_medida : [] };
     d.feitoCom = body.atividade; d.ajusteAberto = false; d.ajuste = ''; g.baixado = null;
   } catch (e) { d.erro = e?.message || 'O Laudomiro não conseguiu montar o documento agora.'; }
   d.carregando = false; _ctx.repintar();
@@ -815,9 +874,9 @@ function renderLivre(g, t) {
     const r = d.res;
     const itens = r.secoes.map((s) => li('ok', esc(maiusc1(s.titulo.toLowerCase())), contagem(s)));
     (r.avisos || []).forEach((a) => itens.push(li('pr', 'Atenção', esc(a))));
-    if (r.conferir?.length) itens.push(li('pr', 'Confira estes números', `${esc(r.conferir.join(', '))}. Não estão nos trechos da norma que o Laudomiro consultou`));
-    itens.push(li('pr', 'Empresa, datas, nomes e assinaturas', 'Saem como [preencher]'));
+    itens.push(li('pr', 'Empresa, datas, nomes e assinaturas', 'Saem em branco para escrever à mão'));
     const partes = partesLivre(g);
+    const cf = conferencia(g, partes[0]);
     corpo = `<div class="lq-doc-b"><div>
       ${mudou ? '<p class="lq-doc-nota" style="margin:0 0 12px"><b>A atividade mudou.</b> Toque em Montar de novo para refazer o documento.</p>' : ''}
       <p class="lq-doc-h">O Laudomiro montou</p><ul class="lq-doc-l">${itens.join('')}</ul>
@@ -825,67 +884,132 @@ function renderLivre(g, t) {
       ${d.erro ? `<p class="lq-doc-nota" role="alert"><b>${esc(d.erro)}</b></p>` : ''}
       ${d.ajusteAberto ? `<div class="lq-ajuste"><label class="lq-doc-sel"><small>O que mudar</small><textarea class="cp-inp lq-g-ta" data-cp="lq.g.${t}.dl.ajuste" aria-label="O que mudar no documento" placeholder="Ex.: incluir a etapa de içamento das telhas com corda">${esc(d.ajuste)}</textarea></label>
         <span class="lq-doc-acts mini"><button type="button" class="btn btn-navy btn-sm" data-acao="campo:lq-g:${t}.ajuste-enviar"${d.carregando ? ' disabled' : ''}>${d.carregando === 'ajuste' ? 'Refazendo...' : 'Refazer com o ajuste (usa 1 pergunta)'}</button><button type="button" class="btn btn-outline btn-sm" data-acao="campo:lq-g:${t}.ajuste-fechar">Cancelar</button></span></div>` : ''}
-      <div class="lq-doc-acts"><button type="button" class="btn btn-amber" data-acao="campo:lq-g:${t}.baixar.pdf"${d.carregando ? ' disabled' : ''}>Baixar PDF</button><button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.baixar.docx"${d.carregando ? ' disabled' : ''}>Baixar Word</button>${d.ajusteAberto ? '' : `<button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.ajuste-abrir">Mudar alguma coisa</button>`}</div>
+      ${cf.html}
+      <div class="lq-doc-acts"><button type="button" class="btn btn-amber" data-acao="campo:lq-g:${t}.baixar.pdf"${d.carregando || cf.bloqueia ? ' disabled' : ''}>Baixar PDF</button><button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.baixar.docx"${d.carregando || cf.bloqueia ? ' disabled' : ''}>Baixar Word</button>${d.ajusteAberto ? '' : `<button type="button" class="btn btn-outline" data-acao="campo:lq-g:${t}.ajuste-abrir">Mudar alguma coisa</button>`}</div>
     </div>${papel(partes[0], 1, t)}</div>`;
   }
   return `<article class="lq-resp lq-r2 lq-gerar">${cabT}${topo}${botaoMontar}${corpo}</article>`;
 }
 
-/** Documento livre em partes: cabeçalho e assinaturas do roteiro (fixos), seções escritas pela IA. */
+/** Documento livre em partes (v295): cabeçalho, campos e formulários fixos (conferidos pelo engenheiro),
+ *  seções escritas pela IA, já com as citações conferidas pelo servidor. */
+function nrsCitadas(r) {
+  const txt = [...(r.referencias || []), ...r.secoes.flatMap((s) => [s.texto, ...(s.itens || []), ...(s.linhas || []).flat()])].join(' ');
+  const nrs = [...new Set([...txt.matchAll(/\bNR\s?-?\s?0?(\d{1,2})\b/gi)].map((m) => `NR-${m[1].padStart(2, '0')}`))].sort();
+  return nrs.length > 1 ? `${nrs.slice(0, -1).join(', ')} e ${nrs[nrs.length - 1]}` : nrs[0] || '';
+}
+function secaoPartes(s, num) {
+  const out = [{ t: 'h', x: num ? `${num}. ${s.titulo.replace(/^\d+\.\s*/, '')}` : s.titulo }];
+  if (s.formato === 'texto') out.push({ t: 'p', x: s.texto });
+  else if (s.formato === 'tabela') { const n = s.colunas.length || 1; out.push({ t: 'tabela', cols: s.colunas.map((c) => ({ t: c, w: 1 / n })), linhas: s.linhas }); }
+  else if (s.formato === 'numerada') s.itens.forEach((x, i) => out.push({ t: 'p', x: `${i + 1}. ${x}` }));
+  else s.itens.forEach((x) => out.push({ t: 'li', x }));
+  return out;
+}
 export function partesLivre(g) {
   const T = TIPOS[g.tipo], d = g.dl || {}, r = d.res;
   if (!r) return [];
-  const P = '[preencher]';
   const emp = String(d.empresa || '').trim();
   const cli = (g.clientes || []).find((c) => norm(c.nome) === norm(emp));
-  const empresa = emp || P, cnpj = (cli?.tipo_pessoa === 'fisica' ? docClienteTxt(cli, true).replace(/^CPF /, '') : cli?.cnpj) || P;
-  const atividade = r.titulo_atividade || d.atividade || P;
-  const sub = SUBTIPO[semAc(r.subtipo || '')] || '';
-  const titulo = g.tipo === 'pt' && r.subtipo === 'eletricidade' ? 'PERMISSÃO DE TRABALHO / ORDEM DE SERVIÇO' : T.titulo;
-  const out = [{ t: 'titulo', x: titulo, sub: [sub, g.tipo === 'pt' && r.subtipo === 'eletricidade' ? 'NR-10, item 10.11.2' : ''].filter(Boolean).join(' · ') }];
-  const campos = {
-    apr: [['Empresa', empresa], ['CNPJ', cnpj], ['Unidade ou obra', P], ['Nº da APR', P], ['Data', P], ['Tarefa', atividade], ['Local exato', P], ['Setor', P], ['Equipe executante (nomes e funções)', P], ['Rotineira ou não rotineira', P], ['Responsável pela supervisão', P]],
-    pt: [['Empresa', empresa], ['Nº da PT', P], ['Tipo', sub || P], ['Serviço', atividade], ['Data', P], ['Local', P], ['Nº da APR vinculada', P], ['Horário de início', P], ['Horário de término previsto', P], ['Turno', P]],
-    checklist: [['Empresa', empresa], ['Nº', P], ['Tipo de inspeção', sub ? `${sub}. ${atividade}` : atividade], ['Data', P], ['Equipamento e identificação (TAG, nº de série ou patrimônio)', P], ['Local', P], ['Inspetor (nome e função)', P], ['Inspeção inicial, rotineira ou periódica', P]],
-    procedimento: [['Empresa', empresa], ['Código', P], ['Revisão', '00'], ['Data', P], ['Atividade', atividade]],
-  }[g.tipo];
-  out.push({ t: 'campos', itens: campos });
-  const largAPR = [0.12, 0.14, 0.16, 0.16, 0.26, 0.16];
-  r.secoes.forEach((s) => {
-    if (g.tipo === 'checklist' && s.formato === 'tabela') {
-      out.push({ t: 'h', x: s.titulo });
-      const f = s.colunas.findIndex((c) => /base|norma|refer|fundamento/i.test(c)), ib = f < 0 ? 1 : f, ii = f === 0 ? 1 : 0;
-      out.push({ t: 'tabela', cols: [{ t: 'Nº', w: 0.05 }, { t: 'Item verificado', w: 0.4 }, { t: 'Sim', w: 0.06 }, { t: 'Não', w: 0.06 }, { t: 'N/A', w: 0.06 }, { t: 'Observação', w: 0.19 }, { t: 'Base', w: 0.18 }],
-        linhas: s.linhas.map((l, i) => [String(i + 1), l[ii] || '', '', '', '', '', s.colunas.length > 1 ? (l[ib] || '') : '']) });
-      return;
-    }
-    out.push({ t: 'h', x: s.titulo });
-    if (s.formato === 'texto') out.push({ t: 'p', x: s.texto });
-    else if (s.formato === 'tabela') {
-      const n = s.colunas.length || 1;
-      const ws = g.tipo === 'apr' && n === 6 ? largAPR : Array(n).fill(1 / n);
-      out.push({ t: 'tabela', cols: s.colunas.map((c, i) => ({ t: c, w: ws[i] })), linhas: s.linhas });
-    } else if (s.formato === 'numerada') s.itens.forEach((x, i) => out.push({ t: 'p', x: `${i + 1}. ${x}` }));
-    else s.itens.forEach((x) => out.push({ t: 'li', x }));
-  });
-  const temRef = r.secoes.some((s) => /REFER/.test(s.titulo));
-  if (!temRef && r.referencias?.length) { out.push({ t: 'h', x: 'REFERÊNCIAS' }); r.referencias.forEach((x) => out.push({ t: 'li', x })); }
-  // partes fixas do roteiro (conferido pelo engenheiro de segurança)
+  const docCli = cli ? docClienteTxt(cli, true) : '';
+  const [rotDoc, valDoc] = docCli ? [docCli.replace(/\s.*$/, ''), docCli.replace(/^\S+\s/, '')] : ['CNPJ', '[preencher]'];
+  const atividade = r.titulo_atividade || d.atividade || '';
+  const subK = semAc(r.subtipo || ''), sub = SUBTIPO[subK] || '';
+  const nrs = nrsCitadas(r);
+  const faixa = { t: 'faixa', itens: [[g.tipo === 'pt' ? 'Contratante' : 'Empresa', emp || '[preencher]'], [rotDoc, valDoc]] };
+  const secs = r.secoes.filter((s) => !/REFER/.test(s.titulo));
+  const refs = [...new Set([...(r.secoes.find((s) => /REFER/.test(s.titulo))?.itens || []), ...(r.referencias || [])])];
+  const refPartes = refs.length ? [{ t: 'h', x: 'Referências normativas' }, ...refs.map((x) => ({ t: 'li', x }))] : [];
+  const avisos = (r.avisos || []).length ? [{ t: 'nota', x: r.avisos.join(' ') }] : [];
+  const acha = (rx) => secs.find((s) => rx.test(semAc(s.titulo)));
+  const resto = (usadas) => secs.filter((s) => !usadas.includes(s));
+
   if (g.tipo === 'apr') {
-    out.push({ t: 'h', x: 'TRABALHADORES CONSULTADOS' }, { t: 'tabela', cols: [{ t: 'Nome', w: 0.4 }, { t: 'Função', w: 0.3 }, { t: 'Assinatura', w: 0.3 }], linhas: [], vazias: 4 });
-    out.push({ t: 'assin', nomes: ['Elaborado por (nome e função)', 'Aprovado por'] }, { t: 'nota', x: 'Esta APR não substitui o inventário de riscos do PGR.' });
-  } else if (g.tipo === 'pt') {
-    out.push({ t: 'h', x: 'RELAÇÃO DOS ENVOLVIDOS' }, { t: 'tabela', cols: [{ t: 'Nome', w: 0.3 }, { t: 'Função', w: 0.22 }, { t: 'Autorização ou capacitação', w: 0.26 }, { t: 'Assinatura', w: 0.22 }], linhas: [], vazias: 5 });
-    out.push({ t: 'h', x: 'REVALIDAÇÃO' }, { t: 'p', x: 'Só se não mudarem as condições nem a equipe.' }, { t: 'tabela', cols: [{ t: 'Data', w: 0.25 }, { t: 'Hora', w: 0.2 }, { t: 'Assinatura do aprovador', w: 0.55 }], linhas: [], vazias: 2 });
-    out.push({ t: 'h', x: 'ENCERRAMENTO' }, { t: 'campos', itens: [['Serviço concluído', 'Sim (   )  Não (   )'], ['Área liberada', 'Sim (   )  Não (   )'], ['Hora', P]] });
-    out.push({ t: 'assin', nomes: ['Responsável pela autorização da permissão', 'Responsável pelo encerramento'] }, { t: 'nota', x: 'Validade limitada à duração da atividade, restrita ao turno ou à jornada. Arquivar depois de encerrada, para rastreabilidade.' });
-  } else if (g.tipo === 'checklist') {
-    out.push({ t: 'p', x: 'Qualquer item marcado Não em item de segurança impede o uso até a correção.' });
-    out.push({ t: 'campos', itens: [['Resultado', 'Liberado (   )  Não liberado (   )'], ['Ações corretivas', P]] }, { t: 'assin', nomes: ['Inspetor'] });
-  } else if (g.tipo === 'procedimento') {
-    out.push({ t: 'h', x: 'QUADRO DE REVISÕES' }, { t: 'tabela', cols: [{ t: 'Revisão', w: 0.15 }, { t: 'Data', w: 0.2 }, { t: 'Descrição da alteração', w: 0.65 }], linhas: [['00', P, 'Emissão inicial']], vazias: 2 });
-    out.push({ t: 'assin', nomes: ['Elaborado por (nome e função)', 'Aprovado por (nome, função e registro)'] });
+    const analise = acha(/analise de risc/);
+    const out = [
+      { t: 'cab', esq: emp, titulo: 'ANÁLISE DE RISCO DA TAREFA (APR)', norma: nrs, ctl: ['Nº [preencher]', 'Revisão 00', `Data ${DATA_MAO}`] }, faixa,
+      { t: 'grade', cols: 4, itens: [{ r: 'Tarefa', v: atividade, span: 4 }, { r: 'Unidade ou obra', v: '', span: 2 }, { r: 'Local exato', v: '', span: 2 }, { r: 'Equipe executante (nomes e funções)', v: '', span: 4 }, { r: 'Tipo', v: '[ ] Rotineira   [ ] Não rotineira', span: 2 }, { r: 'Responsável pela supervisão', v: '', span: 2 }] },
+    ];
+    secs.forEach((s) => {
+      if (s !== analise) { out.push(...secaoPartes(s)); return; }
+      // a classificação é da empresa: P, S, Nível e Residual em branco (a coluna "Nível" antiga sai)
+      const keep = s.colunas.map((c, i) => (/n[ií]vel/i.test(c) ? -1 : i)).filter((i) => i >= 0);
+      const cols = keep.map((i) => s.colunas[i]);
+      const larg = (c) => (/medida/i.test(c) ? 0.33 : /etapa/i.test(c) ? 0.115 : /les[aã]o|agravo/i.test(c) ? 0.14 : 0.12);
+      const soma = cols.reduce((a, c) => a + larg(c), 0), fator = (1 - 0.215) / soma;
+      out.push({ t: 'h', x: 'Análise de riscos · P, S e Nível pela matriz da empresa' },
+        { t: 'tabela', cols: [...cols.map((c) => ({ t: c, w: larg(c) * fator })), { t: 'P', w: 0.038, centro: true }, { t: 'S', w: 0.038, centro: true }, { t: 'Nível', w: 0.055, centro: true }, { t: 'Residual', w: 0.084, centro: true }],
+          linhas: s.linhas.map((l) => [...keep.map((i) => l[i] || ''), '', '', '', '']) },
+        { t: 'nota', x: 'P probabilidade · S severidade. Nível e risco residual pela matriz de risco da empresa, com os critérios em documento (NR-01, item 1.5.4.4.2.2). A classificação não é feita pela IA.' },
+        { t: 'p', x: 'Matriz usada: [preencher]     Classificado por: [preencher]' });
+    });
+    out.push(...refPartes,
+      { t: 'h', x: 'Trabalhadores consultados' }, { t: 'tabela', alt: 8, cols: [{ t: 'Nome', w: 0.4 }, { t: 'Função', w: 0.3 }, { t: 'Assinatura', w: 0.3 }], linhas: [], vazias: 4 },
+      { t: 'assin', blocos: [{ titulo: 'Elaborado por', linhas: ['Nome e função: [preencher]', `Data: ${DATA_MAO}`] }, { titulo: 'Aprovado por', linhas: ['Nome e cargo: [preencher]', `Data: ${DATA_MAO}`] }] },
+      { t: 'nota', x: 'Esta APR não substitui o inventário de riscos do PGR.' }, ...avisos, { t: 'rod', x: `APR · ${atividade}` });
+    return [out];
   }
-  if (r.avisos?.length) out.push({ t: 'nota', x: r.avisos.join(' ') });
+
+  if (g.tipo === 'pt') {
+    const altura = subK === 'altura', eletr = subK === 'eletricidade';
+    const titulo = eletr ? 'PERMISSÃO DE TRABALHO / ORDEM DE SERVIÇO · ELETRICIDADE' : `PERMISSÃO DE TRABALHO${sub ? ` · ${sub.toUpperCase()}` : ''}`;
+    const norma = altura ? `NR-35, item 35.5.8${/NR-18/.test(nrs) ? ' · NR-18' : ''}` : eletr ? 'NR-10, item 10.11.2' : nrs;
+    const desc = acha(/descricao/), req = acha(/requisito/), med = acha(/medidas/);
+    const out = [
+      { t: 'cab', esq: emp, titulo, norma, ctl: ['Nº PT [preencher]', 'APR vinculada [preencher]', `Data ${DATA_MAO}`] },
+      { t: 'faixa', itens: [['Contratante', emp || '[preencher]'], ['Executante', '[preencher]']] },
+      { t: 'grade', cols: 4, itens: [{ r: 'Serviço', v: atividade, span: 4 }, { r: 'Local exato', v: '', span: 2 }, { r: 'Início', v: '___:___' }, { r: 'Término previsto', v: '___:___' }, { r: 'Emitente (nome)', v: '', span: 2 }, { r: 'Responsável pela execução', v: '', span: 2 }] },
+    ];
+    if (desc) out.push(...secaoPartes(desc));
+    if (req) out.push({ t: 'h', x: 'Checklist de liberação · "Não" em qualquer item: a PT não é liberada' },
+      { t: 'tabela', cols: [{ t: 'Item verificado', w: 0.62 }, { t: 'Sim', w: 0.07, centro: true }, { t: 'Não', w: 0.07, centro: true }, { t: 'N/A', w: 0.07, centro: true }, { t: 'Rubrica', w: 0.17 }],
+        linhas: [...(req.itens || []).map((x) => [x, '[ ]', '[ ]', '[ ]', '']), ...(altura ? [['Trabalhadores com NR-35 válida e ASO apto para altura', '[ ]', '[ ]', '[ ]', '']] : [])] });
+    if (med) out.push({ t: 'h', x: 'Medidas da análise de risco' },
+      { t: 'tabela', cols: [{ t: 'Medida', w: 0.6 }, { t: 'Implantada', w: 0.16, centro: true }, { t: 'Responsável', w: 0.24 }], linhas: (med.itens || []).map((x) => [x, '[ ] S   [ ] N', '']) });
+    resto([desc, req, med]).forEach((s) => out.push(...secaoPartes(s)));
+    out.push({ t: 'h', x: 'Envolvidos · todos com ciência antes de iniciar' },
+      { t: 'tabela', alt: 8, cols: [{ t: 'Nome', w: 0.3 }, { t: 'Função na tarefa', w: 0.16 }, { t: altura ? 'NR-35 válida até' : eletr ? 'NR-10 válida até' : 'Autorização ou treinamento', w: 0.17 }, { t: 'ASO apto (data)', w: 0.15 }, { t: 'Ciência (assinatura)', w: 0.22 }], linhas: [], vazias: 4 },
+      { t: 'h', x: 'Aprovação · revalidação · suspensão · encerramento' },
+      { t: 'tabela', alt: 9, cols: [{ t: 'Etapa', w: 0.24 }, { t: 'Data e hora', w: 0.15 }, { t: 'Observação', w: 0.37 }, { t: 'Assinatura', w: 0.24 }],
+        linhas: [['Aprovação e liberação (PT acessível no local)', '', '', ''], ['Revalidação [ ] condições e equipe iguais', '', '', ''], ['Suspensão ou cancelamento', '', 'Motivo:', ''], ['Encerramento [ ] área liberada', '', 'Ocorrências:', '']] },
+      { t: 'nota', x: altura ? 'Validade: só a duração da atividade, restrita ao turno ou à jornada; revalidar só sem mudança nas condições ou na equipe (NR-35, item 35.5.8.2). Encerrar e arquivar para rastreabilidade (NR-35, item 35.5.8).' : 'Validade: só a duração da atividade, restrita ao turno ou à jornada. Encerrar e arquivar para rastreabilidade.' },
+      ...refPartes,
+      { t: 'assin', blocos: [{ titulo: 'Responsável pela autorização da permissão', linhas: ['Nome: [preencher]'] }, { titulo: 'Responsável pelo encerramento', linhas: ['Nome: [preencher]'] }] },
+      ...avisos, { t: 'rod', x: `PT · ${atividade} · válida só no turno` });
+    return [out];
+  }
+
+  if (g.tipo === 'checklist') {
+    const out = [
+      { t: 'cab', esq: emp, titulo: 'CHECKLIST DE INSPEÇÃO DE SEGURANÇA', norma: [sub, nrs].filter(Boolean).join(' · '), ctl: ['Nº [preencher]', 'Revisão 00', `Data ${DATA_MAO}`] }, faixa,
+      { t: 'grade', cols: 4, itens: [{ r: 'O que é inspecionado', v: atividade, span: 2 }, { r: 'Identificação (TAG, série ou patrimônio)', v: '', span: 2 }, { r: 'Local', v: '', span: 2 }, { r: 'Hora', v: '___:___' }, { r: 'Inspetor', v: '' }] },
+    ];
+    secs.forEach((s) => {
+      if (s.formato !== 'tabela') { out.push(...secaoPartes(s)); return; }
+      const ii = Math.max(0, s.colunas.findIndex((c) => /item/i.test(c))), ic = s.colunas.findIndex((c) => /cr[ií]tico/i.test(c)), ib = s.colunas.findIndex((c) => /base|norma|refer|fundamento/i.test(c));
+      out.push({ t: 'h', x: 'Itens · item crítico "NC": parar o uso e avisar o responsável' },
+        { t: 'tabela', cols: [{ t: 'Nº', w: 0.04, centro: true }, { t: 'Item verificado', w: 0.43 }, { t: 'Crítico', w: 0.08, centro: true }, { t: 'C', w: 0.05, centro: true }, { t: 'NC', w: 0.05, centro: true }, { t: 'N/A', w: 0.05, centro: true }, { t: 'Observação', w: 0.15 }, { t: 'Base', w: 0.15 }],
+          linhas: s.linhas.map((l, i) => [String(i + 1), l[ii] || '', ic >= 0 && /^sim/i.test(l[ic] || '') ? { x: 'Sim', neg: true } : '', '[ ]', '[ ]', '[ ]', '', ib >= 0 ? (l[ib] || '') : '']) },
+        { t: 'nota', x: 'C conforme · NC não conforme · N/A não se aplica. Os itens críticos foram sugeridos pelo Laudomiro: a empresa pode ajustar.' });
+    });
+    out.push({ t: 'h', x: 'Não conformidades encontradas' },
+      { t: 'tabela', alt: 8, cols: [{ t: 'Item', w: 0.06 }, { t: 'Descrição', w: 0.3 }, { t: 'Ação imediata', w: 0.2 }, { t: 'Responsável', w: 0.16 }, { t: 'Prazo', w: 0.12 }, { t: 'Corrigido em', w: 0.16 }], linhas: [], vazias: 3 },
+      { t: 'p', x: 'Resultado: [ ] Liberado para uso     [ ] Não liberado' }, ...refPartes,
+      { t: 'assin', blocos: [{ titulo: 'Inspetor', linhas: ['Nome: [preencher]', `Data: ${DATA_MAO}`] }, { titulo: 'Responsável pelo setor', linhas: ['Nome: [preencher]', `Data: ${DATA_MAO}`] }] },
+      ...avisos, { t: 'rod', x: `Checklist · ${atividade}` });
+    return [out];
+  }
+
+  // procedimento
+  const eletr = subK === 'eletricidade' || /NR-10/.test(nrs) && secs.some((s) => /BASE T[EÉ]CNICA/.test(s.titulo));
+  const out = [
+    { t: 'cab', esq: emp, titulo: `PROCEDIMENTO DE TRABALHO · ${atividade.toUpperCase()}`.slice(0, 90), norma: eletr ? 'NR-10, item 10.11' : nrs, ctl: ['Nº [preencher]', 'Revisão 00', `Vigência ${DATA_MAO}`] }, faixa,
+    ...(eletr ? [{ t: 'nota', x: 'Estrutura mínima da NR-10, item 10.11.3: objetivo, campo de aplicação, base técnica, competências e responsabilidades, disposições gerais, medidas de controle e orientações finais.' }] : []),
+  ];
+  secs.forEach((s, i) => out.push(...secaoPartes(s, i + 1)));
+  out.push(...refPartes,
+    { t: 'h', x: 'Controle de revisões' }, { t: 'tabela', cols: [{ t: 'Rev.', w: 0.08 }, { t: 'Data', w: 0.14 }, { t: 'Alteração', w: 0.52 }, { t: 'Aprovado por', w: 0.26 }], linhas: [['00', '', 'Emissão inicial', '']], vazias: 2 },
+    { t: 'assin', blocos: [{ titulo: 'Elaborado por', linhas: ['Nome e registro: [preencher]'] }, { titulo: 'Aprovado por', linhas: ['Nome e cargo: [preencher]'] }] },
+    ...avisos, { t: 'rod', x: `Procedimento · ${atividade} · Rev. 00` });
   return [out];
 }
