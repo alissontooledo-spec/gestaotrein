@@ -85,7 +85,9 @@ const SO_VE = 'Seu perfil de acesso permite só consultar as entregas de EPI.';
 const ACOES_GRAVAM = new Set(['campo:epi-funcao', 'campo:epi-novo', 'campo:epi-editar', 'campo:epi-entrada', 'campo:epi-assinar', 'campo:epi-papel', 'campo:epi-link',
   'campo:epi-canc', 'campo:epi-canc-ok', 'campo:epi-link-canc']);
 
-export async function render() {
+export async function render(params = {}) {
+  /* v305: a empresa pode chegar pela tela nova (aba EPI da empresa): ir:campo-epi:<id da empresa> */
+  if (params?.id && /^[0-9a-f-]{36}$/i.test(params.id) && S.cli !== params.id) { S.cli = params.id; S.busca = ''; S.aba = 'itens'; }
   ligarTela({ digitar: (chave, valor) => {
     if (chave !== 'epi.busca') return;
     S.busca = valor; const b = norm(valor);
@@ -286,7 +288,9 @@ export const pessoa = {
     const um = P.ids.length === 1, p0 = P.pessoas[0];
     const topo = `<div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">${esc(P.cli.nome)}</div><div class="cp-topo-tit">${um ? esc(p0.nome) : `Entrega para ${P.pessoas.length} pessoas`}</div>
       <div class="cp-topo-sub">${um ? esc(p0.cargo || 'Sem função cadastrada') : esc(P.pessoas.map((x) => x.nome).join(', ')).slice(0, 220)}</div></div>
-      ${btn('Voltar', 'ir:campo-epi', { cls: 'btn-ghost' })}</div>`;
+      ${um && window.__epiDeFicha === p0.id && typeof window.abrirPessoa === 'function'
+        ? `<button type="button" class="btn btn-ghost" onclick="window.abrirPessoa('${esc(p0.id)}','epi')">Voltar à ficha</button>`   /* v305: veio da ficha do colaborador */
+        : btn('Voltar', 'ir:campo-epi', { cls: 'btn-ghost' })}</div>`;
     return `${topo}${um ? fichaHtml() : ''}${podeEpi() ? formHtml() : nota(SO_VE)}`;
   },
   acao,
