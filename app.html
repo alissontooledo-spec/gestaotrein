@@ -3176,7 +3176,7 @@ function traduzErroSupabase(erro, textoPadrao) {
   let bruto = (erro && (erro.message || erro.error_description || erro.msg)) || (typeof erro === 'string' ? erro : '') || '';
   // v200 (PASSO-66): regra de perfil de acesso e mensagens com código na frente.
   if (/row-level security policy "perm_/.test(bruto)) return 'Seu perfil de acesso não permite esta alteração. Fale com o administrador.';
-  bruto = bruto.replace(/^(PERFIL_[A-Z_]+|CAMPO_PERMISSAO):\s*/, '');
+  bruto = bruto.replace(/^(PERFIL_[A-Z_]+|CAMPO_PERMISSAO|MARCACAO_[A-Z_]+):\s*/, '');   // v304: marcações (PASSO-100)
   if (bruto) {
     for (const [re, pt] of _MAPA_ERROS_PT) {
       if (re.test(bruto)) return pt;
@@ -5774,7 +5774,8 @@ const NAV = {
   // acessar Relatórios nem digitando a URL (_perfilTemAcesso bloqueava).
   // Achado durante a validação de perfis antes do go-live da Avanteseg.
   comercial:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'turmas',l:'Turmas',icon:'cap'},{id:'agendaequipe',l:'Agenda da Equipe',icon:'cal'},{id:'clientes',l:'Clientes',icon:'company'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{sec:'Análise'},{id:'conformidade',l:'Conformidade',icon:'shield'},{id:'relatorios',l:'Relatórios',icon:'chart'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
-  instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'historico',l:'Histórico',icon:'clock'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
+  // v304: Clientes e Colaboradores só aparecem para perfil personalizado que os libere (ex.: Técnico de SST).
+  instrutor:     [{sec:'Principal'},{id:'home',l:'Início',icon:'home'},{id:'agenda',l:'Agenda',icon:'cal'},{id:'clientes',l:'Clientes',icon:'company'},{id:'colaboradores',l:'Colaboradores',icon:'users'},{id:'historico',l:'Histórico',icon:'clock'},{sec:'Conta'},{id:'conta',l:'Minha conta',icon:'user'}],
 };
 // 2026-08-09: rodapé mobile reduzido a 5 itens essenciais (Administrador
 // tinha 8, Comercial 6 — apertado demais numa barra de celular). O resto
@@ -6117,22 +6118,33 @@ function _injetarMenuDosModulos({ soCache = false } = {}) {
 // muda. _PERFIS_CATALOGO é o espelho de _perfil_catalogo() do banco.
 // ══════════════════════════════════════════════════════════════════════════
 const _PERFIS_CATALOGO = {
+  // v304 (PASSO-100): grupos "fixo" valem para todos os módulos e não se desligam.
+  // Gestão de SST em três linhas: Avaliações (campo), EPI (campo-epi) e Documentos (campo-docs).
   modulos: [
+    { id:'comum', nome:'Empresas, colaboradores e agenda', icone:'company', fixo:true, telas:[
+      ['clientes','Empresas'],['colaboradores','Colaboradores'],['agenda','Minha agenda (turmas e visitas)'],['agendaequipe','Agenda da equipe']] },
+    { id:'campo', nome:'Gestão de SST', icone:'clipboard', telas:[
+      ['campo','Avaliações de campo'],['campo-epi','EPI (entregas, fichas e estoque)'],['campo-docs','Documentos (emitir e entregar)']] },
     { id:'treinamentos', nome:'Treinamentos', icone:'cap', telas:[
-      ['turmas','Turmas'],['agendaequipe','Agenda da Equipe'],['clientes','Clientes'],['colaboradores','Colaboradores'],
-      ['catalogo','Catálogo'],['conformidade','Conformidade'],['relatorios','Relatórios'],['equipe','Equipe e perfis de acesso'],
-      ['configuracoes','Configurações'],['agenda','Minha agenda (turmas e visitas)'],['historico','Histórico']] },
+      ['turmas','Turmas'],['catalogo','Catálogo'],['conformidade','Conformidade'],['relatorios','Relatórios'],['historico','Histórico de aulas']] },
     { id:'crm', nome:'CRM', icone:'funnel', telas:[
       ['crm','Painel comercial'],['crm-funil','Funil de vendas'],['crm-contatos','Contatos'],['crm-atividades','Atividades'],
       ['crm-empresa','Contas'],['crm-conversas','Conversas (WhatsApp)'],['crm-numeros','Números de WhatsApp']] },
-    { id:'campo', nome:'Gestão de SST', icone:'clipboard', telas:[['campo','Gestão de SST (avaliações, EPI e documentos)']] },
+    { id:'adm', nome:'Administração', icone:'settings', fixo:true, telas:[['equipe','Equipe e perfis de acesso'],['configuracoes','Configurações']] },
   ],
+  // Máximo que um perfil personalizado pode receber a partir de cada base.
   limites: {
     administrador: {turmas:3,agendaequipe:3,clientes:3,colaboradores:3,catalogo:3,conformidade:2,relatorios:1,equipe:3,configuracoes:2,
-                    crm:1,'crm-funil':3,'crm-contatos':3,'crm-atividades':3,'crm-empresa':2,'crm-conversas':2,'crm-numeros':2,campo:3},
+                    crm:1,'crm-funil':3,'crm-contatos':3,'crm-atividades':3,'crm-empresa':2,'crm-conversas':2,'crm-numeros':2,
+                    campo:3,'campo-epi':3,'campo-docs':3},
     comercial:     {turmas:3,agendaequipe:3,clientes:3,colaboradores:3,conformidade:2,relatorios:1,
-                    crm:1,'crm-funil':3,'crm-contatos':3,'crm-atividades':3,'crm-empresa':2,'crm-conversas':2,campo:3},
-    instrutor:     {agenda:2,historico:1,campo:2},
+                    crm:1,'crm-funil':3,'crm-contatos':3,'crm-atividades':3,'crm-empresa':2,'crm-conversas':2,
+                    campo:3,'campo-epi':3,'campo-docs':3},
+    instrutor:     {agenda:2,historico:1,campo:2,'campo-epi':2,'campo-docs':2,clientes:1,colaboradores:2},
+  },
+  // O que a pessoa SEM perfil personalizado tem. Só difere do máximo no Instrutor.
+  padrao: {
+    instrutor:     {agenda:2,historico:1,campo:2,'campo-epi':2,'campo-docs':2},
   },
   acoes: [
     ['emitir_certificado','Gerar e baixar certificados',['administrador','comercial']],
@@ -6144,23 +6156,52 @@ const _PERFIS_CATALOGO = {
     // v250: o 4º item é quem tem a ação SEM perfil personalizado. Fora dele, só ligando no perfil.
     ['usar_laudomiro','Usar o Laudomiro (assistente de IA)',['administrador','comercial','instrutor'],['administrador']],
   ],
+  // v304: em qual grupo do editor cada ação especial aparece.
+  acaoGrupo: { emitir_certificado:'treinamentos', exportar_relatorios:'treinamentos', importar_colaboradores:'comum',
+               concluir_avaliacao:'campo', trazer_soc:'campo', nova_revisao:'campo', usar_laudomiro:'campo' },
   niveis: ['Não vê','Só vê','Vê e edita','Edita e apaga'],
-  bases: [['administrador','Administrador','tudo da organização, inclusive Equipe'],['comercial','Comercial','operação e vendas'],['instrutor','Instrutor','só o que é dele: agenda e avaliações em que foi escalado']],
+  bases: [['administrador','Administrador','tudo da organização, inclusive Equipe'],['comercial','Comercial','operação e vendas'],['instrutor','Instrutor','agenda, turmas dele e avaliações dele']],
 };
 const _TELA_MODULO = {};
 _PERFIS_CATALOGO.modulos.forEach(m => m.telas.forEach(([t]) => { _TELA_MODULO[t] = m.id; }));
 // Rotas que não são tela do catálogo, mas pertencem a uma.
 const _ROTA_TELA = { 'crm-lead':'crm-funil', 'crm-funis':'crm-funil', 'crm-respostas':'crm-conversas', 'crm-numeros-status':'crm-numeros', perfis:'equipe', laudomiro:'campo', 'cfg-avisos':'configuracoes', 'cfg-empresa':'configuracoes', 'cfg-unidades':'configuracoes', 'cfg-laudomiro':'equipe' };
-const _telaDaRota = (rota) => rota && rota.startsWith('campo') ? 'campo' : (_ROTA_TELA[rota] || rota);
+// v304: EPI e Documentos emitidos têm linha própria; as demais rotas do módulo são Avaliações.
+const _telaDaRota = (rota) => {
+  if (rota && rota.startsWith('campo')) return /^campo-epi/.test(rota) ? 'campo-epi' : rota === 'campo-emitidos' ? 'campo-docs' : 'campo';
+  return _ROTA_TELA[rota] || rota;
+};
 
 function _permAtual() { return usuarioAtual && usuarioAtual._perm ? usuarioAtual._perm : null; }
 function _pode(tela, nivel = 1) {
   const p = _permAtual();
-  if (!p) return true;
+  if (!p) {
+    // v304: sem perfil personalizado vale o padrão da base. Só o Instrutor tem padrão menor que o
+    // máximo (Empresas e Colaboradores só via perfil personalizado); o resto segue a regra de sempre.
+    const base = usuarioAtual?.perfil, pad = _PERFIS_CATALOGO.padrao[base], lim = _PERFIS_CATALOGO.limites[base];
+    if (pad && lim && lim[tela] !== undefined && pad[tela] === undefined) return false;
+    return true;
+  }
   const mod = _TELA_MODULO[tela];
   if (!mod) return true;                       // rota fora do catálogo: regra de sempre
   if (p.modulos && p.modulos[mod] === false) return false;
   return Number((p.telas || {})[tela] || 0) >= nivel;
+}
+// v304: o perfil acessa este módulo? (Treinamentos, CRM, Gestão de SST)
+function _podeModulo(m) {
+  const p = _permAtual();
+  return !p || !p.modulos || p.modulos[m] !== false;
+}
+// v304: perfil gravado antes do PASSO-100 (sem as linhas novas) lido como o banco converte.
+function _permCompat(perm) {
+  const p = JSON.parse(JSON.stringify(perm || {}));
+  p.modulos ||= {}; p.telas ||= {}; p.acoes ||= {};
+  if (p.telas['campo-epi'] === undefined) p.telas['campo-epi'] = p.telas.campo || 0;
+  if (p.telas['campo-docs'] === undefined) p.telas['campo-docs'] = p.telas.campo || 0;
+  if (p.modulos.comum === undefined && p.modulos.treinamentos === false)
+    ['clientes','colaboradores','agenda','agendaequipe','equipe','configuracoes'].forEach(t => { if (t in p.telas) p.telas[t] = 0; });
+  _PERFIS_CATALOGO.modulos.filter(m => m.fixo).forEach(m => { p.modulos[m.id] = true; });
+  return p;
 }
 function _podeRota(rota, nivel = 1) {
   if (!rota || rota === 'home' || rota === 'conta') return true;
@@ -6186,7 +6227,7 @@ async function _carregarPerfilAcesso() {
   try {
     const { data, error } = await sb.from('perfis_acesso').select('nome,permissoes,ativo').eq('id', usuarioAtual.perfil_acesso_id).maybeSingle();
     if (error) throw error;
-    if (data) { usuarioAtual._perm = data.permissoes || {}; usuarioAtual._permNome = data.nome; }
+    if (data) { usuarioAtual._perm = _permCompat(data.permissoes); usuarioAtual._permNome = data.nome; }
   } catch (e) {
     // Falha na leitura: fica o perfil padrão no MENU; o banco continua
     // aplicando o perfil de acesso de verdade (regras perm_).
@@ -6311,117 +6352,271 @@ function _aplicarSomenteConsulta(pagina) {
 }
 
 // ── Tela Configurações → Perfis de acesso ─────────────────────────────────
+// v304 (PASSO-100, proposta grid-proposta-perfis-de-acesso-v304): modelos prontos, editor em grupos
+// com resumo em palavras e últimas alterações. Nenhum perfil-base novo: o modelo só preenche o formulário.
 window._perfisEstado = null;
+const _PERFIS_MODELOS = [
+  { id: 'tecnico_sst', nome: 'Técnico de SST', base: 'instrutor', exige: 'campo',
+    itens: ['Faz visitas e avaliações dele', 'Entrega EPI e manda o link de assinatura', 'Vê as empresas e edita os colaboradores', 'Não vê turmas, CRM nem Equipe'],
+    perm: { modulos: { treinamentos: false, crm: false, campo: true },
+            telas: { clientes: 1, colaboradores: 2, agenda: 2, historico: 0, campo: 2, 'campo-epi': 2, 'campo-docs': 2 },
+            acoes: { concluir_avaliacao: true, trazer_soc: true, nova_revisao: true, usar_laudomiro: false } } },
+  { id: 'instrutor_tecnico', nome: 'Instrutor e técnico', base: 'instrutor', exige: 'campo',
+    itens: ['Tudo do Técnico de SST', 'Também dá aula nas turmas dele'],
+    perm: { modulos: { treinamentos: true, crm: false, campo: true },
+            telas: { clientes: 1, colaboradores: 2, agenda: 2, historico: 1, campo: 2, 'campo-epi': 2, 'campo-docs': 2 },
+            acoes: { concluir_avaliacao: true, trazer_soc: true, nova_revisao: true, usar_laudomiro: false } } },
+  { id: 'auxiliar_sst', nome: 'Auxiliar administrativo de SST', base: 'comercial', exige: 'campo',
+    itens: ['Cadastra empresas e colaboradores', 'Entrega EPI e manda o link de assinatura', 'Só consulta as avaliações', 'Não vê turmas nem CRM'],
+    perm: { modulos: { treinamentos: false, crm: false, campo: true },
+            telas: { clientes: 2, colaboradores: 2, agendaequipe: 2, campo: 1, 'campo-epi': 2, 'campo-docs': 2 },
+            acoes: { importar_colaboradores: true } } },
+  { id: 'consulta', nome: 'Consulta', base: 'comercial', exige: null,
+    itens: ['Vê empresas, colaboradores, turmas e o que houver de SST', 'Não altera nada', 'Não vê o CRM'],
+    perm: { modulos: { treinamentos: true, crm: false, campo: true },
+            telas: { clientes: 1, colaboradores: 1, agendaequipe: 1, turmas: 1, conformidade: 1, relatorios: 1, campo: 1, 'campo-epi': 1, 'campo-docs': 1 },
+            acoes: {} } },
+];
+// Texto curto sob a linha, quando ajuda a entender o efeito daquela base.
+const _PERFIS_DICA = {
+  instrutor: { campo: 'só as visitas em que ele é o técnico', colaboradores: 'para corrigir CPF e telefone antes de mandar o link do EPI', agenda: 'turmas e visitas em que for escalado' },
+  todas: { 'campo-docs': 'os documentos são gerados pelo Laudomiro: ligue-o em Ações especiais', 'campo-epi': 'em "Só vê" a pessoa vê a ficha na tela; o PDF é de quem entrega' },
+};
+
 async function renderPerfisAcesso() {
   setMobileHeader(`<div class="mh-greeting">Configurações</div><div class="mh-name">Perfis de acesso</div>`);
   fabOcultar();
   const orgId = usuarioAtual.org_id;
-  const [{ data: perfis, error }, { data: usos }] = await Promise.all([
+  const [{ data: perfis, error }, { data: usos }, hist, pronto] = await Promise.all([
     sb.from('perfis_acesso').select('id,nome,perfil_base,permissoes,ativo,atualizado_em').eq('org_id', orgId).order('nome'),
     sb.from('usuarios').select('perfil,perfil_acesso_id,ativo').eq('org_id', orgId).eq('ativo', true),
+    _perfisHistoricoLer(orgId, 4),
+    _marcacoesExistem(),   // v304: o PASSO-100 já rodou?
   ]);
   if (error) {
     setConteudo(`<div class="card"><div class="empty" style="padding:32px 20px"><div class="empty-title">Perfis de acesso indisponíveis</div>
       <div class="empty-sub">${escapeHtml(traduzErroSupabase(error, 'Confira se o PASSO-66 foi aplicado no banco.'))}</div></div></div>`);
     return;
   }
-  window._perfisEstado = { perfis: perfis || [], usos: usos || [], editando: null };
+  window._perfisEstado = { perfis: (perfis || []).map(p => ({ ...p, permissoes: _permCompat(p.permissoes) })), usos: usos || [], hist, pronto, editando: null, modelo: null };
   _perfisRenderLista();
 }
-const _perfisPodeEditar = () => usuarioAtual.perfil === 'provedor' || (usuarioAtual.perfil === 'administrador' && _pode('equipe', 2));
-const _perfisModulosDaOrg = () => ['treinamentos', ...(_modulosAtivos || []).filter(m => m !== 'treinamentos')];
+// v304: sem o PASSO-100 o banco ainda não conhece as linhas novas; editar agora gravaria no formato antigo.
+const _perfisPodeEditar = () => window._perfisEstado?.pronto !== false && (usuarioAtual.perfil === 'provedor' || (usuarioAtual.perfil === 'administrador' && _pode('equipe', 2)));
+// Grupos que esta organização usa, na ordem do catálogo (os fixos sempre).
+const _perfisModulosDaOrg = () => {
+  const tem = new Set(['comum', 'adm', 'treinamentos', ...(_modulosAtivos || [])]);
+  return _PERFIS_CATALOGO.modulos.map(m => m.id).filter(id => tem.has(id));
+};
+const _perfisNomeBase = (b) => (_PERFIS_CATALOGO.bases.find(x => x[0] === b) || [, ''])[1];
+const _perfisCap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const _perfisLista = (xs) => xs.length <= 1 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' e ' + xs[xs.length - 1];
+
+// Em uma linha, o que o perfil personalizado faz.
+function _perfisLinhaCurta(p) {
+  const t = p.permissoes?.telas || {}, m = p.permissoes?.modulos || {}, org = _perfisModulosDaOrg();
+  const on = (mod) => m[mod] !== false && org.includes(mod);
+  const xs = [];
+  if (p.perfil_base === 'instrutor' && Number(t.agenda) > 0) xs.push('agenda');
+  if (on('campo') && Number(t.campo) > 0) xs.push('avaliações');
+  if (on('campo') && Number(t['campo-epi']) > 0) xs.push('EPI');
+  if (on('campo') && Number(t['campo-docs']) > 0) xs.push('documentos');
+  if (on('treinamentos') && Number(t.turmas) > 0) xs.push('turmas');
+  if (on('crm') && Number(t['crm-funil'] || t.crm) > 0) xs.push('CRM');
+  if (Number(t.clientes) > 0 || Number(t.colaboradores) > 0) xs.push('empresas');
+  return xs.length ? _perfisLista(xs) : 'sem acesso a telas';
+}
+
 function _perfisRenderLista() {
   const st = window._perfisEstado;
   const conta = (fn) => st.usos.filter(fn).length;
   const pessoas = (n) => `<span class="badge badge-blue">${n} pessoa${n === 1 ? '' : 's'}</span>`;
-  const mods = (ids) => ids.map(id => `<span style="font-size:11px;font-weight:600;background:var(--gray-100);color:var(--text-2);border-radius:6px;padding:3px 8px">${escapeHtml((_PERFIS_CATALOGO.modulos.find(m => m.id === id) || {}).nome || id)}</span>`).join(' ');
-  const orgMods = _perfisModulosDaOrg();
-  const padrao = _PERFIS_CATALOGO.bases.map(([b, nome, desc]) => {
-    const temMods = orgMods.filter(m => _PERFIS_CATALOGO.modulos.find(x => x.id === m)?.telas.some(([t]) => _PERFIS_CATALOGO.limites[b][t]));
-    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+  const padrao = _PERFIS_CATALOGO.bases.map(([b, nome, desc]) => `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">
       <div style="font-size:14.5px;font-weight:800;color:var(--text-1);display:flex;align-items:center;gap:8px">${nome} <span class="badge badge-gray">padrão</span></div>
-      <div style="font-size:12px;color:var(--text-3);line-height:1.45">${escapeHtml(desc)}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${mods(temMods)}</div>
-      <div>${pessoas(conta(u => u.perfil === b && !u.perfil_acesso_id))}</div></div>`;
-  }).join('');
-  const pers = st.perfis.map(p => {
-    const nomeBase = (_PERFIS_CATALOGO.bases.find(b => b[0] === p.perfil_base) || [,''])[1];
-    const ligados = orgMods.filter(m => (p.permissoes?.modulos || {})[m] !== false &&
-      (_PERFIS_CATALOGO.modulos.find(x => x.id === m)?.telas || []).some(([t]) => Number((p.permissoes?.telas || {})[t] || 0) > 0));
-    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;${p.ativo ? 'border-color:#FCD34D' : 'opacity:.7'}">
+      <div style="font-size:12px;color:var(--text-3);line-height:1.45">${escapeHtml(_perfisCap(desc))}</div>
+      <div>${pessoas(conta(u => u.perfil === b && !u.perfil_acesso_id))}</div></div>`).join('');
+  const pers = st.perfis.map(p => `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;${p.ativo ? 'border-color:#FCD34D' : 'opacity:.7'}">
       <div style="font-size:14.5px;font-weight:800;color:var(--text-1);display:flex;align-items:center;gap:8px">${escapeHtml(p.nome)}${p.ativo ? '' : ' <span class="badge badge-gray">desativado</span>'}</div>
-      <div style="font-size:12px;color:var(--text-3)">Parte de <b>${nomeBase}</b>.</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${mods(ligados) || '<span style="font-size:12px;color:var(--text-3)">Nenhum módulo</span>'}${(p.permissoes?.acoes || {}).usar_laudomiro && ligados.includes('campo') ? '<span class="cx-pill cx-p-green" style="font-size:11px">✓ Laudomiro</span>' : ''}</div>
+      <div style="font-size:12px;color:var(--text-3);line-height:1.45">Parte do ${_perfisNomeBase(p.perfil_base)} · ${escapeHtml(_perfisLinhaCurta(p))}${(p.permissoes?.acoes || {}).usar_laudomiro ? ' · Laudomiro' : ''}</div>
       <div style="display:flex;align-items:center;gap:8px">${pessoas(conta(u => u.perfil_acesso_id === p.id))}
-        <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="_perfisAbrir('${p.id}')">${_perfisPodeEditar() ? 'Editar' : 'Ver'}</button></div></div>`;
-  }).join('');
+        <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="_perfisAbrir('${p.id}')">${_perfisPodeEditar() ? 'Editar' : 'Ver'}</button></div></div>`).join('');
   setConteudo(`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       <div class="cx-h" style="margin:0;flex:1"><div><h1>Perfis de acesso</h1><p>Quem vê o quê no sistema. Cada pessoa da Equipe recebe um perfil.</p></div></div>
-      ${_perfisPodeEditar() ? `<button class="btn btn-amber" style="margin-left:auto" onclick="_perfisAbrir(null)">${ICONS.plus || ''} Novo perfil</button>` : ''}</div>
+      ${_perfisPodeEditar() ? `<button class="btn btn-amber" style="margin-left:auto" onclick="_perfisNovo()">${ICONS.plus || ''} Novo perfil</button>` : ''}</div>
+    ${st.pronto === false ? '<div style="background:#FEF3C7;color:#92400E;border-radius:var(--r-md);padding:9px 11px;font-size:12.5px;line-height:1.5;margin-bottom:12px">Falta rodar o PASSO-100 no banco. Até lá os perfis ficam só para consulta.</div>' : ''}
     <div style="display:flex;gap:8px;background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 11px;font-size:12.5px;color:var(--text-2);line-height:1.5;margin-bottom:12px">
-      <span>Os 3 perfis padrão continuam existindo e não podem ser apagados. Um perfil novo parte de um deles e só pode <b>tirar</b> acesso, nunca dar mais do que o perfil de partida. Para dar um perfil a alguém: <b>Equipe</b> → pessoa → <b>Editar</b> → Perfil.</span></div>
+      <span>Os 3 perfis padrão continuam existindo e não podem ser apagados. Um perfil novo parte de um deles e só pode <b>tirar</b> acesso, nunca dar mais do que o perfil de partida permite. Para dar um perfil a alguém: <b>Equipe</b> → editar a pessoa → Perfil.</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">${padrao}${pers}</div>
-    ${!st.perfis.length ? '<div style="font-size:12.5px;color:var(--text-3);margin-top:12px">Nenhum perfil personalizado ainda.</div>' : ''}`);
+    ${!st.perfis.length ? '<div style="font-size:12.5px;color:var(--text-3);margin-top:12px">Nenhum perfil personalizado ainda. Toque em "Novo perfil" para começar de um modelo pronto.</div>' : ''}
+    ${st.hist ? `<div class="card" style="padding:0;margin-top:14px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--gray-50)">
+        <b style="font-size:13px;color:var(--text-1)">Últimas alterações</b>
+        ${st.hist.length ? '<button class="btn btn-ghost btn-sm" onclick="_perfisVerHistorico()">Ver todas</button>' : ''}</div>
+      ${st.hist.length ? st.hist.map(_perfisHistLinha).join('') : '<div style="padding:12px 14px;font-size:12.5px;color:var(--text-3)">Nenhuma alteração registrada ainda. A partir de agora, cada mudança de perfil fica aqui.</div>'}
+    </div>` : ''}`);
 }
+
+// ── Novo perfil: escolher um modelo ──
+function _perfisNovo() {
+  const st = window._perfisEstado;
+  const org = _perfisModulosDaOrg();
+  const modelos = _PERFIS_MODELOS.filter(m => !m.exige || org.includes(m.exige));
+  if (!st.modelo || !modelos.some(m => m.id === st.modelo) && st.modelo !== 'branco') st.modelo = modelos[0]?.id || 'branco';
+  const card = (id, nome, sub, itens, extra = '') => {
+    const on = st.modelo === id;
+    return `<button type="button" onclick="_perfisModeloEscolher('${id}')" aria-pressed="${on}" style="text-align:left;cursor:pointer;font-family:inherit;border:${on ? '2px solid #F59E0B' : `1px ${extra || 'solid'} var(--border)`};background:${on ? '#FFFBEB' : 'var(--surface)'};border-radius:var(--r-md);padding:${on ? '12px 13px' : '13px 14px'};display:flex;flex-direction:column;gap:2px">
+      <b style="font-size:14px;color:var(--text-1)">${escapeHtml(nome)}</b><span style="font-size:11.5px;color:var(--text-3);margin-bottom:6px">${escapeHtml(sub)}</span>
+      <ul style="margin:0;padding-left:16px;font-size:12.5px;color:var(--text-2);line-height:1.5">${itens.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></button>`;
+  };
+  const sel = modelos.find(m => m.id === st.modelo);
+  setConteudo(`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="_perfisRenderLista()">${ICONS.back} Voltar</button>
+      <div style="font-size:18px;font-weight:800;color:var(--text-1)">Novo perfil</div></div>
+    <div class="card" style="padding:16px">
+      <div style="font-size:16px;font-weight:800;color:var(--text-1)">Por onde começar?</div>
+      <div style="font-size:12.5px;color:var(--text-3);margin:2px 0 12px">Escolha o modelo mais parecido com a função da pessoa. Você ajusta tudo na próxima tela, e nada é gravado antes de "Salvar perfil".</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+        ${modelos.map(m => card(m.id, m.nome, 'Parte do ' + _perfisNomeBase(m.base), m.itens)).join('')}
+        ${card('branco', 'Em branco', 'Escolho tudo', ['Começa pelo perfil padrão escolhido'], 'dashed')}
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="_perfisRenderLista()">Cancelar</button>
+        <button class="btn btn-amber" onclick="_perfisAbrir(null, '${st.modelo}')">Continuar${sel ? ' com ' + escapeHtml(sel.nome) : ''}</button></div>
+    </div>`);
+  window.scrollTo(0, 0);
+}
+function _perfisModeloEscolher(id) { window._perfisEstado.modelo = id; _perfisNovo(); }
+
+// Permissões de partida de uma base: o padrão dela (ou o máximo, onde não há padrão menor).
 function _perfisPadraoDaBase(base) {
-  const lim = _PERFIS_CATALOGO.limites[base];
-  return { modulos: { treinamentos: true, crm: true, campo: true }, telas: { ...lim },
+  const lim = _PERFIS_CATALOGO.limites[base], pad = _PERFIS_CATALOGO.padrao[base];
+  const telas = {};
+  Object.keys(lim).forEach(t => { telas[t] = pad ? (pad[t] || 0) : lim[t]; });
+  return { modulos: Object.fromEntries(_PERFIS_CATALOGO.modulos.map(m => [m.id, true])), telas,
     acoes: Object.fromEntries(_PERFIS_CATALOGO.acoes.filter(a => a[2].includes(base)).map(a => [a[0], (a[3] || a[2]).includes(base)])) };
 }
-function _perfisAbrir(id) {
+function _perfisDoModelo(m) {
+  const lim = _PERFIS_CATALOGO.limites[m.base];
+  const telas = {};
+  Object.keys(lim).forEach(t => { telas[t] = Math.min(lim[t], Number(m.perm.telas[t] || 0)); });
+  return { modulos: { ...Object.fromEntries(_PERFIS_CATALOGO.modulos.map(x => [x.id, true])), ...m.perm.modulos }, telas,
+    acoes: Object.fromEntries(_PERFIS_CATALOGO.acoes.filter(a => a[2].includes(m.base)).map(a => [a[0], !!m.perm.acoes[a[0]]])) };
+}
+function _perfisAbrir(id, modeloId) {
   const st = window._perfisEstado;
   const p = id ? st.perfis.find(x => x.id === id) : null;
-  const base = p?.perfil_base || 'comercial';
-  st.editando = { id: p?.id || null, nome: p?.nome || '', perfil_base: base, ativo: p ? p.ativo : true,
-    permissoes: p ? JSON.parse(JSON.stringify(p.permissoes || {})) : _perfisPadraoDaBase(base) };
+  const mod = !p && modeloId ? _PERFIS_MODELOS.find(m => m.id === modeloId) : null;
+  const base = p?.perfil_base || mod?.base || 'comercial';
+  st.editando = { id: p?.id || null, nome: p?.nome || mod?.nome || '', perfil_base: base, ativo: p ? p.ativo : true, modelo: mod?.nome || null,
+    permissoes: p ? _permCompat(p.permissoes) : mod ? _perfisDoModelo(mod) : _perfisPadraoDaBase(base) };
   _perfisRenderEditor();
   window.scrollTo(0, 0);
 }
+
+// O que a pessoa pode e não pode, em palavras — muda a cada clique.
+function _perfisResumo(e) {
+  const t = e.permissoes.telas || {}, m = e.permissoes.modulos || {}, a = e.permissoes.acoes || {}, b = e.perfil_base;
+  const lim = _PERFIS_CATALOGO.limites[b], org = _perfisModulosDaOrg();
+  const n = (x) => lim[x] === undefined ? -1 : Number(t[x] || 0);
+  const on = (mod) => org.includes(mod) && m[mod] !== false;
+  const pode = [], nao = [];
+  const ins = b === 'instrutor';
+  if (ins && n('agenda') >= 1) pode.push(on('campo') && on('treinamentos') ? 'Faz as visitas e dá as aulas em que for escalado' : on('campo') ? 'Faz as visitas em que for escalado' : 'Dá as aulas em que for escalado');
+  if (n('agendaequipe') >= 2) pode.push('Marca turmas e visitas na agenda da equipe'); else if (n('agendaequipe') === 1) pode.push('Vê a agenda da equipe');
+  if (on('campo')) {
+    if (n('campo') >= 2) pode.push(ins ? 'Preenche as avaliações em que for o técnico' : 'Cria e preenche avaliações de campo');
+    else if (n('campo') === 1) pode.push(ins ? 'Consulta as avaliações dele' : 'Consulta as avaliações de campo');
+    if (n('campo-epi') >= 2) pode.push('Entrega EPI, manda o link de assinatura e vê as fichas'); else if (n('campo-epi') === 1) pode.push('Consulta as fichas de EPI na tela');
+    // Gerar e ver documentos acontece dentro do Laudomiro: sem ele, a linha Documentos só vale no banco.
+    const lq = a.usar_laudomiro || (!('usar_laudomiro' in a) && b === 'administrador');
+    if (n('campo-docs') >= 2 && lq) pode.push('Gera e entrega documentos pelo Laudomiro'); else if (n('campo-docs') === 1 && lq) pode.push('Consulta os documentos emitidos');
+    if (n('campo-docs') >= 1 && !lq) nao.push('Gerar ou ver documentos: precisam do Laudomiro, que está desligado');
+  }
+  if (n('clientes') >= 2) pode.push(n('clientes') >= 3 ? 'Cadastra, altera e apaga empresas' : 'Cadastra e altera empresas'); else if (n('clientes') === 1) pode.push('Vê as empresas');
+  if (n('colaboradores') >= 2) pode.push(ins ? 'Vê os colaboradores e corrige os dados deles' : 'Cadastra e corrige os colaboradores'); else if (n('colaboradores') === 1) pode.push('Vê os colaboradores');
+  if (on('treinamentos')) {
+    if (n('turmas') >= 2) pode.push('Cria e conduz turmas'); else if (n('turmas') === 1) pode.push('Consulta as turmas');
+    if (ins && n('historico') >= 1) pode.push('Vê o histórico das aulas dele');
+    if (n('conformidade') >= 1) pode.push(n('conformidade') >= 2 ? 'Acompanha e ajusta os vencimentos' : 'Consulta os vencimentos');
+  }
+  if (on('crm') && ['crm', 'crm-funil', 'crm-contatos', 'crm-conversas'].some(x => n(x) >= 1)) pode.push('Usa o CRM');
+  if (n('equipe') >= 2) pode.push('Gerencia a Equipe e os perfis de acesso');
+  if (a.usar_laudomiro && on('campo')) pode.push('Usa o Laudomiro');
+  if (ins && on('campo') && n('campo') >= 1) nao.push('Ver avaliações de outros técnicos');
+  if (n('clientes') >= 0 && n('clientes') < 2) nao.push('Cadastrar ou alterar empresas');
+  if (n('colaboradores') >= 0 && n('colaboradores') < 3 && n('colaboradores') > 0) nao.push('Apagar colaboradores');
+  if (org.includes('treinamentos') && !on('treinamentos')) nao.push('Ver turmas, certificados e o histórico de aulas');
+  if (org.includes('campo') && !on('campo')) nao.push('Usar a Gestão de SST');
+  if (org.includes('crm') && lim.crm !== undefined && !on('crm')) nao.push('Usar o CRM');
+  if (n('equipe') < 2) nao.push('Mudar a Equipe e os perfis de acesso');
+  if (org.includes('campo') && on('campo') && 'usar_laudomiro' in a && !a.usar_laudomiro && !nao.some(x => /Laudomiro/.test(x))) nao.push('Usar o Laudomiro');
+  return { pode: pode.length ? pode : ['Nada: todas as linhas estão em "Não vê"'], nao };
+}
+
 function _perfisRenderEditor() {
   const st = window._perfisEstado, e = st.editando, pode = _perfisPodeEditar();
   const lim = _PERFIS_CATALOGO.limites[e.perfil_base];
   const perm = e.permissoes; perm.modulos ||= {}; perm.telas ||= {}; perm.acoes ||= {};
+  const dica = { ..._PERFIS_DICA.todas, ...(_PERFIS_DICA[e.perfil_base] || {}) };
   const sw = (on, acao, travado) => `<button type="button" ${travado ? 'disabled' : `onclick="${acao}"`} aria-pressed="${on}" style="width:36px;height:20px;border-radius:999px;border:none;position:relative;cursor:${travado ? 'default' : 'pointer'};background:${on ? 'var(--green)' : 'var(--gray-300)'};flex-shrink:0;${travado ? 'opacity:.4' : ''}"><span style="position:absolute;top:2px;left:${on ? '18px' : '2px'};width:16px;height:16px;border-radius:50%;background:#fff"></span></button>`;
   const seg = (tela, v, cap) => `<div style="display:inline-flex;flex-wrap:wrap;background:var(--gray-100);border:1.5px solid var(--border);border-radius:var(--r-md);padding:3px;gap:2px">${
     _PERFIS_CATALOGO.niveis.map((n, k) => `<button type="button" ${(!pode || k > cap) ? 'disabled' : `onclick="_perfisNivel('${tela}',${k})"`} style="min-height:30px;padding:0 10px;border:none;border-radius:6px;font-size:12px;font-weight:700;font-family:inherit;${k === v ? 'background:var(--amber);color:var(--navy)' : 'background:none;color:var(--text-3)'};${k > cap ? 'opacity:.35;cursor:not-allowed' : 'cursor:pointer'}">${n}</button>`).join('')}</div>`;
   const blocos = _PERFIS_CATALOGO.modulos.filter(m => _perfisModulosDaOrg().includes(m.id)).map(m => {
     const telas = m.telas.filter(([t]) => lim[t] !== undefined);
-    if (!telas.length) return '';
-    const ligado = perm.modulos[m.id] !== false;
-    const acoes = _PERFIS_CATALOGO.acoes.filter(a => a[2].includes(e.perfil_base) && ((m.id === 'campo') === ['concluir_avaliacao','trazer_soc','nova_revisao','usar_laudomiro'].includes(a[0])));
-    return `<div style="border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden">
+    const acoes = _PERFIS_CATALOGO.acoes.filter(a => a[2].includes(e.perfil_base) && (_PERFIS_CATALOGO.acaoGrupo[a[0]] || 'comum') === m.id);
+    if (!telas.length && !acoes.length) return '';
+    const ligado = m.fixo || perm.modulos[m.id] !== false;
+    return `<div style="border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden;background:var(--surface)">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-50);border-bottom:1px solid var(--border);flex-wrap:wrap">
         <span style="width:26px;height:26px;border-radius:6px;background:#F59E0B;color:#172541;display:flex;align-items:center;justify-content:center">${ICONS[m.icone] || ''}</span>
         <b style="font-size:13.5px;color:var(--text-1)">${m.nome}</b>
-        <span style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)">Acessa este módulo ${sw(ligado, `_perfisModulo('${m.id}')`, !pode)}</span></div>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)">${m.fixo ? 'vale para todos os módulos' : `Acessa este módulo ${sw(ligado, `_perfisModulo('${m.id}')`, !pode)}`}</span></div>
       ${ligado ? `<div>${telas.map(([t, nome]) => `<div class="perf-linha" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap">
-          <span style="flex:1;min-width:160px;font-size:13px;font-weight:600;color:var(--text-1)">${nome}</span>${seg(t, Math.min(Number(perm.telas[t] || 0), lim[t]), lim[t])}</div>`).join('')}
+          <span style="flex:1;min-width:160px;font-size:13px;font-weight:600;color:var(--text-1)">${nome}${dica[t] ? `<small style="display:block;font-weight:500;color:var(--text-3);font-size:11.5px">${dica[t]}</small>` : ''}</span>${seg(t, Math.min(Number(perm.telas[t] || 0), lim[t]), lim[t])}</div>`).join('')}
         ${acoes.length ? `<div style="padding:8px 12px"><div style="font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Ações especiais</div>
-          ${acoes.map(([a, rot]) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12.5px;color:var(--text-1)">${sw(!!perm.acoes[a], `_perfisAcao('${a}')`, !pode)}${rot}</div>`).join('')}</div>` : ''}</div>` : ''}</div>`;
+          ${acoes.map(([a, rot]) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12.5px;color:var(--text-1)">${sw(!!perm.acoes[a], `_perfisAcao('${a}')`, !pode)}${rot}</div>`).join('')}</div>` : ''}</div>`
+      : `<div style="padding:10px 12px;font-size:12.5px;color:var(--text-3)">Desligado: ${m.id === 'treinamentos' ? 'não vê turmas, presenças, certificados nem o histórico de aulas. O banco também recusa a leitura.' : 'nenhuma tela deste módulo aparece, e o banco recusa a leitura e a gravação.'}</div>`}
+    </div>`;
   }).join('');
+  const r = _perfisResumo(e);
   const usando = st.usos.filter(u => e.id && u.perfil_acesso_id === e.id).length;
   setConteudo(`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="_perfisRenderLista()">${ICONS.back} Voltar</button>
-      <div style="font-size:18px;font-weight:800;color:var(--text-1)">${e.id ? 'Perfil: ' + escapeHtml(e.nome) : 'Novo perfil'}</div></div>
-    <div class="card" style="padding:14px 16px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Identificação</div>
-      <div class="field" style="max-width:420px"><label>Nome do perfil *</label><input type="text" id="perfNome" maxlength="60" value="${escapeHtml(e.nome)}" ${pode ? '' : 'readonly'} placeholder="Ex.: Técnico de campo, Recepção" oninput="window._perfisEstado.editando.nome=this.value"></div>
-      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin:10px 0 6px">Parte de qual perfil padrão</label>
-      <div class="perf-bases" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${_PERFIS_CATALOGO.bases.map(([b, nome, desc]) => `
-        <button type="button" ${pode ? `onclick="_perfisBase('${b}')"` : 'disabled'} style="text-align:left;border:1.5px solid ${b === e.perfil_base ? '#FCD34D' : 'var(--border)'};background:${b === e.perfil_base ? '#FFFBEB' : 'var(--surface)'};border-radius:var(--r-md);padding:10px 12px;font-family:inherit;cursor:${pode ? 'pointer' : 'default'}">
-          <b style="display:block;font-size:13px;color:var(--text-1)">${nome}</b><span style="font-size:12px;color:var(--text-3);line-height:1.4">${escapeHtml(desc)}</span></button>`).join('')}</div>
-      ${e.perfil_base === 'instrutor' ? '<div style="font-size:11.5px;color:var(--text-3);margin-top:6px">Quem tem este perfil aparece na agenda para ser escalado, igual a um Instrutor.</div>' : ''}
-      ${e.id && usando ? `<div style="font-size:11.5px;color:var(--warn-text);margin-top:6px">${usando} pessoa(s) usam este perfil: trocar o perfil de partida muda o perfil delas também.</div>` : ''}</div>
-    <div class="card" style="padding:14px 16px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">O que este perfil acessa</div>
-      ${blocos}
-      <div style="font-size:11.5px;color:var(--text-3)">Opção apagada = o perfil de partida não permite. "Só vê" deixa a tela aberta, mas o sistema recusa qualquer alteração.</div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="${e.id ? '_perfisRenderLista()' : '_perfisNovo()'}">${ICONS.back} Voltar</button>
+      <div style="font-size:18px;font-weight:800;color:var(--text-1);min-width:0;overflow:hidden;text-overflow:ellipsis">${e.id ? 'Perfil: ' + escapeHtml(e.nome) : 'Novo perfil'}</div></div>
+    <div class="perf-ed">
+      <div class="perf-ed-main">
+        <div class="card" style="padding:14px 16px;margin-bottom:12px">
+          <div class="field" style="max-width:420px"><label>Nome do perfil *</label><input type="text" id="perfNome" maxlength="60" value="${escapeHtml(e.nome)}" ${pode ? '' : 'readonly'} placeholder="Ex.: Técnico de SST, Recepção" oninput="window._perfisEstado.editando.nome=this.value"></div>
+          ${e.modelo ? `<div style="font-size:11.5px;color:var(--text-3);margin:-6px 0 8px">Preenchido pelo modelo ${escapeHtml(e.modelo)}. Ajuste o que quiser.</div>` : ''}
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin:10px 0 6px">Parte de qual perfil padrão</label>
+          <div class="perf-bases" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${_PERFIS_CATALOGO.bases.map(([b, nome, desc]) => `
+            <button type="button" ${pode ? `onclick="_perfisBase('${b}')"` : 'disabled'} style="text-align:left;border:1.5px solid ${b === e.perfil_base ? '#FCD34D' : 'var(--border)'};background:${b === e.perfil_base ? '#FFFBEB' : 'var(--surface)'};border-radius:var(--r-md);padding:9px 11px;cursor:${pode ? 'pointer' : 'default'};font-family:inherit">
+              <b style="display:block;font-size:13px;color:var(--text-1)">${nome}</b><span style="font-size:12px;color:var(--text-3);line-height:1.4">${escapeHtml(_perfisCap(desc))}</span></button>`).join('')}</div>
+          ${e.perfil_base === 'instrutor' ? '<div style="font-size:11.5px;color:var(--text-3);margin-top:6px">Quem tem este perfil aparece na agenda para ser escalado. Em Equipe, marque o que cada pessoa faz: dar aula, fazer visitas ou as duas coisas.</div>' : ''}
+          ${e.id && usando ? `<div style="font-size:11.5px;color:var(--warn-text);margin-top:6px">${usando} pessoa(s) usam este perfil: trocar o perfil de partida muda o perfil delas também.</div>` : ''}</div>
+        <div class="card" style="padding:14px 16px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">O que este perfil acessa</div>
+          ${blocos}
+          <div style="display:flex;gap:8px;align-items:flex-start;background:#ECFDF3;color:#085D3A;border-radius:var(--r-md);padding:8px 10px;font-size:12px;font-weight:600;line-height:1.45">O banco confere cada linha desta tela. O que está desligado aqui o sistema recusa, mesmo que alguém tente por fora do app.</div>
+          <div style="font-size:11.5px;color:var(--text-3);margin-top:8px">Opção apagada = o perfil de partida não permite. "Só vê" deixa a tela aberta, mas o sistema recusa qualquer alteração.</div></div>
+      </div>
+      <div class="perf-ed-lado">
+        <div class="card" id="perfResumo" style="padding:14px 16px">
+          <div style="font-size:12.5px;font-weight:800;color:var(--text-1);margin-bottom:6px">Quem tiver este perfil</div>
+          <ul style="margin:0 0 10px;padding-left:18px;font-size:12.5px;line-height:1.55;color:var(--text-1)">${r.pode.map(x => `<li style="color:#067647"><span style="color:var(--text-1)">${escapeHtml(x)}</span></li>`).join('')}</ul>
+          ${r.nao.length ? `<div style="font-size:12.5px;font-weight:800;color:var(--text-1);margin-bottom:6px">Não pode</div>
+          <ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.55">${r.nao.map(x => `<li style="color:#B42318"><span style="color:var(--text-1)">${escapeHtml(x)}</span></li>`).join('')}</ul>` : ''}
+        </div>
+      </div>
+    </div>
     ${pode ? `<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:20px">
       ${e.id ? `<button class="btn btn-ghost" style="color:var(--red);margin-right:auto" onclick="_perfisApagar()">${usando ? 'Desativar' : 'Apagar perfil'}</button>` : ''}
       <button class="btn btn-outline" onclick="_perfisRenderLista()">Cancelar</button>
       <button class="btn btn-amber" id="btnPerfSalvar" onclick="_perfisSalvar()">Salvar perfil</button></div>` : ''}
-    <style>@media(max-width:767px){.perf-bases{grid-template-columns:1fr!important}}</style>`);
+    <style>.perf-ed{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}.perf-ed-lado{position:sticky;top:12px}
+      @media(max-width:1023px){.perf-ed{grid-template-columns:1fr}.perf-ed-lado{position:static}}
+      @media(max-width:767px){.perf-bases{grid-template-columns:1fr!important}}</style>`);
 }
 function _perfisNivel(tela, n) { window._perfisEstado.editando.permissoes.telas[tela] = n; _perfisRenderEditor(); }
 function _perfisModulo(m) { const p = window._perfisEstado.editando.permissoes; p.modulos[m] = p.modulos[m] === false; _perfisRenderEditor(); }
@@ -6430,18 +6625,21 @@ function _perfisBase(b) {
   const e = window._perfisEstado.editando;
   if (b === e.perfil_base) return;
   e.perfil_base = b;
-  const padrao = _perfisPadraoDaBase(b);
-  // mantém o que der das escolhas anteriores, dentro do limite da nova base
-  for (const t of Object.keys(padrao.telas)) if (e.permissoes.telas[t] !== undefined) padrao.telas[t] = Math.min(padrao.telas[t], e.permissoes.telas[t]);
+  const padrao = _perfisPadraoDaBase(b), lim = _PERFIS_CATALOGO.limites[b];
+  // mantém o que der das escolhas anteriores, dentro do máximo da nova base
+  for (const t of Object.keys(lim)) if (e.permissoes.telas[t] !== undefined) padrao.telas[t] = Math.min(lim[t], e.permissoes.telas[t]);
   padrao.modulos = { ...padrao.modulos, ...(e.permissoes.modulos || {}) };
+  _PERFIS_CATALOGO.modulos.filter(m => m.fixo).forEach(m => { padrao.modulos[m.id] = true; });
   e.permissoes = padrao;
   _perfisRenderEditor();
 }
 async function _perfisSalvar() {
   const st = window._perfisEstado, e = st.editando;
-  const nome = (e.nome || '').trim();
-  if (nome.length < 2) { showToast('Dê um nome ao perfil (ex.: Técnico de campo).', 'error'); return; }
-  const btn = document.getElementById('btnPerfSalvar'); if (btn) btn.disabled = true;
+  const nome = String(_getElVisible('perfNome')?.value ?? e.nome ?? '').trim();
+  if (nome.length < 2) { showToast('Dê um nome ao perfil (ex.: Técnico de SST).', 'error'); return; }
+  e.nome = nome;
+  _PERFIS_CATALOGO.modulos.filter(m => m.fixo).forEach(m => { e.permissoes.modulos[m.id] = true; });   // marca do formato v304
+  const btn = _getElVisible('btnPerfSalvar'); if (btn) btn.disabled = true;
   const reg = { nome, perfil_base: e.perfil_base, permissoes: e.permissoes };
   const q = e.id
     ? sb.from('perfis_acesso').update(reg).eq('id', e.id).select('id')
@@ -6462,6 +6660,77 @@ async function _perfisApagar() {
   if (error) { showToast(traduzErroSupabase(error, 'Não foi possível apagar.'), 'error'); return; }
   showToast('Perfil apagado.', 'success');
   await renderPerfisAcesso();
+}
+
+// ── Últimas alterações (PASSO-100) ──
+// null = sem a tabela (antes do PASSO-100) ou sem permissão: o bloco não aparece.
+async function _perfisHistoricoLer(orgId, limite) {
+  if (!['administrador', 'provedor'].includes(usuarioAtual?.perfil)) return null;
+  try {
+    const { data, error } = await sb.from('perfis_acesso_historico').select('quando,quem_nome,alvo,alvo_nome,acao,antes,depois')
+      .eq('org_id', orgId).order('quando', { ascending: false }).limit(limite);
+    return error ? null : (data || []);
+  } catch (e) { return null; }
+}
+function _perfisQuando(iso) {
+  const d = new Date(iso), hoje = new Date(), hh = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dia = (x) => dataLocalISO(x);
+  const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+  if (dia(d) === dia(hoje)) return 'hoje ' + hh;
+  if (dia(d) === dia(ontem)) return 'ontem ' + hh;
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: d.getFullYear() === hoje.getFullYear() ? undefined : '2-digit' }) + ' ' + hh;
+}
+const _perfisNivelTxt = (n) => _PERFIS_CATALOGO.niveis[Number(n) || 0] || 'Não vê';
+// O que mudou entre duas versões de um perfil, em frases curtas.
+function _perfisDiferencas(a, d) {
+  const xs = [];
+  if (!a || !d) return xs;
+  if (a.nome !== d.nome) xs.push(`nome passou para "${d.nome}"`);
+  if (a.perfil_base !== d.perfil_base) xs.push(`passou a partir do ${_perfisNomeBase(d.perfil_base)}`);
+  if (a.ativo !== d.ativo) xs.push(d.ativo ? 'reativado' : 'desativado');
+  const pa = _permCompat(a.permissoes), pd = _permCompat(d.permissoes);   // v304: perfil antigo lido como o banco converte
+  _PERFIS_CATALOGO.modulos.filter(m => !m.fixo).forEach(m => {
+    const va = (pa.modulos || {})[m.id] !== false, vd = (pd.modulos || {})[m.id] !== false;
+    if (va !== vd) xs.push(`${m.nome} ${vd ? 'ligado' : 'desligado'}`);
+  });
+  _PERFIS_CATALOGO.modulos.forEach(m => m.telas.forEach(([t, nome]) => {
+    const va = Number((pa.telas || {})[t] || 0), vd = Number((pd.telas || {})[t] || 0);
+    if (va !== vd && ((pa.telas || {})[t] !== undefined)) xs.push(`${nome.replace(/ \(.*\)$/, '')} passou de "${_perfisNivelTxt(va)}" para "${_perfisNivelTxt(vd)}"`);
+  }));
+  _PERFIS_CATALOGO.acoes.forEach(([k, rot]) => {
+    const va = !!(pa.acoes || {})[k], vd = !!(pd.acoes || {})[k];
+    if (va !== vd && (pa.acoes || {})[k] !== undefined) xs.push(`${rot.replace(/ \(.*\)$/, '')}: ${vd ? 'ligado' : 'desligado'}`);
+  });
+  return xs;
+}
+function _perfisHistLinha(h) {
+  const quem = h.quem_nome === 'Sistema' ? 'pelo sistema (atualização do GRID)' : `por ${escapeHtml(h.quem_nome || 'alguém')}`;
+  const nome = `<b>${escapeHtml(h.alvo_nome || '')}</b>`;
+  let txt, sub = '';
+  if (h.alvo === 'perfil') {
+    if (h.acao === 'criou') txt = `${nome} criado`;
+    else if (h.acao === 'apagou') txt = `${nome} apagado`;
+    else {
+      const ds = _perfisDiferencas(h.antes, h.depois);
+      txt = `${nome}${ds.length ? ' · ' + escapeHtml(ds.slice(0, 2).join('; ')) : h.quem_nome === 'Sistema' ? ' · recebeu as linhas novas (EPI e Documentos), sem mudar o acesso' : ' · ajustado'}${ds.length > 2 ? ` <span style="color:var(--text-3)">e mais ${ds.length - 2}</span>` : ''}`;
+    }
+  } else if (h.acao === 'marcacoes') {
+    const d = h.depois || {};
+    txt = `${nome}: ${d.ministra_treinamentos ? 'ministra treinamentos' : 'não ministra treinamentos'} · ${d.faz_visitas ? 'faz visitas' : 'não faz visitas'}`;
+  } else {
+    const nomePerfil = (x) => x ? (x.perfil_acesso_nome || _perfisNomeBase(x.perfil)) : '';
+    txt = `${nome} recebeu o perfil ${escapeHtml(nomePerfil(h.depois))}`;
+    sub = h.antes ? ` · antes: ${escapeHtml(nomePerfil(h.antes))}` : '';
+  }
+  return `<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 14px;border-top:1px solid var(--border);font-size:12.5px;align-items:center">
+    <span style="min-width:0;color:var(--text-1);line-height:1.45">${txt}<small style="display:block;color:var(--text-3);font-size:11.5px">${quem}${sub}</small></span>
+    <span style="font-size:11.5px;color:var(--text-3);white-space:nowrap">${_perfisQuando(h.quando)}</span></div>`;
+}
+async function _perfisVerHistorico() {
+  const lista = await _perfisHistoricoLer(usuarioAtual.org_id, 100);
+  abrirModal('Alterações de perfis e de acesso', `<div style="margin:-6px -4px">${(lista || []).length ? lista.map(_perfisHistLinha).join('') : '<div style="font-size:13px;color:var(--text-3)">Nenhuma alteração registrada.</div>'}</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-top:10px">As 100 mais recentes. Ninguém apaga nem altera este registro.</div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>`);
 }
 
 // ── Equipe: select de perfil com os perfis personalizados ─────────────────
@@ -6486,6 +6755,40 @@ function _lerPerfilUsuario() {
   const v = document.getElementById('mUsrPerfil')?.value || '';
   const [perfil, perfilAcessoId] = v.split('|');
   return { perfil, perfilAcessoId: perfilAcessoId || null };
+}
+
+// ── v304 (PASSO-100): o que a pessoa faz — "ministra treinamentos" e "faz visitas" ──
+// Não muda o que ela vê; muda só em quais listas de escalação ela aparece. Só para quem parte do
+// Instrutor, e só o Administrador (ou o Provedor) altera. Sem o PASSO-100 as colunas não existem:
+// o bloco não aparece e nada é gravado.
+window._temMarcacoes = undefined;
+async function _marcacoesExistem() {
+  if (window._temMarcacoes !== undefined) return window._temMarcacoes;
+  try { const { error } = await sb.from('usuarios').select('faz_visitas').limit(1); window._temMarcacoes = !error; }
+  catch (e) { window._temMarcacoes = false; }
+  return window._temMarcacoes;
+}
+async function _marcacoesBlocoHtml(u) {
+  if (!['administrador', 'provedor'].includes(usuarioAtual?.perfil)) return '';
+  if (u && u.id === usuarioAtual.id) return '';
+  if (u ? !('faz_visitas' in u) : !(await _marcacoesExistem())) return '';
+  const ck = (id, on, titulo, sub) => `<label style="display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--border);border-radius:var(--r-md);padding:9px 11px;margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" id="${id}" ${on ? 'checked' : ''} style="width:18px;height:18px;margin:1px 0 0;accent-color:var(--navy);flex-shrink:0">
+      <span><b style="display:block;font-size:13px;color:var(--text-1)">${titulo}</b><span style="font-size:11.5px;color:var(--text-3)">${sub}</span></span></label>`;
+  return `<div id="mUsrMarcacoes" style="margin:-4px 0 14px;${(u?.perfil || 'comercial') === 'instrutor' ? '' : 'display:none'}">
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">O que esta pessoa faz</label>
+    ${ck('mUsrMinistra', u ? u.ministra_treinamentos !== false : true, 'Ministra treinamentos', 'Aparece na lista de instrutores ao montar uma turma.')}
+    ${ck('mUsrVisitas', u ? u.faz_visitas !== false : true, 'Faz visitas de campo', 'Aparece na lista de técnicos ao agendar uma visita.')}
+    <div style="font-size:11px;color:var(--text-3)">Na Agenda da equipe ela aparece se tiver pelo menos uma das duas marcadas.</div></div>`;
+}
+function _marcacoesMostrar() {
+  const el = document.getElementById('mUsrMarcacoes');
+  if (el) el.style.display = _lerPerfilUsuario().perfil === 'instrutor' ? '' : 'none';
+}
+function _marcacoesLer(perfil) {
+  const m = document.getElementById('mUsrMinistra'), v = document.getElementById('mUsrVisitas');
+  if (!m || !v || perfil !== 'instrutor') return {};
+  return { ministra_treinamentos: !!m.checked, faz_visitas: !!v.checked };
 }
 
 function _perfilTemAcesso(pagina) {
@@ -11876,16 +12179,18 @@ async function abrirModalUsuarioOrg(orgId, usuarioId = null) {
 
   // v200: perfis de acesso da organização entram no mesmo seletor de Perfil.
   const _perfisOrg = await _perfisDaOrg(orgId || usuarioAtual.org_id);
+  const _blocoMarcacoes = await _marcacoesBlocoHtml(u);   // v304
   abrirModal(u ? `Editar usuário — ${escapeHtml(u.nome)}` : `Novo usuário — ${escapeHtml(org?.nome||'')}`, `
     <div class="field"><label>Nome completo *</label><input type="text" id="mUsrNome" value="${escapeHtml(u?.nome||'')}" placeholder="Nome do usuário"></div>
     <div class="field"><label>E-mail *</label><input type="email" id="mUsrEmail" value="${escapeHtml(u?.email||'')}" placeholder="email@exemplo.com.br" ${u?'disabled style="background:var(--gray-50);color:var(--text-3)"':''}></div>
     ${u ? '<div style="font-size:11px;color:var(--text-3);margin:-8px 0 12px">O e-mail não pode ser alterado aqui. Para trocar, inative este usuário e crie um novo.</div>' : ''}
     ${campoSenha}
     <div class="field"><label>Perfil *</label>
-      <select id="mUsrPerfil" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
+      <select id="mUsrPerfil" onchange="_marcacoesMostrar()" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-md);font-size:14px;font-family:inherit;background:var(--surface);color:var(--text-1);outline:none">
         ${_opcoesPerfilUsuario(u, _perfisOrg)}
       </select>
       ${(_perfisOrg || []).length ? '<div style="font-size:11px;color:var(--text-3);margin-top:4px">Perfis personalizados aparecem abaixo do perfil padrão de que partem (Configurações → Perfis de acesso).</div>' : ''}</div>
+    ${_blocoMarcacoes}
     ${_uniBloco}
     <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
       <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Identificação profissional <span style="font-weight:400;text-transform:none">(exibida no certificado)</span></div>
@@ -12029,6 +12334,7 @@ async function salvarUsuarioOrg() {
     // v200: só manda a coluna nova se o PASSO-66 já rodou (há o seletor com optgroup
     // ou valor "base|id"); antes dele a coluna não existe.
     if (perfilAcessoId || document.querySelector('#mUsrPerfil optgroup')) _dadosUsr.perfil_acesso_id = perfilAcessoId;
+    Object.assign(_dadosUsr, _marcacoesLer(perfil));   // v304: só vem quando o bloco está na tela
     const { data: _alterados, error } = await sb.from('usuarios').update(_dadosUsr).eq('id', usuarioId).select('id');
     if (error) throw error;
     if (!_alterados || _alterados.length === 0) {
@@ -12122,6 +12428,12 @@ async function criarUsuarioOrg() {
     if (resultado.userId && perfilAcessoId) {
       const { error: ePa } = await sb.from('usuarios').update({ perfil_acesso_id: perfilAcessoId }).eq('id', resultado.userId);
       if (ePa) showToast('Usuário criado, mas o perfil de acesso não foi aplicado: ' + traduzErroSupabase(ePa, 'erro'), 'error');
+    }
+    // v304: marcações (começam ligadas no banco; só grava se alguma foi desmarcada)
+    const _marc = _marcacoesLer(perfil);
+    if (resultado.userId && Object.values(_marc).some(v => v === false)) {
+      const { error: eMc } = await sb.from('usuarios').update(_marc).eq('id', resultado.userId);
+      if (eMc) showToast('Usuário criado, mas o que ele faz (aulas e visitas) não foi gravado: ' + traduzErroSupabase(eMc, 'erro'), 'error');
     }
     if (resultado.userId && !(await uniSalvarPessoa(resultado.userId))) { fecharModal(); showToast(`${nome} foi criado(a). Abra o cadastro e marque de novo onde a pessoa atua.`, 'error'); return; }   // v273
     fecharModal(); showToast(`${nome} criado com sucesso!`,'success');
@@ -12811,7 +13123,8 @@ async function renderColaboradores() {
   }
   window._clientesPorId = Object.fromEntries(_clientesCache.map(c=>[c.id,c.nome]));
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Colaboradores</div>`);
-  const podeCriar = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  // v304: Técnico de SST (perfil personalizado do Instrutor) também cadastra, se o perfil liberar.
+  const podeCriar = ['administrador','comercial','instrutor'].includes(usuarioAtual.perfil) && _pode('colaboradores', 2);
   if (podeCriar) fabOcultar();
   const total = _colabsCache.length;
   const comCargo = _colabsCache.filter(c=>c.cargo).length;
@@ -12889,6 +13202,13 @@ function _htmlListaColabs(lista) {
 /* v282: Dossiê para fiscalização (módulo separado, carregado só quando abre). */
 async function abrirDossie(clienteId, colaboradorId) {
   if (!_podeAcao('exportar_relatorios')) { showToast('Seu perfil de acesso não permite exportar relatórios.', 'error'); return; }
+  // v304: o dossiê vai para a fiscalização e precisa sair completo. Se o perfil não lê uma das partes,
+  // o banco esconderia essa parte e o PDF diria "nada" onde há registro. Avisa em vez de gerar.
+  {
+    const comSst = Array.isArray(_modulosAtivos) && _modulosAtivos.includes('campo');
+    const faltam = [!_podeModulo('treinamentos') && 'Treinamentos', comSst && !_pode('campo') && 'Avaliações de campo', comSst && !_pode('campo-docs') && 'Documentos'].filter(Boolean);
+    if (faltam.length) { showToast(`O dossiê reúne treinamentos, avaliações e documentos. Seu perfil de acesso não inclui: ${faltam.join(', ')}. Peça ao administrador.`, 'error'); return; }
+  }
   try {
     const m = await import('./modulos/dossie/dossie.js?v=' + APP_BUILD);
     await _dossiePdfSafeCarregar().catch(() => {});
@@ -12905,6 +13225,9 @@ async function verColab(id) {
   const c = _colabsCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
+  // v304: editar os dados vale para quem tem Colaboradores em "Vê e edita" (inclui o Técnico de SST).
+  const podeEditar = ['administrador','comercial','instrutor'].includes(usuarioAtual.perfil) && _pode('colaboradores', 2);
+  const comTrein = _podeModulo('treinamentos');
 
   // Mesmo helper de ícone + linha já usado em "Dados cadastrais" da tela de
   // Clientes (_htmlInfoIcone) — reaproveitado aqui pra manter os dois
@@ -12918,15 +13241,18 @@ async function verColab(id) {
   const temAlgumDado = !!linhasCadastro;
 
   // v299: EPI e documentos de SST — só com o módulo Gestão de SST ligado e liberado no perfil.
-  const comCampo = Array.isArray(_modulosAtivos) && _modulosAtivos.includes('campo') && _podeRota('campo');
+  // v304: EPI e Documentos conferem cada um a sua linha do perfil.
+  const comSst = Array.isArray(_modulosAtivos) && _modulosAtivos.includes('campo');
+  const comEpi = comSst && _podeRota('campo-epi'), comDocs = comSst && _podeRota('campo-docs');
+  const comCampo = comEpi || comDocs;
   const [{ data: treinos }, entregasR, epiR] = await Promise.all([
-    sb.from('conformidade_status')
+    !comTrein ? Promise.resolve({ data: [] }) : sb.from('conformidade_status')
       .select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,catalogo(nome)')
       .eq('colaborador_id', id)
       .order('data_vencimento', { ascending: false }),
     // v284: OS e fichas de EPI com entrega registrada pelo Laudomiro (PASSO-92). Sem a tabela, segue sem.
-    comCampo ? sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(6) : Promise.resolve({ data: null, error: 1 }),
-    comCampo ? sb.from('epi_entregas').select('nome,ca,entregue_em').eq('colaborador_id', id).is('cancelada_em', null).order('entregue_em', { ascending: false }).limit(4) : Promise.resolve({ data: null, error: 1 }),
+    comDocs ? sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(6) : Promise.resolve({ data: null, error: 1 }),
+    comEpi ? sb.from('epi_entregas').select('nome,ca,entregue_em').eq('colaborador_id', id).is('cancelada_em', null).order('entregue_em', { ascending: false }).limit(4) : Promise.resolve({ data: null, error: 1 }),
   ]);
   const entregas = entregasR?.error ? null : (entregasR?.data || []);
   const episEnt = epiR?.error ? null : (epiR?.data || []);
@@ -12954,7 +13280,7 @@ async function verColab(id) {
       </div>
     </div>
 
-    <div class="detail-layout">
+    <div class="detail-layout"${comTrein ? '' : ' style="grid-template-columns:minmax(0,440px)"'}>
       <div class="detail-sidebar">
         <div class="card">
           <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Dados cadastrais</div>
@@ -12966,22 +13292,22 @@ async function verColab(id) {
           ${(entregas || []).map(e => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text-1)">${e.tipo === 'ficha_epi' ? 'Ficha de EPI (registro antigo)' : 'Ordem de Serviço'}${e.funcao ? `<span style="display:block;font-size:12px;color:var(--text-3)">${escapeHtml(e.funcao)}</span>` : ''}</span><span style="color:var(--text-2);white-space:nowrap">${escapeHtml(formatarData(e.entregue_em))}</span></div>`).join('')}
           ${episEnt ? `<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%" onclick="window.GRID&&window.GRID.tratarAcao&&window.GRID.tratarAcao('ir:campo-epi-pessoa:${c.id}')">Ficha de EPI e entregar</button>` : ''}
         </div>` : ''}
-        ${podeMgr?`
+        ${podeEditar || (podeMgr && c.cliente_id && _podeAcao('exportar_relatorios'))?`
         <div class="detail-actions">
-          <button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">Editar dados</button>
+          ${podeEditar ? `<button class="btn btn-navy" data-action="editarColab" data-id="${c.id}">Editar dados</button>` : ''}
           ${c.cliente_id && _podeAcao('exportar_relatorios') ? `<button class="btn btn-outline" onclick="abrirDossie('${c.cliente_id}','${c.id}')" title="PDF com os treinamentos deste colaborador e o que falta">${ICONS.doc || ''} Dossiê para fiscalização</button>` : ''}
         </div>`:''}
       </div>
 
       <div class="detail-main">
-        <div class="card detail-card-accent">
+        ${comTrein ? `<div class="card detail-card-accent">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
             <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em">Treinamentos</div>
             ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${c.id}">Registrar treinamento externo</button>` : ''}
           </div>
           ${totalTreinos > 8 ? `<input type="search" id="buscaTreinosColab" placeholder="Buscar por treinamento, instituição ou instrutor..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;outline:none;background:var(--surface);color:var(--text-1);margin-bottom:12px" oninput="_colabTreinosFiltrar(this.value)">` : ''}
           <div id="treinosColabMiolo">${_htmlTreinosColabMiolo()}</div>
-        </div>
+        </div>` : ''}
       </div>
     </div>
   `);
@@ -17193,8 +17519,25 @@ async function confirmarExcluirTurma() {
 // risco. NUNCA reintroduzir cache aqui (ou em qualquer lista dependente de
 // org_id) sem invalidar explicitamente a cada troca de organização.
 async function _carregarInstrutores() {
-  const {data} = await sb.from('usuarios').select('id,nome').eq('org_id',usuarioAtual.org_id).eq('perfil','instrutor').eq('ativo',true).order('nome');
-  return data||[];
+  // v304 (PASSO-100): cada pessoa traz o que faz (aulas e/ou visitas). Sem o PASSO-100 as colunas
+  // não existem: lê como antes e considera que todos fazem as duas coisas.
+  const ler = (cols) => sb.from('usuarios').select(cols).eq('org_id',usuarioAtual.org_id).eq('perfil','instrutor').eq('ativo',true).order('nome');
+  let {data, error} = await ler('id,nome,ministra_treinamentos,faz_visitas');
+  if (error) ({data} = await ler('id,nome'));
+  return (data||[]).map(i => ({ ...i, ministra: i.ministra_treinamentos !== false, visita: i.faz_visitas !== false }));
+}
+// v304: a lista inteira de instrutores (as colunas da agenda podem estar filtradas pelas marcações)
+const _agTodos = () => (window._agEquipeInstrutoresTodos || []).length ? window._agEquipeInstrutoresTodos : (window._agEquipeInstrutores || []);
+// v304: lista de escalação por finalidade, sem nunca tirar quem já está escalado.
+//   'turma' → quem ministra treinamentos; 'visita_campo' → quem faz visitas; outro → todos.
+function _instrutoresPara(lista, finalidade, manterId) {
+  const ok = i => finalidade === 'turma' ? i.ministra !== false : finalidade === 'visita_campo' ? i.visita !== false : true;
+  return (lista || []).filter(i => ok(i) || (manterId && i.id === manterId));
+}
+// v304: colunas da Agenda da equipe: quem dá aula ou faz visita, mais quem tem algo marcado no período.
+function _instrutoresDaAgenda(lista, idsComAgenda) {
+  const tem = new Set((idsComAgenda || []).filter(Boolean));
+  return (lista || []).filter(i => i.ministra !== false || i.visita !== false || tem.has(i.id));
 }
 
 async function abrirModalAgendamento(turmaId, agendamentoId=null) {
@@ -17231,7 +17574,7 @@ async function abrirModalAgendamento(turmaId, agendamentoId=null) {
   }
   if (ag?.hora_fim) window._agHoraFimManual = true;
 
-    const instOpts = instrutores.map(i =>
+    const instOpts = _instrutoresPara(instrutores, 'turma', ag?.instrutor_id).map(i =>
     `<option value="${i.id}" ${ag?.instrutor_id===i.id?'selected':''}>${escapeHtml(i.nome)}</option>`
   ).join('');
 
@@ -20156,7 +20499,7 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
   window._compEditId = compromissoId || null;
   window._compTemConflito = false;
 
-  const instrutores = (window._agEquipeInstrutores||[]).length ? window._agEquipeInstrutores : await _carregarInstrutores();
+  const instrutores = _agTodos().length ? _agTodos() : await _carregarInstrutores();
   if (!instrutores.length) { showToast('Cadastre instrutores em Equipe antes de reservar a agenda','error'); return; }
 
   // 2026-08-22 (item 6 do pedido de revisão de UX — migration
@@ -20189,9 +20532,10 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
      <button class="btn btn-navy" id="btnSalvarModal" onclick="salvarCompromisso()">${cm?'Salvar':'Reservar agenda'}</button>`;
 
   const instrutorSel = cm?.instrutor_id || preset.instrutorId || '';
-  const instOpts = instrutores.map(i => `<option value="${i.id}" ${i.id===instrutorSel?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
   const tipoPreset = _agTiposCompromissoPermitidos().some(t => t.v === preset.tipo) ? preset.tipo : '';
   const tipoSel  = cm?.tipo || tipoPreset || 'reuniao';
+  window._compInstrutoresBase = instrutores;   // v304: a lista se ajusta ao tipo (visita só com quem faz visitas)
+  const instOpts = _compOpcoesInstrutor(instrutores, tipoSel, instrutorSel);
   // 04/10 (v231): compromisso NOVO ganha "Treinamento (nova turma)" como 1ª
   // opção do Tipo (troca para o formulário da turma). Editando, nada muda.
   const tipoOpts = cm
@@ -20274,11 +20618,25 @@ async function abrirModalCompromisso(compromissoId = null, preset = {}) {
 // Painel-resumo ao vivo do modal Novo/Editar compromisso (mesmo padrão de
 // _turmaAtualizarPreview/_agRapidaAtualizarPreview) — só LÊ os campos já
 // preenchidos, nunca decide nem valida nada sozinha.
+// v304: opções de "Instrutor" do compromisso. Visita técnica lista só quem faz visitas; o já escolhido fica.
+function _compOpcoesInstrutor(lista, tipo, selId) {
+  return _instrutoresPara(lista, tipo, selId).map(i => `<option value="${i.id}" ${i.id===selId?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
+}
+function _compAjustarInstrutores() {
+  const sel = document.getElementById('mCompInstrutor'), tipo = document.getElementById('mCompTipo')?.value || '';
+  if (!sel || !window._compInstrutoresBase) return;
+  if (sel.dataset.tipo === undefined) { sel.dataset.tipo = tipo; return; }   // 1ª vez: a lista já nasceu certa
+  if (sel.dataset.tipo === tipo) return;
+  // quem já está escolhido continua na lista: a marcação organiza, não bloqueia
+  sel.innerHTML = '<option value="">Selecione o instrutor...</option>' + _compOpcoesInstrutor(window._compInstrutoresBase, tipo, sel.value);
+  sel.dataset.tipo = tipo;
+}
 function _compAtualizarPreview() {
+  _compAjustarInstrutores();
   const el = document.getElementById('mCompPreview');
   if (!el) return;
   const tipo = _compTipo(document.getElementById('mCompTipo')?.value || 'outro');
-  const instrutores = window._agEquipeInstrutores||[];
+  const instrutores = _agTodos();
   const inst = instrutores.find(i => String(i.id)===String(document.getElementById('mCompInstrutor')?.value));
   const titulo = document.getElementById('mCompTitulo')?.value.trim();
   const cliente = _clientesCache.find(c => String(c.id)===String(document.getElementById('mCompCliente')?.value));
@@ -20466,7 +20824,7 @@ async function verCompromisso(id) {
   const {data:cm, error} = await sb.from('compromissos').select(COMPROMISSO_COLS).eq('id', id).maybeSingle();
   if (error || !cm) { showToast('Não foi possível abrir o compromisso','error'); return; }
   const t = _compTipo(cm.tipo);
-  const inst = (window._agEquipeInstrutores||[]).find(i => i.id === cm.instrutor_id);
+  const inst = _agTodos().find(i => i.id === cm.instrutor_id);
 
   const linha = (rot, val) => val ? `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;width:112px;flex-shrink:0;padding-top:2px">${rot}</span>
@@ -20813,6 +21171,9 @@ async function _agEquipeCarregarDados() {
   // existente (pendencias, contagens, conflito entre turmas) passa a
   // enxerga-los por acidente. A mesclagem acontece so na renderizacao.
   window._agEquipeCompromissosDoDia = await _compCarregarPeriodoOrg(data, data);
+  window._agEquipeInstrutoresTodos = instrutores || [];   // v304: os modais e as cores usam a lista inteira
+  // v304: colunas = quem dá aula ou faz visita, mais quem tem algo marcado no dia (nada some da agenda)
+  window._agEquipeInstrutores = _instrutoresDaAgenda(instrutores, [...sessoesDoDia, ...(window._agEquipeCompromissosDoDia || [])].map(x => x.instrutor_id));
 }
 
 async function _agEquipeAtualizarSilenciosamente() {
@@ -21045,6 +21406,9 @@ async function _agEquipeCarregarDadosIntervalo(dataIni, dataFim) {
   // 2026-08-22 — mesma logica de _agEquipeCarregarDados: variavel propria,
   // separada das sessoes (ver comentario la).
   window._agEquipeCompromissosPeriodo = await _compCarregarPeriodoOrg(dataIni, dataFim);
+  window._agEquipeInstrutoresTodos = instrutores || [];
+  // v304: mesma regra das colunas do dia
+  window._agEquipeInstrutores = _instrutoresDaAgenda(instrutores, [...sessoes, ...(window._agEquipeCompromissosPeriodo || [])].map(x => x.instrutor_id));
 }
 async function _agEquipeCarregarDadosSemana() {
   const {inicio, fim} = _agEquipeSemanaAtual();
@@ -21208,7 +21572,7 @@ function _agEquipeRenderSemana() {
   // sistema, só reaproveitado aqui pra manter as duas visões consistentes).
   const PALETA_AG = PALETA_INSTRUTOR; // (mantido: referenciado nos comentários da função)
   const corDoInstrutorAg = {};
-  Object.assign(corDoInstrutorAg, _mapaCoresInstrutores(window._agEquipeInstrutores));
+  Object.assign(corDoInstrutorAg, _mapaCoresInstrutores(_agTodos()));
 
   // 2026-08-12: antes só o dia de hoje tinha fundo/cor de destaque — os
   // outros 6 dias ficavam com o número (a informação mais importante do
@@ -21415,7 +21779,7 @@ function _agEquipeFecharPopoverSemana() {
 function _agEquipeHtmlPopoverSemana(sessoesPorDia, corDoInstrutor) {
   const p = window._agEquipeSemPopover;
   if (!p || !p.pos) return '';
-  const inst = (window._agEquipeInstrutores||[]).find(i => i.id === p.inst);
+  const inst = _agTodos().find(i => i.id === p.inst);
   const itensDia = (sessoesPorDia[p.data]||[]).filter(s => s.instrutor_id === p.inst).sort((a,b)=>(a.hora_inicio||'').localeCompare(b.hora_inicio||''));
   if (!inst || !itensDia.length) return '';
   const dows = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -21481,7 +21845,7 @@ function _agEquipeRenderMes() {
   const sel = window._agEquipeInstrutorSel;
   const instrutores = (window._agEquipeInstrutores||[]).filter(i => !sel || i.id===sel);
   const corDoInstrutor = {};
-  Object.assign(corDoInstrutor, _mapaCoresInstrutores(window._agEquipeInstrutores));
+  Object.assign(corDoInstrutor, _mapaCoresInstrutores(_agTodos()));
 
   if (!instrutores.length) {
     const vazio = `<div style="font-size:12px;color:var(--text-3);padding:20px 0;text-align:center">Cadastre instrutores em Equipe para usar a Agenda da Equipe.</div>`;
@@ -21675,7 +22039,7 @@ function _agEquipeRenderTimeline() {
   // consistência visual entre as 3 visões da Agenda da Equipe).
   const PALETA_AG = PALETA_INSTRUTOR; // (mantido: referenciado nos comentários da função)
   const corDoInstrutorAg = {};
-  Object.assign(corDoInstrutorAg, _mapaCoresInstrutores(window._agEquipeInstrutores));
+  Object.assign(corDoInstrutorAg, _mapaCoresInstrutores(_agTodos()));
 
   const sessoesPorInstrutor = {};
   (window._agEquipeSessoesDoDia||[]).forEach(s => {
@@ -22016,10 +22380,10 @@ async function _agEquipeAbrirCriacaoRapida(instrutorId, data, horaInicio, veioDe
     return;
   }
 
-  const instrutores = (window._agEquipeInstrutores||[]).length ? window._agEquipeInstrutores : await _carregarInstrutores();
+  const instrutores = _agTodos().length ? _agTodos() : await _carregarInstrutores();
   const cliOpcoes  = _clientesCache.map(c=>({id:c.id, nome:c.nome}));
   const catOpcoes  = _catalogoCache.map(c=>({id:c.id, nome:c.nome}));
-  const instOpts   = instrutores.map(i => `<option value="${i.id}" ${i.id===instrutorId?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
+  const instOpts   = _instrutoresPara(instrutores, 'turma', instrutorId).map(i => `<option value="${i.id}" ${i.id===instrutorId?'selected':''}>${escapeHtml(i.nome)}</option>`).join('');
 
   window._agRapidaHoraFimManual = false;
   window._agRapidaTemConflito   = false;
@@ -22146,7 +22510,7 @@ function _agRapidaAtualizarPreview() {
   if (!el) return;
   const cli = _clientesCache.find(c => String(c.id)===String(document.getElementById('mNtCli')?.value));
   const cat = _catalogoCache.find(c => String(c.id)===String(document.getElementById('mNtCat')?.value));
-  const instrutores = window._agEquipeInstrutores||[];
+  const instrutores = _agTodos();
   const inst = instrutores.find(i => String(i.id)===String(document.getElementById('mNtInstrutor')?.value));
   const data = document.getElementById('mNtData')?.value;
   const ini  = document.getElementById('mNtIni')?.value;
@@ -34241,7 +34605,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '300';
+  var APP_BUILD = '304';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
