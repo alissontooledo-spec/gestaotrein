@@ -2516,6 +2516,56 @@ button.prov-chip { border:0; cursor:pointer; font-family:inherit; padding:4px 10
 </style>
 <style id="v287-ficha-cliente">
 .fc{max-width:1240px}
+/* v305: Empresas, abas da empresa e ficha do colaborador */
+.emp{max-width:1240px}
+.emp-uni{margin:-4px 0 12px}
+.emp-imp{display:contents}
+@media(max-width:767px){.emp-topo{display:none}}   /* no celular o topo azul já diz Empresas */
+@media(max-width:767px){.emp-imp{display:none}}   /* importar é tarefa de computador; no celular fica só "Nova empresa" */
+@media(min-width:768px){.emp-voltar-cam{display:none}}   /* no computador o caminho Empresas › empresa › pessoa já faz a volta */.emp-semca{display:block;font-style:normal;color:var(--red-text);font-weight:600}
+.emp-func .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.emp-topo h1{font-size:20px;color:var(--navy);margin:0 0 4px}.emp-topo p{font-size:13px;color:var(--text-2);margin:0 0 14px}
+.emp-filtro{position:relative;flex:1;min-width:220px;max-width:520px;margin-bottom:10px}
+.emp-filtro .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-3);display:flex}.emp-filtro .ic svg{width:16px;height:16px}
+.emp-filtro input{width:100%;height:42px;padding:0 12px 0 36px;border:1.5px solid var(--border);border-radius:var(--r-md);font:inherit;font-size:14px;background:#fff;color:var(--text-1)}
+.emp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center}
+.emp-chip{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--border);background:#fff;color:var(--text-2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.emp-chip b{font-weight:800;color:var(--navy);margin-left:2px}
+.emp-chip.on{background:var(--navy);border-color:var(--navy);color:#fff}.emp-chip.on b{color:var(--amber)}
+.emp-func select{height:34px;border:1.5px solid var(--border);border-radius:999px;padding:0 12px;font:inherit;font-size:12.5px;font-weight:700;color:var(--text-2);background:#fff}
+.emp-lista{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.emp-cab{display:grid;grid-template-columns:minmax(0,1fr) 130px 160px 24px;gap:12px;padding:10px 16px;background:var(--gray-50);border-bottom:1px solid var(--border);font-size:11.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.emp-li{display:grid;grid-template-columns:minmax(0,1fr) 130px 160px 24px;gap:12px;align-items:center;width:100%;text-align:left;padding:12px 16px;border:0;border-top:1px solid var(--border);background:#fff;font:inherit;cursor:pointer;min-height:58px}
+.emp-cab+.emp-li,.emp-lista>.emp-li:first-child{border-top:0}
+.emp-li:hover{background:#F8F9FC}.emp-li:hover .emp-li-n b{text-decoration:underline;text-decoration-color:var(--amber)}
+.emp-li-n{min-width:0}.emp-li-n b{display:block;font-size:14px;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.emp-li-n small{display:block;font-size:12.5px;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.emp-li-c b{font-size:15px;color:var(--navy);font-variant-numeric:tabular-nums}.emp-li-c small{font-size:12px;color:var(--text-3);margin-left:4px}
+.emp-li-s{color:var(--text-3);font-size:20px;text-align:right}
+.emp-li-p{grid-template-columns:minmax(0,1fr) 170px 150px 24px}
+.emp-li-x{min-width:0}.emp-rot{display:none}
+.emp-tx{font-size:12.5px;color:var(--text-2)}.emp-tx.mute,.mute{color:var(--text-3)}
+.fc-st.alerta{background:var(--red-l);color:var(--red-text)}
+.emp-mais{display:block;margin:12px auto}
+.emp-ctop{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}.emp-ctop .btn{height:42px}
+.emp-abas{display:flex;gap:2px;margin:0 0 14px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.emp-abas button{border:0;background:none;padding:11px 14px;font:inherit;font-size:13.5px;font-weight:700;color:var(--text-3);cursor:pointer;white-space:nowrap;min-height:44px}
+.emp-abas button.on{color:var(--navy);box-shadow:inset 0 -3px 0 var(--amber)}
+.emp-q{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--red-l);color:var(--red-text);font-size:11px;align-items:center;justify-content:center;margin-left:4px}
+.emp-cam{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;color:var(--text-3);margin:-8px 0 12px}
+.emp-cam button{border:0;background:none;padding:0;font:inherit;color:var(--navy);font-weight:600;cursor:pointer;text-decoration:underline;text-decoration-color:var(--border-2)}
+.emp-cam b{color:var(--text-1)}
+.emp-dados .fc-li-t small{margin:0 0 2px}.emp-dados .fc-li-t b{font-weight:600}
+@media(max-width:767px){
+  .emp-cab{display:none}
+  .emp-li,.emp-li-p{grid-template-columns:minmax(0,1fr) auto;row-gap:6px;padding:12px 14px}
+  .emp-li-c{grid-column:1;grid-row:2}.emp-li-a{grid-column:2;grid-row:1/3;align-self:center}.emp-li-s{display:none}
+  .emp-li-p .emp-li-x{grid-column:1/3}.emp-li-p .emp-li-x .emp-rot{display:inline;font-size:11px;color:var(--text-3);margin-right:6px;font-weight:700;text-transform:uppercase}
+  .emp-li-p .emp-li-x{display:flex;align-items:center}
+  .emp-cam{display:none}
+  .emp-filtro{max-width:none}
+  .emp-ctop .btn{width:100%;justify-content:center}
+}
 .fc-voltar{padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:16px}
 .fc-h{display:flex;align-items:center;gap:16px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:16px;min-width:0}
 .fc-av{width:52px;height:52px;border-radius:10px;background:var(--navy);color:var(--amber);font-weight:700;font-size:17px;display:flex;align-items:center;justify-content:center;flex:none}
@@ -2894,6 +2944,11 @@ body.sidebar-mini svg.sidebar-logo-icon{display:block}
 .sidebar-tagline{font-size:12px;margin:7px 0 0 2px}
 body,.main-content{background:#F7F8FB}
 .main-header{background:#FFFFFF}
+/* v305 (proposta grid-proposta-empresa-e-ficha-fase1-v305): a tarja com o nome da tela sai no computador.
+   O item marcado no menu já diz onde a pessoa está, e as telas de detalhe têm o próprio cabeçalho. */
+@media(min-width:768px){.main-header{display:none}}
+.selo-consulta{display:none}
+@media(min-width:768px){.selo-consulta{display:inline-flex;align-items:center;position:fixed;right:24px;bottom:20px;z-index:140;font-size:12px;padding:6px 12px;box-shadow:0 4px 14px rgba(23,37,65,.14)}}
 .gi-kpi,.rx-at,.rx-pane,.gi-focus{border-color:transparent;box-shadow:0 1px 2px rgba(23,37,65,.06),0 8px 24px rgba(23,37,65,.08)}
 .rx-at-r{box-shadow:inset 4px 0 0 #C8322B,0 1px 2px rgba(23,37,65,.06),0 8px 24px rgba(23,37,65,.08)}
 .rx-at-a{box-shadow:inset 4px 0 0 var(--amber),0 1px 2px rgba(23,37,65,.06),0 8px 24px rgba(23,37,65,.08)}
@@ -6218,7 +6273,10 @@ function _podeAcao(acao) {
 }
 // NAV do perfil, sem o que o perfil de acesso esconde (e sem seção vazia).
 function _navDoUsuario(perfil) {
-  const base = (NAV[perfil] || []).filter(i => !i.id || _podeRota(i.id));
+  // v305: com o piloto "empresas_v2", Clientes aparece como Empresas
+  const v2 = _empV2();
+  TITULOS.clientes = v2 ? 'Empresas' : 'Clientes';
+  const base = (NAV[perfil] || []).filter(i => !i.id || _podeRota(i.id)).map(i => (v2 && i.id === 'clientes') ? { ...i, l: 'Empresas' } : i);
   return base.filter((i, k) => !i.sec || base.slice(k + 1).find(x => x.id || x.sec)?.id);
 }
 async function _carregarPerfilAcesso() {
@@ -6348,7 +6406,8 @@ function _aplicarSomenteConsulta(pagina) {
   if (!_permAtual() || !_podeRota(pagina, 1) || _podeRota(pagina, 2)) return;
   if (pagina === 'home' || pagina === 'conta') return;
   fabOcultar();
-  if (h) h.insertAdjacentHTML('beforeend', ' <span id="seloSomenteConsulta" class="badge badge-gray" style="font-size:11px;vertical-align:middle;margin-left:6px">Somente consulta</span>');
+  // v305: a tarja do topo saiu; o aviso fica num selo fixo no canto de baixo
+  document.body.insertAdjacentHTML('beforeend', '<span id="seloSomenteConsulta" class="badge badge-gray selo-consulta" role="status">Somente consulta</span>');
 }
 
 // ── Tela Configurações → Perfis de acesso ─────────────────────────────────
@@ -7230,6 +7289,7 @@ async function irPara(pagina, params={}) {
   window._turmaAbertaViaHash = null;
   paginaAtual = pagina;
   window._paramsRotaAtual = params;
+  if (pagina !== 'campo-epi-pessoa') window.__epiDeFicha = null;   // v305: "Voltar à ficha" só para quem veio da ficha
   // v213: guarda a última tela do MENU usada em cada módulo (ver trocarModulo)
   try {
     if (pagina === 'home' || _navDoUsuario(usuarioAtual?.perfil).some(i => i.id === pagina)) {
@@ -8165,7 +8225,11 @@ const _MODULOS_DO_PRODUTO = [
         desc:'Conversas e configuração de números. O gateway ainda não existe — ligado, as telas abrem vazias.' }
     ] },
   { id:'campo', nome:'Gestão de SST',
-    desc:'Avaliações de campo (visita, GHEs, riscos, fotos, assinaturas e PDF), Entregas de EPI com ficha e QR, Laudomiro e documentos emitidos. Técnico = perfil Instrutor.' }
+    desc:'Avaliações de campo (visita, GHEs, riscos, fotos, assinaturas e PDF), Entregas de EPI com ficha e QR, Laudomiro e documentos emitidos. Técnico = perfil Instrutor.',
+    funcionalidades:[
+      { id:'empresas_v2', nome:'Empresas e ficha do colaborador (piloto)',
+        desc:'Clientes vira Empresas, com os colaboradores dentro da empresa e uma ficha por pessoa (EPI, documentos e treinamentos). Precisa do PASSO-101.' }
+    ] }
 ];
 
 /* `leitura_ate` e uma DATA, nao um instante. `new Date('2026-12-07')` e lido
@@ -8304,7 +8368,8 @@ async function alternarFuncionalidadeOrg(modulo, funcionalidade, ligar) {
     .upsert({ org_id: est.orgId, modulo, funcionalidade, ativo: ligar },
             { onConflict: 'org_id,modulo,funcionalidade' });
   if (error) { showToast('Não foi possível salvar: ' + error.message, 'error'); _recarregarCardModulosOrg(); return; }
-  showToast(`${funcionalidade === 'whatsapp' ? 'WhatsApp' : funcionalidade} ${ligar ? 'liberado' : 'desligado'}.`, 'success');
+  const _fn = ((_MODULOS_DO_PRODUTO.find(m => m.id === modulo) || {}).funcionalidades || []).find(f => f.id === funcionalidade);   // v305
+  showToast(`${_fn ? _fn.nome : funcionalidade} ${ligar ? 'liberado' : 'desligado'}.`, 'success');
   _recarregarCardModulosOrg();
 }
 
@@ -12456,9 +12521,379 @@ async function criarUsuarioOrg() {
 }
 
 // ============================================================
+// EMPRESAS E FICHA DO COLABORADOR — v305 (fase 1, piloto)
+// ------------------------------------------------------------
+// Proposta v303 aprovada (Empresas → empresa → colaboradores → ficha da pessoa) e fase 1 em
+// grid-proposta-empresa-e-ficha-fase1-v305.html. Só liga onde o Provedor ligar a funcionalidade
+// "empresas_v2" (Gestão de SST) no painel da organização. Desligada, Clientes e Colaboradores
+// continuam exatamente como hoje. Os dados vêm das funções do PASSO-101 (só leitura, com o acesso
+// de quem chama); sem o PASSO-101, as telas antigas abrem sozinhas.
+// ============================================================
+const _empV2 = () => { try { return !!(_GRID?.dados?.temFuncionalidade?.('empresas_v2')); } catch (e) { return false; } };
+const _empSemFuncao = (e) => /PGRST202|42883|could not find the function|does not exist|schema cache/i.test(`${e?.code || ''} ${e?.message || ''}`);
+const _empComSst = () => Array.isArray(_modulosAtivos) && _modulosAtivos.includes('campo');
+const _empPode = {
+  epi: () => _empComSst() && _pode('campo-epi'),
+  epiEntregar: () => _empComSst() && _pode('campo-epi', 2),
+  docs: () => _empComSst() && _pode('campo-docs'),
+  trein: () => _podeModulo('treinamentos'),
+  editarColab: () => ['administrador', 'comercial', 'instrutor'].includes(usuarioAtual?.perfil) && _pode('colaboradores', 2),
+};
+const _empDataBr = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '';
+const _empRecKey = () => `grid.empRecentes.${usuarioAtual?.org_id || ''}`;
+function _empRecentes() { try { return JSON.parse(localStorage.getItem(_empRecKey()) || '[]').slice(0, 8); } catch (e) { return []; } }
+function _empLembrar(id) { try { localStorage.setItem(_empRecKey(), JSON.stringify([id, ..._empRecentes().filter(x => x !== id)].slice(0, 8))); } catch (e) {} }
+
+// ── 1. Lista de empresas ─────────────────────────────────────
+window._empLista = null;
+async function renderEmpresasV2(opts = {}) {
+  setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Empresas</div>`);
+  const podeCriar = ['administrador', 'comercial'].includes(usuarioAtual.perfil) && _pode('clientes', 2);
+  if (podeCriar) fabMostrar(() => abrirModalCliente()); else fabOcultar();
+  window.__epiDeFicha = null;
+  const st = window._empLista = { busca: '', filtro: 'todas', itens: [], total: 0, offset: 0, cont: {}, auto: opts.auto !== false, tok: Date.now() };
+  setConteudo(`<div class="emp">
+    <div class="emp-topo"><div><h1>Empresas</h1><p>Cada CNPJ é uma empresa. Abra uma para ver os colaboradores e tudo o que existe sobre cada pessoa.</p></div></div>
+    <div class="emp-filtro"><span class="ic">${ICONS.search || ''}</span><input type="search" id="empBusca" placeholder="Filtrar pelo nome ou CNPJ" aria-label="Filtrar empresas pelo nome ou CNPJ" oninput="_empBuscarDepois(this.value)"></div>
+    ${typeof uniFiltroHtml === 'function' && uniFiltroHtml() ? `<div class="emp-uni">${uniFiltroHtml()}</div>` : ''}
+    <div class="emp-chips" id="empChips" role="group" aria-label="Filtros"></div>
+    ${podeCriar ? `<div class="acoes-row">
+      <button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Nova empresa</button>
+      <span class="emp-imp">${_btnAcaoBadge(ICONS.upload, 'Importar CSV', 'abrirModalImportarCSV()')}
+      ${_btnAcaoBadge(ICONS.filesheet, 'Importar modelo 1', "abrirModalImportacaoSOC('clientes')")}
+      ${usuarioAtual.orgSocIntegracaoAtiva ? _btnAcaoBadge(ICONS.search, 'Buscar no SOC', "_socWsAbrirModal('clientes')", 'var(--green-text)', 'var(--green)', '#fff', 'var(--green-l)') : ''}</span>
+    </div>` : ''}
+    <div class="emp-lista" id="empLista">${_fcCarregando('Carregando empresas…')}</div></div>`);
+  await _empListaCarregar(true);
+}
+let _empBuscaT = null;
+function _empBuscarDepois(v) { clearTimeout(_empBuscaT); _empBuscaT = setTimeout(() => { if (window._empLista) { window._empLista.busca = v; _empListaCarregar(true); } }, 300); }
+function _empFiltro(f) { const st = window._empLista; if (!st || st.filtro === f) return; st.filtro = f; _empListaCarregar(true); }
+async function _empListaCarregar(reset) {
+  const st = window._empLista; if (!st) return;
+  const tok = st.tok = Date.now();
+  if (reset) { st.offset = 0; st.itens = []; }
+  const rec = _empRecentes();
+  const arg = (filtro, limite, offset, ids) => ({ p_busca: st.busca || null, p_filtro: filtro, p_limite: limite, p_offset: offset, p_org_id: usuarioAtual.org_id, p_ids: ids });
+  const filtroDb = st.filtro === 'recentes' ? 'todas' : st.filtro;
+  const chamadas = [sb.rpc('empresas_lista', arg(filtroDb, 50, st.offset, st.filtro === 'recentes' ? (rec.length ? rec : ['00000000-0000-0000-0000-000000000000']) : null))];
+  if (!st.cont.ok) chamadas.push(sb.rpc('empresas_contagens', { p_org_id: usuarioAtual.org_id }));   // os números dos botões: uma vez, não a cada letra
+  st.carregando = true;
+  const res = await Promise.all(chamadas);
+  if (st.tok !== tok || window._empLista !== st) return;
+  st.carregando = false;
+  const erro = res.find(r => r.error)?.error;
+  if (erro) {
+    if (_empSemFuncao(erro)) { window._empSemRpc = true; return renderClientes(); }   // sem o PASSO-101: tela de sempre
+    _setElBoth('empLista', `<div class="fc-vazio">${_fcEsc(traduzErroSupabase(erro, 'Não foi possível ler as empresas.'))}</div>`); return;
+  }
+  const lote = res[0].data || [];
+  if (st.filtro === 'recentes') lote.sort((a, b) => rec.indexOf(a.id) - rec.indexOf(b.id));
+  st.itens = st.itens.concat(lote); st.total = Number(lote[0]?.total || (reset ? 0 : st.total));
+  if (res[1]) st.cont = { ok: true, todas: Number(res[1].data?.todas || 0), atencao: Number(res[1].data?.atencao || 0), inativas: Number(res[1].data?.inativas || 0) };
+  // Uma empresa só (indústria com um CNPJ): abre direto nos colaboradores dela.
+  if (st.auto && reset && !st.busca && st.filtro === 'todas' && st.cont.todas === 1 && lote.length === 1 && !st.cont.inativas) { st.auto = false; return abrirEmpresa(lote[0].id); }
+  st.auto = false;
+  const comSinal = _empPode.trein();   // "Precisa de atenção" é de Treinamentos; quem não vê Treinamentos não recebe "Em dia" (o banco devolve zero)
+  const chip = (f, rot, n) => `<button type="button" class="emp-chip${st.filtro === f ? ' on' : ''}" aria-pressed="${st.filtro === f}" onclick="_empFiltro('${f}')">${rot}${n != null ? ` <b>${n}</b>` : ''}</button>`;
+  _setElBoth('empChips', chip('todas', 'Todas', st.cont.todas) + (comSinal ? chip('atencao', 'Com pendências', st.cont.atencao) : '') + (rec.length ? chip('recentes', 'Abertas por último', null) : '') + (st.cont.inativas ? chip('inativas', 'Inativas', st.cont.inativas) : ''));
+  const linha = (e) => {
+    const cid = e.cidade ? `${_fcTitulo(e.cidade)}${e.uf ? '/' + e.uf : ''}` : '';
+    const doc = e.cnpj ? `CNPJ ${_fmtCnpjSeguro(e.cnpj)}` : '';
+    return `<button type="button" class="emp-li" onclick="abrirEmpresa('${e.id}')">
+      <span class="emp-li-n"><b>${_fcEsc(e.nome)}</b><small>${_fcEsc([doc, cid].filter(Boolean).join(' · ')) || '&nbsp;'}</small></span>
+      <span class="emp-li-c"><b>${e.colaboradores}</b><small>${e.colaboradores === 1 ? 'colaborador' : 'colaboradores'}</small></span>
+      <span class="emp-li-a">${!comSinal ? '' : e.atencao ? `<span class="fc-st b-amb">${e.atencao} ${e.atencao === 1 ? 'pessoa' : 'pessoas'}</span>` : `<span class="fc-st b-verde">Em dia</span>`}</span>
+      <span class="emp-li-s" aria-hidden="true">›</span></button>`;
+  };
+  const vazio = st.busca ? 'Nenhuma empresa encontrada com esse nome ou CNPJ.' : st.filtro === 'atencao' ? 'Nenhuma empresa com pendências. Tudo em dia.' : st.filtro === 'recentes' ? 'Nenhuma empresa aberta ainda neste aparelho.' : 'Nenhuma empresa cadastrada ainda.';
+  _setElBoth('empLista', st.itens.length ? `<div class="emp-cab" aria-hidden="true"><span>Empresa</span><span>Colaboradores</span><span>${comSinal ? 'Precisa de atenção' : ''}</span><span></span></div>
+    ${st.itens.map(linha).join('')}
+    ${st.itens.length < st.total ? `<button type="button" class="btn btn-outline emp-mais" onclick="_empListaMais()">Carregar mais (${st.total - st.itens.length})</button>` : ''}`
+    : `<div class="fc-vazio" style="padding:18px">${vazio}</div>`);
+}
+function _empListaMais() { const st = window._empLista; if (!st || st.carregando) return; st.offset += 50; _empListaCarregar(false); }
+const _fmtCnpjSeguro = (c) => { const d = String(c || '').replace(/\D/g, ''); return d.length === 14 ? d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : String(c || ''); };
+
+// ── 2. A empresa (a ficha do cliente de hoje + abas) ──────────
+window._empAtual = null;
+// As telas de sempre (Colaboradores, janela do colaborador) só releem as empresas quando a lista está
+// vazia; por isso a lista nova carrega a lista completa, e nunca deixa só uma parte dela.
+async function _empGarantirClientes() {
+  if (_clientesCache.length) return;
+  const { data, error } = await sb.from('clientes').select('*').eq('org_id', usuarioAtual.org_id).order('nome');
+  if (!error) _clientesCache = data || [];
+}
+async function abrirEmpresa(id, aba) {
+  await _empGarantirClientes();
+  let c = _clientesCache.find(x => x.id === id);
+  if (!c) {
+    const { data, error } = await sb.from('clientes').select('*').eq('id', id).eq('org_id', usuarioAtual.org_id).maybeSingle();
+    if (error || !data) { showToast('Empresa não encontrada.', 'error'); return; }
+    _clientesCache.push(data); c = data;
+  }
+  _empLembrar(id);
+  window._empAtual = { id, aba: aba || (window._empAtual?.id === id ? window._empAtual.aba : 'colaboradores') };
+  if (typeof paginaAtual !== 'undefined' && paginaAtual !== 'clientes') { window._empAbrirDepois = id; await irPara('clientes'); return; }
+  window.__empTelaAntiga = false;
+  verCliente(id);
+  window.scrollTo(0, 0);
+}
+function _empAbasHtml(c) {
+  const abas = [['geral', 'Visão geral'], ['colaboradores', 'Colaboradores'], ...(_empPode.epi() ? [['epi', 'EPI']] : [])];
+  const at = window._empAtual?.aba || 'colaboradores';
+  return `<nav class="emp-abas" role="tablist" aria-label="Partes da empresa">${abas.map(([k, r]) => `<button type="button" role="tab" aria-selected="${k === at}" class="${k === at ? 'on' : ''}" onclick="abrirEmpresa('${c.id}','${k}')">${r}</button>`).join('')}</nav>`;
+}
+async function _empAbaCarregar(c, aba) {
+  if (aba === 'epi') return _empAbaEpi(c);
+  return _empAbaColab(c);
+}
+// 2a. Colaboradores da empresa
+window._empColab = null;
+async function _empAbaColab(c) {
+  const st = window._empColab = (window._empColab?.cli === c.id) ? { ...window._empColab, itens: [], offset: 0, resumo: null } : { cli: c.id, busca: '', filtro: 'todos', funcao: '', itens: [], total: 0, offset: 0, resumo: null };
+  const podeNovo = _empPode.editarColab();
+  _setElBoth('empAbaCorpo', `<div class="emp-ctop">
+      <div class="emp-filtro"><span class="ic">${ICONS.search || ''}</span><input type="search" id="empColBusca" value="${_fcEsc(st.busca)}" placeholder="Filtrar por nome, CPF ou matrícula" aria-label="Filtrar colaboradores" oninput="_empColBuscarDepois(this.value)"></div>
+      ${podeNovo ? `<button class="btn btn-amber" onclick="_empNovoColab('${c.id}')">${ICONS.plus} Novo colaborador</button>` : ''}</div>
+    <div class="emp-chips" id="empColChips"></div>
+    <div class="emp-lista" id="empColLista">${_fcCarregando('Carregando colaboradores…')}</div>`);
+  await _empColCarregar(true);
+}
+let _empColT = null;
+function _empColBuscarDepois(v) { clearTimeout(_empColT); _empColT = setTimeout(() => { if (window._empColab) { window._empColab.busca = v; _empColCarregar(true); } }, 300); }
+function _empColFiltro(f) { const st = window._empColab; if (!st) return; st.filtro = st.filtro === f && f !== 'todos' ? 'todos' : f; _empColCarregar(true); }
+function _empColFuncao(v) { const st = window._empColab; if (!st) return; st.funcao = v; _empColCarregar(true); }
+async function _empColCarregar(reset) {
+  const st = window._empColab; if (!st) return;
+  const tok = st.tok = Date.now();
+  if (reset) { st.offset = 0; st.itens = []; }
+  st.carregando = true;
+  const [r, rs] = await Promise.all([
+    sb.rpc('colaboradores_da_empresa', { p_cliente: st.cli, p_busca: st.busca || null, p_filtro: st.filtro, p_funcao: st.funcao || null, p_limite: 50, p_offset: st.offset, p_org_id: usuarioAtual.org_id }),
+    reset && !st.resumo ? sb.rpc('empresa_resumo', { p_cliente: st.cli, p_org_id: usuarioAtual.org_id }) : Promise.resolve({ data: st.resumo }),
+  ]);
+  if (st.tok !== tok || window._empColab !== st) return;
+  st.carregando = false;
+  if (r.error || rs.error) {
+    const e = r.error || rs.error;
+    if (_empSemFuncao(e)) { window._empSemRpc = true; return verCliente(st.cli); }   // sem o PASSO-101: a ficha de sempre
+    _setElBoth('empColLista', `<div class="fc-vazio">${_fcEsc(traduzErroSupabase(e, 'Não foi possível ler os colaboradores.'))}</div>`); return;
+  }
+  st.resumo = rs.data || {};
+  const lote = r.data || [];
+  st.itens = st.itens.concat(lote); st.total = Number(lote[0]?.total || (reset ? 0 : st.total));
+  const R = st.resumo, comEpi = _empPode.epi(), comTrein = _empPode.trein();
+  const chip = (f, rot, n) => `<button type="button" class="emp-chip${st.filtro === f ? ' on' : ''}" aria-pressed="${st.filtro === f}" onclick="_empColFiltro('${f}')">${rot} <b>${n ?? 0}</b></button>`;
+  const funcoes = R.funcoes || [];
+  _setElBoth('empColChips', chip('todos', 'Todos', R.todos) + (comTrein ? chip('atencao', 'Precisa de atenção', R.atencao) : '')
+    + (comEpi ? chip('sem_epi', 'Sem entrega de EPI', R.sem_epi) : '') + (comTrein ? chip('vencido', 'Treinamento vencido', R.vencido) : '')
+    + (funcoes.length > 1 ? `<label class="emp-func"><span class="sr-only">Função</span><select onchange="_empColFuncao(this.value)" aria-label="Filtrar por função"><option value="">Todas as funções</option>${funcoes.map(f => `<option value="${_fcEsc(f)}"${f === st.funcao ? ' selected' : ''}>${_fcEsc(f)}</option>`).join('')}</select></label>` : ''));
+  const epiTxt = (p) => p.epi_link_bloqueado ? `<span class="fc-st alerta">Link bloqueado</span>` : p.epi_link_aberto ? `<span class="fc-st b-amb">Assinatura pendente</span>` : p.epi_entregas ? `<span class="emp-tx">Última entrega ${_empDataBr(p.epi_ultima)}</span>` : `<span class="emp-tx mute">Nenhuma entrega</span>`;
+  const trTxt = (p) => p.trein_vencidos ? `<span class="fc-st alerta">${p.trein_vencidos} ${p.trein_vencidos === 1 ? 'vencido' : 'vencidos'}</span>` : p.trein_vencendo ? `<span class="fc-st b-amb">Vence ${_empDataBr(p.prox_vencimento).slice(0, 5)}</span>` : p.prox_vencimento ? `<span class="fc-st b-verde">Em dia</span>` : `<span class="emp-tx mute">Sem treinamento registrado</span>`;
+  const linha = (p) => `<button type="button" class="emp-li emp-li-p" onclick="abrirPessoa('${p.id}')">
+      <span class="emp-li-n"><b>${_fcEsc(p.nome)}</b><small>${_fcEsc([p.cargo || 'Sem função', p.matricula ? 'matrícula ' + p.matricula : ''].filter(Boolean).join(' · '))}</small></span>
+      ${comEpi ? `<span class="emp-li-x"><small class="emp-rot">EPI</small>${epiTxt(p)}</span>` : ''}
+      ${comTrein ? `<span class="emp-li-x"><small class="emp-rot">Treinamentos</small>${trTxt(p)}</span>` : ''}
+      <span class="emp-li-s" aria-hidden="true">›</span></button>`;
+  const vazio = st.busca || st.funcao ? 'Ninguém encontrado com esse filtro.' : st.filtro === 'atencao' ? 'Ninguém precisa de atenção agora.' : st.filtro === 'sem_epi' ? 'Todos já receberam EPI.' : st.filtro === 'vencido' ? 'Nenhum treinamento vencido.' : 'Esta empresa ainda não tem colaboradores cadastrados.';
+  _setElBoth('empColLista', st.itens.length ? `${st.itens.map(linha).join('')}
+    ${st.itens.length < st.total ? `<button type="button" class="btn btn-outline emp-mais" onclick="_empColMais()">Carregar mais (${st.total - st.itens.length})</button>` : ''}`
+    : `<div class="fc-vazio" style="padding:18px">${vazio}</div>`);
+}
+function _empColMais() { const st = window._empColab; if (!st || st.carregando) return; st.offset += 50; _empColCarregar(false); }
+function _empNovoColab(cliId) {
+  window._colabAposSalvar = { id: null, fn: async () => { window._empColab = null; await abrirEmpresa(cliId, 'colaboradores'); } };
+  abrirModalColab(null, cliId);
+}
+// 2b. EPI da empresa (resumo; o trabalho continua na tela de Entregas de EPI)
+async function _empAbaEpi(c) {
+  const oi = usuarioAtual.org_id;
+  const [it, rs] = await Promise.all([
+    sb.from('epi_itens').select('id,nome,ca,validade,situacao,controla').eq('org_id', oi).eq('cliente_id', c.id).eq('ativo', true).order('nome'),
+    sb.rpc('empresa_resumo', { p_cliente: c.id, p_org_id: oi }),
+  ]);
+  if (window._empAtual?.id !== c.id || window._empAtual?.aba !== 'epi') return;
+  const itens = it.data || [], R = rs.data || {}, hoje = dataLocalISO(new Date());
+  const caSit = (i) => { const s = String(i.situacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return !i.ca ? '' : /cancel/.test(s) ? 'CA cancelado' : /suspens/.test(s) ? 'CA suspenso' : ((i.validade && i.validade < hoje) || /vencid/.test(s)) ? 'CA vencido' : ''; };
+  const caVenc = itens.filter(caSit);
+  _setElBoth('empAbaCorpo', `<div class="fc-grid"><div class="fc-main">
+      ${_fcPainel('EPI cadastrados', itens.length ? `<div class="fc-lista">${itens.slice(0, 12).map(i => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(i.nome)}</b><small>${i.ca ? 'CA ' + _fcEsc(i.ca) : 'sem CA'}${i.validade ? ' · validade do CA ' + _empDataBr(i.validade) : ''}</small></span>${caSit(i) ? `<span class="fc-st alerta">${caSit(i)}</span>` : ''}</div>`).join('')}</div>${itens.length > 12 ? `<div class="fc-mais-t">e mais ${itens.length - 12}</div>` : ''}`
+        : '<div class="fc-vazio">Nenhum EPI cadastrado nesta empresa.</div>', _fcLink('Abrir Entregas de EPI', `_empIrEpi('${c.id}')`))}
+    </div><aside class="fc-side">
+      ${_fcPainel('Resumo', `<div class="fc-lista">
+        <div class="fc-li"><span class="fc-num${R.links ? ' red' : ''}">${R.links || 0}</span><span class="fc-li-t"><b>${R.links === 1 ? 'Link aguardando assinatura' : 'Links aguardando assinatura'}</b><small>${R.bloqueados ? `${R.bloqueados} ${R.bloqueados === 1 ? 'bloqueado' : 'bloqueados'} por tentativas erradas` : 'Entregas mandadas pelo WhatsApp'}</small></span></div>
+        <div class="fc-li"><span class="fc-num">${R.sem_epi || 0}</span><span class="fc-li-t"><b>Sem nenhuma entrega</b><small>Nem toda função usa EPI</small></span></div>
+        <div class="fc-li"><span class="fc-num${caVenc.length ? ' red' : ''}">${caVenc.length}</span><span class="fc-li-t"><b>EPI com CA vencido, cancelado ou suspenso</b><small>Não entregar novas unidades</small></span></div>
+        <div class="fc-li"><span class="fc-num${R.sem_ca ? ' red' : ''}">${R.sem_ca || 0}</span><span class="fc-li-t"><b>${R.sem_ca === 1 ? 'Entrega sem CA conferido' : 'Entregas sem CA conferido'}</b><small>Registradas sem achar o CA na base do Ministério</small></span></div></div>`)}
+    </aside></div>`);
+}
+function _empIrEpi(cliId) { Promise.resolve().then(() => _GRID.tratarAcao('ir:campo-epi:' + cliId)).catch(() => irPara('campo-epi')); }
+
+// ── 3. A ficha do colaborador ───────────────────────────────────
+window._pessoaAtual = null;
+async function abrirPessoa(id, aba) {
+  const oi = usuarioAtual.org_id;
+  const { data: p, error } = await sb.from('colaboradores').select('*').eq('id', id).eq('org_id', oi).maybeSingle();
+  if (error || !p) { showToast('Colaborador não encontrado.', 'error'); return; }
+  const i = _colabsCache.findIndex(x => x.id === id); if (i >= 0) _colabsCache[i] = p; else _colabsCache.push(p);   // o Editar usa este cache
+  await _empGarantirClientes();
+  let c = p.cliente_id ? _clientesCache.find(x => x.id === p.cliente_id) : null;
+  if (p.cliente_id && !c) { const r = await sb.from('clientes').select('*').eq('id', p.cliente_id).eq('org_id', oi).maybeSingle(); if (r.data) { _clientesCache.push(r.data); c = r.data; } }
+  aba = aba || (window._pessoaAtual?.id === id ? window._pessoaAtual.aba : 'geral');
+  window._pessoaAtual = { id, aba };
+  if (typeof paginaAtual !== 'undefined' && paginaAtual !== 'clientes' && paginaAtual !== 'colaboradores') { window._pessoaAbrirDepois = id; await irPara('clientes'); return; }
+  const comEpi = _empPode.epi(), comDocs = _empPode.docs(), comTrein = _empPode.trein();
+  const [cfR, enR, lkR, fiR, dcR, deR] = await Promise.all([
+    comTrein ? sb.from('conformidade_status').select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,status_excecao,catalogo(nome)').eq('colaborador_id', id).order('data_vencimento', { ascending: false }) : null,
+    comEpi ? sb.from('epi_entregas').select('id,nome,ca,ca_conferido,tamanho,qtde,serie,entregue_em,forma,motivo,entregue_por_nome').eq('colaborador_id', id).is('cancelada_em', null).order('entregue_em', { ascending: false }).limit(60) : null,
+    comEpi ? sb.from('epi_links').select('id,itens,expira_em,tentativas').eq('colaborador_id', id).is('usado_em', null).is('cancelado_em', null).order('criado_em', { ascending: false }) : null,
+    comEpi || comDocs ? sb.from('doc_emitidos').select('numero,codigo,emitido_em').eq('colaborador_id', id).eq('tipo', 'epi').eq('situacao', 'valido').order('emitido_em', { ascending: false }).limit(1) : null,
+    comDocs ? sb.from('doc_emitidos').select('id,tipo,numero,revisao,titulo,situacao,codigo,emitido_em,assinado_em').eq('colaborador_id', id).neq('tipo', 'epi').order('emitido_em', { ascending: false }).limit(40) : null,
+    comDocs ? sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(20) : null,
+  ].map(q => q || Promise.resolve({ data: null })));
+  if (window._pessoaAtual?.id !== id) return;
+  const P = { p, c, comEpi, comDocs, comTrein,
+    trein: (cfR.data || []), entregas: enR.data || [], links: lkR.data || [], ficha: (fiR.data || [])[0] || null, docs: dcR.data || [], docEnt: deR.data || [] };
+  window._colabTreinos = { colaboradorId: id, lista: P.trein, aba: 'turma', busca: '', pagina: 1, porPagina: 8 };
+  window._pessoaDados = P;
+  _pessoaRender();
+  window.scrollTo(0, 0);
+}
+const _SIGLA_DOC = { os: 'OS', epi: 'FEPI', pt: 'PT', apr: 'APR', checklist: 'CK', procedimento: 'PO' };
+const _numDoc = (t, n) => `${_SIGLA_DOC[t] || 'DOC'}-${String(n).padStart(4, '0')}`;
+const _FORMA_EPI = { aparelho: ['Assinada no aparelho', 'b-verde'], link: ['Assinada pelo link', 'b-verde'], papel: ['Papel', 'b-azul'] };
+function _pessoaAtencao(P) {
+  const hoje = dataLocalISO(new Date()), em20 = dataLocalISO(new Date(Date.now() + 20 * 86400000)), xs = [];
+  const ult = new Map();
+  P.trein.filter(t => !t.status_excecao && t.data_vencimento).forEach(t => { const k = t.catalogo_id || t.id; if (!ult.has(k) || t.data_vencimento > ult.get(k).data_vencimento) ult.set(k, t); });
+  [...ult.values()].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento)).forEach(t => {
+    if (t.data_vencimento < hoje) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vencido em ${_empDataBr(t.data_vencimento)}`, tag: ['Vencido', 'alerta'] });
+    else if (t.data_vencimento <= em20) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vence em ${_empDataBr(t.data_vencimento)}`, tag: ['Vence em breve', 'b-amb'] });
+  });
+  return xs;   // EPI (link sem assinatura) aparece no quadro de EPI, como informação
+}
+// Link de assinatura de EPI ainda aberto: aguardando, vencido ou bloqueado (5 tentativas erradas)
+function _pessoaLinkSit(l, agora) {
+  if ((l.tentativas || 0) >= 5) return { s: 'link bloqueado após 5 tentativas erradas: mande um novo link ou colha a assinatura no aparelho', tag: ['Bloqueado', 'alerta'] };
+  if (l.expira_em > agora) return { s: `link de assinatura vale até ${_empDataBr(l.expira_em.slice(0, 10))}`, tag: ['Aguardando', 'b-amb'] };
+  return { s: 'o link venceu sem assinatura', tag: ['Sem assinatura', 'b-amb'] };
+}
+function _pessoaRender() {
+  const P = window._pessoaDados; if (!P) return;
+  const { p, c } = P, aba = window._pessoaAtual.aba;
+  const podeEditar = _empPode.editarColab(), podeMgr = ['administrador', 'comercial'].includes(usuarioAtual.perfil);
+  setMobileHeader(`<div class="mh-greeting">${_fcEsc(c?.nome || 'Sem empresa')}</div><div class="mh-name">${_fcEsc(p.nome)}</div>`);
+  fabOcultar();
+  const at = _pessoaAtencao(P);
+  const abas = [['geral', 'Visão geral'], ['dados', 'Dados'], ...(P.comEpi ? [['epi', 'EPI']] : []), ...(P.comDocs ? [['docs', 'Documentos']] : []), ...(P.comTrein ? [['trein', 'Treinamentos']] : [])];
+  const ab = abas.some(a => a[0] === aba) ? aba : 'geral';
+  const voltar = c ? `<button class="btn btn-ghost btn-sm fc-voltar emp-voltar-cam" onclick="abrirEmpresa('${c.id}','colaboradores')">${ICONS.back} ${_fcEsc(c.nome)}</button>` : `<button class="btn btn-ghost btn-sm fc-voltar" data-action="irPara" data-id="colaboradores">${ICONS.back} Colaboradores</button>`;
+  const caminho = `<div class="emp-cam"><button type="button" onclick="renderEmpresasV2({auto:false})">Empresas</button>${c ? `<span>›</span><button type="button" onclick="abrirEmpresa('${c.id}','colaboradores')">${_fcEsc(c.nome)}</button>` : ''}<span>›</span><b>${_fcEsc(p.nome)}</b></div>`;
+  const acts = [
+    podeEditar ? `<button class="btn btn-outline" onclick="_pessoaEditar('${p.id}')">${ICONS.edit} Editar dados</button>` : '',
+    P.comEpi && _empPode.epiEntregar() ? `<button class="btn btn-amber" onclick="_pessoaIrEpi('${p.id}')">${ICONS.plus} Entregar EPI</button>` : '',
+    podeMgr && p.cliente_id && _podeAcao('exportar_relatorios') ? `<button class="btn btn-outline" onclick="abrirDossie('${p.cliente_id}','${p.id}')">${ICONS.doc || ''} Dossiê</button>` : '',
+  ].filter(Boolean).join('');
+  const meta = [p.cargo || 'Sem função', c?.nome, p.soc_matricula ? 'matrícula ' + p.soc_matricula : ''].filter(Boolean).map(_fcEsc).join(' · ');
+  let corpo;
+  if (ab === 'dados') corpo = _pessoaDadosHtml(P, podeEditar);
+  else if (ab === 'epi') corpo = _pessoaEpiHtml(P);
+  else if (ab === 'docs') corpo = _pessoaDocsHtml(P);
+  else if (ab === 'trein') corpo = _pessoaTreinHtml(P, podeMgr);
+  else corpo = _pessoaGeralHtml(P, at);
+  setConteudo(`<div class="fc">${voltar}${caminho}
+    <header class="fc-h"><div class="fc-av">${iniciais(p.nome)}</div>
+      <div class="fc-id"><h1>${_fcEsc(p.nome)}</h1><div class="fc-meta"><span>${meta}</span>${at.length ? `<span class="fc-selo alerta">${at.length} ${at.length === 1 ? 'ponto de atenção' : 'pontos de atenção'}</span>` : (P.comTrein ? '<span class="fc-selo ok">Treinamentos em dia</span>' : '')}</div></div>
+      ${acts ? `<div class="fc-acts">${acts}</div>` : ''}</header>
+    <nav class="emp-abas" role="tablist" aria-label="Partes da ficha">${abas.map(([k, r]) => `<button type="button" role="tab" aria-selected="${k === ab}" class="${k === ab ? 'on' : ''}" onclick="_pessoaAba('${k}')">${r}${k === 'geral' && at.length ? ` <b class="emp-q">${at.length}</b>` : ''}</button>`).join('')}</nav>
+    ${corpo}</div>`);
+}
+function _pessoaAba(k) { if (!window._pessoaAtual) return; window._pessoaAtual.aba = k; _pessoaRender(); }
+function _pessoaEditar(id) {
+  window._colabAposSalvar = { id, fn: async () => { await abrirPessoa(id, window._pessoaAtual?.aba); } };
+  abrirModalColab(id);
+}
+function _pessoaIrEpi(id) { window.__epiDeFicha = id; Promise.resolve().then(() => _GRID.tratarAcao('ir:campo-epi-pessoa:' + id)).catch(() => showToast('Abra pela tela Entregas de EPI.', 'error')); }
+function _pessoaGeralHtml(P, at) {
+  const ent = P.entregas.slice(0, 4), docs = P.docs.slice(0, 3);
+  const pAt = !P.comTrein ? '' : _fcPainel('Precisa de atenção', at.length ? `<div class="fc-lista">${at.map(x => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(x.t)}</b><small>${_fcEsc(x.s)}</small></span><span class="fc-st ${x.tag[1]}">${x.tag[0]}</span></div>`).join('')}</div>`
+    : '<div class="fc-vazio">Nada pendente: treinamentos em dia.</div>');
+  const agora = new Date().toISOString();
+  const lks = P.links.map(l => { const s = _pessoaLinkSit(l, agora); return `<div class="fc-li"><span class="fc-data">Por link</span><span class="fc-li-t"><b>${_fcEsc((l.itens || []).map(i => i.nome).join(', ').slice(0, 90) || 'EPI')}</b><small>${_fcEsc(s.s)}</small></span><span class="fc-st ${s.tag[1]}">${s.tag[0]}</span></div>`; }).join('');
+  const pEpi = P.comEpi ? _fcPainel('EPI com a pessoa', (ent.length || lks) ? `<div class="fc-lista">${lks}${ent.map(_pessoaEntLi).join('')}</div>${P.entregas.length > 4 ? `<div class="fc-mais-t">e mais ${P.entregas.length - 4} ${P.entregas.length - 4 === 1 ? 'entrega' : 'entregas'}</div>` : ''}` : '<div class="fc-vazio">Nenhuma entrega de EPI registrada.</div>', _fcLink('Ver EPI', "_pessoaAba('epi')")) : '';
+  const pDoc = P.comDocs ? _fcPainel('Documentos', docs.length ? `<div class="fc-lista">${docs.map(_pessoaDocLi).join('')}</div>` : '<div class="fc-vazio">Nenhum documento emitido para esta pessoa.</div>', _fcLink('Ver documentos', "_pessoaAba('docs')")) : '';
+  const tre = P.comTrein ? _fcPainel('Treinamentos', _pessoaTreinResumo(P), _fcLink('Ver treinamentos', "_pessoaAba('trein')")) : '';
+  return `<div class="fc-grid"><div class="fc-main">${pAt}${pEpi}${tre}</div><aside class="fc-side">${_fcPainel('Contato', _pessoaContato(P.p))}${pDoc}</aside></div>`;
+}
+function _pessoaContato(p) {
+  const l = (ic, h) => `<div class="fc-ct">${ic}<span>${h}</span></div>`;
+  const xs = [p.cpf ? l(ICONS.doc, `CPF ${_fcEsc(p.cpf)}`) : '', p.telefone ? l(ICONS.phone, `<a class="fc-tel" href="tel:${String(p.telefone).replace(/\D/g, '')}">${_fcEsc(p.telefone)}</a>`) : '', p.email ? l(ICONS.mail, `<a href="mailto:${_fcEsc(p.email)}">${_fcEsc(p.email)}</a>`) : ''].join('');
+  return xs || '<div class="fc-vazio">Sem contato cadastrado.</div>';
+}
+function _pessoaEntLi(e) {
+  const f = _FORMA_EPI[e.forma] || ['Registrada', ''];
+  return `<div class="fc-li"><span class="fc-data">${_empDataBr(e.entregue_em)}</span><span class="fc-li-t"><b>${_fcEsc(e.nome)}</b><small>${[e.ca ? 'CA ' + e.ca : '', e.tamanho ? 'tam. ' + e.tamanho : '', e.serie ? 'série ' + e.serie : '', e.qtde > 1 ? e.qtde + ' unidades' : ''].filter(Boolean).map(_fcEsc).join(' · ') || '&nbsp;'}${e.ca_conferido === false ? `<em class="emp-semca">CA não conferido na entrega</em>` : ''}</small></span><span class="fc-st ${f[1]}">${f[0]}</span></div>`;
+}
+function _pessoaDocLi(d) {
+  const sit = d.situacao === 'cancelado' ? ['Cancelado', 'alerta'] : d.situacao === 'substituido' ? ['Substituído', ''] : d.assinado_em ? ['Assinado', 'b-verde'] : ['Aguardando assinatura', 'b-amb'];
+  return `<div class="fc-li"><span class="fc-li-t"><b>${_numDoc(d.tipo, d.numero)} · Rev. ${String(d.revisao || 0).padStart(2, '0')}</b><small>${[_fcEsc(d.titulo || ''), _empDataBr(d.emitido_em)].filter(Boolean).join(' · ') || '&nbsp;'}</small></span><span class="fc-st ${sit[1]}">${sit[0]}</span></div>`;
+}
+function _pessoaTreinResumo(P) {
+  const hoje = dataLocalISO(new Date()), ult = new Map();
+  P.trein.filter(t => !t.status_excecao && t.data_vencimento).forEach(t => { const k = t.catalogo_id || t.id; if (!ult.has(k) || t.data_vencimento > ult.get(k).data_vencimento) ult.set(k, t); });
+  const xs = [...ult.values()].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento)).slice(0, 5);
+  if (!xs.length) return '<div class="fc-vazio">Nenhum treinamento registrado.</div>';
+  return `<div class="fc-lista">${xs.map(t => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(t.catalogo?.nome || 'Treinamento')}</b><small>${t.data_vencimento < hoje ? 'vencido em ' : 'válido até '}${_empDataBr(t.data_vencimento)}</small></span><span class="fc-st ${t.data_vencimento < hoje ? 'alerta' : 'b-verde'}">${t.data_vencimento < hoje ? 'Vencido' : 'Em dia'}</span></div>`).join('')}</div>`;
+}
+function _pessoaDadosHtml(P, podeEditar) {
+  const p = P.p, l = (rot, v) => `<div class="fc-li"><span class="fc-li-t"><small>${rot}</small><b>${v ? _fcEsc(v) : '<span class="mute">—</span>'}</b></span></div>`;
+  return `<div class="fc-grid"><div class="fc-main">${_fcPainel('Cadastro', `<div class="fc-lista emp-dados">${l('Nome', p.nome)}${l('CPF', p.cpf)}${l('Função', p.cargo)}${l('Empresa', P.c?.nome)}${l('Matrícula', p.soc_matricula)}${l('E-mail', p.email)}${l('Telefone', p.telefone)}</div>`,
+    podeEditar ? _fcLink('Editar dados', `_pessoaEditar('${p.id}')`) : '')}</div><aside class="fc-side"></aside></div>`;
+}
+function _pessoaEpiHtml(P) {
+  const agora = new Date().toISOString(), pode = _empPode.epiEntregar();
+  const pend = P.links;
+  return `<div class="fc-grid"><div class="fc-main">
+    ${pend.length ? _fcPainel('Aguardando assinatura', `<div class="fc-lista">${pend.map(l => { const s = _pessoaLinkSit(l, agora); return `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc((l.itens || []).map(i => i.nome).join(', ').slice(0, 120))}</b><small>${_fcEsc(s.s)}</small></span><span class="fc-st ${s.tag[1]}">${s.tag[0]}</span></div>`; }).join('')}</div>`) : ''}
+    ${_fcPainel(`Entregas · ${P.entregas.length}`, P.entregas.length ? `<div class="fc-lista">${P.entregas.map(_pessoaEntLi).join('')}</div>` : '<div class="fc-vazio">Nenhuma entrega de EPI registrada.</div>',
+      _fcLink(pode ? 'Entregar EPI' : 'Abrir a ficha de EPI', `_pessoaIrEpi('${P.p.id}')`))}
+  </div><aside class="fc-side">
+    ${_fcPainel('Ficha de EPI', P.ficha ? `<div class="fc-lista"><div class="fc-li"><span class="fc-li-t"><b>${_numDoc('epi', P.ficha.numero)}</b><small>código de validação ${_fcEsc(P.ficha.codigo)}</small></span></div></div><a class="fc-lnk" href="https://www.toledolabs.com.br/validar.html?doc=${encodeURIComponent(P.ficha.codigo)}" target="_blank" rel="noopener">Ver a validação</a>`
+      : '<div class="fc-vazio">A ficha ganha número na primeira entrega ou no primeiro PDF.</div>', _fcLink('PDF da ficha', `_pessoaIrEpi('${P.p.id}')`))}
+  </aside></div>`;
+}
+function _pessoaDocsHtml(P) {
+  const TIP = { ordem_servico: 'Ordem de serviço', ficha_epi: 'Ficha de EPI' };
+  return `<div class="fc-grid"><div class="fc-main">
+    ${_fcPainel(`Documentos emitidos · ${P.docs.length}`, P.docs.length ? `<div class="fc-lista">${P.docs.map(_pessoaDocLi).join('')}</div>` : '<div class="fc-vazio">Nenhum documento emitido para esta pessoa.</div>',
+      _podeAcao('usar_laudomiro') ? _fcLink('Gerar documento', "irPara('laudomiro')") : '')}
+  </div><aside class="fc-side">
+    ${_fcPainel('Entregues em mãos', P.docEnt.length ? `<div class="fc-lista">${P.docEnt.map(d => `<div class="fc-li"><span class="fc-data">${_empDataBr(d.entregue_em)}</span><span class="fc-li-t"><b>${TIP[d.tipo] || _fcEsc(d.tipo)}</b><small>${_fcEsc(d.funcao || '')}</small></span></div>`).join('')}</div>` : '<div class="fc-vazio">Nenhuma entrega de documento registrada.</div>')}
+  </aside></div>`;
+}
+function _pessoaTreinHtml(P, podeMgr) {
+  const total = P.trein.length;
+  return `<div class="card detail-card-accent" style="margin-top:0">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em">Treinamentos</div>
+      ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${P.p.id}">Registrar treinamento externo</button>` : ''}</div>
+    ${total > 8 ? `<input type="search" id="buscaTreinosColab" placeholder="Buscar por treinamento, instituição ou instrutor..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;margin-bottom:12px" oninput="_colabTreinosFiltrar(this.value)">` : ''}
+    <div id="treinosColabMiolo">${_htmlTreinosColabMiolo()}</div></div>`;
+}
+
+// ============================================================
 // CLIENTES
 // ============================================================
 async function renderClientes() {
+  // v305: com a funcionalidade "empresas_v2" ligada, Clientes abre a lista nova de empresas.
+  if (_empV2() && !window._empSemRpc) {
+    const ae = window._empAbrirDepois, ap = window._pessoaAbrirDepois; window._empAbrirDepois = null; window._pessoaAbrirDepois = null;
+    if (ap) return abrirPessoa(ap);
+    if (ae) return abrirEmpresa(ae);
+    return renderEmpresasV2();
+  }
   const {data,error} = await sb.from('clientes').select('*').eq('org_id',usuarioAtual.org_id).order('nome');
   if (error) throw error;
   _clientesCache = data||[];
@@ -12615,6 +13050,7 @@ function menuFichaCliente(btn, id) {
 function _fcNovaTurma(clienteId) { abrirModalTurma(null, { clienteId }); }
 
 function _fcVerColaboradores(clienteId) {
+  if (_empV2() && !window._empSemRpc) { abrirEmpresa(clienteId, 'colaboradores'); return; }   // v305
   irPara('colaboradores').then(() => {
     const sel = _getElVisible('filtroColabEmpresa');
     if (sel) { sel.value = clienteId; aplicarFiltrosColabs(); }
@@ -12624,12 +13060,17 @@ function _fcVerColaboradores(clienteId) {
 function verCliente(id) {
   const c = _clientesCache.find(x => x.id === id);
   if (!c) return;
+  // v305: empresa com abas (Visão geral = esta ficha; Colaboradores e EPI são novas)
+  const _v2 = _empV2() && !window._empSemRpc;
+  if (_v2 && window._empAtual?.id !== id) window._empAtual = { id, aba: 'colaboradores' };
+  const _aba = _v2 ? window._empAtual.aba : 'geral';
+  if (_v2) _empLembrar(id);
   const podeMgr = ['administrador', 'comercial'].includes(usuarioAtual.perfil);
   const podeTurma = _podeRota('turmas') && podeMgr;
   const pf = _cliEhPF(c);
   const doc = docCliente(c);
   const cidade = c.cidade ? `${_fcTitulo(c.cidade)}${c.uf ? '/' + c.uf : ''}` : '';
-  const meta = [doc ? `${doc.rot} ${_fcEsc(doc.val)}` : '', _fcEsc(cidade)].filter(Boolean).join(' · ');
+  const meta = [doc ? `${doc.rot} ${_fcEsc(doc.rot === 'CNPJ' ? _fmtCnpjSeguro(doc.val) : doc.val)}` : '', _fcEsc(cidade)].filter(Boolean).join(' · ');
   const selos = [
     `<span class="fc-selo ${c.ativo ? 'ok' : ''}">${c.ativo ? 'Ativo' : 'Inativo'}</span>`,
     pf ? '<span class="fc-selo">Pessoa física</span>' : (c.situacao_cadastral ? `<span class="fc-selo ${String(c.situacao_cadastral).toUpperCase() === 'ATIVA' ? 'ok' : 'alerta'}">CNPJ ${_fcEsc(String(c.situacao_cadastral).toLowerCase())}</span>` : ''),
@@ -12666,7 +13107,7 @@ function verCliente(id) {
   }
 
   setConteudo(`<div class="fc">
-    <button class="btn btn-ghost btn-sm fc-voltar" data-action="irPara" data-id="clientes">${ICONS.back} Clientes</button>
+    ${_v2 ? `<button class="btn btn-ghost btn-sm fc-voltar" onclick="renderEmpresasV2({auto:false})">${ICONS.back} Empresas</button>` : `<button class="btn btn-ghost btn-sm fc-voltar" data-action="irPara" data-id="clientes">${ICONS.back} Clientes</button>`}
     <header class="fc-h">
       <div class="fc-av">${iniciais(c.nome)}</div>
       <div class="fc-id"><h1>${_fcEsc(c.nome)}</h1><div class="fc-meta">${meta ? `<span>${meta}</span>` : ''}${selos}</div></div>
@@ -12677,6 +13118,8 @@ function verCliente(id) {
         ${podeTurma && c.ativo ? `<button class="btn btn-amber" onclick="_fcNovaTurma('${c.id}')">${ICONS.plus} Nova turma</button>` : ''}
       </div>` : ''}
     </header>
+    ${_v2 ? _empAbasHtml(c) : ''}
+    ${_aba !== 'geral' ? '<div id="empAbaCorpo"><div class="fc-vazio">Carregando…</div></div>' : `
     <div class="gi-kpirow fc-kpis" id="fcKpis">${['Colaboradores', 'Treinamentos vencidos', 'Vencem em breve', 'Turmas no ano'].map(t => `<div class="gi-kpi gi-sm"><div class="gi-kh">${t}</div><span class="gi-n fc-n0">·</span><small class="gi5-ex">carregando</small></div>`).join('')}</div>
     <div class="fc-grid">
       <div class="fc-main">
@@ -12688,8 +13131,9 @@ function verCliente(id) {
         <div class="fc-contato">${_fcPainel('Contato', contatoHtml)}</div>
         <div class="fc-enq">${_fcPainel('Enquadramento SST', enq)}</div>
       </aside>
-    </div>
+    </div>`}
   </div>`);
+  if (_aba !== 'geral') { _empAbaCarregar(c, _aba); return; }
   _fcCarregar(c, todasNrs);
 }
 
@@ -12947,6 +13391,8 @@ async function salvarCliente() {
     if (error && _pfSalvar && /column|schema cache/i.test(String(error.message||''))) { setBtnModalLoading(false); showToast('O cadastro de pessoa física ainda não foi ligado no banco. Fale com o suporte da Toledo Labs.','error'); return; }
     if (error) throw error;
     fecharModal(); showToast(_modalCurrentId?'Cliente atualizado!':'Cliente cadastrado!','success');
+    // v305: na lista nova a lista de empresas é relida na próxima tela que precisar; quem editou volta para a empresa
+    if (_empV2() && !window._empSemRpc) { _clientesCache = []; if (_modalCurrentId) window._empAbrirDepois = _modalCurrentId; }
     await renderClientes();
   } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
@@ -12960,6 +13406,7 @@ async function toggleCliente(id) {
   const {error} = await sb.from('clientes').update({ativo:!c.ativo}).eq('id',id);
   if (error) { showToast(traduzErroSupabase(error,'Não foi possível atualizar o cliente.'),'error'); return; }
   showToast(`Cliente ${c.ativo?'desativado':'ativado'}!`,'success');
+  if (_empV2() && !window._empSemRpc) { _clientesCache = []; window._empAbrirDepois = id; }   // v305: relê e volta para a empresa
   await renderClientes();
 }
 
@@ -13113,6 +13560,7 @@ async function _fetchTodosColaboradores(orgId, selectCols) {
   return todos;
 }
 async function renderColaboradores() {
+  window._colabAposSalvar = null;   // v305: o retorno para a ficha vale só para o modal aberto por ela
   const data = await _fetchTodosColaboradores(usuarioAtual.org_id, '*');
   _colabsCache = data||[];
   _colabsListaFiltrada = _colabsCache;
@@ -13222,6 +13670,7 @@ async function _dossiePdfSafeCarregar() { if (!window.__dossiePdfSafe) window.__
 const _dossiePdfSafe = (t) => (window.__dossiePdfSafe ? window.__dossiePdfSafe(t) : pdfSafe(t));
 
 async function verColab(id) {
+  if (_empV2() && !window._empSemRpc) return abrirPessoa(id);   // v305: ficha nova com abas
   const c = _colabsCache.find(x=>x.id===id);
   if (!c) return;
   const podeMgr = ['administrador','comercial'].includes(usuarioAtual.perfil);
@@ -13414,14 +13863,14 @@ function aplicarFiltrosColabs() {
   _setElBoth('listaColabs', _renderColabsListaPaginada());
 }
 
-async function abrirModalColab(id=null) {
+async function abrirModalColab(id=null, presetCliente=null) {
   _modalCurrentId = id;
   const c = id ? _colabsCache.find(x=>x.id===id) : null;
   if (!_clientesCache.length) {
     const {data} = await sb.from('clientes').select('id,nome,cep,logradouro,numero,complemento,bairro,cidade,uf').eq('org_id',usuarioAtual.org_id).eq('ativo',true).order('nome');
     _clientesCache = data||[];
   }
-  const cliOpts = _clientesCache.map(cli=>`<option value="${cli.id}" ${c?.cliente_id===cli.id?'selected':''}>${escapeHtml(cli.nome)}</option>`).join('');
+  const cliOpts = _clientesCache.map(cli=>`<option value="${cli.id}" ${(c ? c.cliente_id===cli.id : presetCliente===cli.id)?'selected':''}>${escapeHtml(cli.nome)}</option>`).join('');
   abrirModal(c?'Editar colaborador':'Novo colaborador', `
     <div class="field"><label>Nome completo *</label><input type="text" id="mColNome" value="${escapeHtml(c?.nome||'')}" placeholder="Nome completo"></div>
     <div class="field"><label>Empresa</label>
@@ -13455,7 +13904,10 @@ async function salvarColab() {
     if (error) throw error;
     if (!salvo || !salvo.length) throw new Error('Nada foi gravado — confira se o colaborador ainda existe (nenhuma linha foi afetada).');
     fecharModal(); showToast(_modalCurrentId?'Colaborador atualizado!':'Colaborador cadastrado!','success');
-    await renderColaboradores();
+    // v305: aberto pela ficha ou pela empresa, volta para lá
+    const _ap = window._colabAposSalvar; window._colabAposSalvar = null;
+    if (_ap && _ap.id === (_modalCurrentId || null)) await _ap.fn(salvo[0]?.id);
+    else await renderColaboradores();
   } catch(e) { setBtnModalLoading(false); showToast(traduzErroSupabase(e,'Erro ao salvar'),'error'); }
 }
 
@@ -34605,7 +35057,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '304';
+  var APP_BUILD = '305';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
