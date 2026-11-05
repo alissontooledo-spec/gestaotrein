@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Assinar recebimento de EPI | GRID</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#1E2A4A">
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- GRID · assinar.html (v300, PASSO-98): o trabalhador assina o recebimento de EPI no celular dele.
+       Sem login. O link vale 72 horas e uma vez; os EPI só aparecem depois dos 4 últimos números do CPF. -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --navy:#1E2A4A; --amber:#F59E0B; --bg:#F4F6FA; --border:#E2E8F0; --t1:#1E2A4A; --t2:#475569; --t3:#64748B;
+      --green:#065F46; --green-l:#D1FAE5; --yel:#92400E; --yel-l:#FEF3C7; }
+    html, body { min-height: 100vh; background: var(--bg); font-family: 'Inter', system-ui, sans-serif; color: var(--t1); -webkit-font-smoothing: antialiased; }
+    header { background: var(--navy); padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
+    header img { width: 28px; height: 28px; }
+    header b { color: #fff; font-size: 17px; letter-spacing: .02em; display: block; }
+    header small { color: rgba(255,255,255,.65); font-size: 12px; }
+    main { max-width: 520px; margin: 0 auto; padding: 18px 16px 40px; }
+    .card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    h1 { font-size: 21px; margin-bottom: 6px; }
+    p { font-size: 15px; line-height: 1.55; color: var(--t2); margin-bottom: 12px; }
+    p b { color: var(--t1); }
+    .passo { font-size: 12px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+    .dig { display: flex; gap: 10px; justify-content: center; margin: 14px 0 8px; }
+    .dig input { width: 54px; height: 62px; text-align: center; font-size: 26px; font-weight: 700; border: 1.5px solid #B7C0D1; border-radius: 12px; font-family: inherit; color: var(--t1); background: #fff; }
+    .dig input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,42,74,.12); }
+    .btn { display: block; width: 100%; min-height: 50px; border: 0; border-radius: 12px; background: var(--navy); color: #fff; font: 700 16px 'Inter', sans-serif; cursor: pointer; margin-top: 12px; }
+    .btn:disabled { opacity: .5; cursor: default; }
+    .btn.leve { background: #fff; color: var(--t1); border: 1.5px solid #B7C0D1; min-height: 42px; font-size: 14px; }
+    .it { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+    .it b { display: block; font-size: 15px; }
+    .it small { color: var(--t3); font-size: 13px; }
+    .decl { background: #F8FAFC; border-radius: 12px; padding: 12px; font-size: 14px; line-height: 1.5; color: var(--t1); margin: 12px 0; }
+    .ok-chk { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; font-weight: 600; margin: 12px 0; cursor: pointer; }
+    .ok-chk input { width: 22px; height: 22px; margin-top: 1px; flex: 0 0 auto; accent-color: var(--navy); }
+    canvas { display: block; width: 100%; height: 190px; border: 2px dashed #B7C0D1; border-radius: 12px; background: #fff; touch-action: none; cursor: crosshair; }
+    .canvas-rod { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 13px; color: var(--t3); }
+    .canvas-rod button { border: 0; background: none; font: 600 14px 'Inter', sans-serif; color: var(--navy); text-decoration: underline; cursor: pointer; padding: 6px; }
+    .aviso { border-radius: 12px; padding: 12px 14px; font-size: 14px; margin-bottom: 12px; }
+    .aviso.y { background: var(--yel-l); color: var(--yel); }
+    .fim { text-align: center; }
+    .fim .sel { width: 56px; height: 56px; border-radius: 50%; margin: 4px auto 12px; display: flex; align-items: center; justify-content: center; }
+    .fim .sel.v { background: var(--green-l); color: var(--green); }
+    .fim .sel.y { background: var(--yel-l); color: var(--yel); }
+    .cod { font-size: 18px; font-weight: 700; letter-spacing: .12em; color: var(--t1); }
+    footer { text-align: center; font-size: 12px; color: var(--t3); padding: 0 16px 24px; }
+    footer a { color: var(--t3); }
+  </style>
+</head>
+<body>
+  <header><img src="./icons/grid-simbolo-amber.png" alt=""><div><b>GRID</b><small>Assinatura de recebimento de EPI</small></div></header>
+  <main><div class="card" id="tela" aria-live="polite"><p>Abrindo...</p></div></main>
+  <footer>Seus dados são tratados conforme a <a href="./privacidade.html">Política de Privacidade</a>.</footer>
+<script>
+(() => {
+  const sb = supabase.createClient('https://cldbqcpnzitwqvgqbipz.supabase.co', 'sb_publishable_uuOYchKEtJXdYPI0pKmM_A_mtp-ihMT');
+  const token = (new URLSearchParams(location.search).get('t') || '').toLowerCase();
+  const tela = document.getElementById('tela');
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const dataBr = (iso) => { if (!iso) return ''; const [a, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}/${a}`; };
+  const quando = (t) => { const d = new Date(t); return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`; };
+  const IC_OK = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+  const IC_AL = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9.5"/></svg>';
+  let info = null, cpf4 = '';
+
+  const fimErro = (titulo, texto) => { tela.innerHTML = `<div class="fim"><div class="sel y">${IC_AL}</div><h1>${esc(titulo)}</h1><p>${esc(texto)}</p></div>`; };
+  const ERROS = {
+    link: ['Link inválido', 'Confira se o link foi copiado inteiro ou peça um novo ao técnico de segurança.'],
+    expirado: ['Este link venceu', 'Peça um novo ao técnico de segurança.'],
+    usado: ['Este recebimento já foi assinado', 'O link vale uma vez só. Você pode fechar esta página.'],
+    cancelado: ['Este link foi cancelado', 'A empresa cancelou este pedido de assinatura. Fale com o técnico de segurança.'],
+    bloqueado: ['Link bloqueado', 'Foram 5 tentativas com o CPF errado. Peça um novo link ao técnico de segurança.'],
+  };
+  const mostrarErro = (k) => fimErro(...(ERROS[k] || ['Não foi possível continuar', 'Tente de novo em alguns minutos.']));
+
+  /* Passo 1: confirmar com os 4 últimos números do CPF */
+  function passoCpf(msg) {
+    tela.innerHTML = `<div class="passo">Passo 1 de 2 · confirmar</div><h1>Olá, ${esc(info.pessoa || '')}</h1>
+      <p>A <b>${esc(info.empresa || 'empresa')}</b> pediu sua assinatura no recebimento de EPI.</p>
+      <p>Para confirmar que é você, digite os <b>4 últimos números do seu CPF</b>:</p>
+      ${msg ? `<div class="aviso y" role="alert">${esc(msg)}</div>` : ''}
+      <div class="dig">${[0, 1, 2, 3].map((i) => `<input inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="Número ${i + 1} de 4" data-i="${i}">`).join('')}</div>
+      <button class="btn" id="bCpf" disabled>Continuar</button>`;
+    const cx = [...tela.querySelectorAll('.dig input')];
+    const ler = () => cx.map((x) => x.value).join('');
+    cx.forEach((x, i) => {
+      x.addEventListener('input', () => { x.value = x.value.replace(/\D/g, '').slice(-1); if (x.value && cx[i + 1]) cx[i + 1].focus(); document.getElementById('bCpf').disabled = ler().length !== 4; });
+      x.addEventListener('keydown', (e) => { if (e.key === 'Backspace' && !x.value && cx[i - 1]) cx[i - 1].focus(); if (e.key === 'Enter' && ler().length === 4) conferir(ler()); });
+      x.addEventListener('paste', (e) => { const t = (e.clipboardData?.getData('text') || '').replace(/\D/g, '').slice(-4); if (t.length === 4) { e.preventDefault(); t.split('').forEach((c, k) => { cx[k].value = c; }); document.getElementById('bCpf').disabled = false; } });
+    });
+    cx[0].focus();
+    document.getElementById('bCpf').addEventListener('click', () => conferir(ler()));
+  }
+  async function conferir(c) {
+    const b = document.getElementById('bCpf'); b.disabled = true; b.textContent = 'Conferindo...';
+    const { data, error } = await sb.rpc('epi_link_conferir', { p_token: token, p_cpf4: c });
+    if (error || !data) { passoCpf('Não foi possível conferir agora. Confira a internet e tente de novo.'); return; }
+    if (!data.ok) {
+      if (data.erro === 'cpf') { passoCpf(`Os números não conferem. ${data.restantes === 1 ? 'Resta 1 tentativa.' : `Restam ${data.restantes} tentativas.`}`); return; }
+      mostrarErro(data.erro); return;
+    }
+    cpf4 = c; passoAssinar(data);
+  }
+
+  /* Passo 2: ler e assinar */
+  function passoAssinar(d) {
+    tela.innerHTML = `<div class="passo">Passo 2 de 2 · ler e assinar</div><h1>Recebimento de EPI</h1>
+      <p>${d.ficha ? `Ficha de EPI FEPI-${String(d.ficha).padStart(4, '0')} · ` : ''}entrega de ${dataBr(d.entregue_em)}${d.entregue_por ? `, por ${esc(d.entregue_por)}` : ''}.</p>
+      ${(d.itens || []).map((i) => `<div class="it"><b>${esc(i.nome)}</b><small>${[i.ca && `CA ${esc(i.ca)}`, i.tamanho && `tamanho ${esc(i.tamanho)}`, `${i.qtde} ${i.qtde === 1 ? 'unidade' : 'unidades'}`, i.serie && `nº de série ${esc(i.serie)}`].filter(Boolean).join(' · ')}</small></div>`).join('')}
+      <div class="decl">Recebi gratuitamente os EPI acima, em perfeito estado, e fui orientado sobre o uso, o ajuste, a guarda, a higienização e a troca (NR-06, itens 6.5.1 e 6.7.2). Devo usá-los só para a finalidade a que se destinam e avisar a empresa quando forem danificados ou extraviados (NR-06, item 6.6.1).</div>
+      <label class="ok-chk"><input type="checkbox" id="aceite"> Aceito assinar eletronicamente este recebimento.</label>
+      <canvas id="cv" aria-label="Espaço para assinar com o dedo"></canvas>
+      <div class="canvas-rod"><span>Assine com o dedo no quadro.</span><button type="button" id="limpar">Limpar</button></div>
+      <button class="btn" id="bAss">Confirmar assinatura</button>`;
+    const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+    const ajustar = () => { const r = cv.getBoundingClientRect(), k = window.devicePixelRatio || 1; cv.width = r.width * k; cv.height = r.height * k; ctx.setTransform(k, 0, 0, k, 0, 0); ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111827'; };
+    ajustar();
+    let desenhando = false, riscou = false;
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.addEventListener('pointerdown', (e) => { desenhando = true; cv.setPointerCapture(e.pointerId); const [x, y] = pos(e); ctx.beginPath(); ctx.moveTo(x, y); e.preventDefault(); });
+    cv.addEventListener('pointermove', (e) => { if (!desenhando) return; const [x, y] = pos(e); ctx.lineTo(x, y); ctx.stroke(); riscou = true; e.preventDefault(); });
+    const parar = () => { desenhando = false; };
+    cv.addEventListener('pointerup', parar); cv.addEventListener('pointercancel', parar);
+    document.getElementById('limpar').addEventListener('click', () => { ctx.clearRect(0, 0, cv.width, cv.height); riscou = false; });
+    document.getElementById('bAss').addEventListener('click', async () => {
+      if (!document.getElementById('aceite').checked) { alertar('Marque o aceite antes de assinar.'); return; }
+      if (!riscou) { alertar('Assine no quadro antes de confirmar.'); return; }
+      const b = document.getElementById('bAss'); b.disabled = true; b.textContent = 'Registrando...';
+      /* imagem menor para guardar (largura até 600 px, fundo branco) */
+      const out = document.createElement('canvas'), esc2 = Math.min(1, 600 / cv.width); out.width = Math.round(cv.width * esc2); out.height = Math.round(cv.height * esc2);
+      const o = out.getContext('2d'); o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height); o.drawImage(cv, 0, 0, out.width, out.height);
+      const aparelho = `${navigator.userAgentData?.platform || navigator.platform || ''} · ${String(navigator.userAgent || '').slice(0, 200)}`;
+      const { data, error } = await sb.rpc('epi_link_assinar', { p_token: token, p_cpf4: cpf4, p_png: out.toDataURL('image/png'), p_aparelho: aparelho });
+      if (error || !data) { b.disabled = false; b.textContent = 'Confirmar assinatura'; alertar('Não foi possível registrar agora. Confira a internet e tente de novo.'); return; }
+      if (!data.ok) { mostrarErro(data.erro === 'cpf' ? 'bloqueado' : data.erro); return; }
+      tela.innerHTML = `<div class="fim"><div class="sel v">${IC_OK}</div><h1>Assinatura registrada</h1>
+        <p>${esc(quando(data.assinado_em))}. Obrigado, ${esc(info.pessoa || '')}. A ${esc(info.empresa || 'empresa')} já recebeu sua assinatura.</p>
+        ${data.codigo ? `<p>Código para conferir a ficha:<br><span class="cod">${esc(data.codigo)}</span></p>
+        <a class="btn leve" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="./validar.html?doc=${encodeURIComponent(data.codigo)}">Conferir a ficha</a>` : ''}
+        <p style="margin-top:14px">Este link não vale mais. Você pode fechar esta página.</p></div>`;
+    });
+  }
+  function alertar(msg) {
+    let a = document.getElementById('avisoAss');
+    if (!a) { a = document.createElement('div'); a.id = 'avisoAss'; a.className = 'aviso y'; a.setAttribute('role', 'alert'); document.getElementById('bAss').before(a); a.style.marginTop = '12px'; }
+    a.textContent = msg;
+  }
+
+  async function iniciar() {
+    if (!/^[0-9a-f]{64}$/.test(token)) { mostrarErro('link'); return; }
+    const { data, error } = await sb.rpc('epi_link_ver', { p_token: token });
+    if (error) { fimErro('Não foi possível abrir', 'Confira a internet e abra o link de novo.'); return; }
+    if (!data) { mostrarErro('link'); return; }
+    info = data;
+    if (data.estado !== 'ok') { mostrarErro(data.estado); return; }
+    passoCpf('');
+  }
+  iniciar();
+})();
+</script>
+</body>
+</html>

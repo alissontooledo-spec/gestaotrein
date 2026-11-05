@@ -20,7 +20,7 @@
 // version.json e o `APP_BUILD` dentro do app.html — os três com o mesmo
 // número. É o único passo manual do processo.
 
-const BUILD    = '299b';
+const BUILD    = '300';
 const CACHE    = 'grid-' + BUILD;
 const FALLBACK = './app.html';
 
@@ -154,7 +154,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req, { cache: 'no-store' })
         .then((res) => {
-          if (res && res.ok) {
+          // v300: só o app.html vira a cópia de emergência (antes, abrir validar.html ou assinar.html trocava a cópia)
+          if (res && res.ok && /\/app\.html$/.test(new URL(req.url).pathname)) {
             const copia = res.clone();
             caches.open(CACHE).then((c) => c.put(FALLBACK, copia)).catch(() => {});
           }
