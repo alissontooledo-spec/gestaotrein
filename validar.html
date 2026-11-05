@@ -868,11 +868,13 @@
     const tit = document.querySelector('#stateResult .valid-banner-title');
     if (banner) banner.style.background = sit === 'valido' ? '' : sit === 'antigo' ? '#B54708' : '#B42318';
     if (tit) tit.textContent = sit === 'valido' ? 'Documento válido' : sit === 'antigo' ? 'Existe revisão mais nova' : 'Documento cancelado';
-    const emitido = d.emitido_em ? String(d.emitido_em).slice(0, 10) : '';
+    // v299b: data de emissão no fuso de quem abre (antes saía a data em UTC: emitido às 21h de 04/11 aparecia como 05/11)
+    const diaLocal = (t) => { const x = new Date(t); return isNaN(x) ? String(t).slice(0, 10) : `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const emitido = d.emitido_em ? diaLocal(d.emitido_em) : '';
     document.getElementById('resultCodigo').textContent = codigo;
-    document.getElementById('resultEmissao').textContent = sit === 'valido' ? 'É a revisão mais recente'
+    document.getElementById('resultEmissao').textContent = sit === 'valido' ? (d.tipo === 'epi' ? 'Ficha em uso' : 'É a revisão mais recente')
       : sit === 'antigo' ? `Este papel é a Rev. ${rev2(d.revisao)}. A mais recente é a Rev. ${rev2(d.ultima_revisao)}`
-      : `Cancelado pela empresa${d.cancelado_em ? ' em ' + fmtDataExtenso(String(d.cancelado_em).slice(0, 10)) : ''}`;
+      : `Cancelado pela empresa${d.cancelado_em ? ' em ' + fmtDataExtenso(diaLocal(d.cancelado_em)) : ''}`;
     const pessoa = d.pessoa || '';
     document.getElementById('resultAvatar').textContent = pessoa ? iniciais(pessoa) : (DOC_SIGLA[d.tipo] || 'D').slice(0, 2);
     document.getElementById('resultNome').textContent = pessoa || (DOC_NOME[d.tipo] || 'Documento');
@@ -882,7 +884,7 @@
       ...(d.tipo === 'epi' ? [{ l: 'Entregas na ficha', v: d.entregas ? `${d.entregas}${d.ultima_entrega ? ' · a última em ' + fmtDataExtenso(String(d.ultima_entrega).slice(0, 10)) : ''}` : 'Nenhuma ainda' }] : [{ l: 'Revisão', v: rev2(d.revisao) }]),   // v299: a ficha de EPI cresce com as entregas
       { l: 'Empresa', v: d.cliente_nome || '—' },
       { l: 'Emitido em', v: emitido ? fmtDataExtenso(emitido) : '—' },
-      ...(sit === 'antigo' ? [{ l: 'Revisão mais recente', v: `${rev2(d.ultima_revisao)}${d.ultima_emitida_em ? ' · ' + fmtDataExtenso(String(d.ultima_emitida_em).slice(0, 10)) : ''}` }, ...(d.ultima_motivo ? [{ l: 'Motivo da revisão', v: d.ultima_motivo }] : [])] : []),
+      ...(sit === 'antigo' ? [{ l: 'Revisão mais recente', v: `${rev2(d.ultima_revisao)}${d.ultima_emitida_em ? ' · ' + fmtDataExtenso(diaLocal(d.ultima_emitida_em)) : ''}` }, ...(d.ultima_motivo ? [{ l: 'Motivo da revisão', v: d.ultima_motivo }] : [])] : []),
       ...(sit === 'cancelado' && d.motivo_cancelamento ? [{ l: 'Motivo do cancelamento', v: d.motivo_cancelamento }] : []),
       ...(d.assinado_em ? [{ l: 'Assinado em', v: new Date(d.assinado_em).toLocaleString('pt-BR') }] : []),
       { l: 'Código de autenticidade', v: codigo, amber: true },
