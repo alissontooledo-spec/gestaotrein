@@ -146,7 +146,8 @@ function modalItem(item, redesenhar) {
     <div class="field"><label>Tamanhos (opcional, separe por vírgula)</label><input type="text" id="epTam" maxlength="120" value="${esc((i.tamanhos || []).join(', '))}" placeholder="Ex.: P, M, G ou 8, 9, 10" onchange="window.__epTam()"></div>
     ${novo ? `<div class="field"><label>Quantidade em estoque (opcional)</label><div id="epQtd"></div><small class="ep-mute">Em branco: o EPI fica só cadastrado, sem controle de saldo.</small></div>` : `<label class="ep-chk"><input type="checkbox" id="epCtrl"${i.controla ? ' checked' : ''}> Controlar quantidade (baixa a cada entrega)</label>`}
     <div class="field"><label>Avisar quando o saldo ficar abaixo de (opcional)</label><input type="number" id="epMin" min="0" value="${i.minimo ?? ''}"></div>
-    <label class="ep-chk"><input type="checkbox" id="epSerie"${i.pede_serie ? ' checked' : ''}> Pedir o número de série na entrega (ex.: luva isolante)</label>`,
+    <label class="ep-chk"><input type="checkbox" id="epSerie"${i.pede_serie ? ' checked' : ''}> Pedir o número de série na entrega (ex.: luva isolante)</label>
+    ${novo ? '' : '<label class="ep-chk"><input type="checkbox" id="epInativo"> Desativar este EPI (sai da lista e da entrega; as entregas feitas continuam nas fichas)</label>'}`,
     p.botoes(novo ? 'Salvar EPI' : 'Salvar', 'epOk'));
   let dadosCa = item ? { equipamento: i.equipamento, fabricante: i.fabricante, validade: i.validade, situacao: i.situacao } : null;
   window.__epTam = () => {
@@ -190,7 +191,7 @@ function modalItem(item, redesenhar) {
           if (e2) throw e2;
         }
       } else {
-        const { error } = await sb().from('epi_itens').update(linha).eq('id', id);
+        const { error } = await sb().from('epi_itens').update({ ...linha, ...(v('epInativo')?.checked ? { ativo: false } : {}) }).eq('id', id);
         if (error) throw error;
       }
       p.fecharModal(); avisar(novo ? 'EPI cadastrado.' : 'EPI alterado.'); redesenhar();
@@ -303,7 +304,7 @@ function formHtml() {
     return `<div class="ep-lin"><div class="ep-lin-t"><b>${esc(l.nome)}</b>${l.ca ? ` <span class="ep-mute">CA ${esc(l.ca)}</span>` : ''} ${l.ca ? tagCa(sit) : ''} ${avisoTreino(l.nome)}
         <button type="button" class="lq-ib" data-acao="campo:epi-tirar:${k}" aria-label="Tirar ${esc(l.nome)}">×</button></div>
       <div class="ep-lin-c">
-        ${it?.tamanhos?.length ? `<label><small>Tamanho</small><select data-cp="epl.${k}.tamanho"><option value="">—</option>${it.tamanhos.map((t) => `<option${t === l.tamanho ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : `<label><small>Tamanho</small><input class="cp-inp" data-cp="epl.${k}.tamanho" value="${esc(l.tamanho)}" maxlength="20"></label>`}
+        ${it?.tamanhos?.length ? `<label><small>Tamanho</small><select data-acao="campo:epi-tam:${k}"><option value="">—</option>${it.tamanhos.map((t) => `<option${t === l.tamanho ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : `<label><small>Tamanho</small><input class="cp-inp" data-cp="epl.${k}.tamanho" value="${esc(l.tamanho)}" maxlength="20"></label>`}
         <label><small>Qtde</small><input class="cp-inp" type="number" min="1" data-cp="epl.${k}.qtde" value="${l.qtde}"></label>
         <label><small>Motivo</small><select data-cp="epl.${k}.motivo"><option value="">—</option>${Object.entries(MOTIVOS).map(([v, r]) => `<option value="${v}"${String(l.motivo) === v ? ' selected' : ''}>${r}</option>`).join('')}</select></label>
         <label class="ep-chk"><input type="checkbox" data-cpk="epl.${k}.devolveu"${l.devolveu ? ' checked' : ''} onchange="window.__epChk(this)"> Devolveu o anterior</label>
@@ -449,6 +450,7 @@ export async function acao(nome, valor, redesenhar) {
       if (await adicionar(el?.value || _add)) redesenhar(); return true;
     }
     if (nome === 'campo:epi-sug') { await adicionar(decodeURIComponent(valor || '')); redesenhar(); return true; }
+    if (nome === 'campo:epi-tam') { const [k, ...t] = String(valor).split(':'); if (P.linhas[+k]) P.linhas[+k].tamanho = t.join(':').slice(0, 20); redesenhar(); return true; }  // v299b
     if (nome === 'campo:epi-tirar') { P.linhas.splice(+valor, 1); redesenhar(); return true; }
     if (nome === 'campo:epi-assinar') { await entregar('aparelho', redesenhar); return true; }
     if (nome === 'campo:epi-papel') {
