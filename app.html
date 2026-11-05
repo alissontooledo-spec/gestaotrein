@@ -1358,6 +1358,22 @@ body.sidebar-mini .mod-bloco .mod-itens{display:block}
 .tv-step.bad .ic{background:var(--red);color:#fff}
 .tv-step.bad .v{color:var(--red-text);font-weight:600}
 .tv-step.off{opacity:.6;cursor:default}
+/* v306: linha da aula atrasada / de hoje / registrada pelo escritório */
+.tv-agescr{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-radius:var(--r-md);padding:8px 10px;font-size:12.5px}
+.tv-agescr.atraso{background:var(--red-l);color:var(--red-text);border:1px solid #F5C2BE}
+.tv-agescr.hoje{background:var(--blue-l);color:var(--blue-text)}
+.tv-agescr.fim{background:var(--gray-50);color:var(--text-2);padding:6px 10px}
+.tv-agescr-bts{display:flex;gap:6px;flex-wrap:wrap}
+.exec-escr{background:var(--blue-l);border:1px solid #BFD0FF;color:var(--blue-text);border-radius:var(--r-md);padding:12px 14px;font-size:13px;line-height:1.5;margin-bottom:14px}
+.exec-escr b{color:#0F2466}
+.exec-escr-m{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.exec-escr-m label{font-weight:700;color:#0F2466}
+.exec-escr-m select,.exec-escr-m input{border:1.5px solid #9FB4F0;border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;background:#fff;color:var(--text-1);max-width:100%}
+.exec-escr-m input{flex:1 1 240px}
+.exec-escr-d{font-size:12px;margin-top:8px;color:var(--blue-text)}
+.exec-escr-ck{display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:600;color:#0F2466;cursor:pointer}
+.exec-escr-ck input{width:17px;height:17px;accent-color:var(--navy)}
+@media(max-width:767px){.tv-agescr-bts{width:100%}.tv-agescr-bts .btn{flex:1;justify-content:center}}
 /* Agendamentos — LISTA de largura inteira (2026-08-29, patch22). Cards
    lado a lado não escalavam: com 3+ encontros cada card ficava com ~270px
    e os elementos de largura fixa (selo + Editar + Excluir) esmagavam o
@@ -16874,18 +16890,185 @@ function _tvHtmlTrilha(turmaId, agendamentos, participantes, st) {
     ? passo('done','✓','Participantes', `${nP} inscrito${nP!==1?'s':''}`, `onclick="_tvIrPara('tvCardPart')"`)
     : passo('todo','2','Participantes', 'Nenhum ainda', `onclick="_tvIrPara('tvCardPart')"`);
 
+  // v306: aula de data passada que ninguém finalizou aparece como problema, não como "em andamento".
+  const _hojeTv = dataLocalISO();
+  const _atras = agendamentos.filter(a => !a.concluida && !a.cancelada && a.data && a.data < _hojeTv).sort((a, b) => a.data > b.data ? 1 : -1);
   let p3;
   if (st === 'cancelada')          p3 = passo('bad','!','Execução','Turma cancelada','');
+  else if (st !== 'concluida' && _atras.length) p3 = passo('bad','!','Execução', _atras.length === 1 ? `Aula de ${formatarData(_atras[0].data).slice(0, 5)} não finalizada` : `${_atras.length} aulas não finalizadas`, `onclick="_tvIrPara('tvCardAg')"`);
   else if (st === 'concluida')     p3 = passo('done','✓','Execução','Concluída','');
   else if (st === 'em_andamento')  p3 = passo('now','3','Execução', nAg?`${nOk} de ${nAg} encontro${nAg!==1?'s':''}`:'Em andamento','');
   else if (nAg && nP)              p3 = passo('todo','3','Execução','Pronta para começar','');
   else                             p3 = passo('off','3','Execução','Aguardando o preenchimento','');
 
   const p4 = st === 'concluida'
-    ? passo('done','✓','Documentos','Gerar e enviar', `data-action="abrirDocumentos" data-id="${turmaId}"`)
+    ? passo('todo','4','Documentos','Conferindo…', `data-action="abrirDocumentos" data-id="${turmaId}" data-tvdocs="1"`)   /* v306: estado real em _tvAtualizarPassoDocs */
     : passo('off','4','Documentos','Após concluir','');
 
   return p1 + p2 + p3 + p4;
+}
+
+// ============================================================
+// v306 · REGISTRO PELO ESCRITÓRIO E DOCUMENTOS DA TURMA
+// Proposta aprovada: grid-proposta-fluxo-execucao-documentos-v306.html
+//   · o administrador (e o Provedor) abre a aula que o instrutor não finalizou e a
+//     registra pela folha em papel, com motivo (PASSO-102 grava quem e por quê);
+//   · "Cobrar instrutor" só MONTA a mensagem: quem envia pelo WhatsApp é a pessoa;
+//   · a trilha mostra o estado real dos documentos (gerados / falta enviar / enviados);
+//   · ao concluir a turma, a janela final oferece "Gerar e enviar agora".
+// ============================================================
+const _ESCR_MOTIVOS = ['O instrutor não finalizou no sistema', 'Sem internet no local da aula', 'A presença foi colhida só na folha em papel', 'Outro motivo'];
+function _escrPodeRegistrar() { return ['administrador', 'provedor'].includes(usuarioAtual?.perfil); }
+// O banco já tem o PASSO-102? (coluna nova do encontro). Sem ele, os botões não aparecem.
+async function _escrBancoPronto() {
+  if (window._escritorioOk != null) return window._escritorioOk;
+  try {
+    const { error } = await sb.from('sessoes').select('finalizacao_motivo').limit(1);
+    window._escritorioOk = !error;
+  } catch (e) { window._escritorioOk = false; }
+  return window._escritorioOk;
+}
+function _escrDias(dataIso) {
+  const a = new Date(String(dataIso).slice(0, 10) + 'T00:00:00'), h = new Date(dataLocalISO() + 'T00:00:00');
+  return Math.max(0, Math.round((h - a) / 86400000));
+}
+// Linha extra do agendamento (largura toda): atraso, aula de hoje ou quem finalizou pelo escritório.
+function _escrHtmlLinhaAg(ag, turmaId, info) {
+  if (ag.cancelada) return '';
+  if (ag.concluida) {
+    if (!ag.finalizada_pelo_escritorio) return '';
+    return `<div class="tv-agescr fim">Registrado pelo escritório${ag.finalizada_por_nome ? ' por ' + escapeHtml(ag.finalizada_por_nome) : ''}${ag.concluida_em ? ' em ' + formatarData(String(ag.concluida_em).slice(0, 10)) : ''}${ag.finalizacao_motivo ? ' · ' + escapeHtml(ag.finalizacao_motivo) : ''}</div>`;
+  }
+  if (!info.pode) return '';
+  const hoje = dataLocalISO();
+  const n = info.presentes[ag.id] || 0, tot = info.inscritos;
+  const assin = tot ? `${n} de ${tot} com presença registrada` : 'sem participantes';
+  if (ag.data && ag.data < hoje) {
+    const d = _escrDias(ag.data);
+    return `<div class="tv-agescr atraso"><span><b>Aula não finalizada</b> · há ${d} ${d === 1 ? 'dia' : 'dias'} · ${assin}</span>
+      <span class="tv-agescr-bts"><button type="button" class="btn btn-outline btn-sm" onclick="_escrCobrarInstrutor('${ag.id}')">Cobrar instrutor</button>
+      <button type="button" class="btn btn-navy btn-sm" onclick="_escrRegistrar('${turmaId}','${ag.id}')">Registrar pelo escritório</button></span></div>`;
+  }
+  if (ag.data === hoje) {
+    return `<div class="tv-agescr hoje"><span><b>Aula de hoje</b> · ${assin}</span>
+      <span class="tv-agescr-bts"><button type="button" class="btn btn-outline btn-sm" onclick="_escrRegistrar('${turmaId}','${ag.id}')">Abrir execução</button></span></div>`;
+  }
+  return '';
+}
+function _escrRegistrar(turmaId, sessaoId) { abrirExecucao(turmaId, sessaoId); }
+
+// "Cobrar instrutor": monta o texto e abre o WhatsApp de quem está usando o GRID.
+async function _escrCobrarInstrutor(agId) {
+  const info = window._tvEscr || {}, ag = (info.ags || {})[agId];
+  if (!ag) return;
+  let nome = ag.instrutorNome || '', zap = '';
+  try {
+    if (ag.instrutorId) {
+      const { data } = await sb.from('usuarios').select('nome,whatsapp').eq('id', ag.instrutorId).maybeSingle();
+      nome = data?.nome || nome; zap = String(data?.whatsapp || '').replace(/\D/g, '');
+    }
+  } catch (e) {}
+  const primeiro = String(nome || '').trim().split(/\s+/)[0] || '';
+  const txt = `Olá${primeiro ? ', ' + primeiro : ''}! A aula de ${info.curso || 'treinamento'}${info.cliente ? ' na ' + info.cliente : ''}, do dia ${formatarData(ag.data)}, ainda não foi finalizada no GRID${info.protocolo ? ' (turma ' + info.protocolo + ')' : ''}. Abra a turma, confira as presenças e toque em "Finalizar treinamento". Sem isso os certificados não saem. Obrigado!`;
+  if (zap && zap.length >= 10 && zap.length <= 11) zap = '55' + zap;
+  const link = zap.length >= 12 ? `https://wa.me/${zap}?text=${encodeURIComponent(txt)}` : '';
+  abrirModal('Cobrar o instrutor', `
+    <div style="font-size:12.5px;color:var(--text-2);margin-bottom:10px">${link ? `O WhatsApp abre com este texto para <b>${escapeHtml(nome || 'o instrutor')}</b>. Quem envia é você.` : `<b>${escapeHtml(nome || 'Este instrutor')}</b> não tem WhatsApp cadastrado em Equipe. Copie o texto e mande por onde preferir.`}</div>
+    <div style="background:var(--gray-50);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;font-size:13px;line-height:1.55;white-space:pre-wrap" id="escrTxtCobrar">${escapeHtml(txt)}</div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Fechar</button>
+     <button class="btn btn-outline" onclick="copiarTexto(document.getElementById('escrTxtCobrar').innerText)">Copiar texto</button>
+     ${link ? `<a class="btn btn-navy" href="${link}" target="_blank" rel="noopener" onclick="setTimeout(fecharModal,300)">Abrir o WhatsApp</a>` : ''}`);
+}
+
+// ── Modo escritório na tela de execução ─────────────────────
+function _escrFaixaExec(sessaoAtiva) {
+  if (!window._execEscritorio || !sessaoAtiva || sessaoAtiva.concluida) return '';
+  const nomeInstr = window._execEscrInstrutor || 'o instrutor';
+  const m = window._execMotivo || '';
+  const outro = m && !_ESCR_MOTIVOS.slice(0, -1).includes(m);
+  return `<div class="exec-escr" role="note">
+    <div><b>Registro pelo escritório</b> · encontro de ${escapeHtml(nomeInstr)} em ${formatarData(sessaoAtiva.data)}. Tudo o que você fizer aqui fica registrado com o seu nome.</div>
+    <div class="exec-escr-m"><label for="execMotivoSel">Motivo</label>
+      <select id="execMotivoSel" onchange="_escrMotivoSel(this.value)">
+        <option value="">Escolha o motivo</option>
+        ${_ESCR_MOTIVOS.map(x => `<option${(x === m || (outro && x === 'Outro motivo')) ? ' selected' : ''}>${x}</option>`).join('')}
+      </select>
+      <input type="text" id="execMotivoOutro" maxlength="300" placeholder="Escreva o motivo" value="${outro ? escapeHtml(m) : ''}" style="display:${outro ? 'block' : 'none'}" oninput="window._execMotivo=this.value"></div>
+    <label class="exec-escr-ck"><input type="checkbox" id="execFolhaInstr"${window._execFolhaInstr ? ' checked' : ''} onchange="window._execFolhaInstr=this.checked"> A folha anexada tem a assinatura do instrutor</label>
+    <div class="exec-escr-d">Pelo escritório a presença é marcada pela folha assinada em papel: marque cada pessoa conferindo a assinatura dela na folha. Quem assinou no celular continua valendo; o escritório nunca assina pela pessoa.</div>
+  </div>`;
+}
+function _escrMotivoSel(v) {
+  document.querySelectorAll('#execMotivoOutro').forEach(el => { el.style.display = v === 'Outro motivo' ? 'block' : 'none'; if (v === 'Outro motivo') el.focus(); });
+  window._execMotivo = v === 'Outro motivo' ? (_getElVisible('execMotivoOutro')?.value || '') : v;
+}
+function _escrMotivoAtual() { return String(window._execMotivo || '').trim(); }
+// Texto que vai para o banco: o motivo e a confirmação de que a folha tem a assinatura do instrutor.
+function _escrMotivoParaGravar() { const m = _escrMotivoAtual(); return m ? (m + (window._execFolhaInstr ? ' · folha com a assinatura do instrutor' : '')) : ''; }
+
+// ── Trilha: estado real dos documentos ──────────────────────
+async function _tvDocsStatus(turmaId) {
+  const [rSes, rDocs, rEnv, eleg] = await Promise.all([
+    sb.from('sessoes').select('id,cancelada').eq('turma_id', turmaId),
+    sb.from('documentos').select('tipo,colaborador_id,sessao_id').eq('turma_id', turmaId),
+    sb.from('envios_email').select('*').eq('turma_id', turmaId).maybeSingle(),
+    _participantesElegiveisCertificado(turmaId),
+  ]);
+  const ses = rSes.data || [], docs = rDocs.data || [];
+  const tem = (tipo, col, ses) => docs.some(d => d.tipo === tipo && (d.colaborador_id || '') === (col || '') && (d.sessao_id || '') === (ses || ''));
+  const listas = ses.length, listasOk = ses.filter(s => tem('lista_presenca', '', s.id)).length;
+  const nEleg = eleg.size, coletivo = nEleg > 0 ? 1 : 0, coletivoOk = coletivo && tem('certificado_coletivo', '', '') ? 1 : 0;
+  const indOk = [...eleg].filter(c => tem('certificado_individual', c, '')).length;
+  const total = listas + coletivo + nEleg, gerados = listasOk + coletivoOk + indOk;
+  const env = rEnv.data || null;
+  const quando = env && (env.enviado_em || env.created_at || env.criado_em || env.atualizado_em) || null;
+  return { total, gerados, enviado: !!env, quando };
+}
+async function _tvAtualizarPassoDocs(turmaId) {
+  try {
+    const s = await _tvDocsStatus(turmaId);
+    if (window._turmaAbertaViaHash !== turmaId) return;
+    const [cls, ic, v] = s.enviado
+      ? ['done', '✓', `Enviados${s.quando ? ' em ' + formatarData(String(s.quando).slice(0, 10)) : ''}`]
+      : (s.total > 0 && s.gerados >= s.total) ? ['todo', '4', 'Gerados · falta enviar']
+      : ['todo', '4', s.total ? `${s.gerados} de ${s.total} gerados` : 'Nada a gerar'];
+    document.querySelectorAll('.tv-step[data-tvdocs]').forEach(el => {
+      el.className = 'tv-step ' + cls;
+      const c = el.querySelector('.ic'); if (c) c.textContent = ic;
+      const t = el.querySelector('.v'); if (t) t.textContent = v;
+    });
+  } catch (e) {
+    document.querySelectorAll('.tv-step[data-tvdocs] .v').forEach(el => { el.textContent = 'Abrir documentos'; });
+  }
+}
+
+// ── Janela de conclusão: o próximo passo aparece na hora ────
+async function _escrJanelaConclusao(turmaId) {
+  try {
+    const [{ data: t }, eleg, art] = await Promise.all([
+      sb.from('turmas').select('id,clientes(nome,email),turma_participantes(colaborador_id,colaboradores(nome))').eq('id', turmaId).maybeSingle(),
+      _participantesElegiveisCertificado(turmaId),
+      _artDaTurmaParaPdf(turmaId).catch(() => ({})),
+    ]);
+    if (!t) return;
+    const parts = t.turma_participantes || [];
+    const fora = parts.filter(p => !eleg.has(p.colaborador_id)).map(p => p.colaboradores?.nome || 'Participante').sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const email = t.clientes?.email || '';
+    const faltaArt = !!(art && art.exige && !art.numero);
+    const pode = eleg.size > 0 && !!email && !faltaArt;
+    const motivo = !eleg.size ? 'Ninguém tem presença em todos os encontros: não há certificado para gerar. Confira as presenças.'
+      : !email ? 'A empresa não tem e-mail cadastrado. Cadastre o e-mail na empresa ou envie pela tela de documentos.'
+      : faltaArt ? 'Este treinamento exige ART: informe o número da ART na tela de documentos antes de gerar.' : '';
+    const lin = (k, v, cor) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border);font-size:13.5px"><span style="color:var(--text-2)">${k}</span><b${cor ? ` style="color:${cor}"` : ''}>${v}</b></div>`;
+    abrirModal('Treinamento concluído', `
+      <div style="font-size:13.5px;color:var(--text-2);margin-bottom:8px">${pode ? 'Falta gerar e enviar os certificados para a empresa.' : escapeHtml(motivo)}</div>
+      ${lin('Recebem certificado', eleg.size)}
+      ${fora.length ? lin('Sem presença completa (não recebem)', fora.length, 'var(--red-text)') + `<details style="font-size:12.5px;color:var(--text-2);margin:2px 0 6px"><summary style="cursor:pointer">Ver os nomes</summary><div style="padding:6px 0 0;line-height:1.7">${fora.map(escapeHtml).join('<br>')}</div></details>` : ''}
+      ${lin('E-mail da empresa', email ? escapeHtml(email) : 'não cadastrado', email ? '' : 'var(--red-text)')}`,
+      `<button class="btn btn-outline" onclick="fecharModal()">${usuarioAtual?.perfil === 'instrutor' ? 'Deixar para o escritório' : 'Depois'}</button>
+       ${pode ? `<button class="btn btn-amber" onclick="fecharModal();gerarTudoEnviarEmail('${turmaId}')">Gerar e enviar agora</button>`
+              : `<button class="btn btn-navy" onclick="fecharModal();renderDocumentosTurma('${turmaId}')">Abrir documentos</button>`}`);
+  } catch (e) { /* a janela é um atalho: se falhar, a turma já está concluída e a tela de documentos resolve */ }
 }
 
 // ── Menu ⋮ do agendamento (só aparece no mobile, via CSS) ─────────
@@ -17266,15 +17449,15 @@ async function verTurma(id, opts = {}) {
     // e tolerante de propósito: não altera o select principal (que é
     // compartilhado com o resto da tela) e, se falhar por qualquer motivo,
     // a tela continua funcionando sem os selos de presença.
-    let _tvPresencas = {};
+    let _tvPresencas = {}, _tvPresSess = {};   // v306: presenças por encontro (linha "Aula não finalizada")
     try {
       const _sids = agendamentos.map(a => a.id);
       if (_sids.length) {
         const {data:_prs} = await sb.from('presencas')
-          .select('colaborador_id,assinatura_path,presente').in('sessao_id', _sids);
+          .select('colaborador_id,sessao_id,assinatura_path,presente').in('sessao_id', _sids);
         // v188: presença marcada sem assinatura também conta — é o que o
         // banco usa para travar a remoção (PASSO-52).
-        (_prs||[]).forEach(pr => { if (pr.assinatura_path || pr.presente === true) _tvPresencas[pr.colaborador_id] = true; });
+        (_prs||[]).forEach(pr => { if (pr.assinatura_path || pr.presente === true) { _tvPresencas[pr.colaborador_id] = true; _tvPresSess[pr.sessao_id] = (_tvPresSess[pr.sessao_id] || 0) + 1; } });
       }
     } catch(e) { _tvPresencas = {}; }
     const st           = t.status||'agendada';
@@ -17283,6 +17466,13 @@ async function verTurma(id, opts = {}) {
     const nomeT = t.catalogo?.nome||'Treinamento';
     const nomeC = t.clientes?.nome||'-';
     const podeEditar = podeMgr && st !== 'concluida' && st !== 'cancelada';
+    // v306: registro pelo escritório (administrador e Provedor), só com o PASSO-102 no banco.
+    const _escrInfo = {
+      pode: _escrPodeRegistrar() && st !== 'concluida' && st !== 'cancelada' && usuarioAtual.perfil !== 'instrutor' && await _escrBancoPronto(),
+      presentes: _tvPresSess, inscritos: participantes.length,
+    };
+    window._tvEscr = { turmaId: id, curso: t.catalogo?.nome || '', cliente: t.clientes?.nome || '', protocolo: t.protocolo || '',
+      ags: Object.fromEntries(agendamentos.map(a => [a.id, { data: a.data, instrutorId: a.instrutor_id, instrutorNome: a.usuarios?.nome || '' }])) };
 
     // Agendamento do instrutor logado (para exibir data/hora).
     // IMPORTANTE: em turmas com mais de um encontro, não pode ser "o
@@ -17466,11 +17656,13 @@ async function verTurma(id, opts = {}) {
           <div class="tv-aglist">${agendamentos.map((ag,i)=>{
             const _instr = ag.usuarios?.nome ? escapeHtml(ag.usuarios.nome) : 'Sem instrutor';
             const _loc = [ag.local, ag.modalidade].filter(Boolean).map(x=>escapeHtml(x)).join(' · ');
-            const _stTxt = ag.concluida ? 'Concluído' : 'Pendente';
+            const _atrasada = !ag.concluida && !ag.cancelada && ag.data && ag.data < dataLocalISO();   // v306
+            const _stTxt = ag.concluida ? 'Concluído' : _atrasada ? 'Não finalizada' : 'Pendente';
             // Mesma convenção de cor da lista de participantes: o status
             // vira texto colorido quando sai da grade, no mobile.
             const _stCor = ag.concluida
               ? '<span style="color:var(--green-text);font-weight:700">Concluído</span>'
+              : _atrasada ? '<span style="color:var(--red-text);font-weight:700">Não finalizada</span>'
               : '<span style="color:var(--text-3);font-weight:600">Pendente</span>';
             return `<div class="tv-agrow${ag.concluida?' ok':''}">
               <div class="tv-agn">${ag.concluida?'✓':i+1}</div>
@@ -17482,7 +17674,7 @@ async function verTurma(id, opts = {}) {
               </div>
               <div class="tv-agi">${_instr}</div>
               <div class="tv-agl">${_loc||'—'}</div>
-              <div class="tv-agst"><span class="badge ${ag.concluida?'badge-green':'badge-gray'}">${_stTxt}</span></div>
+              <div class="tv-agst"><span class="badge ${ag.concluida?'badge-green':_atrasada?'badge-red':'badge-gray'}">${_stTxt}</span></div>
               <div class="tv-agacts">${podeEditar && !ag.concluida?`<div class="tv-ag-btns">
                   ${!ag.concluida?`<button class="btn btn-outline btn-sm" data-action="avisarAgendamento" data-id="${ag.id}" data-extra="${id}" title="Avisar a empresa e o instrutor por WhatsApp">Avisar</button>`:``}
                   <button class="btn btn-navy btn-sm" data-action="editarAgendamento" data-id="${ag.id}" data-extra="${id}">Editar</button>
@@ -17490,6 +17682,7 @@ async function verTurma(id, opts = {}) {
                 </div>
                 <button class="tv-ag-menu" title="Mais ações" onclick="_tvMenuAgendamento(this,'${ag.id}','${id}')">⋮</button>`:``}</div>
               ${_htmlBotaoEvidenciasSessao(ag)?`<div class="tv-agev">${_htmlBotaoEvidenciasSessao(ag)}</div>`:''}
+              ${_escrHtmlLinhaAg(ag, id, _escrInfo)}
             </div>`;}).join('')}
           </div>
           ${podeEditar?`<button class="tv-ag-add" data-action="addAgendamento" data-id="${id}">${ICONS.cal} Adicionar agendamento</button>`:``}`}
@@ -17514,6 +17707,7 @@ async function verTurma(id, opts = {}) {
 
     setConteudo(html);
     setMobileHeader(`<div class="mh-greeting">Turma</div><div class="mh-name">${nomeT}</div>`);
+    if (st === 'concluida' && usuarioAtual.perfil !== 'instrutor') _tvAtualizarPassoDocs(id);   // v306
 
     // Foco opcional (hoje só 'participantes', vindo da criação rápida da
     // Agenda): rola até a seção e pisca a borda uma vez. Silencioso se o
@@ -24270,12 +24464,11 @@ async function _enviarAnotacoes(reg) {
 // Além disso, uma trava no banco impede qualquer caminho de concluir turma
 // com encontro pendente.
 async function _enviarFinalizarSessao(reg) {
-  const {data:r, error} = await sb.rpc('turma_finalizar_encontro', {
-    p_sessao_id: reg.sessaoId,
-    p_carga_horaria_real: reg.cargaHorariaReal || null,
-  });
+  const _args = { p_sessao_id: reg.sessaoId, p_carga_horaria_real: reg.cargaHorariaReal || null };
+  if (reg.motivo) _args.p_motivo = reg.motivo;   // v306 (PASSO-102): registro pelo escritório
+  const {data:r, error} = await sb.rpc('turma_finalizar_encontro', _args);
   if (error) {
-    if (error.code === 'PGRST202') throw new Error('O banco ainda não recebeu a atualização PASSO-50. Avise o administrador.');
+    if (error.code === 'PGRST202') throw new Error(reg.motivo ? 'O banco ainda não recebeu a atualização PASSO-102. Avise o administrador.' : 'O banco ainda não recebeu a atualização PASSO-50. Avise o administrador.');
     throw error;
   }
   const concluida = !!r?.turma_concluida;
@@ -24497,6 +24690,14 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
     window._execFiltroBusca   = '';
     window._execFiltroChip    = 'todos';
     window._execSessaoConcluida = !!sessaoAtiva?.concluida;
+    // v306: administrador/Provedor abrindo o encontro de um instrutor = registro pelo escritório.
+    window._execEscritorio = _escrPodeRegistrar() && !!sessaoAtiva && sessaoAtiva.instrutor_id !== usuarioAtual.id && await _escrBancoPronto();
+    window._execEscrInstrutor = '';
+    if (window._execEscritorio && window._execEscrSessao !== sessaoAtiva.id) { window._execMotivo = ''; window._execFolhaInstr = false; }
+    window._execEscrSessao = sessaoAtiva?.id || null;
+    if (window._execEscritorio && sessaoAtiva?.instrutor_id) {
+      try { const { data: _u } = await sb.from('usuarios').select('nome').eq('id', sessaoAtiva.instrutor_id).maybeSingle(); window._execEscrInstrutor = _u?.nome || ''; } catch (e) {}
+    }
 
     window._execPresencas = {};
     (presencas||[]).forEach(p => { window._execPresencas[p.colaborador_id] = p; });
@@ -24589,6 +24790,8 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
         </div>`;
       })()}
 
+      ${_escrFaixaExec(sessaoAtiva)}
+
       ${deCache && window._execSemCacheDoEncontro ? `<div style="display:flex;align-items:center;gap:6px;background:var(--amber-l);color:var(--amber-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:12px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M2 8.5A16 16 0 0 1 8 5M22 8.5a16 16 0 0 0-4.5-2.7M5.5 12.5A11 11 0 0 1 9 10.4M18.5 12.5a11 11 0 0 0-2.6-1.7M9 16a5.5 5.5 0 0 1 5-.4"/><path d="M12 20h.01M3 3l18 18"/></svg> Sem conexão agora, e este encontro específico ainda não tinha sido aberto online neste dispositivo — a lista de presença abaixo pode estar incompleta até você reconectar.</div>` : deCache ? `<div style="display:flex;align-items:center;gap:6px;background:var(--blue-l);color:var(--blue-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:12px"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-.14em;flex-shrink:0" aria-hidden="true"><path d="M2 8.5A16 16 0 0 1 8 5M22 8.5a16 16 0 0 0-4.5-2.7M5.5 12.5A11 11 0 0 1 9 10.4M18.5 12.5a11 11 0 0 0-2.6-1.7M9 16a5.5 5.5 0 0 1 5-.4"/><path d="M12 20h.01M3 3l18 18"/></svg> Sem conexão agora — exibindo dados salvos localmente na última vez que este dispositivo esteve online.</div>` : ''}
 
       <div class="badge-fila-offline" style="display:none;align-items:center;gap:6px;background:var(--amber-l);color:var(--amber-text);padding:8px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;margin-bottom:16px">
@@ -24649,6 +24852,9 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
           <!-- Etapa 2 — Evidências -->
           <div id="abaEvidencias" class="exec-panel" data-step="2">
             <div class="card">
+              ${window._execEscritorio ? `<div class="card-title">Evidências</div>
+              <div style="font-size:12.5px;color:var(--text-2);margin:4px 0 14px;line-height:1.55">Fotos e anotações são do instrutor (${evidCountExec} ${evidCountExec === 1 ? 'registrada' : 'registradas'}). Pelo escritório, a prova da aula é a folha de presença assinada.</div>
+              ` : ''}<div${window._execEscritorio ? ' hidden' : ''}>
               <div class="card-title">Registre evidências</div>
               <div style="font-size:12px;color:var(--text-2);margin:4px 0 14px">Fotos do treinamento e observações do instrutor.</div>
               <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:10px">Fotos e registros</div>
@@ -24667,6 +24873,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
                 <button class="btn btn-navy btn-sm" id="btnSalvarAnotacoes" onclick="salvarAnotacoes('${turmaId}')">Salvar anotações</button>
                 <button class="btn btn-outline btn-sm" id="btnEditarAnotacoes" style="display:none" onclick="editarAnotacoes()">✏ Editar</button>
                 <span id="anotacoesSalvas" style="display:none;font-size:13px;color:var(--green);font-weight:500">✓ Salvo</span>
+              </div>
               </div>
               <div class="exec-footer"><button class="btn btn-navy" onclick="execIrEtapa(3,this)">Próximo: ${_execExigeArtLocal ? 'ART' : 'Finalizar'} →</button></div>
             </div>
@@ -25034,6 +25241,8 @@ function _htmlListaPresencas(participantes) {
             ?`<span class="badge" style="background:var(--amber-l);color:var(--amber-text)" title="Guardado localmente — será enviado quando a internet voltar">⏳ Pendente</span>`
             :assinou
             ?(podeAvaliar ? htmlAval : `<span class="badge badge-green">✓ Assinou</span>`)
+            :window._execEscritorio
+            ?`<span class="badge badge-gray" title="Pelo escritório a presença é marcada pela folha em papel">Sem assinatura</span>`
             :`<button class="btn btn-navy btn-sm" data-action="abrirAssinatura" data-col="${p.colaborador_id}" data-nome="${escapeHtml(col.nome||'')}">Assinar</button>`
           }
         </div>
@@ -25641,6 +25850,7 @@ function _htmlPainelFolha() {
   </div>`;
 }
 function _execSubPresTexto(aval) {
+  if (window._execEscritorio) return _execModoPapel() ? 'Folha anexada: marque cada pessoa conferindo a assinatura dela na folha.' : 'Pelo escritório: anexe a foto ou o PDF da folha assinada e depois marque, um a um, quem assinou.';
   if (_execModoPapel()) return aval ? 'Folha anexada: desmarque quem faltou e registre o resultado da avaliação de cada aluno.' : 'Folha anexada: todos entram como presentes. Desmarque quem faltou, conferindo pela folha.';
   return aval ? 'Colete a assinatura e registre o resultado da avaliação de cada aluno.' : 'Toque em "Assinar" para coletar a assinatura de cada aluno.';
 }
@@ -25698,13 +25908,13 @@ async function anexarFolhaPapel(input) {
         }
       }
     }
-    if (primeira && _execFolhas().length) await _execMarcarTodosPresentesPapel();
+    if (primeira && _execFolhas().length && !window._execEscritorio) await _execMarcarTodosPresentesPapel();   // v306: pelo escritório, marca um a um
   } finally {
     hideLoading();
     _execRenderPainelFolha(); _execRedesenharLista(); _execAtualizarResumoEtapas(); _atualizarBadgeFilaOffline();
   }
   if (naFila) showToast('Sem conexão — a folha foi guardada neste aparelho e será enviada quando a internet voltar.', 'info', 6000);
-  else if (anexadas) showToast(primeira ? 'Folha anexada. Todos foram marcados como presentes: desmarque quem faltou.' : 'Página anexada.', 'success', 6000);
+  else if (anexadas) showToast(primeira ? (window._execEscritorio ? 'Folha anexada. Agora marque cada pessoa que assinou a folha.' : 'Folha anexada. Todos foram marcados como presentes: desmarque quem faltou.') : 'Página anexada.', 'success', 6000);
 }
 
 async function abrirFolhaPapel(id) {
@@ -25822,7 +26032,7 @@ function _imagemJpegComDimensoes(blob) {
 // Acrescenta as páginas da folha ao fim do PDF. Fotos entram pelo jsPDF;
 // PDFs anexados são copiados página a página com a pdf-lib. Devolve os
 // bytes finais (Uint8Array) quando houve PDF para juntar, ou null.
-async function _anexarFolhasAoPdf(doc, folhas, W, H, cores) {
+async function _anexarFolhasAoPdf(doc, folhas, W, H, cores, nota = '') {
   if (!folhas.length) return null;
   const pdfs = [];
   const mg = 14;
@@ -25841,12 +26051,21 @@ async function _anexarFolhasAoPdf(doc, folhas, W, H, cores) {
     doc.setFillColor(...cores.fundoCabecalho); doc.rect(mg, mg, W - mg * 2, 12, 'F');
     doc.setFontSize(9.5); doc.setTextColor(...cores.textoCabecalho); doc.setFont('helvetica', 'bold');
     doc.text(pdfSafe(`FOLHA DE PRESENCA ASSINADA EM PAPEL${total > 1 ? ` - PAGINA ${i + 1} DE ${total}` : ''}`, 90), mg + 4, mg + 8);
-    const areaW = W - mg * 2, areaH = H - mg * 2 - 18;
+    if (nota) { doc.setFontSize(7.5); doc.setTextColor(90, 90, 90); doc.setFont('helvetica', 'normal'); doc.text(pdfSafe(nota, 160), mg, mg + 16); }   // v306
+    const areaW = W - mg * 2, areaH = H - mg * 2 - 18 - (nota ? 5 : 0);
     const r = Math.min(areaW / im.w, areaH / im.h);
     const w = im.w * r, h = im.h * r;
-    try { doc.addImage(im.dataUrl, 'JPEG', mg + (areaW - w) / 2, mg + 16, w, h); } catch (e) {}
+    try { doc.addImage(im.dataUrl, 'JPEG', mg + (areaW - w) / 2, mg + 16 + (nota ? 5 : 0), w, h); } catch (e) {}
   });
   if (!pdfs.length) return null;
+  if (nota && !imagens.length) {   // v306: folha só em PDF — a nota vai numa página própria antes dela
+    doc.addPage('a4', 'portrait');
+    doc.setFillColor(...cores.fundoCabecalho); doc.rect(mg, mg, W - mg * 2, 12, 'F');
+    doc.setFontSize(9.5); doc.setTextColor(...cores.textoCabecalho); doc.setFont('helvetica', 'bold');
+    doc.text('FOLHA DE PRESENCA ASSINADA EM PAPEL', mg + 4, mg + 8);
+    doc.setFontSize(9); doc.setTextColor(60, 60, 60); doc.setFont('helvetica', 'normal');
+    doc.text(doc.splitTextToSize(pdfSafe(nota, 400), W - mg * 2), mg, mg + 22);
+  }
   await _garantirPdfLib();
   const { PDFDocument } = window.PDFLib;
   const final = await PDFDocument.load(doc.output('arraybuffer'));
@@ -26327,14 +26546,29 @@ async function finalizarTurma(turmaId) {
     }
   }
 
-  const okFinalizar = await confirmarAcao(window._execFechaTurma
+  // v306: pelo escritório o motivo é obrigatório (o banco também confere).
+  const _motivoEscr = window._execEscritorio ? _escrMotivoParaGravar() : '';
+  if (window._execEscritorio && _escrMotivoAtual().length < 5) {
+    showToast('Escolha o motivo do registro pelo escritório (faixa azul no topo).', 'error', 6000);
+    _getElVisible('execMotivoSel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const _nPapel = Object.values(window._execPresencas || {}).filter(p => p && p.forma === 'papel' && p.presente && !p.assinatura_path).length;
+  if (window._execEscritorio && _nPapel && !window._execFolhaInstr) {
+    showToast('Confirme que a folha anexada tem a assinatura do instrutor (faixa azul no topo). Sem ela, a presença pela folha não vale como prova.', 'error', 7000);
+    _getElVisible('execFolhaInstr')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const okFinalizar = await confirmarAcao(window._execEscritorio
+    ? `${_nPapel ? `Você marcou ${_nPapel} ${_nPapel === 1 ? 'pessoa' : 'pessoas'} pela folha. ` : ''}${window._execFechaTurma ? 'Registrar este encontro pelo escritório e concluir a turma?' : 'Registrar este encontro pelo escritório?'} Fica gravado com o seu nome e o motivo.`
+    : window._execFechaTurma
     ? 'Este é o último encontro da turma. Ao finalizar, a turma fica Concluída e os documentos são liberados. Confirma?'
     : 'Confirma a finalização deste encontro? A turma continua em andamento até o último encontro ser finalizado.', 'Finalizar', false);
   if (!okFinalizar) return;
 
   const sessaoId = window._execSessaoId;
   if (!sessaoId) { showToast('Aula não encontrada.','error'); return; }
-  const reg = {tipo:'finalizar_sessao', turmaId, sessaoId, cargaHorariaReal, criado_em:new Date().toISOString()};
+  const reg = {tipo:'finalizar_sessao', turmaId, sessaoId, cargaHorariaReal, motivo: _motivoEscr || null, criado_em:new Date().toISOString()};
 
   try {
     showLoading('Finalizando...');
@@ -26344,6 +26578,7 @@ async function finalizarTurma(turmaId) {
       ? 'Treinamento concluído! Todos os encontros da turma foram finalizados.'
       : `Encontro finalizado! A turma continua em andamento${res.pendentes ? ` (falta${res.pendentes > 1 ? 'm' : ''} ${res.pendentes} encontro${res.pendentes > 1 ? 's' : ''})` : ''}.`, 'success');
     await verTurma(turmaId);
+    if (res.concluida) _escrJanelaConclusao(turmaId);   // v306: o próximo passo aparece na hora
   } catch(e) {
     if (e.message === '__offline__' || _erroDeRede(e)) {
       try {
@@ -27704,7 +27939,7 @@ function _rxRenderAbertas() {
   const lista = so ? todas.filter(s => s.instrutor_id === so) : todas;
   const topo = _rxTopo({ titulo: 'Aulas não registradas', voltar: "relIrParaDestino('geral')" });
   const cab = `<div class="rx-acao"><div class="rx-acao-n">${_rxN(lista.length)}</div><div><h2>${lista.length === 1 ? 'Aula com data passada ainda não registrada' : 'Aulas com data passada ainda não registradas'}${so ? ` de ${_rxEsc(b.nomeUsuario[so] || 'instrutor')}` : ''}</h2>
-    <p>O instrutor ainda não finalizou essas aulas. Enquanto uma aula fica aberta, a turma não pode ser concluída e os certificados não saem. Abra a turma, confira a presença e finalize a aula.${so ? ` ${_rxLink('Ver de todos os instrutores', "_rxVerAbertasDe('')")}` : ''}</p></div></div>`;
+    <p>O instrutor ainda não finalizou essas aulas. Enquanto uma aula fica aberta, a turma não pode ser concluída e os certificados não saem. Abra a turma: em cada aula atrasada dá para cobrar o instrutor ou registrar a aula pelo escritório, com a folha de presença assinada.${so ? ` ${_rxLink('Ver de todos os instrutores', "_rxVerAbertasDe('')")}` : ''}</p></div></div>`;
   const porI = {}; todas.forEach(s => { const k = s.instrutor_id || ''; porI[k] = (porI[k] || 0) + 1; });
   const idade = s => _rxDiasEntre(s.data, b.hoje);
   const f1 = lista.filter(s => idade(s) > 30).length, f2 = lista.filter(s => idade(s) > 7 && idade(s) <= 30).length, f3 = lista.filter(s => idade(s) <= 7).length;
@@ -32930,8 +33165,19 @@ async function gerarListaPresenca(turmaId, sessaoId, baixarAoGerar = true, opts 
     if (modoLista === 'final') {
       const _folhasDoc = await _folhasPapelDaSessao(sessaoId);
       if (_folhasDoc.length) {
+        const _notaEscr = ag?.finalizada_pelo_escritorio   // v306: o PDF diz que o encontro foi registrado pelo escritório
+          ? `Encontro registrado pelo escritorio${ag.finalizada_por_nome ? ' por ' + ag.finalizada_por_nome : ''}${ag.concluida_em ? ' em ' + formatarData(String(ag.concluida_em).slice(0, 10)) : ''}${ag.finalizacao_motivo ? '. Motivo: ' + ag.finalizacao_motivo : ''}.` : '';
         _bytesComFolha = await _anexarFolhasAoPdf(doc, _folhasDoc, W, H,
-          _isAvanteseg ? {fundoCabecalho:[31,101,71], textoCabecalho:[255,255,255]} : {fundoCabecalho:NAVY, textoCabecalho:[255,255,255]});
+          _isAvanteseg ? {fundoCabecalho:[31,101,71], textoCabecalho:[255,255,255]} : {fundoCabecalho:NAVY, textoCabecalho:[255,255,255]}, _notaEscr);
+      } else if (ag?.finalizada_pelo_escritorio) {
+        // v306: registrado pelo escritório só com as assinaturas do celular — a nota sai numa página própria.
+        const _mgN = 14, _coresN = _isAvanteseg ? [31,101,71] : NAVY;
+        doc.addPage('a4', 'portrait');
+        doc.setFillColor(..._coresN); doc.rect(_mgN, _mgN, W - _mgN * 2, 12, 'F');
+        doc.setFontSize(9.5); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+        doc.text('REGISTRO DO ENCONTRO PELO ESCRITORIO', _mgN + 4, _mgN + 8);
+        doc.setFontSize(9); doc.setTextColor(60, 60, 60); doc.setFont('helvetica', 'normal');
+        doc.text(doc.splitTextToSize(pdfSafe(`Encontro registrado pelo escritorio${ag.finalizada_por_nome ? ' por ' + ag.finalizada_por_nome : ''}${ag.concluida_em ? ' em ' + formatarData(String(ag.concluida_em).slice(0, 10)) : ''}${ag.finalizacao_motivo ? '. Motivo: ' + ag.finalizacao_motivo : ''}. As presencas desta lista sao as assinaturas colhidas no celular.`, 500), W - _mgN * 2), _mgN, _mgN + 22);
       }
     }
 
@@ -35057,7 +35303,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '305';
+  var APP_BUILD = '306';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
