@@ -79,6 +79,12 @@ async function buscarCa(ca) {
 }
 
 /* ══ Tela principal: empresa → pessoas | EPI da empresa ═══════════════════ */
+/* v304: a linha "EPI" do perfil de acesso. "Só vê" mostra as fichas e esconde o que grava. */
+const podeEpi = () => (ponte().pode ? ponte().pode('campo-epi', 2) !== false : true);
+const SO_VE = 'Seu perfil de acesso permite só consultar as entregas de EPI.';
+const ACOES_GRAVAM = new Set(['campo:epi-funcao', 'campo:epi-novo', 'campo:epi-editar', 'campo:epi-entrada', 'campo:epi-assinar', 'campo:epi-papel', 'campo:epi-link',
+  'campo:epi-canc', 'campo:epi-canc-ok', 'campo:epi-link-canc']);
+
 export async function render() {
   ligarTela({ digitar: (chave, valor) => {
     if (chave !== 'epi.busca') return;
@@ -114,7 +120,7 @@ async function telaPessoas() {
   const funcoes = [...new Set(pessoas.map((p) => String(p.cargo || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const b = norm(S.busca);
   return `<div class="ep-busca"><input type="search" class="cp-inp" data-cp="epi.busca" value="${esc(S.busca)}" placeholder="Buscar pessoa ou função" aria-label="Buscar pessoa ou função">
-      ${funcoes.length ? `<label class="ep-sel"><small>Entregar para uma função inteira</small><select data-acao="campo:epi-funcao" aria-label="Entregar para uma função"><option value="">Escolha a função</option>${funcoes.map((f) => `<option value="${esc(f)}">${esc(f)} (${pessoas.filter((p) => String(p.cargo || '').trim() === f).length})</option>`).join('')}</select></label>` : ''}</div>
+      ${funcoes.length && podeEpi() ? `<label class="ep-sel"><small>Entregar para uma função inteira</small><select data-acao="campo:epi-funcao" aria-label="Entregar para uma função"><option value="">Escolha a função</option>${funcoes.map((f) => `<option value="${esc(f)}">${esc(f)} (${pessoas.filter((p) => String(p.cargo || '').trim() === f).length})</option>`).join('')}</select></label>` : ''}</div>
     <div class="ep-lista">${pessoas.map((p) => { const r = resumo.get(p.id); const k = norm(`${p.nome} ${p.cargo}`);
       return `<div class="ep-pes" data-epb="${esc(k)}"${b && !k.includes(b) ? ' hidden' : ''}><div><b>${esc(p.nome)}</b><small>${esc(p.cargo || 'Sem função cadastrada')}${r ? ` · ${r.n} ${r.n === 1 ? 'entrega' : 'entregas'}, última em ${dataBr(r.ult)}` : ' · nenhuma entrega'}</small></div>
         ${btn('Abrir', `ir:campo-epi-pessoa:${p.id}`, { cls: 'btn-outline btn-sm' })}</div>`; }).join('')}</div>`;
@@ -128,11 +134,12 @@ async function telaItens() {
     const t = (i.tamanhos || []).length ? i.tamanhos.map((tm) => `tam. ${esc(tm)}: ${i.saldos.find((s) => s.tamanho === tm)?.saldo ?? 0}`).join(' · ') : String(i.total);
     return baixo ? `<span class="ep-tag y">${t} · abaixo de ${i.minimo}</span>` : t;
   };
-  return `<div class="ep-acoes-topo">${btn('Novo EPI', 'campo:epi-novo', { cls: 'btn-amber' })}
+  const pode = podeEpi();
+  return `<div class="ep-acoes-topo">${pode ? btn('Novo EPI', 'campo:epi-novo', { cls: 'btn-amber' }) : ''}
       <span class="ep-mute">${base?.data_arquivo ? `Base de CAs do Ministério do Trabalho de ${dataBr(base.data_arquivo)}` : 'Base de CAs do Ministério ainda não carregada: digite os dados do EPI.'}</span></div>
     ${itens.length ? `<div class="ep-tab"><table><thead><tr><th>EPI</th><th>CA</th><th>Situação do CA</th><th>Saldo</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>
       ${itens.map((i) => `<tr><td><b>${esc(i.nome)}</b>${i.fabricante ? `<small>${esc(i.fabricante)}</small>` : ''}</td><td>${esc(i.ca || '—')}</td><td>${i.ca ? tagCa(situacaoCa(i.validade, i.situacao)) : ''}</td><td>${saldoTxt(i)}</td>
-        <td class="ep-bts">${i.controla ? btn('+ Entrada', `campo:epi-entrada:${i.id}`, { cls: 'btn-outline btn-sm' }) : ''}${btn('Editar', `campo:epi-editar:${i.id}`, { cls: 'btn-ghost btn-sm' })}</td></tr>`).join('')}
+        <td class="ep-bts">${pode && i.controla ? btn('+ Entrada', `campo:epi-entrada:${i.id}`, { cls: 'btn-outline btn-sm' }) : ''}${pode ? btn('Editar', `campo:epi-editar:${i.id}`, { cls: 'btn-ghost btn-sm' }) : ''}</td></tr>`).join('')}
       </tbody></table></div>` : nota('Nenhum EPI cadastrado nesta empresa. Toque em "Novo EPI" e digite o número do CA.')}
     <p class="ep-mute">Quantidade é opcional: sem quantidade, o EPI fica só cadastrado. Com quantidade, cada entrega dá baixa no saldo.</p>`;
 }
@@ -280,7 +287,7 @@ export const pessoa = {
     const topo = `<div class="cp-topo"><div class="cp-topo-txt"><div class="cp-topo-emp">${esc(P.cli.nome)}</div><div class="cp-topo-tit">${um ? esc(p0.nome) : `Entrega para ${P.pessoas.length} pessoas`}</div>
       <div class="cp-topo-sub">${um ? esc(p0.cargo || 'Sem função cadastrada') : esc(P.pessoas.map((x) => x.nome).join(', ')).slice(0, 220)}</div></div>
       ${btn('Voltar', 'ir:campo-epi', { cls: 'btn-ghost' })}</div>`;
-    return `${topo}${um ? fichaHtml() : ''}${formHtml()}`;
+    return `${topo}${um ? fichaHtml() : ''}${podeEpi() ? formHtml() : nota(SO_VE)}`;
   },
   acao,
 };
@@ -291,7 +298,7 @@ function fichaHtml() {
       <small>${[e.tamanho && `Tam. ${esc(e.tamanho)}`, `Qtde ${e.qtde}`, e.serie && `série ${esc(e.serie)}`, e.motivo && esc(MOTIVOS[e.motivo]), e.devolveu && 'devolveu o anterior', e.entregue_por_nome && `entregue por ${esc(e.entregue_por_nome)}`].filter(Boolean).join(' · ')}</small>
       ${e.cancelada_em ? `<small>Cancelada: ${esc(e.motivo_cancelamento || '')}</small>` : ''}</div>
       <div class="ep-ent-d">${e.cancelada_em ? '<span class="ep-tag r">Cancelada</span>' : e.forma === 'papel' ? '<span class="ep-tag b">Papel</span>' : e.forma === 'link' ? '<span class="ep-tag v">Assinada pelo link</span>' : '<span class="ep-tag v">Assinada</span>'}
-      ${!e.cancelada_em ? `<button type="button" class="lq-lnk" data-acao="campo:epi-canc:${e.id}">Cancelar</button>` : ''}</div></div>
+      ${!e.cancelada_em && podeEpi() ? `<button type="button" class="lq-lnk" data-acao="campo:epi-canc:${e.id}">Cancelar</button>` : ''}</div></div>
     ${P.cancId === e.id ? `<div class="ep-canc"><label class="ep-sel"><small>Motivo do cancelamento</small><input class="cp-inp" data-cp="epc.motivo" placeholder="Ex.: lançado na pessoa errada"></label>${btn('Cancelar a entrega', 'campo:epi-canc-ok', { cls: 'btn-navy btn-sm' })}${btn('Voltar', 'campo:epi-canc-fechar', { cls: 'btn-ghost btn-sm' })}</div>` : ''}`;
   const agora = new Date().toISOString();
   const pend = (P.links || []).map((l) => {
@@ -299,7 +306,7 @@ function fichaHtml() {
     return `<div class="ep-ent ep-pend"><div><b>${esc((l.itens || []).map((i) => i.nome).join(', ').slice(0, 160))}</b>
       <small>${venc ? 'O link venceu sem assinatura' : bloq ? 'Link bloqueado: 5 tentativas com o CPF errado' : `Link enviado · vale até ${dataHora(l.expira_em)}`}</small></div>
       <div class="ep-ent-d">${venc || bloq ? '<span class="ep-tag b">Sem assinatura</span>' : '<span class="ep-tag y">Aguardando assinatura</span>'}
-      <button type="button" class="lq-lnk" data-acao="campo:epi-link-canc:${l.id}">${venc || bloq ? 'Tirar da lista' : 'Cancelar o link'}</button></div></div>`;
+      ${podeEpi() ? `<button type="button" class="lq-lnk" data-acao="campo:epi-link-canc:${l.id}">${venc || bloq ? 'Tirar da lista' : 'Cancelar o link'}</button>` : ''}</div></div>`;
   }).join('');
   return `${secTit(`Ficha de EPI · ${ativas.length} ${ativas.length === 1 ? 'entrega' : 'entregas'}`)}
     <div class="cp-sec ep-ficha">${pend}${P.entregas.length ? P.entregas.map(linha).join('') : '<p class="ep-mute">Nenhuma entrega ainda.</p>'}
@@ -442,6 +449,7 @@ async function mandarLink(redesenhar) {
 async function fichaPdf() {
   const pes = P.pessoas[0], ativas = P.entregas.filter((e) => !e.cancelada_em).sort((a, b) => String(a.entregue_em).localeCompare(String(b.entregue_em)) || String(a.criado_em).localeCompare(String(b.criado_em)));
   const { data: f, error } = await sb().rpc('epi_ficha', { p_colaborador_id: pes.id, p_org_id: org() });
+  if (error && /42501|permiss/i.test(`${error.code || ''} ${error.message || ''}`)) throw new Error('Seu perfil de acesso não gera a ficha em PDF. Peça a quem entrega EPI.');   // v304
   if (error || !f?.[0]) throw new Error('Não foi possível ler o número da ficha.');
   const fic = f[0];
   const lotes = [...new Set(ativas.filter((e) => e.forma !== 'papel').map((e) => e.lote))];
@@ -472,6 +480,7 @@ async function fichaPdf() {
 /* ── ações ──────────────────────────────────────────────────────────────── */
 export async function acao(nome, valor, redesenhar) {
   if (!nome.startsWith('campo:epi')) return false;
+  if (ACOES_GRAVAM.has(nome) && !podeEpi()) { avisar(SO_VE, 'erro'); return true; }
   try {
     if (nome === 'campo:epi-cli') { S.cli = valor || ''; S.busca = ''; redesenhar(); return true; }
     if (nome === 'campo:epi-aba') { S.aba = valor === 'itens' ? 'itens' : 'pessoas'; redesenhar(); return true; }
