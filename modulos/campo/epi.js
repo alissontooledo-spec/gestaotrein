@@ -25,6 +25,8 @@ const dataBr = (iso) => { if (!iso) return ''; const [a, m, d] = String(iso).sli
 const mesAno = (iso) => { if (!iso) return ''; const [a, m] = String(iso).slice(0, 10).split('-'); return `${m}/${a}`; };
 const semTabela = (e) => /42P01|PGRST20[25]|does not exist|schema cache|could not find/i.test(`${e?.code || ''} ${e?.message || ''}`);
 const MOTIVOS = { 1: 'Primeira entrega', 2: 'Troca por dano', 3: 'Desgaste', 4: 'Extravio', 5: 'Vencimento' };
+const dataHora = (t) => { const d = new Date(t); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} às ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const urlAssinar = (t) => `https://www.toledolabs.com.br/assinar.html?t=${t}`;
 const urlValidar = (c) => `https://www.toledolabs.com.br/validar.html?doc=${c}`;
 
 /* EPI ligado a treinamento de NR (só informa; aparece se a empresa tem Treinamentos) */
@@ -215,16 +217,19 @@ function modalEntrada(item, redesenhar) {
 
 /* ══ Tela da pessoa (ou de várias): ficha e entregar ══════════════════════ */
 async function carregarPessoa(ids) {
-  const { data: pes, error } = await sb().from('colaboradores').select('id,nome,cargo,cliente_id').eq('org_id', org()).in('id', ids);
+  const { data: pes, error } = await sb().from('colaboradores').select('id,nome,cargo,cliente_id,telefone').eq('org_id', org()).in('id', ids);
   if (error) throw error;
   if (!pes?.length) throw new Error('Pessoa não encontrada.');
   const cliId = pes[0].cliente_id;
   S.cli = cliId;
   const cls = await clientes();
-  const [itens, ent] = await Promise.all([itensDaEmpresa(cliId), ids.length === 1
-    ? sb().from('epi_entregas').select('*').eq('colaborador_id', ids[0]).order('entregue_em', { ascending: false }).order('criado_em', { ascending: false }).limit(500) : Promise.resolve({ data: [] })]);
+  const [itens, ent, lk] = await Promise.all([itensDaEmpresa(cliId), ids.length === 1
+    ? sb().from('epi_entregas').select('*').eq('colaborador_id', ids[0]).order('entregue_em', { ascending: false }).order('criado_em', { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
+    /* v300: links mandados e ainda não assinados (sem o PASSO-98, a lista fica vazia) */
+    ids.length === 1 ? sb().from('epi_links').select('id,itens,expira_em,tentativas,criado_em').eq('colaborador_id', ids[0]).is('usado_em', null).is('cancelado_em', null).order('criado_em', { ascending: false }).limit(20) : Promise.resolve({ data: [] })]);
   if (ent.error) throw ent.error;
-  P = { ids, pessoas: pes, cli: cls.find((c) => c.id === cliId) || { id: cliId, nome: '' }, itens, entregas: ent.data || [], linhas: P?.ids?.join() === ids.join() ? P.linhas : [], data: hojeIso(),
+  const links = lk.error ? [] : (lk.data || []);
+  P = { ids, pessoas: pes, cli: cls.find((c) => c.id === cliId) || { id: cliId, nome: '' }, itens, entregas: ent.data || [], links, linhas: P?.ids?.join() === ids.join() ? P.linhas : [], data: hojeIso(),
     entreguePor: sessao.usuario()?.nome || '', sugestoes: [], treinos: {}, cancId: '' };
   await Promise.all([sugestoesGhe(), treinosDaPessoa()]);
 }
@@ -285,11 +290,19 @@ function fichaHtml() {
   const linha = (e) => `<div class="ep-ent${e.cancelada_em ? ' canc' : ''}"><div><b>${dataBr(e.entregue_em)} · ${esc(e.nome)}${e.ca ? ` · CA ${esc(e.ca)}` : ''}</b>
       <small>${[e.tamanho && `Tam. ${esc(e.tamanho)}`, `Qtde ${e.qtde}`, e.serie && `série ${esc(e.serie)}`, e.motivo && esc(MOTIVOS[e.motivo]), e.devolveu && 'devolveu o anterior', e.entregue_por_nome && `entregue por ${esc(e.entregue_por_nome)}`].filter(Boolean).join(' · ')}</small>
       ${e.cancelada_em ? `<small>Cancelada: ${esc(e.motivo_cancelamento || '')}</small>` : ''}</div>
-      <div class="ep-ent-d">${e.cancelada_em ? '<span class="ep-tag r">Cancelada</span>' : e.forma === 'papel' ? '<span class="ep-tag b">Papel</span>' : '<span class="ep-tag v">Assinada</span>'}
+      <div class="ep-ent-d">${e.cancelada_em ? '<span class="ep-tag r">Cancelada</span>' : e.forma === 'papel' ? '<span class="ep-tag b">Papel</span>' : e.forma === 'link' ? '<span class="ep-tag v">Assinada pelo link</span>' : '<span class="ep-tag v">Assinada</span>'}
       ${!e.cancelada_em ? `<button type="button" class="lq-lnk" data-acao="campo:epi-canc:${e.id}">Cancelar</button>` : ''}</div></div>
     ${P.cancId === e.id ? `<div class="ep-canc"><label class="ep-sel"><small>Motivo do cancelamento</small><input class="cp-inp" data-cp="epc.motivo" placeholder="Ex.: lançado na pessoa errada"></label>${btn('Cancelar a entrega', 'campo:epi-canc-ok', { cls: 'btn-navy btn-sm' })}${btn('Voltar', 'campo:epi-canc-fechar', { cls: 'btn-ghost btn-sm' })}</div>` : ''}`;
+  const agora = new Date().toISOString();
+  const pend = (P.links || []).map((l) => {
+    const venc = l.expira_em < agora, bloq = l.tentativas >= 5;
+    return `<div class="ep-ent ep-pend"><div><b>${esc((l.itens || []).map((i) => i.nome).join(', ').slice(0, 160))}</b>
+      <small>${venc ? 'O link venceu sem assinatura' : bloq ? 'Link bloqueado: 5 tentativas com o CPF errado' : `Link enviado · vale até ${dataHora(l.expira_em)}`}</small></div>
+      <div class="ep-ent-d">${venc || bloq ? '<span class="ep-tag b">Sem assinatura</span>' : '<span class="ep-tag y">Aguardando assinatura</span>'}
+      <button type="button" class="lq-lnk" data-acao="campo:epi-link-canc:${l.id}">${venc || bloq ? 'Tirar da lista' : 'Cancelar o link'}</button></div></div>`;
+  }).join('');
   return `${secTit(`Ficha de EPI · ${ativas.length} ${ativas.length === 1 ? 'entrega' : 'entregas'}`)}
-    <div class="cp-sec ep-ficha">${P.entregas.length ? P.entregas.map(linha).join('') : '<p class="ep-mute">Nenhuma entrega ainda.</p>'}
+    <div class="cp-sec ep-ficha">${pend}${P.entregas.length ? P.entregas.map(linha).join('') : '<p class="ep-mute">Nenhuma entrega ainda.</p>'}
       <div class="ep-ficha-bt">${btn('Baixar ficha (PDF)', 'campo:epi-ficha-pdf', { cls: 'btn-amber', travado: !ativas.length })}</div></div>`;
 }
 
@@ -321,6 +334,7 @@ function formHtml() {
       <div class="ep-rod"><label><small>Data da entrega</small><input class="cp-inp" type="date" data-cp="epi.data" value="${esc(P.data)}" max="${hojeIso()}"></label>
         <label><small>Entregue por</small><input class="cp-inp" data-cp="epi.por" value="${esc(P.entreguePor)}" maxlength="120"></label></div>
       <div class="ep-bts2">${btn(P.ids.length === 1 ? 'Assinar neste aparelho' : 'Colher as assinaturas neste aparelho', 'campo:epi-assinar', { cls: 'btn-navy', travado: !L.length })}
+        ${P.ids.length === 1 ? btn('Mandar link para assinar', 'campo:epi-link', { cls: 'btn-outline', travado: !L.length }) : ''}
         ${btn('Só registrar (papel)', 'campo:epi-papel', { cls: 'btn-outline', travado: !L.length })}</div>
       <p class="ep-mute">Qualquer EPI para qualquer pessoa. Nada aqui bloqueia por função, GHE ou saldo.</p>
     </div>`;
@@ -396,6 +410,35 @@ async function entregar(forma, redesenhar) {
   }
 }
 
+/* v300: o trabalhador assina no celular dele (assinar.html). Vale 72 horas e uma vez; confirma com os 4 últimos números do CPF.
+   O GRID não manda mensagem sozinho: o técnico envia pelo WhatsApp dele. A entrega só entra na ficha (e dá baixa) quando ele assina. */
+async function mandarLink(redesenhar) {
+  if (!P.linhas.length) { avisar('Adicione pelo menos um EPI.', 'erro'); return; }
+  const pes = P.pessoas[0];
+  const itens = P.linhas.map((l) => ({ item_id: l.item_id, ca: l.ca, nome: l.nome, tamanho: l.tamanho, qtde: l.qtde, motivo: l.motivo, devolveu: l.motivo && l.motivo > 1 ? !!l.devolveu : null, serie: l.serie, ca_conferido: !!l.ca_conferido }));
+  const { data, error } = await sb().rpc('epi_link_criar', { p_colaborador_id: pes.id, p_itens: itens, p_data: P.data || hojeIso(), p_entregue_por_nome: P.entreguePor || null, p_org_id: org() });
+  if (error) {
+    const m = `${error.code || ''} ${error.message || ''}`;
+    avisar(/sem CPF/.test(m) ? `Cadastre o CPF de ${pes.nome} para mandar o link: ele confirma com os 4 últimos números.` : semTabela(error) || /PGRST202|could not find the function/i.test(m) ? 'A assinatura pelo link ainda não está ligada neste GRID (falta o PASSO-98 no banco).' : /42501/.test(m) ? 'Seu perfil de acesso não permite registrar entregas de EPI.' : 'Não foi possível criar o link.', 'erro');
+    return;
+  }
+  const url = urlAssinar(data.token), vence = dataHora(data.expira_em), primeiro = String(pes.nome || '').split(' ')[0];
+  const txt = `Olá, ${primeiro}. Assine o recebimento dos seus EPI da ${P.cli.nome || 'empresa'}: ${url} . O link vale até ${vence} e pede os 4 últimos números do seu CPF.`;
+  const fone = String(pes.telefone || '').replace(/\D/g, '');
+  const wa = `https://wa.me/${fone.length >= 10 ? (fone.length <= 11 ? `55${fone}` : fone) : ''}?text=${encodeURIComponent(txt)}`;
+  const qr = typeof window.gerarQRCodeDataURL === 'function' ? await window.gerarQRCodeDataURL(url).catch(() => '') : '';
+  P.linhas = []; await carregarPessoa(P.ids); redesenhar();
+  const p = ponte();
+  p.abrirModal(`Link para ${esc(primeiro)} assinar`, `<div class="ep-link">
+      <p>Vale até <b>${esc(vence)}</b> e uma vez só. A entrega entra na ficha quando ${esc(primeiro)} assinar.</p>
+      ${qr ? `<img src="${qr}" alt="QR do link para assinar" width="180" height="180">` : ''}
+      <p class="ep-mute">${esc(primeiro)} pode apontar a câmera para o QR, ou receber o link:</p>
+      <div class="ep-link-bts"><a class="btn btn-navy" href="${esc(wa)}" target="_blank" rel="noopener">Abrir no WhatsApp</a>
+        <button type="button" class="btn btn-outline" onclick="navigator.clipboard?.writeText(${esc(JSON.stringify(url))}).then(()=>window.__GRID_PONTE?.avisar?.('Link copiado.'))">Copiar link</button></div>
+      ${fone.length >= 10 ? '' : '<p class="ep-mute">Sem telefone no cadastro: o WhatsApp abre para você escolher o contato.</p>'}</div>`,
+    `<button class="btn btn-outline" onclick="window.__GRID_PONTE?.fecharModal?.()">Fechar</button>`);
+}
+
 async function fichaPdf() {
   const pes = P.pessoas[0], ativas = P.entregas.filter((e) => !e.cancelada_em).sort((a, b) => String(a.entregue_em).localeCompare(String(b.entregue_em)) || String(a.criado_em).localeCompare(String(b.criado_em)));
   const { data: f, error } = await sb().rpc('epi_ficha', { p_colaborador_id: pes.id, p_org_id: org() });
@@ -420,7 +463,7 @@ async function fichaPdf() {
         e.forma === 'papel' ? 'papel' : (ass.get(e.lote) ? { x: '', img: ass.get(e.lote) } : 'eletrônica')]), vazias: Math.max(2, 8 - ativas.length) },
     { t: 'nota', x: 'Motivo: 1 primeira entrega · 2 troca por dano · 3 desgaste · 4 extravio · 5 vencimento.' },
     { t: 'decl', x: 'Ao assinar cada linha, o trabalhador declara que recebeu gratuitamente o EPI daquela linha, em perfeito estado, e que foi orientado sobre o uso, o ajuste, a guarda, a higienização e a troca (NR-06, itens 6.5.1 e 6.7.2), e que deve usá-lo apenas para a finalidade a que se destina e avisar a empresa quando for danificado ou extraviado (NR-06, item 6.6.1).' },
-    { t: 'nota', x: `Assinaturas eletrônicas colhidas no GRID com aceite do trabalhador, data, hora e aparelho; o resumo de cada entrega fica guardado. Relatório do sistema eletrônico de registro (NR-06, itens 6.5.1, alínea d, e 6.5.1.1). Conferir em toledolabs.com.br/validar.html, código ${fic.codigo}.` },
+    { t: 'nota', x: `Assinaturas eletrônicas colhidas no GRID com aceite do trabalhador, data, hora e aparelho (no aparelho do técnico ou pelo link no celular do trabalhador, confirmado pelos 4 últimos números do CPF); o resumo de cada entrega fica guardado. Relatório do sistema eletrônico de registro (NR-06, itens 6.5.1, alínea d, e 6.5.1.1). Conferir em toledolabs.com.br/validar.html, código ${fic.codigo}.` },
     { t: 'rod', x: `${num} · ${pes.nome}` },
   ];
   await Docs.baixarPartes('pdf', `Ficha de EPI ${num} ${pes.nome}`, [partes]);
@@ -466,6 +509,13 @@ export async function acao(nome, valor, redesenhar) {
       avisar('Entrega cancelada. O saldo voltou.'); const ids = P.ids; await carregarPessoa(ids); redesenhar(); return true;
     }
     if (nome === 'campo:epi-ficha-pdf') { await fichaPdf(); return true; }
+    if (nome === 'campo:epi-link') { await mandarLink(redesenhar); return true; }
+    if (nome === 'campo:epi-link-canc') {
+      if (!await confirmar('Cancelar este link? Ele para de funcionar e nada entra na ficha.')) return true;
+      const { error } = await sb().rpc('epi_link_cancelar', { p_id: valor, p_org_id: org() });
+      if (error) { avisar(/42501/.test(`${error.code}`) ? 'Só o administrador ou quem mandou pode cancelar o link.' : 'Não foi possível cancelar o link.', 'erro'); return true; }
+      avisar('Link cancelado.'); await carregarPessoa(P.ids); redesenhar(); return true;
+    }
   } catch (e) { avisar(e?.message || 'Não foi possível concluir.', 'erro'); }
   return true;
 }
