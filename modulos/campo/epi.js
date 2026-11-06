@@ -8,6 +8,7 @@
    · Ficha da pessoa (FEPI): histórico de entregas, cada uma com a sua assinatura; o PDF
      é o relatório (NR-06, item 6.5.1.1) com QR.
    Funciona sozinho: não depende de avaliação de campo, de GHE nem do Laudomiro.
+   v309: o formulário de entrega ganhou o visual novo (3 passos); o que grava continua igual.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { cliente } from '../../nucleo/dados.js';
@@ -238,6 +239,7 @@ async function carregarPessoa(ids) {
     ids.length === 1 ? sb().from('epi_links').select('id,itens,expira_em,tentativas,criado_em').eq('colaborador_id', ids[0]).is('usado_em', null).is('cancelado_em', null).order('criado_em', { ascending: false }).limit(20) : Promise.resolve({ data: [] })]);
   if (ent.error) throw ent.error;
   const links = lk.error ? [] : (lk.data || []);
+  if (P?.ids?.join() !== ids.join()) _add = '';   // v309: o que estava na busca era de outra pessoa
   P = { ids, pessoas: pes, cli: cls.find((c) => c.id === cliId) || { id: cliId, nome: '' }, itens, entregas: ent.data || [], links, linhas: P?.ids?.join() === ids.join() ? P.linhas : [], data: hojeIso(),
     entreguePor: sessao.usuario()?.nome || '', sugestoes: [], treinos: {}, cancId: '' };
   await Promise.all([sugestoesGhe(), treinosDaPessoa()]);
@@ -341,70 +343,155 @@ function fichaHtml() {
       ${podeEpi() ? `<button type="button" class="lq-lnk" data-acao="campo:epi-link-canc:${l.id}">${venc || bloq ? 'Tirar da lista' : 'Cancelar o link'}</button>` : ''}</div></div>`;
   }).join('');
   return `${secTit(`Ficha de EPI · ${ativas.length} ${ativas.length === 1 ? 'entrega' : 'entregas'}`)}
-    <div class="cp-sec ep-ficha">${pend}${P.entregas.length ? P.entregas.map(linha).join('') : '<p class="ep-mute">Nenhuma entrega ainda.</p>'}
+    <div class="cp-sec ep-ficha">${pend}${P.entregas.length ? P.entregas.map(linha).join('') : '<p class="ep-mute">Nenhuma entrega ainda. Depois da primeira, a ficha (NR-06) aparece aqui.</p>'}
       <div class="ep-ficha-bt">${btn('Baixar ficha (PDF)', 'campo:epi-ficha-pdf', { cls: 'btn-amber', travado: !ativas.length })}</div></div>`;
 }
 
+/* v309: a entrega em 3 passos (proposta aprovada em 06/11/2026: 08-Propostas-visuais/grid-proposta-epi-entrega-v309.html)
+   1. O que vai entregar: a busca vem primeiro e mostra o que achou do CA antes de adicionar; cada EPI é uma linha.
+   2. Dados da entrega: data e quem entregou.
+   3. A barra de baixo diz quantos EPI vão e o que falta, e tem as três formas de assinar (iguais às de antes).
+   O mesmo EPI adicionado de novo soma na quantidade. CA fora da base do Ministério pede o nome do EPI. */
+const caDe = (t) => (/\bCA\s*(\d{3,7})\b/i.exec(t) || /^(\d{3,7})$/.exec(t))?.[1] || '';
+const nomeDaBase = (d) => (d?.equipamento ? d.equipamento.charAt(0) + d.equipamento.slice(1).toLowerCase() : '');
+const _caCache = new Map();   // ca -> linha da base (null = não está na base)
+async function caNaBase(ca) {
+  if (_caCache.has(ca)) return _caCache.get(ca);
+  const d = await buscarCa(ca);   // erro de rede: sobe (não guarda)
+  _caCache.set(ca, d || null);
+  return d || null;
+}
+const ICO_BUSCA = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+const ICO_INFO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v.5M12 11v5"/></svg>';
+const unidades = () => P.linhas.reduce((a, l) => a + (l.qtde || 1), 0);
+const linhaSemNome = () => P.linhas.find((l) => !String(l.nome || '').trim());
+function resumoHtml() {
+  const L = P.linhas, n = unidades(), sn = linhaSemNome();
+  if (!L.length) return '<b>Nenhum EPI na lista</b>Adicione pelo menos um EPI para entregar';
+  return `<b>${n} EPI ${n === 1 ? 'pronto' : 'prontos'} para entregar</b>${sn ? `Falta o nome do EPI do CA ${esc(sn.ca)}` : (P.ids.length === 1 ? 'Como a pessoa vai assinar?' : 'Como as pessoas vão assinar?')}`;
+}
+/* a barra e a prévia mudam enquanto digita, sem redesenhar (o campo não perde o foco) */
+function pintarResumo() { if (P) document.querySelectorAll('.epf-res').forEach((el) => { el.innerHTML = resumoHtml(); }); }
+function pintarPrevia(html) { document.querySelectorAll('.epf-prev').forEach((el) => { el.innerHTML = html; }); }
+
 function formHtml() {
-  const L = P.linhas;
+  const L = P.linhas, um = P.ids.length === 1, p0 = P.pessoas[0];
   const opts = P.itens.map((i) => `<option value="${esc(i.nome)}${i.ca ? ` · CA ${esc(i.ca)}` : ''}"></option>`).join('');
   const sug = P.sugestoes.filter((s) => !L.some((l) => norm(l.nome) === norm(s)));
   const linha = (l, k) => {
     const it = P.itens.find((i) => i.id === l.item_id);
-    const sit = l.ca ? situacaoCa(l.validade, l.situacao) : null;
+    const sit = l.ca && !l.semBase ? situacaoCa(l.validade, l.situacao) : null;
     const saldo = it?.controla ? (it.tamanhos?.length ? (l.tamanho ? it.saldos.find((s) => s.tamanho === l.tamanho)?.saldo ?? 0 : null) : it.total) : null;
-    return `<div class="ep-lin"><div class="ep-lin-t"><b>${esc(l.nome)}</b>${l.ca ? ` <span class="ep-mute">CA ${esc(l.ca)}</span>` : ''} ${l.ca ? tagCa(sit) : ''} ${avisoTreino(l.nome)}
-        <button type="button" class="lq-ib" data-acao="campo:epi-tirar:${k}" aria-label="Tirar ${esc(l.nome)}">×</button></div>
-      <div class="ep-lin-c">
-        ${it?.tamanhos?.length ? `<label><small>Tamanho</small><select data-acao="campo:epi-tam:${k}"><option value="">—</option>${it.tamanhos.map((t) => `<option${t === l.tamanho ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : `<label><small>Tamanho</small><input class="cp-inp" data-cp="epl.${k}.tamanho" value="${esc(l.tamanho)}" maxlength="20"></label>`}
-        <label><small>Qtde</small><input class="cp-inp" type="number" min="1" data-cp="epl.${k}.qtde" value="${l.qtde}"></label>
-        <label><small>Motivo</small><select data-cp="epl.${k}.motivo"><option value="">—</option>${Object.entries(MOTIVOS).map(([v, r]) => `<option value="${v}"${String(l.motivo) === v ? ' selected' : ''}>${r}</option>`).join('')}</select></label>
-        <label class="ep-chk"><input type="checkbox" data-cpk="epl.${k}.devolveu"${l.devolveu ? ' checked' : ''} onchange="window.__epChk(this)"> Devolveu o anterior</label>
-        ${it?.pede_serie || l.serie ? `<label><small>Nº de série</small><input class="cp-inp" data-cp="epl.${k}.serie" value="${esc(l.serie || '')}" maxlength="60"></label>` : ''}
-        ${!l.item_id ? `<label class="ep-chk"><input type="checkbox" data-cpk="epl.${k}.ca_conferido"${l.ca_conferido ? ' checked' : ''} onchange="window.__epChk(this)"> Conferi o CA</label>` : ''}
-      </div>${saldo != null ? `<small class="ep-mute">Saldo${l.tamanho ? ` tam. ${esc(l.tamanho)}` : ''}: ${saldo}${saldo - (l.qtde || 1) < 0 ? ' · vai ficar negativo (lance a entrada depois)' : ` → ${saldo - (l.qtde || 1)}`}</small>` : ''}</div>`;
-  };
-  return `${secTit(P.ids.length === 1 ? 'Entregar EPI' : `Entregar o mesmo EPI para ${P.ids.length} pessoas`)}
-    <div class="cp-sec ep-form">
-      ${sug.length ? `<div class="ep-sug"><small>Sugestões do GHE da função (opcional):</small>${sug.map((s) => `<button type="button" class="ep-chip" data-acao="campo:epi-sug:${encodeURIComponent(s)}">+ ${esc(s)}</button>`).join('')}</div>` : ''}
-      ${L.map(linha).join('')}
-      <div class="ep-add"><input class="cp-inp" list="epLista" data-cp="epi.add" data-cp-enter="epi.add" placeholder="Nome do EPI ou nº do CA" aria-label="Adicionar EPI"><datalist id="epLista">${opts}</datalist>
-        ${btn('Adicionar', 'campo:epi-add', { cls: 'btn-outline' })}</div>
-      <div class="ep-rod"><label><small>Data da entrega</small><input class="cp-inp" type="date" data-cp="epi.data" value="${esc(P.data)}" max="${hojeIso()}"></label>
-        <label><small>Entregue por</small><input class="cp-inp" data-cp="epi.por" value="${esc(P.entreguePor)}" maxlength="120"></label></div>
-      <div class="ep-bts2">${btn(P.ids.length === 1 ? 'Assinar neste aparelho' : 'Colher as assinaturas neste aparelho', 'campo:epi-assinar', { cls: 'btn-navy', travado: !L.length })}
-        ${P.ids.length === 1 ? btn('Mandar link para assinar', 'campo:epi-link', { cls: 'btn-outline', travado: !L.length }) : ''}
-        ${btn('Só registrar (papel)', 'campo:epi-papel', { cls: 'btn-outline', travado: !L.length })}</div>
-      <p class="ep-mute">Qualquer EPI para qualquer pessoa. Nada aqui bloqueia por função, GHE ou saldo.</p>
+    const nome = String(l.nome || '').trim();
+    const tags = l.semBase ? `<span class="ep-tag y">${l.caErro ? 'Não deu para conferir o CA agora' : 'Não achado na base do Ministério'}</span>` : l.ca ? tagCa(sit) : '<span class="ep-tag y">Sem nº de CA</span>';
+    const extra = [
+      `<label class="epf-ck"><input type="checkbox" data-cpk="epl.${k}.devolveu"${l.devolveu ? ' checked' : ''} onchange="window.__epChk(this)"> Devolveu o anterior</label>`,
+      !l.item_id && l.ca && !l.semBase ? `<label class="epf-ck"><input type="checkbox" data-cpk="epl.${k}.ca_conferido"${l.ca_conferido ? ' checked' : ''} onchange="window.__epChk(this)"> Conferi o CA no produto</label>` : '',
+      it?.pede_serie || l.serie ? `<label class="epf-serie"><small>Nº de série</small><input class="cp-inp" data-cp="epl.${k}.serie" value="${esc(l.serie || '')}" maxlength="60"></label>` : '',
+      saldo != null ? `<small class="ep-mute">Saldo${l.tamanho ? ` tam. ${esc(l.tamanho)}` : ''}: ${saldo}${saldo - (l.qtde || 1) < 0 ? ' · vai ficar negativo (lance a entrada depois)' : ` → ${saldo - (l.qtde || 1)}`}</small>` : '',
+    ].join('');
+    return `<div class="epf-lin">
+      <div class="epf-n"><b data-epf-tit="${k}">${nome ? esc(nome) : `CA ${esc(l.ca)}`}</b><div class="epf-sub">${l.ca && nome ? `<span>CA ${esc(l.ca)}</span>` : ''}${tags}${avisoTreino(l.nome)}</div></div>
+      <label class="epf-c"><small>Tamanho</small>${it?.tamanhos?.length
+        ? `<select data-acao="campo:epi-tam:${k}" aria-label="Tamanho"><option value="">—</option>${it.tamanhos.map((t) => `<option${t === l.tamanho ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`
+        : `<input class="cp-inp" data-cp="epl.${k}.tamanho" value="${esc(l.tamanho)}" maxlength="20" placeholder="—" aria-label="Tamanho">`}</label>
+      <div class="epf-c"><small>Qtde</small><div class="epf-qt"><button type="button" data-acao="campo:epi-qt:${k}:-1" aria-label="Menos um">−</button><input class="cp-inp" type="number" min="1" max="1000" data-cp="epl.${k}.qtde" value="${l.qtde}" aria-label="Quantidade"><button type="button" data-acao="campo:epi-qt:${k}:1" aria-label="Mais um">+</button></div></div>
+      <label class="epf-c epf-mot"><small>Motivo</small><select data-cp="epl.${k}.motivo" aria-label="Motivo"><option value="">—</option>${Object.entries(MOTIVOS).map(([v, r]) => `<option value="${v}"${String(l.motivo) === v ? ' selected' : ''}>${r}</option>`).join('')}</select></label>
+      <button type="button" class="epf-x" data-acao="campo:epi-tirar:${k}" aria-label="Tirar ${esc(nome || `CA ${l.ca}`)}">×</button>
+      <div class="epf-extra">${extra}</div>
+      ${l.semBase ? `<div class="epf-alerta"><b>Confira o CA no próprio EPI ou na embalagem.</b> ${l.caErro ? 'O GRID não conseguiu consultar a base do Ministério agora.' : 'O número pode estar errado ou ser muito recente.'}
+        <div class="epf-alerta-l"><input class="cp-inp" data-cp="epl.${k}.nome" value="${esc(l.nome || '')}" maxlength="120" placeholder="Nome do EPI (ex.: Luva de vaqueta)" aria-label="Nome do EPI do CA ${esc(l.ca)}">
+        <label class="epf-ck"><input type="checkbox" data-cpk="epl.${k}.ca_conferido"${l.ca_conferido ? ' checked' : ''} onchange="window.__epChk(this)"> Conferi o CA no produto</label></div></div>` : ''}
     </div>`;
+  };
+  const semCatalogo = !P.itens.length;
+  if (_add) setTimeout(agendarPrevia, 0);   // redesenhou com texto na busca: a prévia volta
+  return `<div class="epf">
+    <div class="epf-h"><h4>${um ? 'Nova entrega de EPI' : `Entregar o mesmo EPI para ${P.ids.length} pessoas`}</h4>${um ? `<small>${esc(p0.nome)} · ${esc(p0.cargo || 'Sem função')}</small>` : ''}</div>
+    <div class="epf-p"><div class="epf-pt"><i>1</i>O que vai entregar</div>
+      <div class="epf-busca">${ICO_BUSCA}<input class="cp-inp" list="epLista" data-cp="epi.add" data-cp-enter="epi.add" value="${esc(_add)}" placeholder="Nome do EPI ou nº do CA" aria-label="Adicionar EPI" autocomplete="off"><datalist id="epLista">${opts}</datalist>
+        ${btn('Adicionar', 'campo:epi-add', { cls: 'btn-outline btn-sm' })}</div>
+      <div class="epf-prev" aria-live="polite"></div>
+      ${sug.length ? `<div class="ep-sug"><small>Sugestões do GHE da função:</small>${sug.map((s) => `<button type="button" class="ep-chip" data-acao="campo:epi-sug:${encodeURIComponent(s)}">+ ${esc(s)}</button>`).join('')}</div>` : ''}
+      ${L.length ? `<div class="epf-itens"><div class="epf-ih" aria-hidden="true"><span>EPI</span><span>Tamanho</span><span>Qtde</span><span>Motivo</span><span></span></div>${L.map(linha).join('')}</div>`
+        : `<div class="epf-vazio"><b>Nenhum EPI na lista ainda</b>Digite o nome do EPI ou o número do CA acima e aperte Enter. O GRID busca o CA na base do Ministério.</div>`}
+      ${semCatalogo ? `<p class="epf-ajuda">${ICO_INFO}<span>${P.cli.nome ? `A ${esc(P.cli.nome)}` : 'A empresa'} ainda não tem EPI cadastrado, então não aparece lista para escolher.${P.cli.id && podeEpi() ? ` <button type="button" class="epf-lnk" data-acao="campo:epi-catalogo">Cadastrar os EPI da empresa</button>` : ''}</span></p>` : ''}
+    </div>
+    <div class="epf-p"><div class="epf-pt"><i>2</i>Dados da entrega</div>
+      <div class="epf-dados"><label><small>Data da entrega</small><input class="cp-inp" type="date" data-cp="epi.data" value="${esc(P.data)}" max="${hojeIso()}"></label>
+        <label><small>Entregue por</small><input class="cp-inp" data-cp="epi.por" value="${esc(P.entreguePor)}" maxlength="120"></label></div></div>
+    <div class="epf-acao"><div class="epf-res" aria-live="polite">${resumoHtml()}</div>
+      <div class="epf-bts">${btn(um ? 'Assinar agora neste aparelho' : 'Colher as assinaturas neste aparelho', 'campo:epi-assinar', { cls: 'btn-navy epf-b1', travado: !L.length })}
+        <button type="button" class="btn btn-outline epf-mais" aria-expanded="false" onclick="const a=this.closest('.epf-acao');const x=a.classList.toggle('abre');this.setAttribute('aria-expanded',x)"${L.length ? '' : ' disabled style="opacity:.5"'}>Outras ▾</button>
+        <span class="epf-b2">${um ? btn('Mandar link', 'campo:epi-link', { cls: 'btn-outline', travado: !L.length }) : ''}
+        ${btn('Já assinou no papel', 'campo:epi-papel', { cls: 'btn-outline', travado: !L.length })}</span></div></div>
+  </div>`;
 }
 
 let _add = '';
+let _prevT = 0;
+function agendarPrevia() {
+  clearTimeout(_prevT);
+  const t = String(_add || '').trim(), ca = caDe(t);
+  if (!ca || !P) { pintarPrevia(''); return; }
+  const card = (nome, sit, fonte) => `<div class="epf-prev-i"><div><small>${fonte}</small><b>${esc(nome)}</b> <span class="ep-mute">CA ${esc(ca)}</span> ${tagCa(sit)}</div>${btn('+ Adicionar', 'campo:epi-add', { cls: 'btn-navy btn-sm' })}</div>`;
+  const it = P.itens.find((i) => i.ca === ca);
+  if (it) { pintarPrevia(card(it.nome, situacaoCa(it.validade, it.situacao), 'Do EPI da empresa')); return; }
+  _prevT = setTimeout(async () => {
+    let d;
+    try { d = await caNaBase(ca); } catch { return; }
+    if (caDe(String(_add || '').trim()) !== ca) return;   // já digitou outra coisa
+    pintarPrevia(d ? card(nomeDaBase(d), situacaoCa(d.validade, d.situacao), 'Encontrado na base de CA do Ministério')
+      : `<div class="epf-prev-i y"><div>O CA ${esc(ca)} não está na base do Ministério. Você pode adicionar e escrever o nome do EPI.</div>${btn('+ Adicionar', 'campo:epi-add', { cls: 'btn-outline btn-sm' })}</div>`);
+  }, 350);
+}
 function digitarLinha(chave, valor) {
-  if (chave === 'epi.add') { _add = valor; return; }
+  if (chave === 'epi.add') { _add = valor; agendarPrevia(); return; }
   if (chave === 'epi.data') { P.data = valor; return; }
   if (chave === 'epi.por') { P.entreguePor = String(valor).slice(0, 120); return; }
   if (chave === 'epc.motivo') { P.cancMotivo = valor; return; }
-  const m = /^epl\.(\d+)\.(tamanho|qtde|motivo|serie)$/.exec(chave);
+  const m = /^epl\.(\d+)\.(tamanho|qtde|motivo|serie|nome)$/.exec(chave);
   if (!m || !P.linhas[+m[1]]) return;
   const l = P.linhas[+m[1]];
   if (m[2] === 'qtde') l.qtde = Math.max(1, Math.min(1000, parseInt(valor, 10) || 1));
   else if (m[2] === 'motivo') l.motivo = valor ? +valor : null;
-  else l[m[2]] = String(valor).slice(0, m[2] === 'serie' ? 60 : 20);
+  else l[m[2]] = String(valor).slice(0, m[2] === 'nome' ? 120 : m[2] === 'serie' ? 60 : 20);
+  if (m[2] === 'nome') document.querySelectorAll(`[data-epf-tit="${m[1]}"]`).forEach((el) => { el.textContent = String(l.nome || '').trim() || `CA ${l.ca}`; });
+  if (m[2] === 'qtde' || m[2] === 'nome') pintarResumo();
 }
 window.__epChk = (el) => { const m = /^epl\.(\d+)\.(devolveu|ca_conferido)$/.exec(el.dataset.cpk || ''); if (m && P?.linhas[+m[1]]) P.linhas[+m[1]][m[2]] = el.checked; };
 
 async function adicionar(texto) {
-  const t = String(texto || '').trim(); if (t.length < 2) { avisar('Digite o nome do EPI ou o número do CA.', 'erro'); return false; }
-  const caTxt = (/\bCA\s*(\d{3,7})\b/i.exec(t) || /^(\d{3,7})$/.exec(t))?.[1] || '';
+  const t = String(texto || '').trim(); if (t.length < 2) { avisar('Digite o nome do EPI ou o número do CA no campo de busca.', 'erro'); return false; }
+  const caTxt = caDe(t);
   let it = P.itens.find((i) => (caTxt && i.ca === caTxt) || norm(i.nome) === norm(t.replace(/\s*·\s*CA.*$/i, '')));
   let l;
   if (it) l = { item_id: it.id, nome: it.nome, ca: it.ca, validade: it.validade, situacao: it.situacao, tamanho: '', qtde: 1, motivo: null, devolveu: false, serie: '', ca_conferido: !!it.ca };
   else if (caTxt) {
-    const d = await buscarCa(caTxt).catch(() => null);
-    l = { item_id: null, nome: d ? d.equipamento.charAt(0) + d.equipamento.slice(1).toLowerCase() : `EPI CA ${caTxt}`, ca: caTxt, validade: d?.validade || null, situacao: d?.situacao || '', tamanho: '', qtde: 1, motivo: null, devolveu: false, serie: '', ca_conferido: !!d };
+    let d;
+    try { d = await caNaBase(caTxt); } catch { d = undefined; }   // sem resposta: entra como não conferido
+    l = { item_id: null, nome: d ? nomeDaBase(d) : '', ca: caTxt, validade: d?.validade || null, situacao: d?.situacao || '', tamanho: '', qtde: 1, motivo: null, devolveu: false, serie: '', ca_conferido: !!d, semBase: !d, caErro: d === undefined };
   } else l = { item_id: null, nome: t.slice(0, 120), ca: '', validade: null, situacao: '', tamanho: '', qtde: 1, motivo: null, devolveu: false, serie: '', ca_conferido: false };
-  P.linhas.push(l); _add = '';
+  /* o mesmo EPI de novo: soma na quantidade, em vez de repetir a linha */
+  //    (só quando não há tamanho nem nº de série em jogo: tamanhos ou séries diferentes ficam em linhas separadas na ficha)
+  const separa = !!(it?.tamanhos?.length || it?.pede_serie);
+  const igual = separa ? null : P.linhas.find((x) => !x.tamanho && !x.serie && ((l.item_id && x.item_id === l.item_id) || (!l.item_id && l.ca && !x.item_id && x.ca === l.ca) || (!l.item_id && !l.ca && !x.item_id && !x.ca && norm(x.nome) === norm(l.nome))));
+  if (igual) { igual.qtde = Math.min(1000, (igual.qtde || 1) + 1); avisar(`${igual.nome || `CA ${igual.ca}`}: quantidade ${igual.qtde}.`); }
+  else P.linhas.push(l);
+  _add = ''; clearTimeout(_prevT);
+  return true;
+}
+/* antes de assinar ou mandar o link: todo EPI precisa de nome (a ficha da NR-06 não sai com "CA 3485" sem nome) */
+function conferirLinhas() {
+  if (!P.linhas.length) { avisar('Adicione pelo menos um EPI.', 'erro'); return false; }
+  const sn = linhaSemNome();
+  if (sn) {
+    avisar(`Escreva o nome do EPI do CA ${sn.ca}.`, 'erro');
+    const k = P.linhas.indexOf(sn);
+    const el = [...document.querySelectorAll(`[data-cp="epl.${k}.nome"]`)].find((x) => x.getBoundingClientRect().width > 0);
+    el?.focus();
+    return false;
+  }
   return true;
 }
 
@@ -431,8 +518,8 @@ function colher(pessoaNome, itens) {
 }
 
 async function entregar(forma, redesenhar) {
-  if (!P.linhas.length) { avisar('Adicione pelo menos um EPI.', 'erro'); return; }
-  const itens = P.linhas.map((l) => ({ item_id: l.item_id, ca: l.ca, nome: l.nome, tamanho: l.tamanho, qtde: l.qtde, motivo: l.motivo, devolveu: l.motivo && l.motivo > 1 ? !!l.devolveu : null, serie: l.serie, ca_conferido: !!l.ca_conferido }));
+  if (!conferirLinhas()) return;
+  const itens = P.linhas.map((l) => ({ item_id: l.item_id, ca: l.ca, nome: String(l.nome || '').trim(), tamanho: l.tamanho, qtde: l.qtde, motivo: l.motivo, devolveu: l.motivo && l.motivo > 1 ? !!l.devolveu : null, serie: l.serie, ca_conferido: !!l.ca_conferido }));
   const aparelho = `${navigator.userAgentData?.platform || navigator.platform || ''} · ${String(navigator.userAgent || '').slice(0, 200)}`;
   const emb = EMB;   // v307: o painel de quem começou (EMB pode mudar se outra tela abrir no meio)
   emb?.ocupado?.(true);
@@ -468,13 +555,13 @@ async function entregarTodas(forma, redesenhar, itens, aparelho, emb) {
 /* v300: o trabalhador assina no celular dele (assinar.html). Vale 72 horas e uma vez; confirma com os 4 últimos números do CPF.
    O GRID não manda mensagem sozinho: o técnico envia pelo WhatsApp dele. A entrega só entra na ficha (e dá baixa) quando ele assina. */
 async function mandarLink(redesenhar) {
-  if (!P.linhas.length) { avisar('Adicione pelo menos um EPI.', 'erro'); return; }
+  if (!conferirLinhas()) return;
   const emb = EMB; emb?.ocupado?.(true);   // v307
   try { await mandarLinkAgora(redesenhar, emb); } finally { emb?.ocupado?.(false); }
 }
 async function mandarLinkAgora(redesenhar, emb) {
   const pes = P.pessoas[0];
-  const itens = P.linhas.map((l) => ({ item_id: l.item_id, ca: l.ca, nome: l.nome, tamanho: l.tamanho, qtde: l.qtde, motivo: l.motivo, devolveu: l.motivo && l.motivo > 1 ? !!l.devolveu : null, serie: l.serie, ca_conferido: !!l.ca_conferido }));
+  const itens = P.linhas.map((l) => ({ item_id: l.item_id, ca: l.ca, nome: String(l.nome || '').trim(), tamanho: l.tamanho, qtde: l.qtde, motivo: l.motivo, devolveu: l.motivo && l.motivo > 1 ? !!l.devolveu : null, serie: l.serie, ca_conferido: !!l.ca_conferido }));
   const { data, error } = await sb().rpc('epi_link_criar', { p_colaborador_id: pes.id, p_itens: itens, p_data: P.data || hojeIso(), p_entregue_por_nome: P.entreguePor || null, p_org_id: org() });
   if (error) {
     const m = `${error.code || ''} ${error.message || ''}`;
@@ -549,6 +636,7 @@ export async function acao(nome, valor, redesenhar) {
       if (nome === 'campo:epi-editar') modalItem(it, redesenhar); else modalEntrada(it, redesenhar);
       return true;
     }
+    if (nome === 'campo:epi-catalogo') { if (!P?.cli?.id) return true; S.cli = P.cli.id; S.busca = ''; S.aba = 'itens'; window.GRID?.tratarAcao?.(`ir:campo-epi:${P.cli.id}`); return true; }   // v309
     if (nome === 'campo:epi-fechar') { EMB?.fechar?.(); return true; }   // v307: painel
     if (!P) return true;
     if (nome === 'campo:epi-ok-novo') { P.ok = null; redesenhar(); return true; }   // v307
@@ -558,9 +646,11 @@ export async function acao(nome, valor, redesenhar) {
     }
     if (nome === 'campo:epi-sug') { await adicionar(decodeURIComponent(valor || '')); redesenhar(); return true; }
     if (nome === 'campo:epi-tam') { const [k, ...t] = String(valor).split(':'); if (P.linhas[+k]) P.linhas[+k].tamanho = t.join(':').slice(0, 20); redesenhar(); return true; }  // v299b
+    if (nome === 'campo:epi-qt') { const [k, d] = String(valor).split(':'); const l = P.linhas[+k]; if (l) l.qtde = Math.max(1, Math.min(1000, (l.qtde || 1) + (+d || 0))); redesenhar(); return true; }   // v309
     if (nome === 'campo:epi-tirar') { P.linhas.splice(+valor, 1); redesenhar(); return true; }
     if (nome === 'campo:epi-assinar') { await entregar('aparelho', redesenhar); return true; }
     if (nome === 'campo:epi-papel') {
+      if (!conferirLinhas()) return true;
       if (!await confirmar('Registrar como entrega em papel? Guarde a ficha assinada à mão.')) return true;
       await entregar('papel', redesenhar); return true;
     }
