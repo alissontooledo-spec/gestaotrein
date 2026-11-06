@@ -2750,7 +2750,7 @@ button.prov-chip { border:0; cursor:pointer; font-family:inherit; padding:4px 10
 .rh-meta .ponto{color:var(--border-2)}
 .rh-meta button{border:0;background:none;padding:0;font:inherit;color:var(--text-2);font-weight:600;cursor:pointer;text-decoration:underline;text-decoration-color:var(--border-2);text-underline-offset:3px}
 .rh-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.rh-pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.rh-pill{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.35;max-width:100%}
 .rh-pill i{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.8}
 .rh-pill.r{background:var(--red-l);color:var(--red-text)}.rh-pill.y{background:var(--amber-l);color:var(--amber-text)}.rh-pill.b{background:var(--blue-l);color:var(--blue-text)}.rh-pill.g{background:var(--green-l);color:var(--green-text)}
 .rh-acts{display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end}
@@ -2851,6 +2851,8 @@ button.prov-chip { border:0; cursor:pointer; font-family:inherit; padding:4px 10
 .gp-b{flex:1;overflow:auto;padding:4px 24px 24px;overscroll-behavior:contain}
 .gp-b .cp-sec-tit:first-child{margin-top:12px}
 body.gp-aberto{overflow:hidden}
+/* Provedor em "Trabalhar como": a faixa do topo fica por cima de tudo; o painel começa abaixo dela */
+body.modo-suporte-ativo .gp,body.modo-suporte-ativo .gp-fundo{top:var(--suporte-h,34px)}
 @media(max-width:1279px){.gp{width:min(88%,720px)}}
 @media(max-width:767px){
   .gp{width:100%;transform:translateY(16px)}
@@ -12909,7 +12911,13 @@ function _painelFechar(op = {}) {
 
 // ── 1. Lista de empresas ─────────────────────────────────────
 window._empLista = null;
-const _empTipoCnpj = (cnpj) => { const d = String(cnpj || '').replace(/\D/g, ''); if (d.length !== 14) return null; const o = d.slice(8, 12); return o === '0001' ? { t: 'Matriz', fil: false } : { t: `Filial ${o}`, fil: true }; };
+/* Matriz/filial só com CNPJ válido (dígitos conferidos): CNPJ de teste ou digitado errado não ganha rótulo */
+const _cnpjValido = (d) => {
+  if (!/^\d{14}$/.test(d) || /^(\d)\1{13}$/.test(d)) return false;
+  const dv = (base) => { let s = 0, p = base.length - 7; for (let i = 0; i < base.length; i++) { s += Number(base[i]) * p--; if (p < 2) p = 9; } const r = s % 11; return r < 2 ? 0 : 11 - r; };
+  return dv(d.slice(0, 12)) === Number(d[12]) && dv(d.slice(0, 13)) === Number(d[13]);
+};
+const _empTipoCnpj = (cnpj) => { const d = String(cnpj || '').replace(/\D/g, ''); if (!_cnpjValido(d)) return null; const o = d.slice(8, 12); if (o === '0000') return null; return o === '0001' ? { t: 'Matriz', fil: false } : { t: `Filial ${o}`, fil: true }; };
 async function renderEmpresasV2(opts = {}) {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Empresas</div>`);
   _mhVoltar(null);
@@ -13270,10 +13278,16 @@ function _pessoaAtencao(P) {
   P.trein.filter(t => !t.status_excecao && t.data_vencimento).forEach(t => { const k = t.catalogo_id || t.id; if (!ult.has(k) || t.data_vencimento > ult.get(k).data_vencimento) ult.set(k, t); });
   [...ult.values()].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento)).forEach(t => {
     const dias = Math.round((new Date(t.data_vencimento + 'T12:00:00') - new Date(hoje + 'T12:00:00')) / 86400000);
-    if (t.data_vencimento < hoje) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vencido em ${_empDataBr(t.data_vencimento)}`, tag: ['Vencido', 'alerta'], pill: [`${t.catalogo?.nome || 'Treinamento'} vencido`, 'r'] });
-    else if (t.data_vencimento <= em20) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vence em ${_empDataBr(t.data_vencimento)}`, tag: ['Vence em breve', 'b-amb'], pill: [`${t.catalogo?.nome || 'Treinamento'} vence ${dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`}`, 'y'] });
+    const curto = _treinoCurto(t.catalogo?.nome);   // a etiqueta do cabeçalho usa o nome curto (NR-32); a lista mostra o nome inteiro
+    if (t.data_vencimento < hoje) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vencido em ${_empDataBr(t.data_vencimento)}`, tag: ['Vencido', 'alerta'], pill: [`${curto} vencido`, 'r', t.catalogo?.nome || ''] });
+    else if (t.data_vencimento <= em20) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vence em ${_empDataBr(t.data_vencimento)}`, tag: ['Vence em breve', 'b-amb'], pill: [`${curto} vence ${dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`}`, 'y', t.catalogo?.nome || ''] });
   });
   return xs;   // EPI (link sem assinatura) aparece no quadro de EPI, como informação
+}
+function _treinoCurto(nome) {
+  const n = String(nome || 'Treinamento').trim(), nr = /\bNR\s*-?\s*0?(\d{1,2})\b/i.exec(n);
+  if (nr) return `NR-${nr[1].padStart(2, '0')}${/reciclagem/i.test(n) ? ' (reciclagem)' : ''}`;
+  return n.length > 34 ? n.slice(0, 32).trimEnd() + '…' : n;
 }
 // Link de assinatura de EPI ainda aberto: aguardando, vencido ou bloqueado (5 tentativas erradas)
 function _pessoaLinkSit(l, agora) {
@@ -13306,7 +13320,7 @@ function _pessoaRender() {
   const tp = c && !_cliEhPF(c) ? _empTipoCnpj(c.cnpj) : null;
   const meta = [`<span>${_fcEsc(p.cargo || 'Sem função')}</span>`, p.soc_matricula ? `<span>matrícula ${_fcEsc(p.soc_matricula)}</span>` : '',
     c ? `<button type="button" onclick="abrirEmpresa('${c.id}','colaboradores')">${_fcEsc(c.nome)}</button>${tp ? `<span>${tp.t}</span>` : ''}` : ''].filter(Boolean).join('<span class="ponto">·</span>');
-  const pills = [...at.slice(0, 3).map(x => `<span class="rh-pill ${x.pill[1]}"><i></i>${_fcEsc(x.pill[0])}</span>`), at.length > 3 ? `<span class="rh-pill r">e mais ${at.length - 3}</span>` : '',
+  const pills = [...at.slice(0, 3).map(x => `<span class="rh-pill ${x.pill[1]}" title="${_fcEsc(x.pill[2] || '')}"><i></i>${_fcEsc(x.pill[0])}</span>`), at.length > 3 ? `<span class="rh-pill r">e mais ${at.length - 3}</span>` : '',
     linksAbertos ? `<span class="rh-pill b">${linksAbertos} ${linksAbertos === 1 ? 'assinatura de EPI aguardando' : 'assinaturas de EPI aguardando'}</span>` : '',
     !at.length && P.comTrein ? '<span class="rh-pill g">Treinamentos em dia</span>' : ''].filter(Boolean).join('');
   let corpo;
@@ -35861,7 +35875,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '307';
+  var APP_BUILD = '307b';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
