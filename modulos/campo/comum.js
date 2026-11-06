@@ -151,7 +151,7 @@ export function legendarFoto(d, fotoId, redesenhar) {
 /* ── Ouvintes do módulo (uma vez só, no document) ───────────────────────── */
 let _tela = null;
 export function ligarTela(t) { _tela = t; }
-const dentro = (el) => el && el.closest('#mainBody, #mobileBody');
+const dentro = (el) => el && el.closest('#mainBody, #mobileBody, #gridPainel');   // v307: e o painel lateral
 if (typeof document !== 'undefined' && !window.__campoOuvintes) {
   window.__campoOuvintes = true;
   document.addEventListener('input', (ev) => {

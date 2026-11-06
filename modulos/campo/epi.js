@@ -277,8 +277,26 @@ function avisoTreino(nome) {
   return '';
 }
 
+/* v307: aberta no painel lateral da ficha do colaborador (ou da lista da empresa).
+   params.embutido = { aoMudar(), fechar(), foco: 'ficha' }. A tela é a mesma; só não repete
+   o cabeçalho (o painel já mostra quem é) e, ao terminar, mostra o resumo em vez de navegar. */
+let EMB = null;
+function okHtml() {
+  const k = P.ok, um = P.ids.length === 1;
+  const forma = k.forma === 'papel' ? 'Registrada como entrega em papel. Guarde a ficha assinada à mão.' : 'Assinada neste aparelho.';
+  return `<div class="ep-ok" role="status"><div class="ep-ok-c" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></div>
+      <h3>${um ? 'Entrega registrada na ficha' : `Entregas registradas para ${k.n} ${k.n === 1 ? 'pessoa' : 'pessoas'}`}</h3>
+      <p>${forma} ${um ? 'Já aparece no EPI e no histórico da ficha.' : 'Já aparece na ficha de cada pessoa.'}</p></div>
+    ${k.faltaram?.length ? `<div class="ep-ok-falta" role="alert"><b>${k.faltaram.length === 1 ? 'Ficou 1 pessoa sem registro' : `Ficaram ${k.faltaram.length} pessoas sem registro`}</b>
+      <span>${esc(k.faltaram.join(', '))}. A assinatura foi cancelada ou o GRID não conseguiu gravar. ${k.faltaram.length === 1 ? 'Ela continua selecionada' : 'Elas continuam selecionadas'} na lista da empresa para entregar de novo.</span></div>` : ''}
+    <div class="ep-ok-l">${k.itens.map((l) => `<div><span>${esc(l.nome)}${l.tamanho ? ` · tam. ${esc(l.tamanho)}` : ''}${l.qtde > 1 ? ` · ${l.qtde} un.` : ''}</span><b>${l.ca ? `CA ${esc(l.ca)}` : ''}</b></div>`).join('')}</div>
+    <div class="ep-ok-b">${um ? btn('Baixar a ficha de EPI preenchida (PDF)', 'campo:epi-ficha-pdf', { cls: 'btn-outline' }) : ''}
+      ${um ? btn('Entregar mais EPI', 'campo:epi-ok-novo', { cls: 'btn-outline' }) : ''}
+      ${btn(um ? 'Fechar e voltar à ficha' : 'Fechar', 'campo:epi-fechar', { cls: 'btn-navy' })}</div>`;
+}
 export const pessoa = {
   async render(params = {}) {
+    EMB = params.embutido || null;   // v307
     ligarTela({ digitar: digitarLinha, enter: (k, v) => { if (k === 'epi.add') window.GRID?.tratarAcao?.('campo:epi-add'); } });
     const ids = String(params.id || '').split(/[,~]/).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 60);
     if (!ids.length) return nota('Pessoa não informada.', 'red');
@@ -291,6 +309,11 @@ export const pessoa = {
       ${um && window.__epiDeFicha === p0.id && typeof window.abrirPessoa === 'function'
         ? `<button type="button" class="btn btn-ghost" onclick="window.abrirPessoa('${esc(p0.id)}','epi')">Voltar à ficha</button>`   /* v305: veio da ficha do colaborador */
         : btn('Voltar', 'ir:campo-epi', { cls: 'btn-ghost' })}</div>`;
+    if (EMB) {   // v307: no painel
+      if (P.ok) return okHtml();
+      const form = podeEpi() ? formHtml() : nota(SO_VE);
+      return EMB.foco === 'ficha' && um ? `${fichaHtml()}${form}` : `${form}${um ? fichaHtml() : ''}`;
+    }
     return `${topo}${um ? fichaHtml() : ''}${podeEpi() ? formHtml() : nota(SO_VE)}`;
   },
   acao,
@@ -406,13 +429,29 @@ async function entregar(forma, redesenhar) {
   if (!P.linhas.length) { avisar('Adicione pelo menos um EPI.', 'erro'); return; }
   const itens = P.linhas.map((l) => ({ item_id: l.item_id, ca: l.ca, nome: l.nome, tamanho: l.tamanho, qtde: l.qtde, motivo: l.motivo, devolveu: l.motivo && l.motivo > 1 ? !!l.devolveu : null, serie: l.serie, ca_conferido: !!l.ca_conferido }));
   const aparelho = `${navigator.userAgentData?.platform || navigator.platform || ''} · ${String(navigator.userAgent || '').slice(0, 200)}`;
+  const emb = EMB;   // v307: o painel de quem começou (EMB pode mudar se outra tela abrir no meio)
+  emb?.ocupado?.(true);
+  try { await entregarTodas(forma, redesenhar, itens, aparelho, emb); } finally { emb?.ocupado?.(false); }
+}
+async function entregarTodas(forma, redesenhar, itens, aparelho, emb) {
+  const pessoas = P.pessoas, ids0 = P.ids;
   let feitas = 0;
-  for (const pes of P.pessoas) {
+  for (const pes of pessoas) {
     let png = null;
     if (forma === 'aparelho') { png = await colher(pes.nome, P.linhas); if (!png) break; }
     const { error } = await sb().rpc('epi_entregar', { p_colaborador_id: pes.id, p_itens: itens, p_forma: forma, p_png: png, p_aparelho: forma === 'aparelho' ? aparelho : null, p_data: P.data || hojeIso(), p_entregue_por_nome: P.entreguePor || null, p_org_id: org() });
     if (error) { avisar(semTabela(error) ? 'As entregas de EPI ainda não estão ligadas neste GRID (falta o PASSO-97 no banco).' : /42501|permiss/i.test(`${error.code} ${error.message}`) ? 'Seu perfil de acesso não permite registrar entregas de EPI.' : `Não foi possível registrar a entrega de ${pes.nome}.`, 'erro'); break; }
     feitas++;
+  }
+  if (feitas && emb) {   // v307: no painel, mostra o resumo e avisa quem abriu
+    const faltaram = pessoas.slice(feitas);   // cancelou a assinatura ou deu erro: estas pessoas ficaram SEM registro
+    const ok = { n: feitas, forma, itens: P.linhas.map((l) => ({ nome: l.nome, ca: l.ca, tamanho: l.tamanho, qtde: l.qtde })), faltaram: faltaram.map((x) => x.nome) };
+    P.linhas = [];
+    if (ids0.length === 1) { P = null; await carregarPessoa(ids0); }
+    P.ok = ok; redesenhar();
+    if (emb.vivo && !emb.vivo()) avisar(feitas === 1 ? 'Entrega registrada na ficha.' : `Entregas registradas para ${feitas} pessoas.`);   // o painel já tinha fechado
+    try { emb.aoMudar?.({ faltaram: faltaram.map((x) => x.id) }); } catch { /* segue */ }
+    return;
   }
   if (feitas) {
     avisar(feitas === 1 ? 'Entrega registrada na ficha.' : `Entregas registradas para ${feitas} pessoas.`);
@@ -425,6 +464,10 @@ async function entregar(forma, redesenhar) {
    O GRID não manda mensagem sozinho: o técnico envia pelo WhatsApp dele. A entrega só entra na ficha (e dá baixa) quando ele assina. */
 async function mandarLink(redesenhar) {
   if (!P.linhas.length) { avisar('Adicione pelo menos um EPI.', 'erro'); return; }
+  const emb = EMB; emb?.ocupado?.(true);   // v307
+  try { await mandarLinkAgora(redesenhar, emb); } finally { emb?.ocupado?.(false); }
+}
+async function mandarLinkAgora(redesenhar, emb) {
   const pes = P.pessoas[0];
   const itens = P.linhas.map((l) => ({ item_id: l.item_id, ca: l.ca, nome: l.nome, tamanho: l.tamanho, qtde: l.qtde, motivo: l.motivo, devolveu: l.motivo && l.motivo > 1 ? !!l.devolveu : null, serie: l.serie, ca_conferido: !!l.ca_conferido }));
   const { data, error } = await sb().rpc('epi_link_criar', { p_colaborador_id: pes.id, p_itens: itens, p_data: P.data || hojeIso(), p_entregue_por_nome: P.entreguePor || null, p_org_id: org() });
@@ -439,6 +482,7 @@ async function mandarLink(redesenhar) {
   const wa = `https://wa.me/${fone.length >= 10 ? (fone.length <= 11 ? `55${fone}` : fone) : ''}?text=${encodeURIComponent(txt)}`;
   const qr = typeof window.gerarQRCodeDataURL === 'function' ? await window.gerarQRCodeDataURL(url).catch(() => '') : '';
   P.linhas = []; await carregarPessoa(P.ids); redesenhar();
+  try { emb?.aoMudar?.(); } catch { /* segue */ }   // v307
   const p = ponte();
   p.abrirModal(`Link para ${esc(primeiro)} assinar`, `<div class="ep-link">
       <p>Vale até <b>${esc(vence)}</b> e uma vez só. A entrega entra na ficha quando ${esc(primeiro)} assinar.</p>
@@ -500,7 +544,9 @@ export async function acao(nome, valor, redesenhar) {
       if (nome === 'campo:epi-editar') modalItem(it, redesenhar); else modalEntrada(it, redesenhar);
       return true;
     }
+    if (nome === 'campo:epi-fechar') { EMB?.fechar?.(); return true; }   // v307: painel
     if (!P) return true;
+    if (nome === 'campo:epi-ok-novo') { P.ok = null; redesenhar(); return true; }   // v307
     if (nome === 'campo:epi-add') {
       const el = [...document.querySelectorAll('[data-cp="epi.add"]')].find((x) => x.getBoundingClientRect().width > 0);
       if (await adicionar(el?.value || _add)) redesenhar(); return true;
@@ -519,7 +565,7 @@ export async function acao(nome, valor, redesenhar) {
       if (String(P.cancMotivo || '').trim().length < 3) { avisar('Escreva o motivo.', 'erro'); return true; }
       const { error } = await sb().rpc('epi_cancelar_entrega', { p_id: P.cancId, p_motivo: P.cancMotivo.trim(), p_org_id: org() });
       if (error) { avisar(/42501|admin/i.test(`${error.code} ${error.message}`) ? 'Só o administrador ou quem entregou pode cancelar.' : 'Não foi possível cancelar.', 'erro'); return true; }
-      avisar('Entrega cancelada. O saldo voltou.'); const ids = P.ids; await carregarPessoa(ids); redesenhar(); return true;
+      avisar('Entrega cancelada. O saldo voltou.'); const ids = P.ids; await carregarPessoa(ids); redesenhar(); try { EMB?.aoMudar?.(); } catch { /* segue */ } return true;
     }
     if (nome === 'campo:epi-ficha-pdf') { await fichaPdf(); return true; }
     if (nome === 'campo:epi-link') { await mandarLink(redesenhar); return true; }
@@ -527,7 +573,7 @@ export async function acao(nome, valor, redesenhar) {
       if (!await confirmar('Cancelar este link? Ele para de funcionar e nada entra na ficha.')) return true;
       const { error } = await sb().rpc('epi_link_cancelar', { p_id: valor, p_org_id: org() });
       if (error) { avisar(/42501/.test(`${error.code}`) ? 'Só o administrador ou quem mandou pode cancelar o link.' : 'Não foi possível cancelar o link.', 'erro'); return true; }
-      avisar('Link cancelado.'); await carregarPessoa(P.ids); redesenhar(); return true;
+      avisar('Link cancelado.'); await carregarPessoa(P.ids); redesenhar(); try { EMB?.aoMudar?.(); } catch { /* segue */ } return true;
     }
   } catch (e) { avisar(e?.message || 'Não foi possível concluir.', 'erro'); }
   return true;
