@@ -2677,6 +2677,207 @@ button.prov-chip { border:0; cursor:pointer; font-family:inherit; padding:4px 10
   .fc-ct{padding:10px 0}
 }
 </style>
+<style id="v307-empresas">
+/* v307 (proposta grid-proposta-empresas-ficha-integrada-v307, aprovada em 05/11/2026)
+   Voltar único, barra de contexto, Empresas/empresa/ficha com a largura da tela e o painel lateral de trabalho. */
+
+/* ── Voltar: um só desenho no app inteiro ─────────────────────────────── */
+.vb{display:inline-flex;align-items:center;gap:10px;height:40px;padding:0 16px 0 6px;border:1px solid var(--border-2);border-radius:10px;background:#fff;font:inherit;font-weight:700;font-size:14px;color:var(--navy);box-shadow:0 1px 2px rgba(23,37,65,.06);white-space:nowrap;cursor:pointer;flex:none;text-decoration:none}
+.vb .vb-i{width:28px;height:28px;border-radius:7px;background:var(--navy);color:#fff;display:inline-flex;align-items:center;justify-content:center;flex:none;transition:background .12s,color .12s}
+.vb .vb-i svg{width:16px;height:16px;stroke-width:2.4}
+.vb:hover{border-color:var(--navy)}.vb:hover .vb-i{background:var(--amber);color:var(--navy)}
+.vb:focus-visible{outline:3px solid #93B4FF;outline-offset:2px}
+.vb-bloco{margin-bottom:16px}
+@media(max-width:767px){.vb{height:44px}}
+/* telas que já tinham o rótulo escondido no celular (turma) continuam iguais */
+@media(max-width:767px){.vb .tv-back-lbl{display:none}.vb:has(.tv-back-lbl){padding:0 8px}}
+
+/* ── Barra de contexto (Voltar + caminho), fixa no topo ao rolar ────────── */
+.ctxbar{position:sticky;top:-24px;z-index:30;display:flex;align-items:center;gap:16px;min-height:64px;margin:-24px -28px 20px;padding:12px 28px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--border);backdrop-filter:saturate(1.4) blur(6px)}
+.ctxbar .sep{width:1px;height:24px;background:var(--border);flex:none}
+.ctx-cam{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-3);min-width:0;white-space:nowrap;overflow:hidden}
+.ctx-cam button{border:0;background:none;padding:0;font:inherit;color:var(--text-2);font-weight:600;cursor:pointer}
+.ctx-cam button:hover{color:var(--navy);text-decoration:underline;text-decoration-color:var(--amber);text-underline-offset:3px}
+.ctx-cam b{color:var(--text-1);overflow:hidden;text-overflow:ellipsis}
+.ctx-cam .chv{color:var(--gray-400);display:inline-flex}.ctx-cam .chv svg{width:14px;height:14px}
+@media(max-width:767px){.ctxbar{display:none}}   /* no celular a seta fica no cabeçalho azul */
+
+/* ── Largura: até 1600 px nas telas novas ──────────────────────────────── */
+.emp.emp2,.fc.emp2{max-width:1600px}
+
+/* ── Lista de empresas ──────────────────────────────────────────────── */
+.emp2 .emp-topo{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:16px}
+.emp2 .emp-topo h1{font-size:24px;letter-spacing:-.01em}
+.emp2 .emp-topo p{margin:0}
+.emp-topo-acts{display:flex;gap:8px;flex:none}
+.emp-barra{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.emp-barra .emp-filtro{margin:0;max-width:440px}
+.emp-barra .emp-chips{margin:0}
+.emp-barra .gap{flex:1}
+.emp2 .emp-cab,.emp2 .emp-li{grid-template-columns:minmax(240px,2.2fr) minmax(120px,1fr) 140px minmax(190px,230px) 190px 20px;gap:16px;padding-left:20px;padding-right:20px}
+.emp2 .emp-li{min-height:64px;cursor:pointer}
+.emp-li:focus-visible{outline:3px solid #93B4FF;outline-offset:-3px}
+.emp-li-cid{font-size:13px;color:var(--text-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.emp-tipo{font-weight:700;color:var(--text-3)}.emp-tipo.fil{color:#2A4A8C}
+.emp-barra-at{height:6px;border-radius:9px;background:var(--gray-100);overflow:hidden;margin-top:6px;width:150px;max-width:100%}
+.emp-barra-at i{display:block;height:100%;background:var(--amber);border-radius:9px}
+.emp-li-acts{display:flex;gap:6px;justify-content:flex-end;opacity:0;transition:opacity .12s}
+.emp-li:hover .emp-li-acts,.emp-li:focus-within .emp-li-acts{opacity:1}
+.emp-li-acts .btn{height:34px;padding:0 12px;font-size:12.5px}
+.emp-rod{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid var(--border);font-size:13px;color:var(--text-3)}
+.emp-rod .emp-mais{margin:0}
+@media(max-width:1279px){.emp2 .emp-cab,.emp2 .emp-li{grid-template-columns:minmax(220px,2fr) minmax(110px,1fr) 120px minmax(170px,210px) 20px}.emp2 .emp-li-acts,.emp2 .emp-cab .c-acts{display:none}}
+@media(max-width:767px){
+  .emp2 .emp-topo{display:none}
+  .emp-barra .emp-filtro{max-width:none;flex:1 1 100%}
+  .emp2 .emp-li{grid-template-columns:minmax(0,1fr) auto;padding:13px 16px}
+  .emp2 .emp-li-cid,.emp2 .emp-li-c{display:none}
+  .emp2 .emp-li-n small .emp-m{display:inline}
+  .emp2 .emp-li-a{grid-column:1;grid-row:2;align-self:start}
+  .emp2 .emp-li-s{display:block;grid-column:2;grid-row:1/3;align-self:center}
+  .emp-barra-at{display:none}
+  .emp-rod{padding:12px 16px}
+}
+.emp-m{display:none}
+
+/* ── Cabeçalho de registro (empresa e pessoa) ──────────────────────────── */
+.rh{background:#fff;border:1px solid var(--border);border-radius:12px;margin-bottom:4px;overflow:hidden}
+.rh-top{display:flex;gap:18px;align-items:flex-start;padding:20px 24px}
+.rh .fc-av{width:56px;height:56px;border-radius:12px;font-size:19px;font-weight:800}
+.rh-id{flex:1;min-width:0}
+.rh-id h1{font-size:24px;letter-spacing:-.02em;line-height:1.2;color:var(--navy);margin:0;overflow-wrap:anywhere}
+.rh-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;font-size:13.5px;color:var(--text-3)}
+.rh-meta .ponto{color:var(--border-2)}
+.rh-meta button{border:0;background:none;padding:0;font:inherit;color:var(--text-2);font-weight:600;cursor:pointer;text-decoration:underline;text-decoration-color:var(--border-2);text-underline-offset:3px}
+.rh-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rh-pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.rh-pill i{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.8}
+.rh-pill.r{background:var(--red-l);color:var(--red-text)}.rh-pill.y{background:var(--amber-l);color:var(--amber-text)}.rh-pill.b{background:var(--blue-l);color:var(--blue-text)}.rh-pill.g{background:var(--green-l);color:var(--green-text)}
+.rh-acts{display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+.rh-acts .btn{height:40px}
+.rh-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid #E9ECF3}
+.rh-kp{border:0;border-left:1px solid #E9ECF3;background:#fff;font:inherit;text-align:left;padding:14px 24px;cursor:pointer;position:relative;min-height:72px}
+.rh-kp:first-child{border-left:0}
+.rh-kp b{display:block;font-size:22px;font-weight:800;line-height:1.1;color:var(--navy);font-variant-numeric:tabular-nums}
+.rh-kp span{font-size:12.5px;color:var(--text-3);font-weight:600}
+.rh-kp:hover{background:#F8F9FC}
+.rh-kp.on{background:#FFFBEB}.rh-kp.on::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--amber)}
+.rh-kp.r b{color:#B42318}.rh-kp.y b{color:#B45309}
+.rh-kp:focus-visible{outline:3px solid #93B4FF;outline-offset:-3px}
+.emp2 .emp-abas{margin:16px 0 16px}
+.emp2 .emp-abas .c{font-size:11.5px;font-weight:800;background:var(--gray-50);color:var(--text-3);border-radius:999px;padding:1px 7px;margin-left:6px}
+.emp2 .emp-abas .c.r{background:var(--red-l);color:var(--red-text)}
+@media(max-width:1279px) and (min-width:768px){.rh-top{flex-wrap:wrap}.rh-acts{width:100%;justify-content:flex-start;padding-left:74px}}
+@media(max-width:767px){
+  .rh-top{padding:16px;gap:14px;flex-wrap:wrap}
+  .rh .fc-av{width:48px;height:48px;font-size:16px}
+  .rh-id h1{font-size:20px}
+  .rh-acts{width:100%;display:flex;flex-wrap:wrap;gap:8px}
+  .rh-acts .btn{height:44px;justify-content:center;flex:1 1 0}
+  .rh-acts .fc-mais{flex:0 0 44px}
+  .rh-acts .btn-amber{order:-1;flex:1 1 100%}
+  .rh-kpis{grid-template-columns:repeat(3,1fr)}
+  .rh-kp{padding:12px 14px;border-top:1px solid #E9ECF3}
+  .rh-kp:nth-child(-n+3){border-top:0}.rh-kp:nth-child(3n+1){border-left:0}
+  .rh-kp b{font-size:19px}
+}
+
+/* ── Colaboradores da empresa ──────────────────────────────────────── */
+.emp-ctop2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.emp-ctop2 .emp-filtro{margin:0;max-width:440px}
+.emp-ctop2 .gap{flex:1}
+.emp-ctop2 .btn{height:42px}
+.emp-fsel{height:42px;border:1.5px solid var(--border);border-radius:var(--r-md);padding:0 12px;font:inherit;font-size:13.5px;font-weight:600;color:var(--text-2);background:#fff;max-width:260px}
+.emp-chip-x{display:inline-flex;align-items:center;gap:6px}
+.emp2 .emp-li-p{grid-template-columns:minmax(220px,1.6fr) minmax(130px,1fr) minmax(130px,1fr) 160px 84px;gap:16px;padding-left:20px;padding-right:20px;min-height:64px}
+.emp2 .emp-li-p.com-cb{grid-template-columns:22px minmax(220px,1.6fr) minmax(130px,1fr) minmax(130px,1fr) 160px 84px}
+.emp2 .emp-cab.p{grid-template-columns:minmax(220px,1.6fr) minmax(130px,1fr) minmax(130px,1fr) 160px 84px;gap:16px;padding-left:20px;padding-right:20px}
+.emp2 .emp-cab.p.com-cb{grid-template-columns:22px minmax(220px,1.6fr) minmax(130px,1fr) minmax(130px,1fr) 160px 84px}
+.emp-cb{width:18px;height:18px;margin:0;accent-color:var(--navy);cursor:pointer}
+.emp-li-p.sel{background:#FFFBEB}
+.emp-li-v{font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.emp-ra{display:flex;gap:6px;justify-content:flex-end;align-items:center}
+.emp-ib{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;color:var(--text-2);background:#fff;cursor:pointer;padding:0;flex:none}
+.emp-ib svg{width:16px;height:16px}
+.emp-ib:hover{border-color:var(--navy);color:var(--navy)}
+.emp2 .emp-li-s{display:inline-flex;align-items:center;justify-content:flex-end;color:var(--text-3)}.emp2 .emp-li-s svg{width:16px;height:16px}
+.emp-lote{position:sticky;bottom:16px;z-index:20;margin-top:12px;background:var(--navy);color:#fff;border-radius:12px;padding:10px 12px 10px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 30px rgba(23,37,65,.3)}
+.emp-lote b{font-size:14px;white-space:nowrap}.emp-lote small{color:#AEB9D3;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.emp-lote .sp{flex:1}
+.emp-lote .lk{border:0;background:none;color:#C9D1E3;font:inherit;font-weight:700;font-size:13px;padding:0 8px;cursor:pointer;white-space:nowrap}
+@media(max-width:1279px){.emp2 .emp-li-p,.emp2 .emp-cab.p{grid-template-columns:minmax(200px,1.6fr) minmax(120px,1fr) minmax(120px,1fr) 84px}.emp2 .emp-li-p.com-cb,.emp2 .emp-cab.p.com-cb{grid-template-columns:22px minmax(200px,1.6fr) minmax(120px,1fr) minmax(120px,1fr) 84px}.emp-li-v,.emp-cab .c-venc{display:none}}
+@media(max-width:767px){
+  .emp-ctop2 .emp-filtro{max-width:none;flex:1 1 100%}
+  .emp-ctop2 .emp-fsel{flex:1;max-width:none}
+  .emp-ctop2 .gap{display:none}
+  .emp2 .emp-li-p,.emp2 .emp-li-p.com-cb{grid-template-columns:minmax(0,1fr) auto;padding:13px 16px;row-gap:6px}
+  .emp2 .emp-li-p.com-cb{grid-template-columns:22px minmax(0,1fr) auto}
+  .emp2 .emp-li-p .emp-li-x{grid-column:1/-1;display:flex;align-items:center}
+  .emp2 .emp-li-p.com-cb .emp-li-x{grid-column:2/-1}
+  .emp2 .emp-li-p .emp-ra .emp-ib{display:none}
+  .emp-lote{bottom:calc(var(--nav-h) + 12px);padding:10px 12px}
+  .emp-lote small{display:none}
+}
+
+/* ── Ficha do colaborador ──────────────────────────────────────────── */
+.fc2-lay{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:20px;align-items:start}
+.fc2-main,.fc2-rail{display:grid;gap:16px;min-width:0}
+.fc2-rail{position:sticky;top:64px}
+@media(max-width:1279px){.fc2-lay{grid-template-columns:1fr}.fc2-rail{position:static;grid-template-columns:1fr 1fr}}
+@media(max-width:767px){.fc2-rail{grid-template-columns:1fr}.fc2-lay{display:flex;flex-direction:column;gap:14px}.fc2-main,.fc2-rail{display:contents}.fc2-o1{order:1}.fc2-o2{order:2}.fc2-o3{order:3}.fc2-o4{order:4}.fc2-o5{order:5}}
+.hist{display:grid}
+.hist-ev{display:grid;grid-template-columns:96px 28px minmax(0,1fr);gap:10px;padding:8px 0;align-items:start}
+.hist-q{font-size:12.5px;font-weight:700;color:var(--text-3);padding-top:4px;font-variant-numeric:tabular-nums}
+.hist-o{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative}
+.hist-o svg{width:15px;height:15px}
+.hist-ev:not(:last-child) .hist-o::after{content:'';position:absolute;top:32px;left:13px;width:2px;height:calc(100% + 4px);background:#E6EAF2}
+.hist-o.e{background:#FEF3C7;color:#92400E}.hist-o.d{background:#E0E7FF;color:#3730A3}.hist-o.t{background:#D1FAE5;color:#065F46}.hist-o.r{background:#FEE2E2;color:#991B1B}
+.hist-ev b{display:block;font-size:13.5px;color:var(--text-1)}.hist-ev small{display:block;color:var(--text-3);font-size:12.5px}
+.hist-mais{margin-top:6px}
+@media(max-width:767px){.hist-ev{grid-template-columns:74px 28px minmax(0,1fr)}}
+
+/* ── Painel lateral de trabalho ────────────────────────────────────── */
+.gp-fundo{position:fixed;inset:0;background:rgba(23,37,65,.34);z-index:440;opacity:0;transition:opacity .16s}
+.gp{position:fixed;top:0;right:0;bottom:0;width:620px;max-width:100%;background:#fff;z-index:450;box-shadow:-16px 0 40px rgba(23,37,65,.18);display:flex;flex-direction:column;transform:translateX(24px);opacity:0;transition:transform .18s ease,opacity .18s ease}
+.gp.on{transform:none;opacity:1}.gp-fundo.on{opacity:1}
+.gp-h{padding:18px 24px 16px;border-bottom:1px solid var(--border);display:flex;gap:14px;align-items:flex-start;flex:none}
+.gp-h .k{font-size:11.5px;font-weight:800;letter-spacing:.07em;color:var(--amber-text);text-transform:uppercase}
+.gp-h h2{font-size:21px;letter-spacing:-.01em;margin:2px 0 0;color:var(--navy);line-height:1.25}
+.gp-h p{color:var(--text-3);font-size:13px;margin:2px 0 0}
+.gp-x{margin-left:auto;width:40px;height:40px;border:1px solid var(--border-2);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;color:var(--navy);background:#fff;cursor:pointer;flex:none;padding:0}
+.gp-x svg{width:18px;height:18px}
+.gp-x:hover{border-color:var(--navy)}
+.gp-x:focus-visible{outline:3px solid #93B4FF;outline-offset:2px}
+.gp-b{flex:1;overflow:auto;padding:4px 24px 24px;overscroll-behavior:contain}
+.gp-b .cp-sec-tit:first-child{margin-top:12px}
+body.gp-aberto{overflow:hidden}
+@media(max-width:1279px){.gp{width:min(88%,720px)}}
+@media(max-width:767px){
+  .gp{width:100%;transform:translateY(16px)}
+  .gp-h{padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));align-items:center}
+  .gp-x{order:-1;margin-left:0;width:44px;height:44px}
+  .gp-h h2{font-size:17px}
+  .gp-b{padding:4px 16px calc(24px + env(safe-area-inset-bottom))}
+  .gp .ep-bts2 .btn{min-height:48px}
+}
+/* resumo depois da entrega (epi.js, modo painel) */
+.ep-ok{display:flex;flex-direction:column;align-items:center;text-align:center;padding:36px 12px 8px}
+.ep-ok-c{width:64px;height:64px;border-radius:50%;background:var(--green-l);color:var(--green);display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.ep-ok-c svg{width:30px;height:30px}
+.ep-ok h3{font-size:20px;color:var(--navy);margin:0}.ep-ok p{color:var(--text-3);max-width:44ch;margin:6px 0 0;font-size:14px}
+.ep-ok-l{border:1px solid var(--border);border-radius:11px;margin-top:22px}
+.ep-ok-l div{display:flex;justify-content:space-between;gap:10px;padding:11px 14px;border-top:1px solid #EEF1F6;font-size:13.5px}
+.ep-ok-l div:first-child{border-top:0}
+.ep-ok-falta{margin-top:18px;border:1px solid #FECACA;background:#FEF2F2;color:#991B1B;border-radius:11px;padding:12px 14px;font-size:13.5px}
+.ep-ok-falta b{display:block;margin-bottom:2px}
+.ep-ok-b{display:flex;flex-direction:column;gap:8px;margin-top:20px}
+.ep-ok-b .btn{width:100%;justify-content:center;min-height:42px}
+
+/* ── Celular: seta de voltar no cabeçalho, no lugar do menu ───────────────── */
+.mobile-back-btn{display:none;border:none;background:rgba(255,255,255,.12);color:#fff;width:40px;height:40px;border-radius:10px;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin-top:-2px}
+.mobile-back-btn svg{width:20px;height:20px}
+@media(max-width:767px){#mobileHeader.com-voltar .mobile-back-btn{display:flex}#mobileHeader.com-voltar .mobile-menu-btn{display:none}}
+</style>
 <style id="v174">
 /* Início do Instrutor */
 .gi-pend-grupo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);padding:14px 0 4px;display:flex;justify-content:space-between;gap:8px}
@@ -3128,6 +3329,7 @@ body .cp-col-h{font-size:13px;font-weight:700}
        reescreve #mobileHeaderConteudo, então este botão nunca é apagado ao
        trocar de tela. -->
   <div id="mobileHeader" class="mobile-header">
+    <button class="mobile-back-btn" id="mobileBackBtn" type="button" aria-label="Voltar" title="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg></button>
     <button class="mobile-menu-btn" onclick="abrirSidebar()" aria-label="Abrir menu" title="Menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
@@ -6055,7 +6257,7 @@ function _ligarAcoesDeModulo() {
   if (_acoesLigadas) return;
   _acoesLigadas = true;
 
-  const dentroDeModulo = (el) => el.closest('#mainBody, #mobileBody');
+  const dentroDeModulo = (el) => el.closest('#mainBody, #mobileBody, #gridPainel');   // v307: e o painel lateral
 
   document.addEventListener('click', async (ev) => {
     if (!_GRID) return;
@@ -6546,7 +6748,7 @@ function _perfisNovo() {
   };
   const sel = modelos.find(m => m.id === st.modelo);
   setConteudo(`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="_perfisRenderLista()">${ICONS.back} Voltar</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button type="button" class="vb" onclick="_perfisRenderLista()"><span class="vb-i">${ICONS.back}</span>Voltar</button>
       <div style="font-size:18px;font-weight:800;color:var(--text-1)">Novo perfil</div></div>
     <div class="card" style="padding:16px">
       <div style="font-size:16px;font-weight:800;color:var(--text-1)">Por onde começar?</div>
@@ -6657,7 +6859,7 @@ function _perfisRenderEditor() {
   const r = _perfisResumo(e);
   const usando = st.usos.filter(u => e.id && u.perfil_acesso_id === e.id).length;
   setConteudo(`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="${e.id ? '_perfisRenderLista()' : '_perfisNovo()'}">${ICONS.back} Voltar</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button type="button" class="vb" onclick="${e.id ? '_perfisRenderLista()' : '_perfisNovo()'}"><span class="vb-i">${ICONS.back}</span>Voltar</button>
       <div style="font-size:18px;font-weight:800;color:var(--text-1);min-width:0;overflow:hidden;text-overflow:ellipsis">${e.id ? 'Perfil: ' + escapeHtml(e.nome) : 'Novo perfil'}</div></div>
     <div class="perf-ed">
       <div class="perf-ed-main">
@@ -7303,6 +7505,8 @@ async function irPara(pagina, params={}) {
   // popstate confunda uma navegação nova com Voltar/Avançar dentro dessa
   // sub-rota. Não afeta nenhuma regra de negócio, só o estado de navegação.
   window._turmaAbertaViaHash = null;
+  if (window._gp) _painelFechar({ semHist: true, navegou: true });   // v307
+  _mhVoltar(null);   // v307: a seta de voltar do celular é só das telas de dentro de Empresas
   paginaAtual = pagina;
   window._paramsRotaAtual = params;
   if (pagina !== 'campo-epi-pessoa') window.__epiDeFicha = null;   // v305: "Voltar à ficha" só para quem veio da ficha
@@ -8132,7 +8336,7 @@ async function verOrgProvedor(orgId) {
   _paginaUsuariosOrg = 1;
 
   setConteudo(`
-    <div style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" onclick="renderOrgs()">${ICONS.back} Organizações</button></div>
+    <div style="margin-bottom:12px"><button type="button" class="vb" onclick="renderOrgs()" title="Voltar para Organizações" aria-label="Voltar para Organizações"><span class="vb-i">${ICONS.back}</span>Voltar</button></div>
 
     <div class="gi-page">
       <div style="min-width:0">
@@ -12537,13 +12741,21 @@ async function criarUsuarioOrg() {
 }
 
 // ============================================================
-// EMPRESAS E FICHA DO COLABORADOR — v305 (fase 1, piloto)
+// EMPRESAS E FICHA DO COLABORADOR — v305 (fase 1, piloto) + v307 (tudo sem sair do lugar)
 // ------------------------------------------------------------
 // Proposta v303 aprovada (Empresas → empresa → colaboradores → ficha da pessoa) e fase 1 em
 // grid-proposta-empresa-e-ficha-fase1-v305.html. Só liga onde o Provedor ligar a funcionalidade
 // "empresas_v2" (Gestão de SST) no painel da organização. Desligada, Clientes e Colaboradores
 // continuam exatamente como hoje. Os dados vêm das funções do PASSO-101 (só leitura, com o acesso
 // de quem chama); sem o PASSO-101, as telas antigas abrem sozinhas.
+//
+// v307 (grid-proposta-empresas-ficha-integrada-v307.html, aprovada em 05/11/2026):
+//   · barra de contexto com o Voltar novo e o caminho; no celular, a seta no cabeçalho azul;
+//   · endereço próprio (#clientes?empresa=…&pessoa=…): Voltar do navegador/celular e F5 funcionam;
+//   · empresa com os números no cabeçalho, que são o filtro da lista; Colaboradores primeiro;
+//   · lista de colaboradores com colunas, atalho de EPI na linha e seleção para entregar em lote;
+//   · ficha com coluna lateral e Histórico (EPI, documentos e treinamentos, montado no aparelho);
+//   · Entregar EPI abre no painel lateral: a MESMA tela de módulo (epi.js), sem sair da ficha.
 // ============================================================
 const _empV2 = () => { try { return !!(_GRID?.dados?.temFuncionalidade?.('empresas_v2')); } catch (e) { return false; } };
 const _empSemFuncao = (e) => /PGRST202|42883|could not find the function|does not exist|schema cache/i.test(`${e?.code || ''} ${e?.message || ''}`);
@@ -12560,27 +12772,171 @@ const _empRecKey = () => `grid.empRecentes.${usuarioAtual?.org_id || ''}`;
 function _empRecentes() { try { return JSON.parse(localStorage.getItem(_empRecKey()) || '[]').slice(0, 8); } catch (e) { return []; } }
 function _empLembrar(id) { try { localStorage.setItem(_empRecKey(), JSON.stringify([id, ..._empRecentes().filter(x => x !== id)].slice(0, 8))); } catch (e) {} }
 
+// ── v307: ícones, Voltar, barra de contexto, seta do celular, endereço ──
+const _I7 = {
+  chv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
+  epi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15a8 8 0 0 1 16 0v1H4z"/><path d="M12 7V5M3 19h18"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
+  cap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  dn: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+};
+/** O Voltar do app inteiro (v307): um desenho, sempre o mesmo nome. */
+function _voltarHtml(js, titulo = '') {
+  return `<button type="button" class="vb" onclick="${js}"${titulo ? ` title="${_fcEsc(titulo)}" aria-label="${_fcEsc(titulo)}"` : ''}><span class="vb-i">${ICONS.back}</span>Voltar</button>`;
+}
+/** Barra fixa no topo: Voltar + caminho. cam = [[rótulo, js], …, [rótulo da tela atual]] */
+function _ctxBarHtml(voltarJs, voltarTitulo, cam) {
+  return `<div class="ctxbar">${_voltarHtml(voltarJs, voltarTitulo)}<span class="sep" aria-hidden="true"></span>
+    <nav class="ctx-cam" aria-label="Caminho">${cam.map(([r, js], i) => i < cam.length - 1 ? `<button type="button" onclick="${js}">${_fcEsc(r)}</button><span class="chv">${_I7.chv}</span>` : `<b aria-current="page">${_fcEsc(r)}</b>`).join('')}</nav></div>`;
+}
+/** Celular: a seta de voltar no lugar do ≡ (só nas telas de dentro de Empresas). fn = null volta o menu. */
+function _mhVoltar(fn) {
+  const h = document.getElementById('mobileHeader'), b = document.getElementById('mobileBackBtn');
+  if (!h || !b) return;
+  h.classList.toggle('com-voltar', !!fn);
+  b.onclick = fn ? () => { try { fn(); } catch (e) { console.warn(e); } } : null;
+}
+/** Endereço da tela: Voltar do navegador, botão do celular e F5 voltam para o mesmo lugar. */
+const _empHashDe = (e, p) => { const q = new URLSearchParams(); if (e) q.set('empresa', e); if (p) q.set('pessoa', p); const s = q.toString(); return '#clientes' + (s ? '?' + s : ''); };
+function _empHist(e, p, op = {}) {
+  if (op.semHist || typeof paginaAtual === 'undefined' || paginaAtual !== 'clientes') return;
+  const h = _empHashDe(e, p);
+  if (location.hash === h) return;
+  try { history.pushState({ pagina: 'clientes', emp: 1 }, '', h); } catch (err) {}
+}
+/** Voltar/Avançar do navegador dentro de Empresas (chamado pelo ouvinte de popstate). */
+async function _empSincronizarHash() {
+  window._turmaAbertaViaHash = null;
+  const qi = location.hash.indexOf('?');
+  const q = qi >= 0 ? new URLSearchParams(location.hash.slice(qi + 1)) : new URLSearchParams();
+  const e = q.get('empresa'), p = q.get('pessoa');
+  if (p) return abrirPessoa(p, null, { semHist: true });
+  if (e) return abrirEmpresa(e, null, { semHist: true });
+  return renderEmpresasV2({ auto: false, semHist: true });
+}
+/** Abre direto o que o endereço pede (F5 ou link colado). Uma vez só, na primeira tela. */
+function _empDoHashInicial() {
+  const qs = window._hashInicialQuery; if (!qs || paginaAtual !== 'clientes') return null;
+  window._hashInicialQuery = null;
+  const q = new URLSearchParams(qs.slice(1)), uuid = /^[0-9a-f-]{36}$/i;
+  const e = q.get('empresa'), p = q.get('pessoa');
+  return { e: uuid.test(e || '') ? e : null, p: uuid.test(p || '') ? p : null };
+}
+
+// ── v307: painel lateral de trabalho ─────────────────────────────
+// A casca do painel. Quem desenha dentro é a plataforma de módulos (navegacao.abrirNoPainel),
+// com a mesma tela que abre sozinha no menu. Fecha pelo X, pelo fundo, pelo Esc e pelo Voltar
+// do navegador/celular. As janelas de assinatura e de link abrem por cima (modal = 500, painel = 450).
+window._gp = null;
+async function _painelAbrir({ kicker = '', titulo = '', sub = '', rota, params = {}, foco = '', aoMudar = null, aoFechar = null }) {
+  if (!_GRID?.navegacao?.abrirNoPainel || !_GRID.navegacao.rota?.(rota)) return false;
+  let reusaHist = false;
+  if (window._gp) { if (window._gp.ocupado) { showToast('Aguarde: o GRID está gravando.', 'error'); return true; } reusaHist = window._gp.hist; _painelFechar({ semHist: true, troca: true }); }
+  const origem = document.activeElement;
+  const fundo = document.createElement('div'); fundo.className = 'gp-fundo';
+  const el = document.createElement('aside'); el.className = 'gp'; el.id = 'gridPainel';
+  el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'gpTit');
+  el.innerHTML = `<div class="gp-h"><div style="min-width:0">${kicker ? `<div class="k">${_fcEsc(kicker)}</div>` : ''}<h2 id="gpTit">${_fcEsc(titulo)}</h2>${sub ? `<p>${_fcEsc(sub)}</p>` : ''}</div>
+    <button type="button" class="gp-x" aria-label="Fechar">${_I7.x}</button></div><div class="gp-b" id="gpCorpo"></div>`;
+  document.body.append(fundo, el); document.body.classList.add('gp-aberto');
+  const st = window._gp = { el, fundo, origem, aoFechar, mudou: false, hist: false };
+  fundo.onclick = () => _painelFechar();
+  el.querySelector('.gp-x').onclick = () => _painelFechar();
+  requestAnimationFrame(() => { fundo.classList.add('on'); el.classList.add('on'); });
+  if (reusaHist && history.state?.painel) st.hist = true;   // trocou de painel: o mesmo passo do histórico
+  else { try { history.pushState({ ...(history.state || {}), pagina: paginaAtual, painel: 1 }, '', location.hash || ('#' + paginaAtual)); st.hist = true; } catch (e) {} }
+  const corpo = el.querySelector('#gpCorpo');
+  const escrever = (html) => { if (window._gp === st) corpo.innerHTML = html; };
+  const emb = { foco,
+    aoMudar: (info) => { st.mudou = true; try { aoMudar?.(info || {}); } catch (e) { console.warn(e); } },
+    fechar: () => _painelFechar(),
+    ocupado: (v) => { st.ocupado = !!v; },   // gravando: o painel não fecha pelo X, Esc ou Voltar
+    vivo: () => window._gp === st };
+  setTimeout(() => { if (window._gp === st) el.querySelector('.gp-x')?.focus(); }, 30);
+  const abriu = await _GRID.navegacao.abrirNoPainel(rota, { ...params, embutido: emb }, {
+    escrever,
+    aoFechar: () => { if (window._gp === st) { window._gp = null; _painelDesmontar(st); _painelTirarDoHist(st); } },   // a plataforma fechou porque a pessoa navegou
+  });
+  if (!abriu && window._gp === st) { _painelFechar({ navegou: true }); return false; }
+  return true;
+}
+/* Fechou sem voltar no histórico (a pessoa navegou): o passo do painel vira um passo comum da mesma tela. */
+function _painelTirarDoHist(st) { if (st?.hist && history.state?.painel) { try { const { painel, ...resto } = history.state; history.replaceState(resto, '', location.hash); } catch (e) {} } }
+function _painelDesmontar(st) {
+  if (!st?.el?.isConnected) return;
+  st.el.remove(); st.fundo.remove();
+  if (!window._gp) document.body.classList.remove('gp-aberto');
+  try {   // o foco volta para quem abriu; se a tela foi redesenhada, para o Voltar da tela
+    if (st.origem && st.origem.isConnected) st.origem.focus();
+    else [...document.querySelectorAll('.ctxbar .vb')].find(b => b.getBoundingClientRect().width > 0)?.focus();
+  } catch (e) {}
+}
+/** op.semHist: quem chama já cuidou do histórico (Voltar do navegador). op.navegou: vai para outra tela. */
+function _painelFechar(op = {}) {
+  const st = window._gp; if (!st) return;
+  const m = document.getElementById('modalOverlay'), modal = !!m && m.style.display === 'flex';
+  if (!op.navegou && !op.troca && (st.ocupado || modal)) {
+    // gravando ou com a assinatura aberta: não fecha. Se veio do Voltar do navegador, devolve o passo do painel.
+    if (op.peloVoltar) { try { history.pushState({ ...(history.state || {}), pagina: paginaAtual, painel: 1 }, '', location.hash); } catch (e) {} }
+    if (st.ocupado) showToast('Aguarde: o GRID está gravando a entrega.', 'error');
+    return;
+  }
+  window._gp = null;
+  try { _GRID?.navegacao?.fecharPainel?.(); } catch (e) {}
+  _painelDesmontar(st);
+  if (op.navegou) _painelTirarDoHist(st);
+  else if (st.hist && !op.semHist && history.state?.painel) { window._gpIgnorarPop = true; history.back(); }
+  if (!op.navegou && !op.troca && st.aoFechar) { try { st.aoFechar({ mudou: st.mudou }); } catch (e) { console.warn(e); } }
+}
+(function _painelTeclas() {
+  if (window.__gpTeclas) return; window.__gpTeclas = true;
+  const modalAberto = () => { const m = document.getElementById('modalOverlay'); return !!m && m.style.display === 'flex'; };
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || !window._gp || modalAberto()) return;
+    const t = ev.target;   // Esc numa lista de sugestões fecha a lista, não o painel
+    if (t?.matches?.('input[list], select')) return;
+    ev.preventDefault(); _painelFechar();
+  });
+  // O Tab não sai do painel para a tela de trás (a assinatura e os avisos ficam de fora da regra)
+  document.addEventListener('focusin', (ev) => {
+    const st = window._gp; if (!st || modalAberto()) return;
+    const t = ev.target;
+    if (st.el.contains(t) || t.closest?.('#modalOverlay, #toast-container, .dropdown-menu')) return;
+    st.el.querySelector('.gp-x')?.focus();
+  });
+})();
+
 // ── 1. Lista de empresas ─────────────────────────────────────
 window._empLista = null;
+const _empTipoCnpj = (cnpj) => { const d = String(cnpj || '').replace(/\D/g, ''); if (d.length !== 14) return null; const o = d.slice(8, 12); return o === '0001' ? { t: 'Matriz', fil: false } : { t: `Filial ${o}`, fil: true }; };
 async function renderEmpresasV2(opts = {}) {
   setMobileHeader(`<div class="mh-greeting">Gestão</div><div class="mh-name">Empresas</div>`);
+  _mhVoltar(null);
   const podeCriar = ['administrador', 'comercial'].includes(usuarioAtual.perfil) && _pode('clientes', 2);
   if (podeCriar) fabMostrar(() => abrirModalCliente()); else fabOcultar();
   window.__epiDeFicha = null;
+  _empHist(null, null, opts);
   const st = window._empLista = { busca: '', filtro: 'todas', itens: [], total: 0, offset: 0, cont: {}, auto: opts.auto !== false, tok: Date.now() };
-  setConteudo(`<div class="emp">
-    <div class="emp-topo"><div><h1>Empresas</h1><p>Cada CNPJ é uma empresa. Abra uma para ver os colaboradores e tudo o que existe sobre cada pessoa.</p></div></div>
-    <div class="emp-filtro"><span class="ic">${ICONS.search || ''}</span><input type="search" id="empBusca" placeholder="Filtrar pelo nome ou CNPJ" aria-label="Filtrar empresas pelo nome ou CNPJ" oninput="_empBuscarDepois(this.value)"></div>
+  setConteudo(`<div class="emp emp2">
+    <div class="emp-topo"><div><h1>Empresas</h1><p>Cada CNPJ é uma empresa. Abra uma para ver os colaboradores e tudo o que existe sobre cada pessoa.</p></div>
+      ${podeCriar ? `<div class="emp-topo-acts"><span class="emp-imp"><button type="button" class="btn btn-outline" onclick="event.stopPropagation();_empMenuImportar(this)">Importar ${_I7.dn}</button></span>
+        <button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Nova empresa</button></div>` : ''}</div>
     ${typeof uniFiltroHtml === 'function' && uniFiltroHtml() ? `<div class="emp-uni">${uniFiltroHtml()}</div>` : ''}
-    <div class="emp-chips" id="empChips" role="group" aria-label="Filtros"></div>
-    ${podeCriar ? `<div class="acoes-row">
-      <button class="btn btn-amber" onclick="abrirModalCliente()">${ICONS.plus} Nova empresa</button>
-      <span class="emp-imp">${_btnAcaoBadge(ICONS.upload, 'Importar CSV', 'abrirModalImportarCSV()')}
-      ${_btnAcaoBadge(ICONS.filesheet, 'Importar modelo 1', "abrirModalImportacaoSOC('clientes')")}
-      ${usuarioAtual.orgSocIntegracaoAtiva ? _btnAcaoBadge(ICONS.search, 'Buscar no SOC', "_socWsAbrirModal('clientes')", 'var(--green-text)', 'var(--green)', '#fff', 'var(--green-l)') : ''}</span>
-    </div>` : ''}
+    <div class="emp-barra"><div class="emp-filtro"><span class="ic">${ICONS.search || ''}</span><input type="search" id="empBusca" placeholder="Filtrar pelo nome ou CNPJ" aria-label="Filtrar empresas pelo nome ou CNPJ" oninput="_empBuscarDepois(this.value)"></div>
+      <div class="emp-chips" id="empChips" role="group" aria-label="Filtros"></div></div>
     <div class="emp-lista" id="empLista">${_fcCarregando('Carregando empresas…')}</div></div>`);
   await _empListaCarregar(true);
+}
+function _empMenuImportar(btn) {
+  document.querySelectorAll('.dropdown-menu').forEach(m => m.remove());
+  const r = btn.getBoundingClientRect(), m = document.createElement('div');
+  m.className = 'dropdown-menu org-menu';
+  m.style.cssText = `position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-md);z-index:200;min-width:200px;padding:4px 0;top:${Math.min(r.bottom + 4, window.innerHeight - 160)}px;right:${window.innerWidth - r.right}px`;
+  const its = [['Importar CSV', 'abrirModalImportarCSV()'], ['Importar modelo 1', "abrirModalImportacaoSOC('clientes')"], ...(usuarioAtual.orgSocIntegracaoAtiva ? [['Buscar no SOC', "_socWsAbrirModal('clientes')"]] : [])];
+  m.innerHTML = its.map(([t, js]) => `<div class="menu-item" role="menuitem" tabindex="0" onclick="${js}">${t}</div>`).join('');
+  document.body.appendChild(m);
+  setTimeout(() => document.addEventListener('click', () => m.remove(), { once: true }), 0);
 }
 let _empBuscaT = null;
 function _empBuscarDepois(v) { clearTimeout(_empBuscaT); _empBuscaT = setTimeout(() => { if (window._empLista) { window._empLista.busca = v; _empListaCarregar(true); } }, 300); }
@@ -12611,21 +12967,27 @@ async function _empListaCarregar(reset) {
   if (st.auto && reset && !st.busca && st.filtro === 'todas' && st.cont.todas === 1 && lote.length === 1 && !st.cont.inativas) { st.auto = false; return abrirEmpresa(lote[0].id); }
   st.auto = false;
   const comSinal = _empPode.trein();   // "Precisa de atenção" é de Treinamentos; quem não vê Treinamentos não recebe "Em dia" (o banco devolve zero)
+  const podeTurma = _podeRota('turmas') && ['administrador', 'comercial'].includes(usuarioAtual.perfil);
   const chip = (f, rot, n) => `<button type="button" class="emp-chip${st.filtro === f ? ' on' : ''}" aria-pressed="${st.filtro === f}" onclick="_empFiltro('${f}')">${rot}${n != null ? ` <b>${n}</b>` : ''}</button>`;
   _setElBoth('empChips', chip('todas', 'Todas', st.cont.todas) + (comSinal ? chip('atencao', 'Com pendências', st.cont.atencao) : '') + (rec.length ? chip('recentes', 'Abertas por último', null) : '') + (st.cont.inativas ? chip('inativas', 'Inativas', st.cont.inativas) : ''));
   const linha = (e) => {
     const cid = e.cidade ? `${_fcTitulo(e.cidade)}${e.uf ? '/' + e.uf : ''}` : '';
+    const tp = _empTipoCnpj(e.cnpj);
     const doc = e.cnpj ? `CNPJ ${_fmtCnpjSeguro(e.cnpj)}` : '';
-    return `<button type="button" class="emp-li" onclick="abrirEmpresa('${e.id}')">
-      <span class="emp-li-n"><b>${_fcEsc(e.nome)}</b><small>${_fcEsc([doc, cid].filter(Boolean).join(' · ')) || '&nbsp;'}</small></span>
-      <span class="emp-li-c"><b>${e.colaboradores}</b><small>${e.colaboradores === 1 ? 'colaborador' : 'colaboradores'}</small></span>
-      <span class="emp-li-a">${!comSinal ? '' : e.atencao ? `<span class="fc-st b-amb">${e.atencao} ${e.atencao === 1 ? 'pessoa' : 'pessoas'}</span>` : `<span class="fc-st b-verde">Em dia</span>`}</span>
-      <span class="emp-li-s" aria-hidden="true">›</span></button>`;
+    const pct = e.colaboradores ? Math.max(4, Math.round(e.atencao / e.colaboradores * 100)) : 0;
+    const abrir = `abrirEmpresa('${e.id}')`;
+    return `<div class="emp-li" role="link" tabindex="0" onclick="${abrir}" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();${abrir}}">
+      <span class="emp-li-n"><b>${_fcEsc(e.nome)}</b><small>${_fcEsc(doc)}${tp ? `${doc ? ' · ' : ''}<span class="emp-tipo${tp.fil ? ' fil' : ''}">${tp.t}</span>` : ''}<span class="emp-m">${cid ? ' · ' + _fcEsc(cid) : ''} · ${e.colaboradores} ${e.colaboradores === 1 ? 'pessoa' : 'pessoas'}</span>${!doc && !tp ? '&nbsp;' : ''}</small></span>
+      <span class="emp-li-cid">${_fcEsc(cid) || '<span class="mute">—</span>'}</span>
+      <span class="emp-li-c"><b>${e.colaboradores}</b><small>${e.colaboradores === 1 ? 'pessoa' : 'pessoas'}</small></span>
+      <span class="emp-li-a">${!comSinal ? '' : e.atencao ? `<span class="fc-st b-amb">${e.atencao} ${e.atencao === 1 ? 'precisa' : 'precisam'} de atenção</span><div class="emp-barra-at" aria-hidden="true"><i style="width:${pct}%"></i></div>` : `<span class="fc-st b-verde">Em dia</span>`}</span>
+      <span class="emp-li-acts">${podeTurma && e.ativo !== false ? `<button type="button" class="btn btn-outline" onclick="event.stopPropagation();_fcNovaTurma('${e.id}')">${ICONS.plus} Nova turma</button>` : ''}<button type="button" class="btn btn-ghost" onclick="event.stopPropagation();${abrir}">Abrir</button></span>
+      <span class="emp-li-s" aria-hidden="true">${_I7.chv}</span></div>`;
   };
   const vazio = st.busca ? 'Nenhuma empresa encontrada com esse nome ou CNPJ.' : st.filtro === 'atencao' ? 'Nenhuma empresa com pendências. Tudo em dia.' : st.filtro === 'recentes' ? 'Nenhuma empresa aberta ainda neste aparelho.' : 'Nenhuma empresa cadastrada ainda.';
-  _setElBoth('empLista', st.itens.length ? `<div class="emp-cab" aria-hidden="true"><span>Empresa</span><span>Colaboradores</span><span>${comSinal ? 'Precisa de atenção' : ''}</span><span></span></div>
+  _setElBoth('empLista', st.itens.length ? `<div class="emp-cab" aria-hidden="true"><span>Empresa</span><span>Cidade</span><span>Colaboradores</span><span>${comSinal ? 'Precisa de atenção' : ''}</span><span class="c-acts"></span><span></span></div>
     ${st.itens.map(linha).join('')}
-    ${st.itens.length < st.total ? `<button type="button" class="btn btn-outline emp-mais" onclick="_empListaMais()">Carregar mais (${st.total - st.itens.length})</button>` : ''}`
+    <div class="emp-rod"><span>Mostrando ${st.itens.length} de ${st.total || st.itens.length}</span>${st.itens.length < st.total ? `<button type="button" class="btn btn-outline btn-sm emp-mais" onclick="_empListaMais()">Carregar mais (${st.total - st.itens.length})</button>` : ''}</div>`
     : `<div class="fc-vazio" style="padding:18px">${vazio}</div>`);
 }
 function _empListaMais() { const st = window._empLista; if (!st || st.carregando) return; st.offset += 50; _empListaCarregar(false); }
@@ -12640,7 +13002,7 @@ async function _empGarantirClientes() {
   const { data, error } = await sb.from('clientes').select('*').eq('org_id', usuarioAtual.org_id).order('nome');
   if (!error) _clientesCache = data || [];
 }
-async function abrirEmpresa(id, aba) {
+async function abrirEmpresa(id, aba, op = {}) {
   await _empGarantirClientes();
   let c = _clientesCache.find(x => x.id === id);
   if (!c) {
@@ -12651,14 +13013,71 @@ async function abrirEmpresa(id, aba) {
   _empLembrar(id);
   window._empAtual = { id, aba: aba || (window._empAtual?.id === id ? window._empAtual.aba : 'colaboradores') };
   if (typeof paginaAtual !== 'undefined' && paginaAtual !== 'clientes') { window._empAbrirDepois = id; await irPara('clientes'); return; }
+  _empHist(id, null, op);
   window.__empTelaAntiga = false;
   verCliente(id);
   window.scrollTo(0, 0);
 }
 function _empAbasHtml(c) {
-  const abas = [['geral', 'Visão geral'], ['colaboradores', 'Colaboradores'], ...(_empPode.epi() ? [['epi', 'EPI']] : [])];
+  const abas = [['colaboradores', 'Colaboradores'], ['geral', 'Visão geral'], ...(_empPode.epi() ? [['epi', 'EPI']] : [])];
   const at = window._empAtual?.aba || 'colaboradores';
   return `<nav class="emp-abas" role="tablist" aria-label="Partes da empresa">${abas.map(([k, r]) => `<button type="button" role="tab" aria-selected="${k === at}" class="${k === at ? 'on' : ''}" onclick="abrirEmpresa('${c.id}','${k}')">${r}</button>`).join('')}</nav>`;
+}
+/** v307: o cabeçalho da empresa (verCliente, com a funcionalidade ligada). */
+function _empCabecalhoHtml(c, { meta, selos, podeMgr, podeTurma, pf }) {
+  const tp = !pf ? _empTipoCnpj(c.cnpj) : null;
+  const acts = podeMgr ? `<div class="rh-acts">
+      <button class="btn btn-outline" data-action="editarCliente" data-id="${c.id}">${ICONS.edit} Editar dados</button>
+      ${(_modulosAtivos || []).includes('crm') && !pf ? `<button class="btn btn-outline fc-crm" onclick="irPara('crm-empresa',{id:'${c.id}'})">${ICONS.target} Ver no CRM</button>` : ''}
+      <button class="btn btn-outline fc-mais" type="button" aria-label="Mais ações" onclick="event.stopPropagation();menuFichaCliente(this,'${c.id}')">${ICONS.dots}</button>
+      ${podeTurma && c.ativo ? `<button class="btn btn-amber" onclick="_fcNovaTurma('${c.id}')">${ICONS.plus} Nova turma</button>` : ''}</div>` : '';
+  return `<header class="rh"><div class="rh-top"><div class="fc-av">${iniciais(c.nome)}</div>
+      <div class="rh-id"><h1>${_fcEsc(c.nome)}</h1><div class="rh-meta">${meta ? `<span>${meta}</span>` : ''}${tp ? `<span class="ponto">·</span><span>${tp.t}</span>` : ''}${selos}</div></div>${acts}</div>
+      <div class="rh-kpis" id="empKpis" role="group" aria-label="Números da empresa"></div></header>`;
+}
+const _empCtxHtml = (c) => _ctxBarHtml('renderEmpresasV2({auto:false})', 'Voltar para Empresas', [['Empresas', 'renderEmpresasV2({auto:false})'], [c.nome]]);
+/* Números do cabeçalho = os filtros da lista (empresa_resumo, uma chamada por empresa) */
+window._empResumo = null;
+/* Uma leitura por vez, compartilhada entre o cabeçalho e a lista (sem chamada dupla). */
+function _empResumoLer(cli, forcar) {
+  const r0 = window._empResumo;
+  if (!forcar && r0?.cli === cli) return r0.p;
+  const p = Promise.resolve(sb.rpc('empresa_resumo', { p_cliente: cli, p_org_id: usuarioAtual.org_id })).then(({ data, error }) => {
+    if (error) throw error;
+    const R = data || {};
+    if (window._empResumo?.p === p) window._empResumo.R = R;
+    return R;
+  });
+  window._empResumo = { cli, p, R: null };
+  p.catch(() => { if (window._empResumo?.p === p) window._empResumo = null; });
+  return p;
+}
+async function _empKpisCarregar(c, forcar) {
+  try { await _empResumoLer(c.id, forcar); } catch (e) { if (_empSemFuncao(e)) return; _setElBoth('empKpis', ''); return; }
+  if (window._empAtual?.id !== c.id) return;
+  _empKpisPintar();
+}
+function _empKpisPintar() {
+  const id = window._empAtual?.id, R = window._empResumo?.cli === id ? window._empResumo.R : null;   // ainda lendo: pinta quando chegar
+  if (!R) return;
+  const comEpi = _empPode.epi(), comTrein = _empPode.trein();
+  const f = window._empAtual?.aba === 'colaboradores' ? (window._empColab?.cli === id ? window._empColab.filtro : 'todos') : (window._empAtual?.aba === 'epi' ? 'links' : '');
+  const kp = (k, n, rot, cor) => `<button type="button" class="rh-kp${cor && n ? ' ' + cor : ''}${f === k ? ' on' : ''}" aria-pressed="${f === k}" onclick="_empKpi('${k}')"><b>${typeof _rxN === 'function' ? _rxN(Number(n) || 0) : (Number(n) || 0)}</b><span>${rot}</span></button>`;
+  _setElBoth('empKpis', [
+    kp('todos', R.todos, Number(R.todos) === 1 ? 'Colaborador' : 'Colaboradores'),
+    comTrein ? kp('atencao', R.atencao, Number(R.atencao) === 1 ? 'Precisa de atenção' : 'Precisam de atenção', 'y') : '',
+    comTrein ? kp('vencido', R.vencido, 'Treinamento vencido', 'r') : '',
+    comEpi ? kp('sem_epi', R.sem_epi, 'Sem entrega de EPI') : '',
+    comEpi ? kp('links', R.links, Number(R.links) === 1 ? 'Assinatura de EPI aguardando' : 'Assinaturas de EPI aguardando') : '',
+  ].join(''));
+}
+function _empKpi(k) {
+  const id = window._empAtual?.id; if (!id) return;
+  if (k === 'links') { abrirEmpresa(id, 'epi'); return; }
+  const st = window._empColab;
+  if (st && st.cli === id) st.filtro = k; else window._empColFiltroInicial = k;
+  if (window._empAtual.aba !== 'colaboradores') { abrirEmpresa(id, 'colaboradores'); return; }
+  _empColCarregar(true); _empKpisPintar();
 }
 async function _empAbaCarregar(c, aba) {
   if (aba === 'epi') return _empAbaEpi(c);
@@ -12667,18 +13086,19 @@ async function _empAbaCarregar(c, aba) {
 // 2a. Colaboradores da empresa
 window._empColab = null;
 async function _empAbaColab(c) {
-  const st = window._empColab = (window._empColab?.cli === c.id) ? { ...window._empColab, itens: [], offset: 0, resumo: null } : { cli: c.id, busca: '', filtro: 'todos', funcao: '', itens: [], total: 0, offset: 0, resumo: null };
+  const ini = window._empColFiltroInicial; window._empColFiltroInicial = null;
+  const st = window._empColab = (window._empColab?.cli === c.id) ? { ...window._empColab, itens: [], offset: 0, resumo: null, ...(ini ? { filtro: ini } : {}) } : { cli: c.id, busca: '', filtro: ini || 'todos', funcao: '', itens: [], total: 0, offset: 0, resumo: null, sel: new Map() };
   const podeNovo = _empPode.editarColab();
-  _setElBoth('empAbaCorpo', `<div class="emp-ctop">
-      <div class="emp-filtro"><span class="ic">${ICONS.search || ''}</span><input type="search" id="empColBusca" value="${_fcEsc(st.busca)}" placeholder="Filtrar por nome, CPF ou matrícula" aria-label="Filtrar colaboradores" oninput="_empColBuscarDepois(this.value)"></div>
-      ${podeNovo ? `<button class="btn btn-amber" onclick="_empNovoColab('${c.id}')">${ICONS.plus} Novo colaborador</button>` : ''}</div>
-    <div class="emp-chips" id="empColChips"></div>
-    <div class="emp-lista" id="empColLista">${_fcCarregando('Carregando colaboradores…')}</div>`);
+  _setElBoth('empAbaCorpo', `<div class="emp-ctop2">
+      <div class="emp-filtro"><span class="ic">${ICONS.search || ''}</span><input type="search" id="empColBusca" value="${_fcEsc(st.busca)}" placeholder="Nome, CPF ou matrícula" aria-label="Filtrar colaboradores" oninput="_empColBuscarDepois(this.value)"></div>
+      <span id="empColFx" style="display:contents"></span><span class="gap"></span>
+      ${podeNovo ? `<button class="btn btn-outline" onclick="_empNovoColab('${c.id}')">${ICONS.plus} Novo colaborador</button>` : ''}</div>
+    <div class="emp-lista" id="empColLista">${_fcCarregando('Carregando colaboradores…')}</div><div id="empLote"></div>`);
   await _empColCarregar(true);
 }
 let _empColT = null;
 function _empColBuscarDepois(v) { clearTimeout(_empColT); _empColT = setTimeout(() => { if (window._empColab) { window._empColab.busca = v; _empColCarregar(true); } }, 300); }
-function _empColFiltro(f) { const st = window._empColab; if (!st) return; st.filtro = st.filtro === f && f !== 'todos' ? 'todos' : f; _empColCarregar(true); }
+function _empColFiltro(f) { const st = window._empColab; if (!st) return; st.filtro = st.filtro === f && f !== 'todos' ? 'todos' : f; _empColCarregar(true); _empKpisPintar(); }
 function _empColFuncao(v) { const st = window._empColab; if (!st) return; st.funcao = v; _empColCarregar(true); }
 async function _empColCarregar(reset) {
   const st = window._empColab; if (!st) return;
@@ -12687,7 +13107,7 @@ async function _empColCarregar(reset) {
   st.carregando = true;
   const [r, rs] = await Promise.all([
     sb.rpc('colaboradores_da_empresa', { p_cliente: st.cli, p_busca: st.busca || null, p_filtro: st.filtro, p_funcao: st.funcao || null, p_limite: 50, p_offset: st.offset, p_org_id: usuarioAtual.org_id }),
-    reset && !st.resumo ? sb.rpc('empresa_resumo', { p_cliente: st.cli, p_org_id: usuarioAtual.org_id }) : Promise.resolve({ data: st.resumo }),
+    reset || !st.resumo ? _empResumoLer(st.cli).then(d => ({ data: d }), e => ({ error: e })) : Promise.resolve({ data: st.resumo }),
   ]);
   if (st.tok !== tok || window._empColab !== st) return;
   st.carregando = false;
@@ -12697,30 +13117,91 @@ async function _empColCarregar(reset) {
     _setElBoth('empColLista', `<div class="fc-vazio">${_fcEsc(traduzErroSupabase(e, 'Não foi possível ler os colaboradores.'))}</div>`); return;
   }
   st.resumo = rs.data || {};
+  _empKpisPintar();
   const lote = r.data || [];
   st.itens = st.itens.concat(lote); st.total = Number(lote[0]?.total || (reset ? 0 : st.total));
-  const R = st.resumo, comEpi = _empPode.epi(), comTrein = _empPode.trein();
-  const chip = (f, rot, n) => `<button type="button" class="emp-chip${st.filtro === f ? ' on' : ''}" aria-pressed="${st.filtro === f}" onclick="_empColFiltro('${f}')">${rot} <b>${n ?? 0}</b></button>`;
+  const R = st.resumo, comEpi = _empPode.epi(), comTrein = _empPode.trein(), podeEnt = comEpi && _empPode.epiEntregar();
   const funcoes = R.funcoes || [];
-  _setElBoth('empColChips', chip('todos', 'Todos', R.todos) + (comTrein ? chip('atencao', 'Precisa de atenção', R.atencao) : '')
-    + (comEpi ? chip('sem_epi', 'Sem entrega de EPI', R.sem_epi) : '') + (comTrein ? chip('vencido', 'Treinamento vencido', R.vencido) : '')
-    + (funcoes.length > 1 ? `<label class="emp-func"><span class="sr-only">Função</span><select onchange="_empColFuncao(this.value)" aria-label="Filtrar por função"><option value="">Todas as funções</option>${funcoes.map(f => `<option value="${_fcEsc(f)}"${f === st.funcao ? ' selected' : ''}>${_fcEsc(f)}</option>`).join('')}</select></label>` : ''));
-  const epiTxt = (p) => p.epi_link_bloqueado ? `<span class="fc-st alerta">Link bloqueado</span>` : p.epi_link_aberto ? `<span class="fc-st b-amb">Assinatura pendente</span>` : p.epi_entregas ? `<span class="emp-tx">Última entrega ${_empDataBr(p.epi_ultima)}</span>` : `<span class="emp-tx mute">Nenhuma entrega</span>`;
-  const trTxt = (p) => p.trein_vencidos ? `<span class="fc-st alerta">${p.trein_vencidos} ${p.trein_vencidos === 1 ? 'vencido' : 'vencidos'}</span>` : p.trein_vencendo ? `<span class="fc-st b-amb">Vence ${_empDataBr(p.prox_vencimento).slice(0, 5)}</span>` : p.prox_vencimento ? `<span class="fc-st b-verde">Em dia</span>` : `<span class="emp-tx mute">Sem treinamento registrado</span>`;
-  const linha = (p) => `<button type="button" class="emp-li emp-li-p" onclick="abrirPessoa('${p.id}')">
+  const ROT = { atencao: 'Precisam de atenção', vencido: 'Treinamento vencido', sem_epi: 'Sem entrega de EPI' };
+  _setElBoth('empColFx', (funcoes.length > 1 ? `<select class="emp-fsel" onchange="_empColFuncao(this.value)" aria-label="Filtrar por função"><option value="">Todas as funções</option>${funcoes.map(f => `<option value="${_fcEsc(f)}"${f === st.funcao ? ' selected' : ''}>${_fcEsc(f)}</option>`).join('')}</select>` : '')
+    + (ROT[st.filtro] ? `<button type="button" class="emp-chip on emp-chip-x" onclick="_empColFiltro('todos')" aria-label="Tirar o filtro ${ROT[st.filtro]}">${ROT[st.filtro]} <b>×</b></button>` : ''));
+  const epiTxt = (p) => p.epi_link_bloqueado ? `<span class="fc-st alerta">Link bloqueado</span>` : p.epi_link_aberto ? `<span class="fc-st b-azul">Assinatura pendente</span>` : p.epi_entregas ? `<span class="fc-st b-verde">Última ${_empDataBr(p.epi_ultima)}</span>` : `<span class="emp-tx mute">Nenhuma entrega</span>`;
+  const trTxt = (p) => p.trein_vencidos ? `<span class="fc-st alerta">${p.trein_vencidos} ${p.trein_vencidos === 1 ? 'vencido' : 'vencidos'}</span>` : p.trein_vencendo ? `<span class="fc-st b-amb">Vence ${_empDataBr(p.prox_vencimento).slice(0, 5)}</span>` : p.prox_vencimento ? `<span class="fc-st b-verde">Em dia</span>` : `<span class="emp-tx mute">Sem treinamento</span>`;
+  const cb = podeEnt ? ' com-cb' : '';
+  const linha = (p) => {
+    const marcado = st.sel.has(p.id), abrir = `abrirPessoa('${p.id}')`;
+    return `<div class="emp-li emp-li-p${cb}${marcado ? ' sel' : ''}" data-pid="${p.id}" role="link" tabindex="0" onclick="${abrir}" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();${abrir}}">
+      ${podeEnt ? `<input type="checkbox" class="emp-cb" aria-label="Selecionar ${_fcEsc(p.nome)}"${marcado ? ' checked' : ''} onclick="event.stopPropagation()" onchange="_empSel('${p.id}',this.checked)">` : ''}
       <span class="emp-li-n"><b>${_fcEsc(p.nome)}</b><small>${_fcEsc([p.cargo || 'Sem função', p.matricula ? 'matrícula ' + p.matricula : ''].filter(Boolean).join(' · '))}</small></span>
-      ${comEpi ? `<span class="emp-li-x"><small class="emp-rot">EPI</small>${epiTxt(p)}</span>` : ''}
-      ${comTrein ? `<span class="emp-li-x"><small class="emp-rot">Treinamentos</small>${trTxt(p)}</span>` : ''}
-      <span class="emp-li-s" aria-hidden="true">›</span></button>`;
+      <span class="emp-li-x">${comTrein ? `<small class="emp-rot">Treinamentos</small>${trTxt(p)}` : ''}</span>
+      <span class="emp-li-x">${comEpi ? `<small class="emp-rot">EPI</small>${epiTxt(p)}` : ''}</span>
+      <span class="emp-li-v">${comTrein && p.prox_vencimento ? _empDataBr(p.prox_vencimento) : '<span class="mute">—</span>'}</span>
+      <span class="emp-ra">${podeEnt ? `<button type="button" class="emp-ib" title="Entregar EPI para ${_fcEsc(p.nome)}" aria-label="Entregar EPI para ${_fcEsc(p.nome)}" onclick="event.stopPropagation();_empLinhaEpi('${p.id}')">${_I7.epi}</button>` : ''}<span class="emp-li-s" aria-hidden="true">${_I7.chv}</span></span></div>`;
+  };
+  const todosMarcados = st.itens.length && st.itens.every(p => st.sel.has(p.id));
   const vazio = st.busca || st.funcao ? 'Ninguém encontrado com esse filtro.' : st.filtro === 'atencao' ? 'Ninguém precisa de atenção agora.' : st.filtro === 'sem_epi' ? 'Todos já receberam EPI.' : st.filtro === 'vencido' ? 'Nenhum treinamento vencido.' : 'Esta empresa ainda não tem colaboradores cadastrados.';
-  _setElBoth('empColLista', st.itens.length ? `${st.itens.map(linha).join('')}
-    ${st.itens.length < st.total ? `<button type="button" class="btn btn-outline emp-mais" onclick="_empColMais()">Carregar mais (${st.total - st.itens.length})</button>` : ''}`
+  _setElBoth('empColLista', st.itens.length ? `<div class="emp-cab p${cb}">${podeEnt ? `<input type="checkbox" class="emp-cb" aria-label="Selecionar todos da lista"${todosMarcados ? ' checked' : ''} onchange="_empSelTodos(this.checked)">` : ''}<span>Colaborador</span><span>${comTrein ? 'Treinamentos' : ''}</span><span>${comEpi ? 'EPI' : ''}</span><span class="c-venc">${comTrein ? 'Próximo vencimento' : ''}</span><span></span></div>
+    ${st.itens.map(linha).join('')}
+    <div class="emp-rod"><span>Mostrando ${st.itens.length} de ${st.total || st.itens.length}</span>${st.itens.length < st.total ? `<button type="button" class="btn btn-outline btn-sm emp-mais" onclick="_empColMais()">Carregar mais (${st.total - st.itens.length})</button>` : ''}</div>`
     : `<div class="fc-vazio" style="padding:18px">${vazio}</div>`);
+  _empLotePintar();
 }
 function _empColMais() { const st = window._empColab; if (!st || st.carregando) return; st.offset += 50; _empColCarregar(false); }
 function _empNovoColab(cliId) {
-  window._colabAposSalvar = { id: null, fn: async () => { window._empColab = null; await abrirEmpresa(cliId, 'colaboradores'); } };
+  window._colabAposSalvar = { id: null, fn: async () => { window._empColab = null; window._empResumo = null; await abrirEmpresa(cliId, 'colaboradores'); } };
   abrirModalColab(null, cliId);
+}
+// 2a'. Seleção para entregar o mesmo EPI a várias pessoas (epi.js aceita até 60 de uma vez)
+const _EMP_LOTE_MAX = 60;
+function _empSel(id, on) {
+  const st = window._empColab; if (!st) return;
+  const p = st.itens.find(x => x.id === id);
+  if (on) st.sel.set(id, p?.nome || ''); else st.sel.delete(id);
+  document.querySelectorAll(`.emp-li-p[data-pid="${id}"]`).forEach(el => { el.classList.toggle('sel', on); const cbx = el.querySelector('.emp-cb'); if (cbx) cbx.checked = on; });
+  const todos = st.itens.length && st.itens.every(x => st.sel.has(x.id));
+  document.querySelectorAll('.emp-cab.p .emp-cb').forEach(cbx => { cbx.checked = !!todos; });
+  _empLotePintar();
+}
+function _empSelTodos(on) {
+  const st = window._empColab; if (!st) return;
+  st.itens.forEach(p => { if (on) st.sel.set(p.id, p.nome); else st.sel.delete(p.id); });
+  document.querySelectorAll('.emp-li-p').forEach(el => { el.classList.toggle('sel', on); const cbx = el.querySelector('.emp-cb'); if (cbx) cbx.checked = on; });
+  document.querySelectorAll('.emp-cab.p .emp-cb').forEach(cbx => { cbx.checked = on; });
+  _empLotePintar();
+}
+function _empLotePintar() {
+  const st = window._empColab; if (!st) return;
+  const n = st.sel.size;
+  if (!n) { _setElBoth('empLote', ''); return; }
+  const nomes = [...st.sel.values()], demais = n > _EMP_LOTE_MAX;
+  const fora = [...st.sel.keys()].filter(id => !st.itens.some(p => p.id === id)).length;   // marcadas antes de mudar o filtro
+  _setElBoth('empLote', `<div class="emp-lote" role="region" aria-label="Pessoas selecionadas"><b>${n} ${n === 1 ? 'pessoa selecionada' : 'pessoas selecionadas'}</b>
+    <small>${_fcEsc(demais ? `Até ${_EMP_LOTE_MAX} pessoas por entrega. Tire ${n - _EMP_LOTE_MAX} da seleção.` : nomes.slice(0, 4).join(', ') + (n > 4 ? ` e mais ${n - 4}` : '') + (fora ? ` · ${fora} fora da lista que está na tela` : ''))}</small><span class="sp"></span>
+    <button type="button" class="btn btn-amber"${demais ? ' disabled' : ''} onclick="_empLoteEntregar()">${_I7.epi} ${n === 1 ? 'Entregar EPI' : `Entregar o mesmo EPI para ${n === 2 ? 'as 2' : `as ${n}`}`}</button>
+    <button type="button" class="lk" onclick="_empSelTodos(false);_empSelLimpar()">Limpar seleção</button></div>`);
+}
+function _empSelLimpar() { const st = window._empColab; if (st) { st.sel.clear(); _empLotePintar(); } }
+function _empAposEpi(cliId) {   // a lista e os números se atualizam atrás do painel
+  if (paginaAtual !== 'clientes' || window._empAtual?.id !== cliId || window._empColab?.cli !== cliId || window._pessoaDados && document.querySelector('.fc2-lay')) return;
+  _empResumoLer(cliId, true).then(() => _empKpisPintar()).catch(() => {});
+  _empColCarregar(true);
+}
+function _empLinhaEpi(id) {
+  const st = window._empColab, p = st?.itens.find(x => x.id === id); if (!p) return;
+  const c = _clientesCache.find(x => x.id === st.cli);
+  _painelAbrir({ kicker: 'Entregar EPI', titulo: p.nome, sub: [p.cargo || 'Sem função', c?.nome].filter(Boolean).join(' · '), rota: 'campo-epi-pessoa', params: { id },
+    aoMudar: () => _empAposEpi(st.cli) }).then(ok => { if (!ok) _pessoaIrEpi(id); });
+}
+function _empLoteEntregar() {
+  const st = window._empColab; if (!st || !st.sel.size || st.sel.size > _EMP_LOTE_MAX) return;
+  const ids = [...st.sel.keys()], nomes = [...st.sel.values()], c = _clientesCache.find(x => x.id === st.cli);
+  if (ids.length === 1) { _empLinhaEpi(ids[0]); return; }
+  _painelAbrir({ kicker: 'Entregar o mesmo EPI', titulo: `${ids.length} pessoas`, sub: [c?.nome, nomes.slice(0, 3).join(', ') + (ids.length > 3 ? ` e mais ${ids.length - 3}` : '')].filter(Boolean).join(' · '),
+    rota: 'campo-epi-pessoa', params: { id: ids.join('~') },
+    aoMudar: (info) => {   // quem ficou sem registro continua selecionado, para entregar de novo
+      if (window._empColab === st) { const falta = new Set(info?.faltaram || []); [...st.sel.keys()].forEach(id => { if (!falta.has(id)) st.sel.delete(id); }); }
+      _empAposEpi(st.cli);
+    } });
 }
 // 2b. EPI da empresa (resumo; o trabalho continua na tela de Entregas de EPI)
 async function _empAbaEpi(c) {
@@ -12731,7 +13212,7 @@ async function _empAbaEpi(c) {
   ]);
   if (window._empAtual?.id !== c.id || window._empAtual?.aba !== 'epi') return;
   const itens = it.data || [], R = rs.data || {}, hoje = dataLocalISO(new Date());
-  const caSit = (i) => { const s = String(i.situacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const caSit = (i) => { const s = String(i.situacao || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     return !i.ca ? '' : /cancel/.test(s) ? 'CA cancelado' : /suspens/.test(s) ? 'CA suspenso' : ((i.validade && i.validade < hoje) || /vencid/.test(s)) ? 'CA vencido' : ''; };
   const caVenc = itens.filter(caSit);
   _setElBoth('empAbaCorpo', `<div class="fc-grid"><div class="fc-main">
@@ -12749,7 +13230,7 @@ function _empIrEpi(cliId) { Promise.resolve().then(() => _GRID.tratarAcao('ir:ca
 
 // ── 3. A ficha do colaborador ───────────────────────────────────
 window._pessoaAtual = null;
-async function abrirPessoa(id, aba) {
+async function abrirPessoa(id, aba, op = {}) {
   const oi = usuarioAtual.org_id;
   const { data: p, error } = await sb.from('colaboradores').select('*').eq('id', id).eq('org_id', oi).maybeSingle();
   if (error || !p) { showToast('Colaborador não encontrado.', 'error'); return; }
@@ -12757,14 +13238,16 @@ async function abrirPessoa(id, aba) {
   await _empGarantirClientes();
   let c = p.cliente_id ? _clientesCache.find(x => x.id === p.cliente_id) : null;
   if (p.cliente_id && !c) { const r = await sb.from('clientes').select('*').eq('id', p.cliente_id).eq('org_id', oi).maybeSingle(); if (r.data) { _clientesCache.push(r.data); c = r.data; } }
-  aba = aba || (window._pessoaAtual?.id === id ? window._pessoaAtual.aba : 'geral');
+  const mesma = window._pessoaAtual?.id === id;
+  aba = aba || (mesma ? window._pessoaAtual.aba : 'geral');
   window._pessoaAtual = { id, aba };
   if (typeof paginaAtual !== 'undefined' && paginaAtual !== 'clientes' && paginaAtual !== 'colaboradores') { window._pessoaAbrirDepois = id; await irPara('clientes'); return; }
+  _empHist(c?.id || null, id, op);
   const comEpi = _empPode.epi(), comDocs = _empPode.docs(), comTrein = _empPode.trein();
   const [cfR, enR, lkR, fiR, dcR, deR] = await Promise.all([
     comTrein ? sb.from('conformidade_status').select('id,catalogo_id,data_conclusao,data_vencimento,origem,instituicao_externa,instrutor_externo,status_excecao,catalogo(nome)').eq('colaborador_id', id).order('data_vencimento', { ascending: false }) : null,
     comEpi ? sb.from('epi_entregas').select('id,nome,ca,ca_conferido,tamanho,qtde,serie,entregue_em,forma,motivo,entregue_por_nome').eq('colaborador_id', id).is('cancelada_em', null).order('entregue_em', { ascending: false }).limit(60) : null,
-    comEpi ? sb.from('epi_links').select('id,itens,expira_em,tentativas').eq('colaborador_id', id).is('usado_em', null).is('cancelado_em', null).order('criado_em', { ascending: false }) : null,
+    comEpi ? sb.from('epi_links').select('id,itens,expira_em,tentativas,criado_em').eq('colaborador_id', id).is('usado_em', null).is('cancelado_em', null).order('criado_em', { ascending: false }) : null,
     comEpi || comDocs ? sb.from('doc_emitidos').select('numero,codigo,emitido_em').eq('colaborador_id', id).eq('tipo', 'epi').eq('situacao', 'valido').order('emitido_em', { ascending: false }).limit(1) : null,
     comDocs ? sb.from('doc_emitidos').select('id,tipo,numero,revisao,titulo,situacao,codigo,emitido_em,assinado_em').eq('colaborador_id', id).neq('tipo', 'epi').order('emitido_em', { ascending: false }).limit(40) : null,
     comDocs ? sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(20) : null,
@@ -12774,8 +13257,9 @@ async function abrirPessoa(id, aba) {
     trein: (cfR.data || []), entregas: enR.data || [], links: lkR.data || [], ficha: (fiR.data || [])[0] || null, docs: dcR.data || [], docEnt: deR.data || [] };
   window._colabTreinos = { colaboradorId: id, lista: P.trein, aba: 'turma', busca: '', pagina: 1, porPagina: 8 };
   window._pessoaDados = P;
+  if (!mesma) window._pessoaHistTudo = false;
   _pessoaRender();
-  window.scrollTo(0, 0);
+  if (!op.manterRolagem) window.scrollTo(0, 0);
 }
 const _SIGLA_DOC = { os: 'OS', epi: 'FEPI', pt: 'PT', apr: 'APR', checklist: 'CK', procedimento: 'PO' };
 const _numDoc = (t, n) => `${_SIGLA_DOC[t] || 'DOC'}-${String(n).padStart(4, '0')}`;
@@ -12785,8 +13269,9 @@ function _pessoaAtencao(P) {
   const ult = new Map();
   P.trein.filter(t => !t.status_excecao && t.data_vencimento).forEach(t => { const k = t.catalogo_id || t.id; if (!ult.has(k) || t.data_vencimento > ult.get(k).data_vencimento) ult.set(k, t); });
   [...ult.values()].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento)).forEach(t => {
-    if (t.data_vencimento < hoje) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vencido em ${_empDataBr(t.data_vencimento)}`, tag: ['Vencido', 'alerta'] });
-    else if (t.data_vencimento <= em20) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vence em ${_empDataBr(t.data_vencimento)}`, tag: ['Vence em breve', 'b-amb'] });
+    const dias = Math.round((new Date(t.data_vencimento + 'T12:00:00') - new Date(hoje + 'T12:00:00')) / 86400000);
+    if (t.data_vencimento < hoje) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vencido em ${_empDataBr(t.data_vencimento)}`, tag: ['Vencido', 'alerta'], pill: [`${t.catalogo?.nome || 'Treinamento'} vencido`, 'r'] });
+    else if (t.data_vencimento <= em20) xs.push({ t: t.catalogo?.nome || 'Treinamento', s: `vence em ${_empDataBr(t.data_vencimento)}`, tag: ['Vence em breve', 'b-amb'], pill: [`${t.catalogo?.nome || 'Treinamento'} vence ${dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : `em ${dias} dias`}`, 'y'] });
   });
   return xs;   // EPI (link sem assinatura) aparece no quadro de EPI, como informação
 }
@@ -12796,52 +13281,112 @@ function _pessoaLinkSit(l, agora) {
   if (l.expira_em > agora) return { s: `link de assinatura vale até ${_empDataBr(l.expira_em.slice(0, 10))}`, tag: ['Aguardando', 'b-amb'] };
   return { s: 'o link venceu sem assinatura', tag: ['Sem assinatura', 'b-amb'] };
 }
+function _pessoaVoltar() {
+  const c = window._pessoaDados?.c;
+  if (c) abrirEmpresa(c.id, 'colaboradores'); else irPara('colaboradores');
+}
 function _pessoaRender() {
   const P = window._pessoaDados; if (!P) return;
   const { p, c } = P, aba = window._pessoaAtual.aba;
   const podeEditar = _empPode.editarColab(), podeMgr = ['administrador', 'comercial'].includes(usuarioAtual.perfil);
   setMobileHeader(`<div class="mh-greeting">${_fcEsc(c?.nome || 'Sem empresa')}</div><div class="mh-name">${_fcEsc(p.nome)}</div>`);
+  _mhVoltar(_pessoaVoltar);
   fabOcultar();
   const at = _pessoaAtencao(P);
-  const abas = [['geral', 'Visão geral'], ['dados', 'Dados'], ...(P.comEpi ? [['epi', 'EPI']] : []), ...(P.comDocs ? [['docs', 'Documentos']] : []), ...(P.comTrein ? [['trein', 'Treinamentos']] : [])];
+  const agora = new Date().toISOString();
+  const linksAbertos = P.comEpi ? P.links.filter(l => l.expira_em > agora && (l.tentativas || 0) < 5).length : 0;
+  const abas = [['geral', 'Visão geral'], ...(P.comEpi ? [['epi', 'EPI', P.entregas.length]] : []), ...(P.comDocs ? [['docs', 'Documentos', P.docs.length]] : []), ...(P.comTrein ? [['trein', 'Treinamentos', at.length, 'r']] : []), ['dados', 'Dados']];
   const ab = abas.some(a => a[0] === aba) ? aba : 'geral';
-  const voltar = c ? `<button class="btn btn-ghost btn-sm fc-voltar emp-voltar-cam" onclick="abrirEmpresa('${c.id}','colaboradores')">${ICONS.back} ${_fcEsc(c.nome)}</button>` : `<button class="btn btn-ghost btn-sm fc-voltar" data-action="irPara" data-id="colaboradores">${ICONS.back} Colaboradores</button>`;
-  const caminho = `<div class="emp-cam"><button type="button" onclick="renderEmpresasV2({auto:false})">Empresas</button>${c ? `<span>›</span><button type="button" onclick="abrirEmpresa('${c.id}','colaboradores')">${_fcEsc(c.nome)}</button>` : ''}<span>›</span><b>${_fcEsc(p.nome)}</b></div>`;
+  const podeEnt = P.comEpi && _empPode.epiEntregar();
   const acts = [
-    podeEditar ? `<button class="btn btn-outline" onclick="_pessoaEditar('${p.id}')">${ICONS.edit} Editar dados</button>` : '',
-    P.comEpi && _empPode.epiEntregar() ? `<button class="btn btn-amber" onclick="_pessoaIrEpi('${p.id}')">${ICONS.plus} Entregar EPI</button>` : '',
+    podeEditar ? `<button class="btn btn-outline" onclick="_pessoaEditar('${p.id}')">${ICONS.edit} Editar</button>` : '',
     podeMgr && p.cliente_id && _podeAcao('exportar_relatorios') ? `<button class="btn btn-outline" onclick="abrirDossie('${p.cliente_id}','${p.id}')">${ICONS.doc || ''} Dossiê</button>` : '',
+    podeEnt ? `<button class="btn btn-amber" onclick="_pessoaPainelEpi('${p.id}')">${_I7.epi} Entregar EPI</button>` : '',
   ].filter(Boolean).join('');
-  const meta = [p.cargo || 'Sem função', c?.nome, p.soc_matricula ? 'matrícula ' + p.soc_matricula : ''].filter(Boolean).map(_fcEsc).join(' · ');
+  const tp = c && !_cliEhPF(c) ? _empTipoCnpj(c.cnpj) : null;
+  const meta = [`<span>${_fcEsc(p.cargo || 'Sem função')}</span>`, p.soc_matricula ? `<span>matrícula ${_fcEsc(p.soc_matricula)}</span>` : '',
+    c ? `<button type="button" onclick="abrirEmpresa('${c.id}','colaboradores')">${_fcEsc(c.nome)}</button>${tp ? `<span>${tp.t}</span>` : ''}` : ''].filter(Boolean).join('<span class="ponto">·</span>');
+  const pills = [...at.slice(0, 3).map(x => `<span class="rh-pill ${x.pill[1]}"><i></i>${_fcEsc(x.pill[0])}</span>`), at.length > 3 ? `<span class="rh-pill r">e mais ${at.length - 3}</span>` : '',
+    linksAbertos ? `<span class="rh-pill b">${linksAbertos} ${linksAbertos === 1 ? 'assinatura de EPI aguardando' : 'assinaturas de EPI aguardando'}</span>` : '',
+    !at.length && P.comTrein ? '<span class="rh-pill g">Treinamentos em dia</span>' : ''].filter(Boolean).join('');
   let corpo;
   if (ab === 'dados') corpo = _pessoaDadosHtml(P, podeEditar);
   else if (ab === 'epi') corpo = _pessoaEpiHtml(P);
   else if (ab === 'docs') corpo = _pessoaDocsHtml(P);
   else if (ab === 'trein') corpo = _pessoaTreinHtml(P, podeMgr);
   else corpo = _pessoaGeralHtml(P, at);
-  setConteudo(`<div class="fc">${voltar}${caminho}
-    <header class="fc-h"><div class="fc-av">${iniciais(p.nome)}</div>
-      <div class="fc-id"><h1>${_fcEsc(p.nome)}</h1><div class="fc-meta"><span>${meta}</span>${at.length ? `<span class="fc-selo alerta">${at.length} ${at.length === 1 ? 'ponto de atenção' : 'pontos de atenção'}</span>` : (P.comTrein ? '<span class="fc-selo ok">Treinamentos em dia</span>' : '')}</div></div>
-      ${acts ? `<div class="fc-acts">${acts}</div>` : ''}</header>
-    <nav class="emp-abas" role="tablist" aria-label="Partes da ficha">${abas.map(([k, r]) => `<button type="button" role="tab" aria-selected="${k === ab}" class="${k === ab ? 'on' : ''}" onclick="_pessoaAba('${k}')">${r}${k === 'geral' && at.length ? ` <b class="emp-q">${at.length}</b>` : ''}</button>`).join('')}</nav>
+  const cam = [['Empresas', 'renderEmpresasV2({auto:false})'], ...(c ? [[c.nome, `abrirEmpresa('${c.id}','colaboradores')`]] : [['Colaboradores', "irPara('colaboradores')"]]), [p.nome]];
+  setConteudo(`${_ctxBarHtml('_pessoaVoltar()', c ? `Voltar para ${c.nome}` : 'Voltar para Colaboradores', cam)}<div class="fc emp2">
+    <header class="rh"><div class="rh-top"><div class="fc-av">${iniciais(p.nome)}</div>
+      <div class="rh-id"><h1>${_fcEsc(p.nome)}</h1><div class="rh-meta">${meta}</div>${pills ? `<div class="rh-pills">${pills}</div>` : ''}</div>
+      ${acts ? `<div class="rh-acts">${acts}</div>` : ''}</div></header>
+    <nav class="emp-abas" role="tablist" aria-label="Partes da ficha">${abas.map(([k, r, n, cor]) => `<button type="button" role="tab" aria-selected="${k === ab}" class="${k === ab ? 'on' : ''}" onclick="_pessoaAba('${k}')">${r}${n ? `<span class="c${cor ? ' ' + cor : ''}">${n}</span>` : ''}</button>`).join('')}</nav>
     ${corpo}</div>`);
 }
 function _pessoaAba(k) { if (!window._pessoaAtual) return; window._pessoaAtual.aba = k; _pessoaRender(); }
 function _pessoaEditar(id) {
-  window._colabAposSalvar = { id, fn: async () => { await abrirPessoa(id, window._pessoaAtual?.aba); } };
+  window._colabAposSalvar = { id, fn: async () => { await abrirPessoa(id, window._pessoaAtual?.aba, { semHist: true }); } };
   abrirModalColab(id);
 }
+/** Caminho antigo (tela Entregas de EPI). Fica para quando o painel não abrir. */
 function _pessoaIrEpi(id) { window.__epiDeFicha = id; Promise.resolve().then(() => _GRID.tratarAcao('ir:campo-epi-pessoa:' + id)).catch(() => showToast('Abra pela tela Entregas de EPI.', 'error')); }
+/** v307: Entregar EPI / ficha de EPI no painel, sem sair da ficha. foco 'ficha' = abre nas entregas e no PDF. */
+let _pessoaRecT = null;
+function _pessoaPainelEpi(id, foco = '') {
+  const P = window._pessoaDados; const p = P?.p?.id === id ? P.p : null;
+  const pode = _empPode.epiEntregar();
+  _painelAbrir({ kicker: foco === 'ficha' || !pode ? 'Ficha de EPI' : 'Entregar EPI', titulo: p?.nome || 'Colaborador', sub: [p?.cargo || 'Sem função', P?.c?.nome].filter(Boolean).join(' · '),
+    rota: 'campo-epi-pessoa', params: { id }, foco,
+    aoMudar: () => { window._empResumo = null; clearTimeout(_pessoaRecT); _pessoaRecT = setTimeout(() => { if (['clientes', 'colaboradores'].includes(paginaAtual) && window._pessoaAtual?.id === id && document.querySelector('.fc2-lay, .emp2 .rh')) abrirPessoa(id, window._pessoaAtual.aba, { semHist: true, manterRolagem: true }); }, 150); },
+  }).then(ok => { if (!ok) _pessoaIrEpi(id); });
+}
+/* Histórico: EPI, documentos e treinamentos em ordem de data, com o que a ficha já leu (sem consulta nova) */
+function _pessoaHistorico(P) {
+  const ev = [], hoje = dataLocalISO(new Date());
+  const FORMA = { aparelho: 'assinada no aparelho', link: 'assinada pelo link', papel: 'registrada em papel' };
+  if (P.comEpi) {
+    const grupos = new Map();
+    P.entregas.forEach(e => { const k = `${String(e.entregue_em).slice(0, 10)}|${e.forma}|${e.entregue_por_nome || ''}`; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(e); });
+    grupos.forEach((es, k) => { const [d, f] = k.split('|'); const n = es.length;
+      ev.push({ d, o: 'e', ic: _I7.epi, t: `${n === 1 ? 'Entrega de EPI' : `Entrega de ${n} EPI`}, ${FORMA[f] || 'registrada'}`, s: [es.map(e => e.nome).join(', '), es[0].entregue_por_nome ? `por ${es[0].entregue_por_nome}` : ''].filter(Boolean).join(' · ') }); });
+    P.links.forEach(l => { if (!l.criado_em) return; ev.push({ d: String(l.criado_em).slice(0, 10), o: 'e', ic: _I7.epi, t: 'Link de assinatura de EPI enviado', s: [(l.itens || []).map(i => i.nome).join(', '), _pessoaLinkSit(l, new Date().toISOString()).s].filter(Boolean).join(' · ') }); });
+  }
+  if (P.comDocs) {
+    P.docs.forEach(d => { if (!d.emitido_em) return; const sit = d.situacao === 'cancelado' ? 'cancelado' : d.situacao === 'substituido' ? 'substituído' : d.assinado_em ? 'assinado' : 'emitido, aguardando assinatura';
+      ev.push({ d: String(d.emitido_em).slice(0, 10), o: 'd', ic: _I7.doc, t: `${_numDoc(d.tipo, d.numero)} · Rev. ${String(d.revisao || 0).padStart(2, '0')} ${sit}`, s: d.titulo || '' }); });
+    const TIP = { ordem_servico: 'Ordem de serviço', ficha_epi: 'Ficha de EPI' };
+    P.docEnt.forEach(d => { if (!d.entregue_em) return; ev.push({ d: String(d.entregue_em).slice(0, 10), o: 'd', ic: _I7.doc, t: `${TIP[d.tipo] || d.tipo} entregue em mãos`, s: d.funcao || '' }); });
+  }
+  if (P.comTrein) {
+    const ult = new Map();
+    P.trein.forEach(t => {
+      if (t.data_conclusao && t.data_conclusao <= hoje) ev.push({ d: String(t.data_conclusao).slice(0, 10), o: 't', ic: _I7.cap, t: `${t.catalogo?.nome || 'Treinamento'} concluído`, s: [t.origem === 'externo' && t.instituicao_externa ? `externo · ${t.instituicao_externa}` : '', t.data_vencimento ? `válido até ${_empDataBr(t.data_vencimento)}` : ''].filter(Boolean).join(' · ') });
+      if (!t.status_excecao && t.data_vencimento) { const k = t.catalogo_id || t.id; if (!ult.has(k) || t.data_vencimento > ult.get(k).data_vencimento) ult.set(k, t); }
+    });
+    ult.forEach(t => { if (t.data_vencimento < hoje) ev.push({ d: t.data_vencimento, o: 'r', ic: _I7.cap, t: `${t.catalogo?.nome || 'Treinamento'} venceu`, s: 'Renovação em Precisa de atenção' }); });
+  }
+  return ev.sort((a, b) => b.d.localeCompare(a.d));
+}
+function _pessoaHistHtml(P) {
+  const ev = _pessoaHistorico(P);
+  if (!ev.length) return '<div class="fc-vazio">Nada registrado ainda para esta pessoa.</div>';
+  const N = 8, tudo = window._pessoaHistTudo, xs = tudo ? ev : ev.slice(0, N);
+  const limite = (P.comEpi && P.entregas.length >= 60) || (P.comDocs && P.docs.length >= 40);
+  return `<div class="hist">${xs.map(e => `<div class="hist-ev"><span class="hist-q">${_empDataBr(e.d)}</span><span class="hist-o ${e.o}" aria-hidden="true">${e.ic}</span><div><b>${_fcEsc(e.t)}</b>${e.s ? `<small>${_fcEsc(e.s)}</small>` : ''}</div></div>`).join('')}</div>
+    ${ev.length > N ? `<div class="hist-mais">${_fcLink(tudo ? 'Mostrar menos' : `Ver mais (${ev.length - N})`, 'window._pessoaHistTudo=!window._pessoaHistTudo;_pessoaRender()')}</div>` : ''}
+    ${limite && tudo ? '<p class="fc-nota">Aqui aparecem as 60 entregas e os 40 documentos mais recentes.</p>' : ''}`;
+}
 function _pessoaGeralHtml(P, at) {
-  const ent = P.entregas.slice(0, 4), docs = P.docs.slice(0, 3);
-  const pAt = !P.comTrein ? '' : _fcPainel('Precisa de atenção', at.length ? `<div class="fc-lista">${at.map(x => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(x.t)}</b><small>${_fcEsc(x.s)}</small></span><span class="fc-st ${x.tag[1]}">${x.tag[0]}</span></div>`).join('')}</div>`
-    : '<div class="fc-vazio">Nada pendente: treinamentos em dia.</div>');
+  const ent = P.entregas.slice(0, 4);
+  const pAt = !P.comTrein ? '' : `<div class="fc2-o1">${_fcPainel(`Precisa de atenção${at.length ? ` <span class="emp-q">${at.length}</span>` : ''}`, at.length ? `<div class="fc-lista">${at.map(x => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(x.t)}</b><small>${_fcEsc(x.s)}</small></span><span class="fc-st ${x.tag[1]}">${x.tag[0]}</span></div>`).join('')}</div>`
+    : '<div class="fc-vazio">Nada pendente: treinamentos em dia.</div>')}</div>`;
   const agora = new Date().toISOString();
   const lks = P.links.map(l => { const s = _pessoaLinkSit(l, agora); return `<div class="fc-li"><span class="fc-data">Por link</span><span class="fc-li-t"><b>${_fcEsc((l.itens || []).map(i => i.nome).join(', ').slice(0, 90) || 'EPI')}</b><small>${_fcEsc(s.s)}</small></span><span class="fc-st ${s.tag[1]}">${s.tag[0]}</span></div>`; }).join('');
-  const pEpi = P.comEpi ? _fcPainel('EPI com a pessoa', (ent.length || lks) ? `<div class="fc-lista">${lks}${ent.map(_pessoaEntLi).join('')}</div>${P.entregas.length > 4 ? `<div class="fc-mais-t">e mais ${P.entregas.length - 4} ${P.entregas.length - 4 === 1 ? 'entrega' : 'entregas'}</div>` : ''}` : '<div class="fc-vazio">Nenhuma entrega de EPI registrada.</div>', _fcLink('Ver EPI', "_pessoaAba('epi')")) : '';
-  const pDoc = P.comDocs ? _fcPainel('Documentos', docs.length ? `<div class="fc-lista">${docs.map(_pessoaDocLi).join('')}</div>` : '<div class="fc-vazio">Nenhum documento emitido para esta pessoa.</div>', _fcLink('Ver documentos', "_pessoaAba('docs')")) : '';
-  const tre = P.comTrein ? _fcPainel('Treinamentos', _pessoaTreinResumo(P), _fcLink('Ver treinamentos', "_pessoaAba('trein')")) : '';
-  return `<div class="fc-grid"><div class="fc-main">${pAt}${pEpi}${tre}</div><aside class="fc-side">${_fcPainel('Contato', _pessoaContato(P.p))}${pDoc}</aside></div>`;
+  const pEpi = P.comEpi ? `<div class="fc2-o2">${_fcPainel('EPI com a pessoa', (ent.length || lks) ? `<div class="fc-lista">${lks}${ent.map(_pessoaEntLi).join('')}</div>${P.entregas.length > 4 ? `<div class="fc-mais-t">e mais ${P.entregas.length - 4} ${P.entregas.length - 4 === 1 ? 'entrega' : 'entregas'}</div>` : ''}` : '<div class="fc-vazio">Nenhuma entrega de EPI registrada.</div>', _fcLink('Ver tudo em EPI', "_pessoaAba('epi')"))}</div>` : '';
+  const hist = `<div class="fc2-o3">${_fcPainel('Histórico', _pessoaHistHtml(P))}</div>`;
+  const tre = P.comTrein ? `<div class="fc2-o4">${_fcPainel('Treinamentos', _pessoaTreinResumo(P), _fcLink('Ver todos', "_pessoaAba('trein')"))}</div>` : '';
+  const ct = `<div class="fc2-o5">${_fcPainel('Contato', _pessoaContato(P.p), _empPode.editarColab() ? _fcLink('Editar', `_pessoaEditar('${P.p.id}')`) : '')}</div>`;
+  return `<div class="fc2-lay"><div class="fc2-main">${pEpi}${hist}</div><aside class="fc2-rail">${pAt}${tre}${ct}</aside></div>`;
 }
 function _pessoaContato(p) {
   const l = (ic, h) => `<div class="fc-ct">${ic}<span>${h}</span></div>`;
@@ -12872,12 +13417,12 @@ function _pessoaEpiHtml(P) {
   const agora = new Date().toISOString(), pode = _empPode.epiEntregar();
   const pend = P.links;
   return `<div class="fc-grid"><div class="fc-main">
-    ${pend.length ? _fcPainel('Aguardando assinatura', `<div class="fc-lista">${pend.map(l => { const s = _pessoaLinkSit(l, agora); return `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc((l.itens || []).map(i => i.nome).join(', ').slice(0, 120))}</b><small>${_fcEsc(s.s)}</small></span><span class="fc-st ${s.tag[1]}">${s.tag[0]}</span></div>`; }).join('')}</div>`) : ''}
+    ${pend.length ? _fcPainel('Aguardando assinatura', `<div class="fc-lista">${pend.map(l => { const s = _pessoaLinkSit(l, agora); return `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc((l.itens || []).map(i => i.nome).join(', ').slice(0, 120))}</b><small>${_fcEsc(s.s)}</small></span><span class="fc-st ${s.tag[1]}">${s.tag[0]}</span></div>`; }).join('')}</div>`, pode ? _fcLink('Cancelar ou reenviar', `_pessoaPainelEpi('${P.p.id}','ficha')`) : '') : ''}
     ${_fcPainel(`Entregas · ${P.entregas.length}`, P.entregas.length ? `<div class="fc-lista">${P.entregas.map(_pessoaEntLi).join('')}</div>` : '<div class="fc-vazio">Nenhuma entrega de EPI registrada.</div>',
-      _fcLink(pode ? 'Entregar EPI' : 'Abrir a ficha de EPI', `_pessoaIrEpi('${P.p.id}')`))}
+      pode ? _fcLink('Entregar EPI', `_pessoaPainelEpi('${P.p.id}')`) : _fcLink('Abrir a ficha de EPI', `_pessoaPainelEpi('${P.p.id}','ficha')`))}
   </div><aside class="fc-side">
     ${_fcPainel('Ficha de EPI', P.ficha ? `<div class="fc-lista"><div class="fc-li"><span class="fc-li-t"><b>${_numDoc('epi', P.ficha.numero)}</b><small>código de validação ${_fcEsc(P.ficha.codigo)}</small></span></div></div><a class="fc-lnk" href="https://www.toledolabs.com.br/validar.html?doc=${encodeURIComponent(P.ficha.codigo)}" target="_blank" rel="noopener">Ver a validação</a>`
-      : '<div class="fc-vazio">A ficha ganha número na primeira entrega ou no primeiro PDF.</div>', _fcLink('PDF da ficha', `_pessoaIrEpi('${P.p.id}')`))}
+      : '<div class="fc-vazio">A ficha ganha número na primeira entrega ou no primeiro PDF.</div>', _fcLink('PDF e cancelamentos', `_pessoaPainelEpi('${P.p.id}','ficha')`))}
   </aside></div>`;
 }
 function _pessoaDocsHtml(P) {
@@ -12908,6 +13453,9 @@ async function renderClientes() {
     const ae = window._empAbrirDepois, ap = window._pessoaAbrirDepois; window._empAbrirDepois = null; window._pessoaAbrirDepois = null;
     if (ap) return abrirPessoa(ap);
     if (ae) return abrirEmpresa(ae);
+    const ini = _empDoHashInicial();   // v307: F5 ou link colado (#clientes?empresa=…&pessoa=…)
+    if (ini?.p) return abrirPessoa(ini.p);
+    if (ini?.e) return abrirEmpresa(ini.e);
     return renderEmpresasV2();
   }
   const {data,error} = await sb.from('clientes').select('*').eq('org_id',usuarioAtual.org_id).order('nome');
@@ -13122,8 +13670,8 @@ function verCliente(id) {
       ${cnaeItens.length ? `<details class="fc-cnaes"><summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Ver ${cnaeItens.length === 1 ? 'o CNAE' : `os ${cnaeItens.length} CNAEs`}</summary><ul>${cnaeItens.map((it, i) => `<li><b>${_fcEsc(it.codigo)}</b>${i === 0 ? ' <span class="fc-selo">principal</span>' : ''}<span>${_fcEsc(it.descricao || '')}</span></li>`).join('')}</ul></details>` : ''}`;
   }
 
-  setConteudo(`<div class="fc">
-    ${_v2 ? `<button class="btn btn-ghost btn-sm fc-voltar" onclick="renderEmpresasV2({auto:false})">${ICONS.back} Empresas</button>` : `<button class="btn btn-ghost btn-sm fc-voltar" data-action="irPara" data-id="clientes">${ICONS.back} Clientes</button>`}
+  setConteudo(`${_v2 ? _empCtxHtml(c) : ''}<div class="fc${_v2 ? ' emp2' : ''}">
+    ${_v2 ? _empCabecalhoHtml(c, { meta, selos, podeMgr, podeTurma, pf }) : `<div class="vb-bloco"><button type="button" class="vb" data-action="irPara" data-id="clientes" title="Voltar para Clientes" aria-label="Voltar para Clientes"><span class="vb-i">${ICONS.back}</span>Voltar</button></div>
     <header class="fc-h">
       <div class="fc-av">${iniciais(c.nome)}</div>
       <div class="fc-id"><h1>${_fcEsc(c.nome)}</h1><div class="fc-meta">${meta ? `<span>${meta}</span>` : ''}${selos}</div></div>
@@ -13133,10 +13681,10 @@ function verCliente(id) {
         <button class="btn btn-outline fc-mais" type="button" aria-label="Mais ações" onclick="event.stopPropagation();menuFichaCliente(this,'${c.id}')">${ICONS.dots}</button>
         ${podeTurma && c.ativo ? `<button class="btn btn-amber" onclick="_fcNovaTurma('${c.id}')">${ICONS.plus} Nova turma</button>` : ''}
       </div>` : ''}
-    </header>
+    </header>`}
     ${_v2 ? _empAbasHtml(c) : ''}
     ${_aba !== 'geral' ? '<div id="empAbaCorpo"><div class="fc-vazio">Carregando…</div></div>' : `
-    <div class="gi-kpirow fc-kpis" id="fcKpis">${['Colaboradores', 'Treinamentos vencidos', 'Vencem em breve', 'Turmas no ano'].map(t => `<div class="gi-kpi gi-sm"><div class="gi-kh">${t}</div><span class="gi-n fc-n0">·</span><small class="gi5-ex">carregando</small></div>`).join('')}</div>
+    <div class="gi-kpirow fc-kpis" id="fcKpis"${_v2 ? ' style="display:none"' : ''}>${['Colaboradores', 'Treinamentos vencidos', 'Vencem em breve', 'Turmas no ano'].map(t => `<div class="gi-kpi gi-sm"><div class="gi-kh">${t}</div><span class="gi-n fc-n0">·</span><small class="gi5-ex">carregando</small></div>`).join('')}</div>
     <div class="fc-grid">
       <div class="fc-main">
         ${_podeRota('conformidade') ? _fcPainel('Renovações', _fcCarregando('Conferindo vencimentos…'), _fcLink('Abrir Conformidade', "irPara('conformidade')"), 'fcRenov') : ''}
@@ -13149,6 +13697,11 @@ function verCliente(id) {
       </aside>
     </div>`}
   </div>`);
+  if (_v2) {   // v307: números do cabeçalho e seta do celular
+    setMobileHeader(`<div class="mh-greeting">Empresas</div><div class="mh-name">${_fcEsc(c.nome)}</div>`);
+    _mhVoltar(() => renderEmpresasV2({ auto: false }));
+    _empKpisCarregar(c, true);   // relido a cada abertura da empresa
+  }
   if (_aba !== 'geral') { _empAbaCarregar(c, _aba); return; }
   _fcCarregar(c, todasNrs);
 }
@@ -13732,7 +14285,7 @@ async function verColab(id) {
 
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-      <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="colaboradores">${ICONS.back} Voltar</button>
+      <button type="button" class="vb" data-action="irPara" data-id="colaboradores"><span class="vb-i">${ICONS.back}</span>Voltar</button>
     </div>
 
     <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
@@ -14097,7 +14650,7 @@ function verCatalogo(id) {
   setConteudo(`
     <div class="detail-page">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="catalogo">${ICONS.back} Voltar</button>
+      <button type="button" class="vb" data-action="irPara" data-id="catalogo"><span class="vb-i">${ICONS.back}</span>Voltar</button>
     </div>
 
     <div style="background:var(--navy);border-radius:var(--r-xl);padding:20px;margin-bottom:14px">
@@ -14604,7 +15157,7 @@ function _confRenderNivel2(chave, itensEmpresa) {
 
   setConteudo(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px">
-      <button class="btn btn-ghost btn-sm" style="padding:4px 8px" onclick="_confVoltarEmpresas()">${ICONS.back} Empresas</button>
+      <button type="button" class="vb" onclick="_confVoltarEmpresas()" title="Voltar para Empresas" aria-label="Voltar para Empresas"><span class="vb-i">${ICONS.back}</span>Voltar</button>
       <span style="color:var(--text-3)">/</span>
       <b style="color:var(--navy)">${escapeHtml(nomeEmpresa)}</b>
     </div>
@@ -17524,7 +18077,7 @@ async function verTurma(id, opts = {}) {
     const html = usuarioAtual.perfil === 'instrutor' ? `
       <!-- ===== TELA INSTRUTOR (padrão visual v2, 2026-08-15) ===== -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
+        <button type="button" class="vb" data-action="irParaOrigem"><span class="vb-i">${ICONS.back}</span>Voltar</button>
       </div>
 
       <!-- Hero card -->
@@ -17621,7 +18174,7 @@ async function verTurma(id, opts = {}) {
       <!-- ===== TELA GESTOR — layout v2 (2026-08-29) ===== -->
       <div class="tv-head">
         <div class="tv-head-top">
-          <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back}<span class="tv-back-lbl"> Voltar</span></button>
+          <button type="button" class="vb" data-action="irParaOrigem" aria-label="Voltar"><span class="vb-i">${ICONS.back}</span><span class="tv-back-lbl">Voltar</span></button>
           <div class="tv-ident">
             <div class="tv-title">${escapeHtml(nomeT)}</div>
             <div class="tv-proto">
@@ -21526,7 +22079,7 @@ async function _verCompromissoTelaInstrutor(id) {
 
     const html = `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <button class="btn btn-ghost btn-sm" data-action="irParaOrigem">${ICONS.back} Voltar</button>
+        <button type="button" class="vb" data-action="irParaOrigem"><span class="vb-i">${ICONS.back}</span>Voltar</button>
       </div>
       <div class="h2-hero" style="margin-bottom:12px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
@@ -24216,7 +24769,7 @@ async function verHistoricoTurma(turmaId) {
     hideLoading();
     setConteudo(`
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="historico">${ICONS.back} Voltar</button>
+        <button type="button" class="vb" data-action="irPara" data-id="historico"><span class="vb-i">${ICONS.back}</span>Voltar</button>
       </div>
 
       <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
@@ -24764,7 +25317,7 @@ async function abrirExecucao(turmaId, sessaoIdParam) {
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm" data-action="voltarDaExecucao" data-id="${turmaId}">${ICONS.back} Voltar</button>
+        <button type="button" class="vb" data-action="voltarDaExecucao" data-id="${turmaId}"><span class="vb-i">${ICONS.back}</span>Voltar</button>
         <div style="flex:1">
           <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
           <div style="font-size:13px;color:var(--text-2)">${nomeC}${infoSessao ? ' · '+infoSessao : ''}</div>
@@ -29097,7 +29650,7 @@ function verUsuarioEquipe(id) {
     setConteudo(`
       <div class="detail-page">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-md)" data-action="irPara" data-id="equipe">${ICONS.back} Voltar</button>
+        <button type="button" class="vb" data-action="irPara" data-id="equipe"><span class="vb-i">${ICONS.back}</span>Voltar</button>
       </div>
 
       <div style="background:var(--navy);border-radius:var(--r-lg);padding:22px;margin-bottom:14px">
@@ -29248,7 +29801,7 @@ async function renderContaEditar() {
     <div class="detail-page">
 
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-      <button class="btn btn-ghost btn-sm" data-action="irPara" data-id="conta">${ICONS.back} Voltar</button>
+      <button type="button" class="vb" data-action="irPara" data-id="conta"><span class="vb-i">${ICONS.back}</span>Voltar</button>
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -29326,7 +29879,7 @@ async function renderContaDocumentos() {
     <div class="detail-page">
 
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-      <button class="btn btn-ghost btn-sm" onclick="renderContaEditar()">${ICONS.back} Voltar</button>
+      <button type="button" class="vb" onclick="renderContaEditar()"><span class="vb-i">${ICONS.back}</span>Voltar</button>
     </div>
 
     <div style="font-size:13px;color:var(--text-2);line-height:1.6;margin-bottom:14px">
@@ -29992,7 +30545,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 // Navegação por botão Voltar/Avançar do browser e troca de hash
 window.addEventListener('popstate', async (e) => {
   if (!usuarioAtual) return;
+  // v307: o painel lateral entra no histórico; o Voltar do navegador/celular fecha o painel, sem sair da tela
+  if (window._gpIgnorarPop) { window._gpIgnorarPop = false; return; }
+  if (window._gp) { _painelFechar({ semHist: true, peloVoltar: true }); return; }
   const pagina = (e.state?.pagina) || _hashPagina() || 'home';
+  // v307: Voltar/Avançar entre a lista de empresas, a empresa e a ficha da pessoa
+  if (pagina === 'clientes' && paginaAtual === 'clientes' && _empV2() && !window._empSemRpc && !/[?&](turma|execucao)=/.test(location.hash)) { await _empSincronizarHash(); return; }
   // Voltar/Avançar DENTRO da própria tela de Conformidade (ex.: de
   // "#conformidade?empresa=X&colaborador=Y" pra "#conformidade?empresa=X",
   // ou pra "#conformidade" puro) não troca de tela — paginaAtual continua
@@ -34608,7 +35166,7 @@ async function renderDocumentosTurma(turmaId) {
 
     const html = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm" data-action="verTurma" data-id="${turmaId}">${ICONS.back} Voltar</button>
+        <button type="button" class="vb" data-action="verTurma" data-id="${turmaId}"><span class="vb-i">${ICONS.back}</span>Voltar</button>
         <div style="flex:1;min-width:0">
           <div style="font-size:18px;font-weight:700;color:var(--text-1)">${nomeT}</div>
           <div style="font-size:13px;color:var(--text-2)">${nomeC}</div>
@@ -35303,7 +35861,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '306';
+  var APP_BUILD = '307';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
