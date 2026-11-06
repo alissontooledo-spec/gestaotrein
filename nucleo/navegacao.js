@@ -202,6 +202,7 @@ export async function abrir(id, params = {}) {
     console.info(`[GRID] rota "${id}" exige a funcionalidade "${item.funcionalidade}", que nao esta contratada.`);
     return false;
   }
+  if (_painel) { const p = fecharPainel(); try { p?.aoFechar?.({ navegou: true }); } catch (e) { /* segue */ } }   // v307: navegar fecha o painel
   _rotaAtual = id; _moduloAberto = mod.id;
 
   const { soComputador, carregando } = await import('./ui.js');
@@ -227,6 +228,52 @@ export async function abrir(id, params = {}) {
     alvo(erro(e?.message || 'Falha ao abrir a tela.', { rotulo: 'Tentar de novo', acao: 'recarregar' }));
   }
   return true;
+}
+
+/* ── Painel lateral de trabalho (v307) ─────────────────────────────────────
+   Proposta aprovada em 05/11/2026: 08-Propostas-visuais/
+   grid-proposta-empresas-ficha-integrada-v307.html.
+
+   Abre uma tela de módulo (a mesma, sem cópia) dentro de um painel que a
+   casca desenha por cima da tela atual: a ficha do colaborador continua
+   atrás. Enquanto o painel está aberto, ELE é a tela aberta: as ações,
+   o redesenho e o foco vão para ele. Ao fechar, a tela de antes volta a
+   ser a aberta, exatamente como estava (ela pode nem ser de módulo).
+
+   A casca informa `escrever(html)`: onde desenhar. O painel fica fora dos
+   dois corpos (#mainBody/#mobileBody), então há uma cópia só da tela. */
+let _painel = null;
+export const painelAberto = () => !!_painel;
+export async function abrirNoPainel(id, params = {}, { escrever, aoFechar } = {}) {
+  const r = rota(id);
+  if (!r || typeof escrever !== 'function') return false;
+  const { modulo: mod, item } = r;
+  if (item.funcionalidade && !dados.temFuncionalidade(item.funcionalidade)) return false;
+  if (_painel) fecharPainel();
+  _painel = { salvo: { tela: _telaAberta, params: _paramsAtuais, rota: _rotaAtual, mod: _moduloAberto }, escrever, aoFechar };
+  const eu = _painel;
+  _rotaAtual = id; _moduloAberto = mod.id;
+  const { carregando, erro } = await import('./ui.js');
+  escrever(carregando(3));
+  try {
+    const tela = await item.rota();
+    if (_painel !== eu) return true;            // fechou enquanto carregava
+    _telaAberta = tela; _paramsAtuais = params;
+    const html = await tela.render(params);
+    if (_painel !== eu) return true;
+    escrever(html);
+    if (tela.depois) tela.depois(params);
+  } catch (e) {
+    if (_painel === eu) escrever(erro(e?.message || 'Falha ao abrir.', { rotulo: 'Tentar de novo', acao: 'recarregar' }));
+  }
+  return true;
+}
+/* Fecha sem chamar aoFechar (quem fecha decide). Devolve o painel fechado. */
+export function fecharPainel() {
+  if (!_painel) return null;
+  const p = _painel; _painel = null;
+  _telaAberta = p.salvo.tela; _paramsAtuais = p.salvo.params; _rotaAtual = p.salvo.rota; _moduloAberto = p.salvo.mod;
+  return p;
 }
 
 /* Onde desenhar: dentro do app real usa setConteudo (DOM duplo);
@@ -258,11 +305,16 @@ export async function tratarAcao(acao) {
   if (nome === 'recarregar') { await redesenhar(); return true; }
 
   if (nome === 'ir') {
+    if (_painel) { const p = fecharPainel(); try { p?.aoFechar?.({ navegou: true }); } catch (e) { /* segue */ } }   // v307: navegar fecha o painel
     const [rota, id] = valor.split(':');
     if (_aoNavegar) { await _aoNavegar(rota, id ? { id } : {}); return true; }
     return abrir(rota, id ? { id } : {});
   }
 
+  /* v307: o redesenho vale para a tela DE QUANDO a ação começou. Uma gravação que termina
+     depois de o painel fechar (ou de abrir) não desenha uma tela no lugar da outra. */
+  const _dono = _painel, _tela0 = _telaAberta;
+  const rd = () => (_painel === _dono && _telaAberta === _tela0 ? redesenhar() : Promise.resolve(false));
   if (_telaAberta?.acao) {
     /* ── BUG CORRIGIDO EM 05/09 (h17) ────────────────────────────────────
        As acoes chegam em duas formas: "nome:valor" (ordenar:valor) e
@@ -277,13 +329,13 @@ export async function tratarAcao(acao) {
     const doModulo = _moduloAberto && p[0] === _moduloAberto && p.length > 1;
     const nomeTela  = doModulo ? p.slice(0, 2).join(':') : nome;
     const valorTela = doModulo ? p.slice(2).join(':')    : valor;
-    const tratou = await _telaAberta.acao(nomeTela, valorTela, redesenhar);
+    const tratou = await _telaAberta.acao(nomeTela, valorTela, rd);
     if (tratou) return true;
   }
 
   const mod = _moduloAberto ? _modulos.get(_moduloAberto) : null;
   if (mod?.acoes) {
-    const tratou = await mod.acoes(acao, { redesenhar, rota: _rotaAtual, params: _paramsAtuais });
+    const tratou = await mod.acoes(acao, { redesenhar: rd, rota: _rotaAtual, params: _paramsAtuais });
     if (tratou) return true;
   }
   return false;
@@ -291,6 +343,7 @@ export async function tratarAcao(acao) {
 
 export function definirContainer(el) { _container = el; }
 function _destino() {
+  if (_painel) return _painel.escrever;   // v307: tela de módulo aberta no painel lateral
   if (typeof window !== 'undefined' && typeof window.setConteudo === 'function') return window.setConteudo;
   return (html) => { if (_container) _container.innerHTML = html; };
 }
