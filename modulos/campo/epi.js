@@ -291,8 +291,9 @@ function okHtml() {
       <span>${esc(k.faltaram.join(', '))}. A assinatura foi cancelada ou o GRID não conseguiu gravar. ${k.faltaram.length === 1 ? 'Ela continua selecionada' : 'Elas continuam selecionadas'} na lista da empresa para entregar de novo.</span></div>` : ''}
     <div class="ep-ok-l">${k.itens.map((l) => `<div><span>${esc(l.nome)}${l.tamanho ? ` · tam. ${esc(l.tamanho)}` : ''}${l.qtde > 1 ? ` · ${l.qtde} un.` : ''}</span><b>${l.ca ? `CA ${esc(l.ca)}` : ''}</b></div>`).join('')}</div>
     <div class="ep-ok-b">${um ? btn('Baixar a ficha de EPI preenchida (PDF)', 'campo:epi-ficha-pdf', { cls: 'btn-outline' }) : ''}
-      ${um ? btn('Entregar mais EPI', 'campo:epi-ok-novo', { cls: 'btn-outline' }) : ''}
-      ${btn(um ? 'Fechar e voltar à ficha' : 'Fechar', 'campo:epi-fechar', { cls: 'btn-navy' })}</div>`;
+      ${EMB?.inline ? btn('Nova entrega', 'campo:epi-ok-novo', { cls: 'btn-navy' })   /* v308: dentro da aba do cadastro, não há o que fechar */
+        : `${um ? btn('Entregar mais EPI', 'campo:epi-ok-novo', { cls: 'btn-outline' }) : ''}
+      ${btn(um ? 'Fechar e voltar à ficha' : 'Fechar', 'campo:epi-fechar', { cls: 'btn-navy' })}`}</div>`;
 }
 export const pessoa = {
   async render(params = {}) {
@@ -309,6 +310,10 @@ export const pessoa = {
       ${um && window.__epiDeFicha === p0.id && typeof window.abrirPessoa === 'function'
         ? `<button type="button" class="btn btn-ghost" onclick="window.abrirPessoa('${esc(p0.id)}','epi')">Voltar à ficha</button>`   /* v305: veio da ficha do colaborador */
         : btn('Voltar', 'ir:campo-epi', { cls: 'btn-ghost' })}</div>`;
+    if (EMB?.inline) {   // v308: dentro da aba EPI do cadastro do colaborador: a entrega de um lado, a ficha do outro
+      const esq = P.ok ? okHtml() : (podeEpi() ? formHtml() : nota(SO_VE));
+      return `<div class="ep-inline"><div class="ep-inline-a">${esq}</div><div class="ep-inline-b">${um ? fichaHtml() : ''}</div></div>`;
+    }
     if (EMB) {   // v307: no painel
       if (P.ok) return okHtml();
       const form = podeEpi() ? formHtml() : nota(SO_VE);

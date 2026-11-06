@@ -158,6 +158,40 @@ export async function iniciar(turno) {
   _ctx.repintar();
 }
 
+/* v308: documento aberto no cadastro do colaborador (aba Documentos). A empresa e a pessoa já vêm
+   escolhidas, pelo código interno (não pelo nome: matriz e filial podem ter o mesmo nome).
+   Mesmo cartão e mesmas regras do pedido feito no chat; só pula a escolha de empresa e de pessoa.
+   A sugestão de riscos pelo Laudomiro (que gasta 1 pergunta) só sai para a função da pessoa. */
+export async function iniciarCom(turno, { clienteId = '', pessoaId = '' } = {}) {
+  const g = turno.gerar;
+  g.com = { clienteId, pessoaId };   // "Tentar de novo" repete com a mesma empresa e pessoa
+  try {
+    const oi = sessao.orgId();
+    if (!oi) throw new Error('Abra uma empresa para gerar documentos.');
+    const { data, error } = await sb().from('clientes').select('*').eq('org_id', oi).eq('ativo', true).order('nome').limit(3000);
+    if (error) throw error;
+    g.clientes = data || [];
+    const cli = g.clientes.find((c) => c.id === clienteId) || null;
+    g.etapa = 'pronto';
+    if (TIPOS[g.tipo]?.livre) {
+      // documento da tarefa aberto no cadastro: fica registrado nesta empresa (pelo código) e nesta pessoa
+      const pes = pessoaId ? (await sb().from('colaboradores').select('id,nome').eq('org_id', oi).eq('id', pessoaId).maybeSingle()).data : null;
+      iniciarLivre(turno, cli);
+      if (g.dl) { g.dl.clienteId = cli?.id || ''; g.dl.pessoa = pes?.id ? { id: pes.id, nome: pes.nome || '' } : null; }
+      return;
+    }
+    if (!cli) { _ctx.repintar(); return; }
+    const auto = g.autoUsado; g.autoUsado = true;   // ao escolher a empresa, nenhuma sugestão sai sozinha para outra função
+    await escolherEmpresa(turno, cli.id, false);
+    g.autoUsado = auto;
+    if (pessoaId && !g.desligados?.has(pessoaId) && (g.D?.colabs || []).some((c) => c.id === pessoaId)) {
+      g.para = `p:${pessoaId}`; g.paraManual = true;
+      if (g.tipo === 'os' || g.tipo === 'epi') { g.riscosFuncao = null; prepararRiscos(turno); }
+    }
+  } catch (e) { g.etapa = 'erro'; g.erro = e?.message || 'Não foi possível ler os dados desta empresa.'; }
+  _ctx.repintar();
+}
+
 async function escolherEmpresa(turno, clienteId, doTexto = false) {
   const g = turno.gerar;
   const req = (g.req = (g.req || 0) + 1);   // troca de empresa no meio da leitura: vale só a última
@@ -622,10 +656,11 @@ function clienteDoLivre(g) { return (g.clientes || []).find((c) => norm(c.nome) 
 async function registrarEmissao(g, docs) {
   const chave = chaveEmissao(g);
   if (g.emit?.chave === chave) return g.emit.regs;
-  const cliL = g.dl ? clienteDoLivre(g) : null;
+  // v308: aberto no cadastro (iniciarCom), a empresa vem pelo código enquanto o nome não for trocado
+  const cliL = g.dl ? (((g.dl.clienteId && (g.clientes || []).find((c) => c.id === g.dl.clienteId && norm(c.nome) === norm(g.dl.empresa || ''))) || clienteDoLivre(g))) : null;
   const clienteId = g.dl ? (cliL?.id || null) : g.fora ? null : (g.clienteId || null);
   const clienteNome = g.dl ? (g.dl.empresa || '') : g.fora ? (g.fora.empresa || '') : (g.D?.cli?.nome || '');
-  const pessoas = g.dl ? [{ id: null, nome: '' }] : pessoasDe(g);
+  const pessoas = g.dl ? [g.dl.pessoa?.id && cliL?.id && cliL.id === g.dl.clienteId ? { id: g.dl.pessoa.id, nome: g.dl.pessoa.nome } : { id: null, nome: '' }] : pessoasDe(g);   // v308: ligado à pessoa do cadastro (só se a empresa continua a do cadastro)
   const titulo = g.dl ? (g.dl.res?.titulo_atividade || g.dl.atividade || '') : `${TIPOS[g.tipo].nome}${funcaoDe(g) ? `, ${funcaoDe(g)}` : ''}`;
   let regs;
   /* v299: ficha de EPI é UMA por pessoa (PASSO-97): o número vem de epi_ficha; empresa fora do GRID sai sem número. */
@@ -1008,7 +1043,7 @@ export async function acao(nome, valor, redesenhar) {
   if (nome !== 'campo:lq-g') return false;
   const [ti, op, arg] = String(valor).split('.');
   const turno = _ctx.turno(+ti); const g = turno?.gerar; if (!g) return true;
-  if (op === 'de-novo') { g.etapa = 'carregando'; redesenhar(); iniciar(turno); return true; }
+  if (op === 'de-novo') { g.etapa = 'carregando'; redesenhar(); if (g.com) iniciarCom(turno, g.com); else iniciar(turno); return true; }
   if (op === 'tipo' && TIPOS[arg]) {
     g.tipo = arg; redesenhar();
     const c = melhor(g.clientes || [], g.texto, 'nome');

@@ -57,6 +57,9 @@ export default {
       rota: () => import('./epi.js') },
     { id: 'campo-epi-pessoa', rotulo: 'Ficha de EPI', icone: 'shield', oculto: true, perfis: TODOS, mobile: true,
       rota: () => import('./epi.js').then(m => m.pessoa) },
+    /* v308: aba Documentos do cadastro do colaborador (montada dentro da aba, não abre sozinha no menu). */
+    { id: 'campo-doc-pessoa', rotulo: 'Documentos do colaborador', icone: 'doc', oculto: true, perfis: TODOS, mobile: true,
+      rota: () => import('./doc-pessoa.js').then(m => m.tela) },
     { id: 'campo-emitidos', rotulo: 'Documentos emitidos', icone: 'doc', perfis: TODOS, mobile: true,
       rota: () => import('./laudomiro-tela.js').then(m => m.comoEmitidos) },
     /* Catálogo da ficha: só abre de verdade em Modo Suporte (Provedor). */
