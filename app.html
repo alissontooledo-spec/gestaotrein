@@ -2880,6 +2880,49 @@ body.modo-suporte-ativo .gp,body.modo-suporte-ativo .gp-fundo{top:var(--suporte-
 .mobile-back-btn svg{width:20px;height:20px}
 @media(max-width:767px){#mobileHeader.com-voltar .mobile-back-btn{display:flex}#mobileHeader.com-voltar .mobile-menu-btn{display:none}}
 </style>
+<style id="v308-empresa-colaborador">
+/* v308 (grid-proposta-fluxo-empresa-colaborador-v308, aprovada em 06/11/2026) */
+/* Indicadores da empresa, na Visão geral */
+.emp-ind-p .fc-p-h small{font-size:12.5px;color:var(--text-3)}
+.emp-ind{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.emp-kc{border:1px solid var(--border);border-radius:11px;background:#fff;text-align:left;padding:14px 16px;display:flex;flex-direction:column;gap:2px;font:inherit;color:inherit;min-width:0}
+button.emp-kc{cursor:pointer}button.emp-kc:hover{border-color:var(--navy);background:#F8F9FC}
+button.emp-kc:focus-visible{outline:3px solid #93B4FF;outline-offset:2px}
+.emp-kc b{font-size:26px;font-weight:800;color:var(--navy);line-height:1.15;font-variant-numeric:tabular-nums}
+.emp-kc span{font-weight:700;font-size:13.5px;color:var(--text-1)}.emp-kc small{color:var(--text-3);font-size:12px}
+.emp-kc.r b{color:#B42318}.emp-kc.y b{color:#B45309}
+@media(max-width:767px){.emp-ind{grid-template-columns:1fr 1fr;gap:8px}.emp-kc{padding:12px}.emp-kc b{font-size:22px}}
+/* Colaboradores: filtros na barra */
+.emp-chips-in{margin:0;display:inline-flex}
+/* Cadastro do colaborador */
+.pd-dados{grid-template-columns:1fr 1fr;column-gap:24px}
+@media(max-width:767px){.pd-dados{grid-template-columns:1fr}}
+.hist-barra{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.hist-barra .emp-chips{margin:0}
+.pm-corpo{min-width:0}
+.pd-lay{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start}
+.pd-side{display:grid;gap:16px;min-width:0}
+@media(max-width:1100px){.pd-lay{grid-template-columns:1fr}}
+/* EPI dentro da aba (epi.js, modo inline): entrega de um lado, ficha do outro */
+.ep-inline{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start}
+.ep-inline>div{min-width:0}
+.ep-inline .ep-ok{padding-top:20px}
+.ep-inline .cp-sec-tit:first-child,.ep-inline-a>.cp-sec-tit:first-child{margin-top:0}
+@media(max-width:1100px){.ep-inline{grid-template-columns:1fr}}
+/* Documentos dentro da aba (doc-pessoa.js) */
+.dp-tit{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
+.dp-tit h3{font-size:15px;font-weight:700;color:var(--navy);margin:0}.dp-tit small{font-size:12.5px;color:var(--text-3)}
+.dp-tipos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dp-t{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;border:1px solid var(--border);border-radius:11px;padding:12px;background:#fff;font:inherit;color:inherit;cursor:pointer;min-width:0}
+.dp-t:hover{border-color:var(--navy);background:#F8F9FC}.dp-t:focus-visible{outline:3px solid #93B4FF;outline-offset:2px}
+.dp-t .ico{width:34px;height:34px;border-radius:8px;background:var(--gray-50);display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.dp-t .ico svg{width:17px;height:17px}
+.dp-t b{display:block;font-size:13.5px;color:var(--text-1)}.dp-t small{display:block;color:var(--text-3);font-size:12px}
+.dp-t .ia{font-size:10.5px;font-weight:800;color:var(--blue-text);background:var(--blue-l);border-radius:5px;padding:1px 6px;white-space:nowrap}
+.dp-voltar{margin-bottom:10px}
+.dp .lq-resp{margin:0;max-width:none}
+@media(max-width:767px){.dp-tipos{grid-template-columns:1fr}}
+</style>
 <style id="v174">
 /* Início do Instrutor */
 .gi-pend-grupo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);padding:14px 0 4px;display:flex;justify-content:space-between;gap:8px}
@@ -7508,6 +7551,7 @@ async function irPara(pagina, params={}) {
   // sub-rota. Não afeta nenhuma regra de negócio, só o estado de navegação.
   window._turmaAbertaViaHash = null;
   if (window._gp) _painelFechar({ semHist: true, navegou: true });   // v307
+  if (typeof _pessoaModFechar === 'function') _pessoaModFechar(true);   // v308: EPI/Documentos montados na aba do colaborador
   _mhVoltar(null);   // v307: a seta de voltar do celular é só das telas de dentro de Empresas
   paginaAtual = pagina;
   window._paramsRotaAtual = params;
@@ -12758,6 +12802,13 @@ async function criarUsuarioOrg() {
 //   · lista de colaboradores com colunas, atalho de EPI na linha e seleção para entregar em lote;
 //   · ficha com coluna lateral e Histórico (EPI, documentos e treinamentos, montado no aparelho);
 //   · Entregar EPI abre no painel lateral: a MESMA tela de módulo (epi.js), sem sair da ficha.
+//
+// v308 (grid-proposta-fluxo-empresa-colaborador-v308.html, aprovada em 06/11/2026):
+//   · Empresa: Visão geral primeiro (só dados e indicadores da empresa) e Colaboradores. A aba EPI saiu.
+//   · Colaborador: Dados cadastrais, Histórico (com os treinamentos), EPI e Documentos.
+//   · EPI e Documentos acontecem DENTRO da aba: a tela de módulo é montada no corpo da aba
+//     (navegacao.abrirNoPainel com um "escrever" que aponta para a aba). Documentos usa o mesmo
+//     gerador do Laudomiro (laudomiro-gerar.js), com a empresa e a pessoa já escolhidas.
 // ============================================================
 const _empV2 = () => { try { return !!(_GRID?.dados?.temFuncionalidade?.('empresas_v2')); } catch (e) { return false; } };
 const _empSemFuncao = (e) => /PGRST202|42883|could not find the function|does not exist|schema cache/i.test(`${e?.code || ''} ${e?.message || ''}`);
@@ -12809,6 +12860,10 @@ function _empHist(e, p, op = {}) {
 }
 /** Voltar/Avançar do navegador dentro de Empresas (chamado pelo ouvinte de popstate). */
 async function _empSincronizarHash() {
+  if (window._pessoaMod?.ocupado) {   // v308: gravando na aba do colaborador: o Voltar espera
+    try { history.pushState({ pagina: 'clientes', emp: 1 }, '', _empHashDe(window._pessoaDados?.c?.id, window._pessoaAtual?.id)); } catch (e) {}
+    showToast('Aguarde: o GRID está gravando a entrega.', 'error'); return;
+  }
   window._turmaAbertaViaHash = null;
   const qi = location.hash.indexOf('?');
   const q = qi >= 0 ? new URLSearchParams(location.hash.slice(qi + 1)) : new URLSearchParams();
@@ -12833,6 +12888,7 @@ function _empDoHashInicial() {
 window._gp = null;
 async function _painelAbrir({ kicker = '', titulo = '', sub = '', rota, params = {}, foco = '', aoMudar = null, aoFechar = null }) {
   if (!_GRID?.navegacao?.abrirNoPainel || !_GRID.navegacao.rota?.(rota)) return false;
+  _pessoaModFechar(true);   // v308: uma tela de módulo por vez
   let reusaHist = false;
   if (window._gp) { if (window._gp.ocupado) { showToast('Aguarde: o GRID está gravando.', 'error'); return true; } reusaHist = window._gp.hist; _painelFechar({ semHist: true, troca: true }); }
   const origem = document.activeElement;
@@ -12924,6 +12980,7 @@ async function renderEmpresasV2(opts = {}) {
   const podeCriar = ['administrador', 'comercial'].includes(usuarioAtual.perfil) && _pode('clientes', 2);
   if (podeCriar) fabMostrar(() => abrirModalCliente()); else fabOcultar();
   window.__epiDeFicha = null;
+  _pessoaModFechar(true);   // v308
   _empHist(null, null, opts);
   const st = window._empLista = { busca: '', filtro: 'todas', itens: [], total: 0, offset: 0, cont: {}, auto: opts.auto !== false, tok: Date.now() };
   setConteudo(`<div class="emp emp2">
@@ -13019,7 +13076,9 @@ async function abrirEmpresa(id, aba, op = {}) {
     _clientesCache.push(data); c = data;
   }
   _empLembrar(id);
-  window._empAtual = { id, aba: aba || (window._empAtual?.id === id ? window._empAtual.aba : 'colaboradores') };
+  aba = aba === 'epi' ? 'geral' : aba;   // v308: a aba EPI saiu da empresa
+  window._empAtual = { id, aba: aba || (window._empAtual?.id === id ? window._empAtual.aba : 'geral') };
+  _pessoaModFechar(true);
   if (typeof paginaAtual !== 'undefined' && paginaAtual !== 'clientes') { window._empAbrirDepois = id; await irPara('clientes'); return; }
   _empHist(id, null, op);
   window.__empTelaAntiga = false;
@@ -13027,8 +13086,8 @@ async function abrirEmpresa(id, aba, op = {}) {
   window.scrollTo(0, 0);
 }
 function _empAbasHtml(c) {
-  const abas = [['colaboradores', 'Colaboradores'], ['geral', 'Visão geral'], ...(_empPode.epi() ? [['epi', 'EPI']] : [])];
-  const at = window._empAtual?.aba || 'colaboradores';
+  const abas = [['geral', 'Visão geral'], ['colaboradores', 'Colaboradores']];   // v308
+  const at = window._empAtual?.aba === 'colaboradores' ? 'colaboradores' : 'geral';
   return `<nav class="emp-abas" role="tablist" aria-label="Partes da empresa">${abas.map(([k, r]) => `<button type="button" role="tab" aria-selected="${k === at}" class="${k === at ? 'on' : ''}" onclick="abrirEmpresa('${c.id}','${k}')">${r}</button>`).join('')}</nav>`;
 }
 /** v307: o cabeçalho da empresa (verCliente, com a funcionalidade ligada). */
@@ -13040,8 +13099,7 @@ function _empCabecalhoHtml(c, { meta, selos, podeMgr, podeTurma, pf }) {
       <button class="btn btn-outline fc-mais" type="button" aria-label="Mais ações" onclick="event.stopPropagation();menuFichaCliente(this,'${c.id}')">${ICONS.dots}</button>
       ${podeTurma && c.ativo ? `<button class="btn btn-amber" onclick="_fcNovaTurma('${c.id}')">${ICONS.plus} Nova turma</button>` : ''}</div>` : '';
   return `<header class="rh"><div class="rh-top"><div class="fc-av">${iniciais(c.nome)}</div>
-      <div class="rh-id"><h1>${_fcEsc(c.nome)}</h1><div class="rh-meta">${meta ? `<span>${meta}</span>` : ''}${tp ? `<span class="ponto">·</span><span>${tp.t}</span>` : ''}${selos}</div></div>${acts}</div>
-      <div class="rh-kpis" id="empKpis" role="group" aria-label="Números da empresa"></div></header>`;
+      <div class="rh-id"><h1>${_fcEsc(c.nome)}</h1><div class="rh-meta">${meta ? `<span>${meta}</span>` : ''}${tp ? `<span class="ponto">·</span><span>${tp.t}</span>` : ''}${selos}</div></div>${acts}</div></header>`;   // v308: os números foram para a Visão geral
 }
 const _empCtxHtml = (c) => _ctxBarHtml('renderEmpresasV2({auto:false})', 'Voltar para Empresas', [['Empresas', 'renderEmpresasV2({auto:false})'], [c.nome]]);
 /* Números do cabeçalho = os filtros da lista (empresa_resumo, uma chamada por empresa) */
@@ -13061,27 +13119,31 @@ function _empResumoLer(cli, forcar) {
   return p;
 }
 async function _empKpisCarregar(c, forcar) {
-  try { await _empResumoLer(c.id, forcar); } catch (e) { if (_empSemFuncao(e)) return; _setElBoth('empKpis', ''); return; }
+  try { await _empResumoLer(c.id, forcar); } catch (e) { if (_empSemFuncao(e)) return; _setElBoth('empKpis', '<div class="fc-vazio">Não foi possível ler os indicadores agora. Abra a empresa de novo em instantes.</div>'); return; }
   if (window._empAtual?.id !== c.id) return;
   _empKpisPintar();
 }
+/* v308: indicadores da empresa, na Visão geral. Clicar abre Colaboradores já filtrado. */
 function _empKpisPintar() {
   const id = window._empAtual?.id, R = window._empResumo?.cli === id ? window._empResumo.R : null;   // ainda lendo: pinta quando chegar
   if (!R) return;
-  const comEpi = _empPode.epi(), comTrein = _empPode.trein();
-  const f = window._empAtual?.aba === 'colaboradores' ? (window._empColab?.cli === id ? window._empColab.filtro : 'todos') : (window._empAtual?.aba === 'epi' ? 'links' : '');
-  const kp = (k, n, rot, cor) => `<button type="button" class="rh-kp${cor && n ? ' ' + cor : ''}${f === k ? ' on' : ''}" aria-pressed="${f === k}" onclick="_empKpi('${k}')"><b>${typeof _rxN === 'function' ? _rxN(Number(n) || 0) : (Number(n) || 0)}</b><span>${rot}</span></button>`;
+  const comEpi = _empPode.epi(), comTrein = _empPode.trein(), T = window._empTurmasAno?.cli === id ? window._empTurmasAno : null;
+  const N = (n) => (typeof _rxN === 'function' ? _rxN(Number(n) || 0) : (Number(n) || 0));
+  const kc = (k, n, rot, sub, cor, js) => js === null
+    ? `<div class="emp-kc${cor && n ? ' ' + cor : ''}"><b>${N(n)}</b><span>${rot}</span><small>${sub}</small></div>`
+    : `<button type="button" class="emp-kc${cor && n ? ' ' + cor : ''}" onclick="${js || `_empKpi('${k}')`}"><b>${N(n)}</b><span>${rot}</span><small>${sub}</small></button>`;
   _setElBoth('empKpis', [
-    kp('todos', R.todos, Number(R.todos) === 1 ? 'Colaborador' : 'Colaboradores'),
-    comTrein ? kp('atencao', R.atencao, Number(R.atencao) === 1 ? 'Precisa de atenção' : 'Precisam de atenção', 'y') : '',
-    comTrein ? kp('vencido', R.vencido, 'Treinamento vencido', 'r') : '',
-    comEpi ? kp('sem_epi', R.sem_epi, 'Sem entrega de EPI') : '',
-    comEpi ? kp('links', R.links, Number(R.links) === 1 ? 'Assinatura de EPI aguardando' : 'Assinaturas de EPI aguardando') : '',
+    kc('todos', R.todos, Number(R.todos) === 1 ? 'Colaborador' : 'Colaboradores', 'ativos no cadastro'),
+    comTrein ? kc('atencao', R.atencao, Number(R.atencao) === 1 ? 'Precisa de atenção' : 'Precisam de atenção', 'treinamento vencido ou vencendo em 20 dias', 'y') : '',
+    comTrein ? kc('vencido', R.vencido, 'Treinamento vencido', 'detalhes em Conformidade', 'r') : '',
+    comEpi ? kc('sem_epi', R.sem_epi, 'Sem entrega de EPI', 'nenhuma entrega registrada') : '',
+    comEpi ? kc('links', R.links, Number(R.links) === 1 ? 'Assinatura de EPI aguardando' : 'Assinaturas de EPI aguardando', 'links mandados e não assinados', '', null) : '',
+    T ? kc('turmas', T.noAno, 'Turmas no ano', T.proxima ? `próxima em ${T.proxima}` : 'nenhuma agendada', '', "irPara('turmas')") : '',
   ].join(''));
 }
 function _empKpi(k) {
   const id = window._empAtual?.id; if (!id) return;
-  if (k === 'links') { abrirEmpresa(id, 'epi'); return; }
+  if (k === 'links' || k === 'turmas') return;
   const st = window._empColab;
   if (st && st.cli === id) st.filtro = k; else window._empColFiltroInicial = k;
   if (window._empAtual.aba !== 'colaboradores') { abrirEmpresa(id, 'colaboradores'); return; }
@@ -13130,9 +13192,9 @@ async function _empColCarregar(reset) {
   st.itens = st.itens.concat(lote); st.total = Number(lote[0]?.total || (reset ? 0 : st.total));
   const R = st.resumo, comEpi = _empPode.epi(), comTrein = _empPode.trein(), podeEnt = comEpi && _empPode.epiEntregar();
   const funcoes = R.funcoes || [];
-  const ROT = { atencao: 'Precisam de atenção', vencido: 'Treinamento vencido', sem_epi: 'Sem entrega de EPI' };
+  const chip = (f, rot, n) => `<button type="button" class="emp-chip${st.filtro === f ? ' on' : ''}" aria-pressed="${st.filtro === f}" onclick="_empColFiltro('${f}')">${rot} <b>${Number(n) || 0}</b></button>`;   // v308: os filtros ficam na barra
   _setElBoth('empColFx', (funcoes.length > 1 ? `<select class="emp-fsel" onchange="_empColFuncao(this.value)" aria-label="Filtrar por função"><option value="">Todas as funções</option>${funcoes.map(f => `<option value="${_fcEsc(f)}"${f === st.funcao ? ' selected' : ''}>${_fcEsc(f)}</option>`).join('')}</select>` : '')
-    + (ROT[st.filtro] ? `<button type="button" class="emp-chip on emp-chip-x" onclick="_empColFiltro('todos')" aria-label="Tirar o filtro ${ROT[st.filtro]}">${ROT[st.filtro]} <b>×</b></button>` : ''));
+    + `<span class="emp-chips emp-chips-in" role="group" aria-label="Filtros">${chip('todos', 'Todos', R.todos)}${comTrein ? chip('atencao', 'Precisa de atenção', R.atencao) : ''}${comTrein ? chip('vencido', 'Treinamento vencido', R.vencido) : ''}${comEpi ? chip('sem_epi', 'Sem entrega de EPI', R.sem_epi) : ''}</span>`);
   const epiTxt = (p) => p.epi_link_bloqueado ? `<span class="fc-st alerta">Link bloqueado</span>` : p.epi_link_aberto ? `<span class="fc-st b-azul">Assinatura pendente</span>` : p.epi_entregas ? `<span class="fc-st b-verde">Última ${_empDataBr(p.epi_ultima)}</span>` : `<span class="emp-tx mute">Nenhuma entrega</span>`;
   const trTxt = (p) => p.trein_vencidos ? `<span class="fc-st alerta">${p.trein_vencidos} ${p.trein_vencidos === 1 ? 'vencido' : 'vencidos'}</span>` : p.trein_vencendo ? `<span class="fc-st b-amb">Vence ${_empDataBr(p.prox_vencimento).slice(0, 5)}</span>` : p.prox_vencimento ? `<span class="fc-st b-verde">Em dia</span>` : `<span class="emp-tx mute">Sem treinamento</span>`;
   const cb = podeEnt ? ' com-cb' : '';
@@ -13144,7 +13206,7 @@ async function _empColCarregar(reset) {
       <span class="emp-li-x">${comTrein ? `<small class="emp-rot">Treinamentos</small>${trTxt(p)}` : ''}</span>
       <span class="emp-li-x">${comEpi ? `<small class="emp-rot">EPI</small>${epiTxt(p)}` : ''}</span>
       <span class="emp-li-v">${comTrein && p.prox_vencimento ? _empDataBr(p.prox_vencimento) : '<span class="mute">—</span>'}</span>
-      <span class="emp-ra">${podeEnt ? `<button type="button" class="emp-ib" title="Entregar EPI para ${_fcEsc(p.nome)}" aria-label="Entregar EPI para ${_fcEsc(p.nome)}" onclick="event.stopPropagation();_empLinhaEpi('${p.id}')">${_I7.epi}</button>` : ''}<span class="emp-li-s" aria-hidden="true">${_I7.chv}</span></span></div>`;
+      <span class="emp-ra"><span class="emp-li-s" aria-hidden="true">${_I7.chv}</span></span></div>`;   // v308: a entrega de EPI é feita dentro do cadastro
   };
   const todosMarcados = st.itens.length && st.itens.every(p => st.sel.has(p.id));
   const vazio = st.busca || st.funcao ? 'Ninguém encontrado com esse filtro.' : st.filtro === 'atencao' ? 'Ninguém precisa de atenção agora.' : st.filtro === 'sem_epi' ? 'Todos já receberam EPI.' : st.filtro === 'vencido' ? 'Nenhum treinamento vencido.' : 'Esta empresa ainda não tem colaboradores cadastrados.';
@@ -13247,7 +13309,8 @@ async function abrirPessoa(id, aba, op = {}) {
   let c = p.cliente_id ? _clientesCache.find(x => x.id === p.cliente_id) : null;
   if (p.cliente_id && !c) { const r = await sb.from('clientes').select('*').eq('id', p.cliente_id).eq('org_id', oi).maybeSingle(); if (r.data) { _clientesCache.push(r.data); c = r.data; } }
   const mesma = window._pessoaAtual?.id === id;
-  aba = aba || (mesma ? window._pessoaAtual.aba : 'geral');
+  aba = ({ geral: 'dados', trein: 'hist' })[aba] || aba;   // v308: as abas antigas abrem as novas
+  aba = aba || (mesma ? window._pessoaAtual.aba : 'dados');
   window._pessoaAtual = { id, aba };
   if (typeof paginaAtual !== 'undefined' && paginaAtual !== 'clientes' && paginaAtual !== 'colaboradores') { window._pessoaAbrirDepois = id; await irPara('clientes'); return; }
   _empHist(c?.id || null, id, op);
@@ -13265,7 +13328,7 @@ async function abrirPessoa(id, aba, op = {}) {
     trein: (cfR.data || []), entregas: enR.data || [], links: lkR.data || [], ficha: (fiR.data || [])[0] || null, docs: dcR.data || [], docEnt: deR.data || [] };
   window._colabTreinos = { colaboradorId: id, lista: P.trein, aba: 'turma', busca: '', pagina: 1, porPagina: 8 };
   window._pessoaDados = P;
-  if (!mesma) window._pessoaHistTudo = false;
+  if (!mesma) { window._pessoaHistTudo = false; window._pessoaHistF = 'tudo'; }
   _pessoaRender();
   if (!op.manterRolagem) window.scrollTo(0, 0);
 }
@@ -13299,6 +13362,27 @@ function _pessoaVoltar() {
   const c = window._pessoaDados?.c;
   if (c) abrirEmpresa(c.id, 'colaboradores'); else irPara('colaboradores');
 }
+/* v308: EPI e Documentos acontecem dentro da aba. A tela de módulo (a mesma do menu) é montada no
+   corpo da aba; ao trocar de aba ou sair da ficha, ela é desmontada e a plataforma volta ao normal. */
+window._pessoaMod = null;
+async function _pessoaModMontar(rota, params) {
+  _pessoaModFechar(true);
+  if (!_GRID?.navegacao?.abrirNoPainel || !_GRID.navegacao.rota?.(rota)) { _setElBoth('pessoaModCorpo', '<div class="fc-vazio">Recarregue o GRID (botão Atualizar) para usar esta parte.</div>'); return; }
+  const m = window._pessoaMod = { rota, id: params.id, ocupado: false };
+  // gravando (entrega de EPI, link): a aba não troca nem sai; se a pessoa navegar mesmo assim, o aviso de "registrado" aparece
+  Object.assign(params.embutido || (params.embutido = {}), { ocupado: (v) => { m.ocupado = !!v; }, vivo: () => window._pessoaMod === m });
+  const escrever = (html) => { if (window._pessoaMod === m) _setElBoth('pessoaModCorpo', html); };
+  await _GRID.navegacao.abrirNoPainel(rota, params, { escrever, aoFechar: () => { if (window._pessoaMod === m) window._pessoaMod = null; } });
+}
+/** Desmonta a tela da aba. Sem forcar, não desmonta enquanto grava (devolve false). */
+function _pessoaModFechar(forcar) {
+  const m = window._pessoaMod; if (!m) return true;
+  const mo = document.getElementById('modalOverlay');
+  if (!forcar && (m.ocupado || (mo && mo.style.display === 'flex'))) { if (m.ocupado) showToast('Aguarde: o GRID está gravando a entrega.', 'error'); return false; }
+  window._pessoaMod = null;
+  try { _GRID?.navegacao?.fecharPainel?.(); } catch (e) {}
+  return true;
+}
 function _pessoaRender() {
   const P = window._pessoaDados; if (!P) return;
   const { p, c } = P, aba = window._pessoaAtual.aba;
@@ -13306,17 +13390,16 @@ function _pessoaRender() {
   setMobileHeader(`<div class="mh-greeting">${_fcEsc(c?.nome || 'Sem empresa')}</div><div class="mh-name">${_fcEsc(p.nome)}</div>`);
   _mhVoltar(_pessoaVoltar);
   fabOcultar();
+  _pessoaModFechar(true);
   const at = _pessoaAtencao(P);
   const agora = new Date().toISOString();
   const linksAbertos = P.comEpi ? P.links.filter(l => l.expira_em > agora && (l.tentativas || 0) < 5).length : 0;
-  const abas = [['geral', 'Visão geral'], ...(P.comEpi ? [['epi', 'EPI', P.entregas.length]] : []), ...(P.comDocs ? [['docs', 'Documentos', P.docs.length]] : []), ...(P.comTrein ? [['trein', 'Treinamentos', at.length, 'r']] : []), ['dados', 'Dados']];
-  const ab = abas.some(a => a[0] === aba) ? aba : 'geral';
-  const podeEnt = P.comEpi && _empPode.epiEntregar();
-  const acts = [
-    podeEditar ? `<button class="btn btn-outline" onclick="_pessoaEditar('${p.id}')">${ICONS.edit} Editar</button>` : '',
-    podeMgr && p.cliente_id && _podeAcao('exportar_relatorios') ? `<button class="btn btn-outline" onclick="abrirDossie('${p.cliente_id}','${p.id}')">${ICONS.doc || ''} Dossiê</button>` : '',
-    podeEnt ? `<button class="btn btn-amber" onclick="_pessoaPainelEpi('${p.id}')">${_I7.epi} Entregar EPI</button>` : '',
-  ].filter(Boolean).join('');
+  const abas = [['dados', 'Dados cadastrais'], ['hist', 'Histórico'], ...(P.comEpi ? [['epi', 'EPI', P.entregas.length]] : []), ...(P.comDocs ? [['docs', 'Documentos', P.docs.length]] : [])];
+  const ab = abas.some(a => a[0] === aba) ? aba : 'dados';
+  window._pessoaAtual.aba = ab;
+  const acts = [podeEditar ? `<button class="btn btn-outline" onclick="_pessoaEditar('${p.id}')">${ICONS.edit} Editar</button>` : '',
+    // sem a aba Documentos (organização sem o módulo de SST), o dossiê continua no cabeçalho, como antes
+    !P.comDocs && podeMgr && p.cliente_id && _podeAcao('exportar_relatorios') ? `<button class="btn btn-outline" onclick="abrirDossie('${p.cliente_id}','${p.id}')">${ICONS.doc || ''} Dossiê</button>` : ''].filter(Boolean).join('');
   const tp = c && !_cliEhPF(c) ? _empTipoCnpj(c.cnpj) : null;
   const meta = [`<span>${_fcEsc(p.cargo || 'Sem função')}</span>`, p.soc_matricula ? `<span>matrícula ${_fcEsc(p.soc_matricula)}</span>` : '',
     c ? `<button type="button" onclick="abrirEmpresa('${c.id}','colaboradores')">${_fcEsc(c.nome)}</button>${tp ? `<span>${tp.t}</span>` : ''}` : ''].filter(Boolean).join('<span class="ponto">·</span>');
@@ -13324,37 +13407,37 @@ function _pessoaRender() {
     linksAbertos ? `<span class="rh-pill b">${linksAbertos} ${linksAbertos === 1 ? 'assinatura de EPI aguardando' : 'assinaturas de EPI aguardando'}</span>` : '',
     !at.length && P.comTrein ? '<span class="rh-pill g">Treinamentos em dia</span>' : ''].filter(Boolean).join('');
   let corpo;
-  if (ab === 'dados') corpo = _pessoaDadosHtml(P, podeEditar);
-  else if (ab === 'epi') corpo = _pessoaEpiHtml(P);
-  else if (ab === 'docs') corpo = _pessoaDocsHtml(P);
-  else if (ab === 'trein') corpo = _pessoaTreinHtml(P, podeMgr);
-  else corpo = _pessoaGeralHtml(P, at);
+  if (ab === 'hist') corpo = _pessoaHistTabHtml(P, podeMgr);
+  else if (ab === 'epi') corpo = `<div id="pessoaModCorpo" class="pm-corpo">${_fcCarregando('Carregando a ficha de EPI…')}</div>`;
+  else if (ab === 'docs') corpo = `<div class="pd-lay"><div id="pessoaModCorpo" class="pm-corpo">${_fcCarregando('Carregando…')}</div><aside id="pessoaDocsLista" class="pd-side">${_pessoaDocsListaHtml(P)}</aside></div>`;
+  else corpo = _pessoaDadosHtml(P, podeEditar, at);
   const cam = [['Empresas', 'renderEmpresasV2({auto:false})'], ...(c ? [[c.nome, `abrirEmpresa('${c.id}','colaboradores')`]] : [['Colaboradores', "irPara('colaboradores')"]]), [p.nome]];
   setConteudo(`${_ctxBarHtml('_pessoaVoltar()', c ? `Voltar para ${c.nome}` : 'Voltar para Colaboradores', cam)}<div class="fc emp2">
     <header class="rh"><div class="rh-top"><div class="fc-av">${iniciais(p.nome)}</div>
       <div class="rh-id"><h1>${_fcEsc(p.nome)}</h1><div class="rh-meta">${meta}</div>${pills ? `<div class="rh-pills">${pills}</div>` : ''}</div>
       ${acts ? `<div class="rh-acts">${acts}</div>` : ''}</div></header>
-    <nav class="emp-abas" role="tablist" aria-label="Partes da ficha">${abas.map(([k, r, n, cor]) => `<button type="button" role="tab" aria-selected="${k === ab}" class="${k === ab ? 'on' : ''}" onclick="_pessoaAba('${k}')">${r}${n ? `<span class="c${cor ? ' ' + cor : ''}">${n}</span>` : ''}</button>`).join('')}</nav>
+    <nav class="emp-abas" role="tablist" aria-label="Partes do cadastro">${abas.map(([k, r, n]) => `<button type="button" role="tab" aria-selected="${k === ab}" class="${k === ab ? 'on' : ''}" onclick="_pessoaAba('${k}')">${r}${n ? `<span class="c">${n}</span>` : ''}</button>`).join('')}</nav>
     ${corpo}</div>`);
+  if (ab === 'epi') _pessoaModMontar('campo-epi-pessoa', { id: p.id, embutido: { inline: true, aoMudar: () => { if (window._pessoaDados === P) P.sujo = true; } } });
+  if (ab === 'docs') _pessoaModMontar('campo-doc-pessoa', { id: p.id, cliente: c?.id || '', embutido: { inline: true, aoMudar: () => _pessoaDocsRecarregar(p.id) } });
 }
-function _pessoaAba(k) { if (!window._pessoaAtual) return; window._pessoaAtual.aba = k; _pessoaRender(); }
+function _pessoaAba(k) {
+  if (!window._pessoaAtual) return;
+  if (!_pessoaModFechar()) return;   // gravando: fica na aba
+  window._pessoaAtual.aba = k;
+  // depois de uma entrega ou de um documento, as outras abas leem os dados de novo
+  if (window._pessoaDados?.sujo) { _setElBoth('pessoaModCorpo', _fcCarregando('Carregando…')); abrirPessoa(window._pessoaAtual.id, k, { semHist: true, manterRolagem: true }); return; }
+  _pessoaRender();
+}
+
 function _pessoaEditar(id) {
   window._colabAposSalvar = { id, fn: async () => { await abrirPessoa(id, window._pessoaAtual?.aba, { semHist: true }); } };
   abrirModalColab(id);
 }
-/** Caminho antigo (tela Entregas de EPI). Fica para quando o painel não abrir. */
+/** Caminho antigo (tela Entregas de EPI). Fica para quando a aba não puder montar a tela. */
 function _pessoaIrEpi(id) { window.__epiDeFicha = id; Promise.resolve().then(() => _GRID.tratarAcao('ir:campo-epi-pessoa:' + id)).catch(() => showToast('Abra pela tela Entregas de EPI.', 'error')); }
-/** v307: Entregar EPI / ficha de EPI no painel, sem sair da ficha. foco 'ficha' = abre nas entregas e no PDF. */
-let _pessoaRecT = null;
-function _pessoaPainelEpi(id, foco = '') {
-  const P = window._pessoaDados; const p = P?.p?.id === id ? P.p : null;
-  const pode = _empPode.epiEntregar();
-  _painelAbrir({ kicker: foco === 'ficha' || !pode ? 'Ficha de EPI' : 'Entregar EPI', titulo: p?.nome || 'Colaborador', sub: [p?.cargo || 'Sem função', P?.c?.nome].filter(Boolean).join(' · '),
-    rota: 'campo-epi-pessoa', params: { id }, foco,
-    aoMudar: () => { window._empResumo = null; clearTimeout(_pessoaRecT); _pessoaRecT = setTimeout(() => { if (['clientes', 'colaboradores'].includes(paginaAtual) && window._pessoaAtual?.id === id && document.querySelector('.fc2-lay, .emp2 .rh')) abrirPessoa(id, window._pessoaAtual.aba, { semHist: true, manterRolagem: true }); }, 150); },
-  }).then(ok => { if (!ok) _pessoaIrEpi(id); });
-}
-/* Histórico: EPI, documentos e treinamentos em ordem de data, com o que a ficha já leu (sem consulta nova) */
+/** v308: entregar EPI acontece na aba EPI do cadastro. */
+function _pessoaPainelEpi(id) { if (window._pessoaAtual?.id === id) _pessoaAba('epi'); else abrirPessoa(id, 'epi'); }
 function _pessoaHistorico(P) {
   const ev = [], hoje = dataLocalISO(new Date());
   const FORMA = { aparelho: 'assinada no aparelho', link: 'assinada pelo link', papel: 'registrada em papel' };
@@ -13381,81 +13464,83 @@ function _pessoaHistorico(P) {
   }
   return ev.sort((a, b) => b.d.localeCompare(a.d));
 }
-function _pessoaHistHtml(P) {
-  const ev = _pessoaHistorico(P);
-  if (!ev.length) return '<div class="fc-vazio">Nada registrado ainda para esta pessoa.</div>';
-  const N = 8, tudo = window._pessoaHistTudo, xs = tudo ? ev : ev.slice(0, N);
+/* v308: Histórico = tudo o que aconteceu no cadastro, com filtro. Em "Treinamentos" aparece a lista de
+   sempre (busca, certificados, treinamento externo), a mesma da antiga aba Treinamentos. */
+function _pessoaHistFiltro(f) { window._pessoaHistF = f; window._pessoaHistTudo = false; _pessoaRender(); }
+function _pessoaHistTabHtml(P, podeMgr) {
+  const ev = _pessoaHistorico(P), f = window._pessoaHistF || 'tudo';
+  const conta = { tudo: ev.length, trein: P.comTrein ? P.trein.length : 0, epi: ev.filter(e => e.o === 'e').length, docs: ev.filter(e => e.o === 'd').length };
+  const chip = (k, r) => `<button type="button" class="emp-chip${f === k ? ' on' : ''}" aria-pressed="${f === k}" onclick="_pessoaHistFiltro('${k}')">${r} <b>${conta[k]}</b></button>`;
+  const barra = `<div class="hist-barra"><div class="emp-chips" role="group" aria-label="Filtrar o histórico">${chip('tudo', 'Tudo')}${P.comTrein ? chip('trein', 'Treinamentos') : ''}${P.comEpi ? chip('epi', 'EPI') : ''}${P.comDocs ? chip('docs', 'Documentos') : ''}</div>
+    ${podeMgr && P.comTrein ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${P.p.id}">${ICONS.plus} Registrar treinamento externo</button>` : ''}</div>`;
+  if (f === 'trein' && P.comTrein) {
+    return `<section class="fc-p">${barra}
+      ${P.trein.length > 8 ? `<input type="search" id="buscaTreinosColab" placeholder="Buscar por treinamento, instituição ou instrutor..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;margin-bottom:12px" oninput="_colabTreinosFiltrar(this.value)">` : ''}
+      <div id="treinosColabMiolo">${_htmlTreinosColabMiolo()}</div></section>`;
+  }
+  const tipo = { epi: ['e'], docs: ['d'] }[f];
+  return `<section class="fc-p">${barra}${_pessoaHistHtml(P, tipo ? ev.filter(e => tipo.includes(e.o)) : ev)}</section>`;
+}
+function _pessoaHistHtml(P, ev) {
+  if (!ev.length) return '<div class="fc-vazio">Nada registrado ainda.</div>';
+  const N = 12, tudo = window._pessoaHistTudo, xs = tudo ? ev : ev.slice(0, N);
   const limite = (P.comEpi && P.entregas.length >= 60) || (P.comDocs && P.docs.length >= 40);
   return `<div class="hist">${xs.map(e => `<div class="hist-ev"><span class="hist-q">${_empDataBr(e.d)}</span><span class="hist-o ${e.o}" aria-hidden="true">${e.ic}</span><div><b>${_fcEsc(e.t)}</b>${e.s ? `<small>${_fcEsc(e.s)}</small>` : ''}</div></div>`).join('')}</div>
     ${ev.length > N ? `<div class="hist-mais">${_fcLink(tudo ? 'Mostrar menos' : `Ver mais (${ev.length - N})`, 'window._pessoaHistTudo=!window._pessoaHistTudo;_pessoaRender()')}</div>` : ''}
     ${limite && tudo ? '<p class="fc-nota">Aqui aparecem as 60 entregas e os 40 documentos mais recentes.</p>' : ''}`;
 }
-function _pessoaGeralHtml(P, at) {
-  const ent = P.entregas.slice(0, 4);
-  const pAt = !P.comTrein ? '' : `<div class="fc2-o1">${_fcPainel(`Precisa de atenção${at.length ? ` <span class="emp-q">${at.length}</span>` : ''}`, at.length ? `<div class="fc-lista">${at.map(x => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(x.t)}</b><small>${_fcEsc(x.s)}</small></span><span class="fc-st ${x.tag[1]}">${x.tag[0]}</span></div>`).join('')}</div>`
-    : '<div class="fc-vazio">Nada pendente: treinamentos em dia.</div>')}</div>`;
-  const agora = new Date().toISOString();
-  const lks = P.links.map(l => { const s = _pessoaLinkSit(l, agora); return `<div class="fc-li"><span class="fc-data">Por link</span><span class="fc-li-t"><b>${_fcEsc((l.itens || []).map(i => i.nome).join(', ').slice(0, 90) || 'EPI')}</b><small>${_fcEsc(s.s)}</small></span><span class="fc-st ${s.tag[1]}">${s.tag[0]}</span></div>`; }).join('');
-  const pEpi = P.comEpi ? `<div class="fc2-o2">${_fcPainel('EPI com a pessoa', (ent.length || lks) ? `<div class="fc-lista">${lks}${ent.map(_pessoaEntLi).join('')}</div>${P.entregas.length > 4 ? `<div class="fc-mais-t">e mais ${P.entregas.length - 4} ${P.entregas.length - 4 === 1 ? 'entrega' : 'entregas'}</div>` : ''}` : '<div class="fc-vazio">Nenhuma entrega de EPI registrada.</div>', _fcLink('Ver tudo em EPI', "_pessoaAba('epi')"))}</div>` : '';
-  const hist = `<div class="fc2-o3">${_fcPainel('Histórico', _pessoaHistHtml(P))}</div>`;
-  const tre = P.comTrein ? `<div class="fc2-o4">${_fcPainel('Treinamentos', _pessoaTreinResumo(P), _fcLink('Ver todos', "_pessoaAba('trein')"))}</div>` : '';
-  const ct = `<div class="fc2-o5">${_fcPainel('Contato', _pessoaContato(P.p), _empPode.editarColab() ? _fcLink('Editar', `_pessoaEditar('${P.p.id}')`) : '')}</div>`;
-  return `<div class="fc2-lay"><div class="fc2-main">${pEpi}${hist}</div><aside class="fc2-rail">${pAt}${tre}${ct}</aside></div>`;
-}
 function _pessoaContato(p) {
   const l = (ic, h) => `<div class="fc-ct">${ic}<span>${h}</span></div>`;
   const xs = [p.cpf ? l(ICONS.doc, `CPF ${_fcEsc(p.cpf)}`) : '', p.telefone ? l(ICONS.phone, `<a class="fc-tel" href="tel:${String(p.telefone).replace(/\D/g, '')}">${_fcEsc(p.telefone)}</a>`) : '', p.email ? l(ICONS.mail, `<a href="mailto:${_fcEsc(p.email)}">${_fcEsc(p.email)}</a>`) : ''].join('');
   return xs || '<div class="fc-vazio">Sem contato cadastrado.</div>';
-}
-function _pessoaEntLi(e) {
+}function _pessoaEntLi(e) {
   const f = _FORMA_EPI[e.forma] || ['Registrada', ''];
   return `<div class="fc-li"><span class="fc-data">${_empDataBr(e.entregue_em)}</span><span class="fc-li-t"><b>${_fcEsc(e.nome)}</b><small>${[e.ca ? 'CA ' + e.ca : '', e.tamanho ? 'tam. ' + e.tamanho : '', e.serie ? 'série ' + e.serie : '', e.qtde > 1 ? e.qtde + ' unidades' : ''].filter(Boolean).map(_fcEsc).join(' · ') || '&nbsp;'}${e.ca_conferido === false ? `<em class="emp-semca">CA não conferido na entrega</em>` : ''}</small></span><span class="fc-st ${f[1]}">${f[0]}</span></div>`;
-}
-function _pessoaDocLi(d) {
+}function _pessoaDocLi(d) {
   const sit = d.situacao === 'cancelado' ? ['Cancelado', 'alerta'] : d.situacao === 'substituido' ? ['Substituído', ''] : d.assinado_em ? ['Assinado', 'b-verde'] : ['Aguardando assinatura', 'b-amb'];
   return `<div class="fc-li"><span class="fc-li-t"><b>${_numDoc(d.tipo, d.numero)} · Rev. ${String(d.revisao || 0).padStart(2, '0')}</b><small>${[_fcEsc(d.titulo || ''), _empDataBr(d.emitido_em)].filter(Boolean).join(' · ') || '&nbsp;'}</small></span><span class="fc-st ${sit[1]}">${sit[0]}</span></div>`;
-}
-function _pessoaTreinResumo(P) {
+}function _pessoaTreinResumo(P) {
   const hoje = dataLocalISO(new Date()), ult = new Map();
   P.trein.filter(t => !t.status_excecao && t.data_vencimento).forEach(t => { const k = t.catalogo_id || t.id; if (!ult.has(k) || t.data_vencimento > ult.get(k).data_vencimento) ult.set(k, t); });
   const xs = [...ult.values()].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento)).slice(0, 5);
   if (!xs.length) return '<div class="fc-vazio">Nenhum treinamento registrado.</div>';
   return `<div class="fc-lista">${xs.map(t => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(t.catalogo?.nome || 'Treinamento')}</b><small>${t.data_vencimento < hoje ? 'vencido em ' : 'válido até '}${_empDataBr(t.data_vencimento)}</small></span><span class="fc-st ${t.data_vencimento < hoje ? 'alerta' : 'b-verde'}">${t.data_vencimento < hoje ? 'Vencido' : 'Em dia'}</span></div>`).join('')}</div>`;
 }
-function _pessoaDadosHtml(P, podeEditar) {
+/* v308: Dados cadastrais (abre primeiro) e a situação resumida da pessoa */
+function _pessoaDadosHtml(P, podeEditar, at) {
   const p = P.p, l = (rot, v) => `<div class="fc-li"><span class="fc-li-t"><small>${rot}</small><b>${v ? _fcEsc(v) : '<span class="mute">—</span>'}</b></span></div>`;
-  return `<div class="fc-grid"><div class="fc-main">${_fcPainel('Cadastro', `<div class="fc-lista emp-dados">${l('Nome', p.nome)}${l('CPF', p.cpf)}${l('Função', p.cargo)}${l('Empresa', P.c?.nome)}${l('Matrícula', p.soc_matricula)}${l('E-mail', p.email)}${l('Telefone', p.telefone)}</div>`,
-    podeEditar ? _fcLink('Editar dados', `_pessoaEditar('${p.id}')`) : '')}</div><aside class="fc-side"></aside></div>`;
+  const agora = new Date().toISOString(), ult = P.entregas[0];
+  const lk = P.links.filter(x => x.expira_em > agora && (x.tentativas || 0) < 5).length;
+  const sit = [
+    P.comTrein ? (at.length ? at.map(x => `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc(x.t)}</b><small>${_fcEsc(x.s)}</small></span><span class="fc-st ${x.tag[1]}">${x.tag[0]}</span></div>`).join('')
+      : `<div class="fc-li"><span class="fc-li-t"><b>Treinamentos</b><small>${P.trein.length ? 'todos em dia' : 'nenhum registrado'}</small></span><span class="fc-st ${P.trein.length ? 'b-verde' : ''}">${P.trein.length ? 'Em dia' : '—'}</span></div>`) : '',
+    P.comEpi ? `<div class="fc-li fc-li-clk" onclick="_pessoaAba('epi')"><span class="fc-li-t"><b>EPI</b><small>${ult ? `última entrega em ${_empDataBr(ult.entregue_em)} · ${P.entregas.length} ${P.entregas.length === 1 ? 'entrega' : 'entregas'}` : 'nenhuma entrega registrada'}${lk ? ` · ${lk} ${lk === 1 ? 'link aguardando assinatura' : 'links aguardando assinatura'}` : ''}</small></span><span class="fc-st ${ult ? 'b-verde' : ''}">${ult ? 'Com ficha' : '—'}</span></div>` : '',
+    P.comDocs ? `<div class="fc-li fc-li-clk" onclick="_pessoaAba('docs')"><span class="fc-li-t"><b>Documentos</b><small>${P.docs.length ? `${P.docs.length} ${P.docs.length === 1 ? 'emitido' : 'emitidos'}` : 'nenhum emitido'}</small></span><span class="fc-st">${P.docs.length || '—'}</span></div>` : '',
+  ].join('');
+  return `<div class="fc-grid"><div class="fc-main">${_fcPainel('Cadastro', `<div class="fc-lista emp-dados pd-dados">${l('Nome', p.nome)}${l('CPF', p.cpf)}${l('Função', p.cargo)}${l('Empresa', P.c?.nome)}${l('Matrícula', p.soc_matricula)}${l('E-mail', p.email)}${l('Telefone', p.telefone)}</div>`,
+    podeEditar ? _fcLink('Editar dados', `_pessoaEditar('${p.id}')`) : '')}</div>
+    <aside class="fc-side">${sit ? _fcPainel('Situação', `<div class="fc-lista">${sit}</div>`) : ''}${_fcPainel('Contato', _pessoaContato(p))}</aside></div>`;
 }
-function _pessoaEpiHtml(P) {
-  const agora = new Date().toISOString(), pode = _empPode.epiEntregar();
-  const pend = P.links;
-  return `<div class="fc-grid"><div class="fc-main">
-    ${pend.length ? _fcPainel('Aguardando assinatura', `<div class="fc-lista">${pend.map(l => { const s = _pessoaLinkSit(l, agora); return `<div class="fc-li"><span class="fc-li-t"><b>${_fcEsc((l.itens || []).map(i => i.nome).join(', ').slice(0, 120))}</b><small>${_fcEsc(s.s)}</small></span><span class="fc-st ${s.tag[1]}">${s.tag[0]}</span></div>`; }).join('')}</div>`, pode ? _fcLink('Cancelar ou reenviar', `_pessoaPainelEpi('${P.p.id}','ficha')`) : '') : ''}
-    ${_fcPainel(`Entregas · ${P.entregas.length}`, P.entregas.length ? `<div class="fc-lista">${P.entregas.map(_pessoaEntLi).join('')}</div>` : '<div class="fc-vazio">Nenhuma entrega de EPI registrada.</div>',
-      pode ? _fcLink('Entregar EPI', `_pessoaPainelEpi('${P.p.id}')`) : _fcLink('Abrir a ficha de EPI', `_pessoaPainelEpi('${P.p.id}','ficha')`))}
-  </div><aside class="fc-side">
-    ${_fcPainel('Ficha de EPI', P.ficha ? `<div class="fc-lista"><div class="fc-li"><span class="fc-li-t"><b>${_numDoc('epi', P.ficha.numero)}</b><small>código de validação ${_fcEsc(P.ficha.codigo)}</small></span></div></div><a class="fc-lnk" href="https://www.toledolabs.com.br/validar.html?doc=${encodeURIComponent(P.ficha.codigo)}" target="_blank" rel="noopener">Ver a validação</a>`
-      : '<div class="fc-vazio">A ficha ganha número na primeira entrega ou no primeiro PDF.</div>', _fcLink('PDF e cancelamentos', `_pessoaPainelEpi('${P.p.id}','ficha')`))}
-  </aside></div>`;
-}
-function _pessoaDocsHtml(P) {
+/* v308: a coluna dos documentos já emitidos (a emissão fica ao lado, na mesma aba) */
+function _pessoaDocsListaHtml(P) {
   const TIP = { ordem_servico: 'Ordem de serviço', ficha_epi: 'Ficha de EPI' };
-  return `<div class="fc-grid"><div class="fc-main">
-    ${_fcPainel(`Documentos emitidos · ${P.docs.length}`, P.docs.length ? `<div class="fc-lista">${P.docs.map(_pessoaDocLi).join('')}</div>` : '<div class="fc-vazio">Nenhum documento emitido para esta pessoa.</div>',
-      _podeAcao('usar_laudomiro') ? _fcLink('Gerar documento', "irPara('laudomiro')") : '')}
-  </div><aside class="fc-side">
-    ${_fcPainel('Entregues em mãos', P.docEnt.length ? `<div class="fc-lista">${P.docEnt.map(d => `<div class="fc-li"><span class="fc-data">${_empDataBr(d.entregue_em)}</span><span class="fc-li-t"><b>${TIP[d.tipo] || _fcEsc(d.tipo)}</b><small>${_fcEsc(d.funcao || '')}</small></span></div>`).join('')}</div>` : '<div class="fc-vazio">Nenhuma entrega de documento registrada.</div>')}
-  </aside></div>`;
+  return `${_fcPainel(`Documentos emitidos · ${P.docs.length}`, P.docs.length ? `<div class="fc-lista">${P.docs.map(_pessoaDocLi).join('')}</div>` : '<div class="fc-vazio">Nenhum documento emitido para esta pessoa.</div>')}
+    ${P.docEnt.length ? _fcPainel('Entregues em mãos', `<div class="fc-lista">${P.docEnt.map(d => `<div class="fc-li"><span class="fc-data">${_empDataBr(d.entregue_em)}</span><span class="fc-li-t"><b>${TIP[d.tipo] || _fcEsc(d.tipo)}</b><small>${_fcEsc(d.funcao || '')}</small></span></div>`).join('')}</div>`) : ''}`;
 }
-function _pessoaTreinHtml(P, podeMgr) {
-  const total = P.trein.length;
-  return `<div class="card detail-card-accent" style="margin-top:0">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em">Treinamentos</div>
-      ${podeMgr ? `<button class="btn btn-outline btn-sm" data-action="abrirTreinoExternoColab" data-id="${P.p.id}">Registrar treinamento externo</button>` : ''}</div>
-    ${total > 8 ? `<input type="search" id="buscaTreinosColab" placeholder="Buscar por treinamento, instituição ou instrutor..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;margin-bottom:12px" oninput="_colabTreinosFiltrar(this.value)">` : ''}
-    <div id="treinosColabMiolo">${_htmlTreinosColabMiolo()}</div></div>`;
+let _pessoaDocsT = null;
+function _pessoaDocsRecarregar(id) {   // depois de emitir: relê só a lista, sem redesenhar o documento que está aberto
+  clearTimeout(_pessoaDocsT);
+  _pessoaDocsT = setTimeout(async () => {
+    const P = window._pessoaDados; if (!P || P.p.id !== id) return;
+    const [dc, de] = await Promise.all([
+      sb.from('doc_emitidos').select('id,tipo,numero,revisao,titulo,situacao,codigo,emitido_em,assinado_em').eq('colaborador_id', id).neq('tipo', 'epi').order('emitido_em', { ascending: false }).limit(40),
+      sb.from('doc_entregas').select('id,tipo,entregue_em,funcao').eq('colaborador_id', id).order('entregue_em', { ascending: false }).limit(20)]);
+    if (window._pessoaDados !== P) return;
+    if (!dc.error) P.docs = dc.data || [];
+    if (!de.error) P.docEnt = de.data || [];
+    P.sujo = true;
+    _setElBoth('pessoaDocsLista', _pessoaDocsListaHtml(P));
+  }, 400);
 }
 
 // ============================================================
@@ -13640,8 +13725,8 @@ function verCliente(id) {
   if (!c) return;
   // v305: empresa com abas (Visão geral = esta ficha; Colaboradores e EPI são novas)
   const _v2 = _empV2() && !window._empSemRpc;
-  if (_v2 && window._empAtual?.id !== id) window._empAtual = { id, aba: 'colaboradores' };
-  const _aba = _v2 ? window._empAtual.aba : 'geral';
+  if (_v2 && window._empAtual?.id !== id) window._empAtual = { id, aba: 'geral' };   // v308: Visão geral primeiro
+  const _aba = _v2 ? (window._empAtual.aba === 'colaboradores' ? 'colaboradores' : 'geral') : 'geral';   // v308: a aba EPI saiu
   if (_v2) _empLembrar(id);
   const podeMgr = ['administrador', 'comercial'].includes(usuarioAtual.perfil);
   const podeTurma = _podeRota('turmas') && podeMgr;
@@ -13701,8 +13786,9 @@ function verCliente(id) {
     <div class="gi-kpirow fc-kpis" id="fcKpis"${_v2 ? ' style="display:none"' : ''}>${['Colaboradores', 'Treinamentos vencidos', 'Vencem em breve', 'Turmas no ano'].map(t => `<div class="gi-kpi gi-sm"><div class="gi-kh">${t}</div><span class="gi-n fc-n0">·</span><small class="gi5-ex">carregando</small></div>`).join('')}</div>
     <div class="fc-grid">
       <div class="fc-main">
-        ${_podeRota('conformidade') ? _fcPainel('Renovações', _fcCarregando('Conferindo vencimentos…'), _fcLink('Abrir Conformidade', "irPara('conformidade')"), 'fcRenov') : ''}
-        ${_fcPainel('Turmas', _fcCarregando('Carregando turmas…'), _fcLink('Ver todas as turmas', "irPara('turmas')"), 'fcTurmas')}
+        ${_v2 ? `<section class="fc-p emp-ind-p"><div class="fc-p-h"><h3>Indicadores da empresa</h3><small>Clique em um número para ver as pessoas</small></div><div class="emp-ind" id="empKpis">${_fcCarregando('Carregando…')}</div></section>` : ''}
+        ${!_v2 && _podeRota('conformidade') ? _fcPainel('Renovações', _fcCarregando('Conferindo vencimentos…'), _fcLink('Abrir Conformidade', "irPara('conformidade')"), 'fcRenov') : ''}
+        ${_fcPainel(_v2 ? 'Próximas turmas' : 'Turmas', _fcCarregando('Carregando turmas…'), _fcLink('Ver todas as turmas', "irPara('turmas')"), 'fcTurmas')}
         <div id="fcCampo"></div>
       </div>
       <aside class="fc-side">
@@ -13717,10 +13803,10 @@ function verCliente(id) {
     _empKpisCarregar(c, true);   // relido a cada abertura da empresa
   }
   if (_aba !== 'geral') { _empAbaCarregar(c, _aba); return; }
-  _fcCarregar(c, todasNrs);
+  _fcCarregar(c, todasNrs, { v2: _v2 });
 }
 
-async function _fcCarregar(c, todasNrs) {
+async function _fcCarregar(c, todasNrs, op = {}) {
   const oi = usuarioAtual.org_id, tok = (window._fcTok = Date.now());
   const vivo = () => window._fcTok === tok && (typeof paginaAtual === 'undefined' || paginaAtual === 'clientes');
   const comCampo = Array.isArray(_modulosAtivos) && _modulosAtivos.includes('campo') && _podeRota('campo');
@@ -13728,7 +13814,7 @@ async function _fcCarregar(c, todasNrs) {
     sb.from('colaboradores').select('id', { count: 'exact', head: true }).eq('org_id', oi).eq('cliente_id', c.id),
     sb.from('turmas').select('id,status,created_at,catalogo(nome,nrs),sessoes(data,concluida,cancelada),turma_participantes(id)').eq('org_id', oi).eq('cliente_id', c.id).order('created_at', { ascending: false }).limit(80),
     todasNrs.length ? sb.from('catalogo').select('nrs').eq('org_id', oi).eq('ativo', true).or('arquivado.is.null,arquivado.eq.false') : Promise.resolve({ data: [] }),
-    _podeRota('conformidade') ? (async () => {
+    !op.v2 && _podeRota('conformidade') ? (async () => {   // v308: a Visão geral nova não lista vencimentos (estão em Conformidade)
       // só os vencimentos deste cliente (não lê a organização inteira)
       const [cf, ativos] = await Promise.all([calcConformidade({ clienteId: c.id }), sb.from('catalogo').select('id').eq('org_id', oi).eq('ativo', true).or('arquivado.is.null,arquivado.eq.false')]);
       cf.cursosAtivos = ativos.error ? null : new Set((ativos.data || []).map(x => x.id));
@@ -13749,6 +13835,7 @@ async function _fcCarregar(c, todasNrs) {
   const concl = turmas.filter(t => t.status === 'concluida').sort((a, b) => (b.ate || '') < (a.ate || '') ? -1 : 1);
   const noAno = turmas.filter(t => (t.de || t.created_at || '').startsWith(ano)).length;
   const proxima = abertas.find(t => t.de && t.de >= hoje);
+  if (op.v2) { window._empTurmasAno = { cli: c.id, noAno, proxima: proxima ? _fcDdmm(proxima.de) : '' }; if (typeof _empKpisPintar === 'function') _empKpisPintar(); }   // v308: indicador "Turmas no ano"
 
   // Conformidade deste cliente
   const conf = val(confR);
@@ -13798,8 +13885,8 @@ async function _fcCarregar(c, todasNrs) {
     const enc = (t.sessoes || []).filter(s => !s.cancelada).length;
     return `<div class="fc-li fc-li-clk" onclick="verTurma('${t.id}')"><span class="fc-data">${quando}</span><div class="fc-li-t"><b>${_fcEsc(_rxNomeCurso(t.catalogo?.nome))}</b><small>${t.n === 1 ? '1 participante' : `${t.n} participantes`}${enc > 1 ? ` · ${enc} encontros` : ''}</small></div><span class="fc-st ${cls}">${_fcEsc(rot)}</span></div>`;
   };
-  const listaT = [...abertas.slice(0, 3), ...concl.slice(0, Math.max(2, 5 - Math.min(3, abertas.length)))];
-  _setElBoth('fcTurmas', `<div class="fc-p-h"><h3>Turmas</h3>${_fcLink('Ver todas as turmas', "irPara('turmas')")}</div>${turR.status !== 'fulfilled' || val(turR)?.error ? '<div class="fc-vazio">Não foi possível carregar as turmas agora.</div>' : listaT.length ? `<div class="fc-lista">${listaT.map(linhaT).join('')}</div>` : `<div class="fc-vazio">Nenhuma turma com este cliente ainda.</div>`}`);
+  const listaT = op.v2 ? abertas.filter(t => !t.de || t.de >= hoje).slice(0, 3) : [...abertas.slice(0, 3), ...concl.slice(0, Math.max(2, 5 - Math.min(3, abertas.length)))];   // v308: até 3, as mais próximas
+  _setElBoth('fcTurmas', `<div class="fc-p-h"><h3>${op.v2 ? 'Próximas turmas' : 'Turmas'}</h3>${_fcLink('Ver todas as turmas', "irPara('turmas')")}</div>${turR.status !== 'fulfilled' || val(turR)?.error ? '<div class="fc-vazio">Não foi possível carregar as turmas agora.</div>' : listaT.length ? `<div class="fc-lista">${listaT.map(linhaT).join('')}</div>` : `<div class="fc-vazio">${op.v2 ? 'Nenhuma turma agendada. As concluídas ficam na tela Turmas.' : 'Nenhuma turma com este cliente ainda.'}</div>`}`);
 
   // NRs sugeridas: marca as que já têm turma e as que estão no catálogo
   if (todasNrs.length) {
@@ -13819,9 +13906,9 @@ async function _fcCarregar(c, todasNrs) {
     // uma linha por avaliação: das revisões do mesmo grupo, fica a mais nova
     const porGrupo = new Map();
     for (const a of (camp.data || [])) { const k = a.grupo_id || a.id; const x = porGrupo.get(k); if (!x || (a.revisao || 0) > (x.revisao || 0)) porGrupo.set(k, a); }
-    camp.data = [...porGrupo.values()].sort((a, b) => (b.data_visita || '') < (a.data_visita || '') ? -1 : 1).slice(0, 4);
+    camp.data = [...porGrupo.values()].sort((a, b) => (b.data_visita || '') < (a.data_visita || '') ? -1 : 1).slice(0, op.v2 ? 1 : 4);   // v308: só a última
     const abrir = "window.GRID&&window.GRID.irPara?window.GRID.irPara('campo'):irPara('campo')";
-    _setElBoth('fcCampo', _fcPainel('Avaliações de campo', (camp.data || []).length ? `<div class="fc-lista">${camp.data.map(a => { const [r, k] = SC[a.situacao] || [a.situacao || '', '']; return `<div class="fc-li"><span class="fc-data">${_fcDdmmaa(a.data_visita)}</span><div class="fc-li-t"><b>Avaliação ${a.numero ? 'nº ' + _fcEsc(a.numero) : ''}</b></div><span class="fc-st ${k}">${_fcEsc(r)}</span></div>`; }).join('')}</div>` : '<div class="fc-vazio">Nenhuma avaliação de campo com este cliente.</div>', _fcLink('Abrir avaliações', abrir)));
+    _setElBoth('fcCampo', _fcPainel(op.v2 ? 'Última avaliação de campo' : 'Avaliações de campo', (camp.data || []).length ? `<div class="fc-lista">${camp.data.map(a => { const [r, k] = SC[a.situacao] || [a.situacao || '', '']; return `<div class="fc-li"><span class="fc-data">${_fcDdmmaa(a.data_visita)}</span><div class="fc-li-t"><b>Avaliação ${a.numero ? 'nº ' + _fcEsc(a.numero) : ''}</b></div><span class="fc-st ${k}">${_fcEsc(r)}</span></div>`; }).join('')}</div>` : '<div class="fc-vazio">Nenhuma avaliação de campo com este cliente.</div>', _fcLink('Abrir avaliações', abrir)));
   }
 }
 
@@ -17994,6 +18081,7 @@ function _htmlPainelEvidenciasSessao(dados) {
 // `opts.foco='participantes'`, usado pela criação rápida da Agenda para
 // abrir a turma já com a seção de participantes em destaque.
 async function verTurma(id, opts = {}) {
+  if (typeof _pessoaModFechar === 'function') _pessoaModFechar(true);   // v308
   fabOcultar();
   showLoading('Carregando turma...');
   try {
@@ -35875,7 +35963,7 @@ async function exportarRelatorioComparativoPDF() {
   // cache do navegador. Agora o nome do cache deriva de APP_BUILD, que
   // muda a cada publicação, e o activate do sw.js apaga os caches
   // anteriores sozinho.
-  var APP_BUILD = '307b';
+  var APP_BUILD = '308';
   window.APP_BUILD = APP_BUILD;
 
   // ── v258 · atualização silenciosa (13/10/2026) ─────────────────────
